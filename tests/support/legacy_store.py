@@ -39,7 +39,7 @@ _COLUMNS = (
 )
 
 
-def plant_legacy_nodes(db_path, rows, artifacts=()):
+def plant_legacy_nodes(db_path, rows):
     conn = sqlite3.connect(db_path)
     conn.executescript(_LEGACY_NODES)
     for row in rows:
@@ -48,13 +48,6 @@ def plant_legacy_nodes(db_path, rows, artifacts=()):
             "INSERT OR REPLACE INTO nodes (%s) VALUES (%s)"
             % (", ".join(_COLUMNS), ", ".join("?" * len(_COLUMNS))),
             values,
-        )
-    for a in artifacts:
-        conn.execute(
-            "INSERT INTO artifacts (item_id, atype, value, label, internal, kind) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (a["item_id"], a["atype"], a["value"], a.get("label"),
-             1 if a.get("internal") else 0, a.get("kind", "text")),
         )
     conn.commit()
     conn.close()

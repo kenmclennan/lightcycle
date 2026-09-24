@@ -10,7 +10,7 @@ from lightcycle.domain.feedback import RETRO_ORIGIN_LABEL, RETROED_LABEL
 from lightcycle.domain.goals import GOAL_DEFAULT_STATUS, Goal, GoalLogEntry
 from lightcycle.domain.money import Cost
 from lightcycle.domain.pool import ToolUsage, UsageResume
-from lightcycle.domain.runs import Pass, PhaseRun, RunState, pass_id, run_id
+from lightcycle.domain.runs import Pass, PhaseRun, RunState, run_id
 from lightcycle.domain.work import (
     Artifact, DailySummary, Item, NodeView, Park, State, Step, default_kind_for, derive_state,
     format_step_id, merge_condition_note, role_state,
@@ -44,6 +44,7 @@ class SchemaVersionRefused(Exception):
 
 _SCHEMA_VERSION = 1
 _LAST_VERSION_ABLE_TO_MIGRATE_PRE_FLOOR_STORES = "0.2.27"
+_LAST_VERSION_ABLE_TO_MIGRATE_NODES_STORES = "0.6.263"
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS items (
@@ -264,11 +265,6 @@ _RUN_SELECT = (
 )
 
 
-_INTERNAL_ARTIFACT_TYPES = (
-    "resolves", "resolved-by",
-)
-
-
 class _ErrorTranslatingConnection:
     def __init__(self, conn):
         self._conn = conn
@@ -312,15 +308,6 @@ class SqliteStore(StorePort):
         self._conn.execute("PRAGMA busy_timeout=5000")
         self._conn.executescript(_SCHEMA)
         self._apply_schema_version_floor()
-        if self._has_table("nodes"):
-            self._migrate_close_reason_to_outcome()
-            self._migrate_artifact_fields()
-            self._migrate_resume_fields()
-            self._migrate_detach_items_from_themes()
-            self._migrate_collapse_step_roles()
-            self._migrate_brief_artifacts_into_description()
-            self._migrate_phase_artifacts_into_runs()
-            self._migrate_split_nodes()
         self._migrate_add_missing_columns()
         self._migrate_drop_step_reflection_column()
         self._migrate_drop_step_title_column()
@@ -362,15 +349,21 @@ class SqliteStore(StorePort):
 
     def _apply_schema_version_floor(self):
         version = self._conn.execute("PRAGMA user_version").fetchone()[0]
+        if version == 0 and self._is_legacy_store():
+            raise SchemaVersionRefused(
+                "store predates the schema-version floor and cannot be opened by "
+                "this engine; migrate it with lightcycle %s first, then reopen."
+                % _LAST_VERSION_ABLE_TO_MIGRATE_PRE_FLOOR_STORES
+            )
+        if self._has_table("nodes"):
+            raise SchemaVersionRefused(
+                "store still carries the pre-split nodes table and cannot be opened by "
+                "this engine; migrate it with lightcycle %s first, then reopen."
+                % _LAST_VERSION_ABLE_TO_MIGRATE_NODES_STORES
+            )
         if version >= _SCHEMA_VERSION:
             return
         if version == 0:
-            if self._is_legacy_store():
-                raise SchemaVersionRefused(
-                    "store predates the schema-version floor and cannot be opened by "
-                    "this engine; migrate it with lightcycle %s first, then reopen."
-                    % _LAST_VERSION_ABLE_TO_MIGRATE_PRE_FLOOR_STORES
-                )
             self._conn.execute("PRAGMA user_version = %d" % _SCHEMA_VERSION)
             return
         raise SchemaVersionRefused(
@@ -389,64 +382,6 @@ class SqliteStore(StorePort):
         if "ts" not in history_cols:
             return True
         return "status" in history_cols and "state" not in history_cols
-
-    def _migrate_close_reason_to_outcome(self):
-        cols = {r[1] for r in self._conn.execute("PRAGMA table_info(nodes)").fetchall()}
-        if "close_reason" in cols and "outcome" not in cols:
-            self._conn.execute("ALTER TABLE nodes RENAME COLUMN close_reason TO outcome")
-
-    def _migrate_artifact_fields(self):
-        cols = {r[1] for r in self._conn.execute("PRAGMA table_info(artifacts)").fetchall()}
-        if "internal" not in cols:
-            self._conn.execute(
-                "ALTER TABLE artifacts ADD COLUMN internal INTEGER NOT NULL DEFAULT 0"
-            )
-            self._conn.execute(
-                "UPDATE artifacts SET internal = 1 WHERE atype IN (%s)"
-                % ",".join("?" * len(_INTERNAL_ARTIFACT_TYPES)),
-                _INTERNAL_ARTIFACT_TYPES,
-            )
-        if "kind" not in cols:
-            self._conn.execute("ALTER TABLE artifacts ADD COLUMN kind TEXT")
-            atypes = [
-                r[0] for r in self._conn.execute("SELECT DISTINCT atype FROM artifacts").fetchall()
-            ]
-            for atype in atypes:
-                self._conn.execute(
-                    "UPDATE artifacts SET kind = ? WHERE atype = ?",
-                    (self.default_kind_for(atype), atype),
-                )
-
-    def _migrate_resume_fields(self):
-        cols = {r[1] for r in self._conn.execute("PRAGMA table_info(nodes)").fetchall()}
-        for col in ("branch", "pr", "reason", "tried", "pass_id"):
-            if col not in cols:
-                self._conn.execute("ALTER TABLE nodes ADD COLUMN %s TEXT" % col)
-
-    def _migrate_detach_items_from_themes(self):
-        self._conn.execute(
-            "UPDATE nodes SET parent = NULL WHERE type = 'item' AND parent IN "
-            "(SELECT id FROM nodes WHERE type = 'theme')"
-        )
-
-    def _migrate_collapse_step_roles(self):
-        self._conn.execute(
-            "UPDATE nodes SET role = 'agent' "
-            "WHERE type = 'step' AND role IS NOT NULL AND role NOT IN ('agent', 'human')"
-        )
-
-    def _migrate_brief_artifacts_into_description(self):
-        self._conn.execute(
-            "UPDATE nodes SET description = ("
-            "  SELECT value FROM artifacts WHERE item_id = nodes.id AND atype = 'brief' LIMIT 1"
-            ") WHERE (description IS NULL OR description = '') AND id IN ("
-            "  SELECT item_id FROM artifacts WHERE atype = 'brief'"
-            ")"
-        )
-        self._conn.execute("DELETE FROM artifacts WHERE atype = 'brief'")
-
-    _STEP_FOLDED_ARTIFACTS = ("watched-step",)
-    _RUN_FOLDED_ARTIFACTS = ("feedback-watermark", "feedback-spawned-through")
 
     _ADDED_COLUMNS = {
         "items": (
@@ -557,149 +492,6 @@ class SqliteStore(StorePort):
         return self._conn.execute(
             "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (name,)
         ).fetchone() is not None
-
-    def _migrate_split_nodes(self):
-        if not self._has_table("nodes"):
-            return
-        self._fold_comment_ledger_into_runs()
-        step_folds = self._step_artifact_folds()
-        cols = [r[1] for r in self._conn.execute("PRAGMA table_info(nodes)").fetchall()]
-        rows = self._conn.execute("SELECT %s FROM nodes" % ", ".join(cols)).fetchall()
-        for row in rows:
-            d = dict(zip(cols, row))
-            if d.get("type") != "step":
-                self._conn.execute(
-                    "INSERT OR IGNORE INTO items (id, title, description, state, repo, workflow, "
-                    "outcome, project, created_at, closed_at) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (d["id"], d["title"], d["description"], d["state"],
-                     self._repo_artifact_of(d["id"]), d.get("workflow"), d.get("outcome"),
-                     d.get("project"), d.get("created_at"), d.get("closed_at")),
-                )
-            else:
-                fold = step_folds.get(d["id"], {})
-                owner = d.get("parent") or self._orphan_owner(d)
-                self._conn.execute(
-                    "INSERT OR IGNORE INTO steps (id, item, stage, pass_id, role, state, "
-                    "assignee, model, outcome, notes, watched_step, "
-                    "park_reason, park_needs, park_tried, created_at, fired_at, closed_at) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (d["id"], owner, d.get("step"), d.get("pass_id"),
-                     d.get("role"), d["state"], d.get("assignee"), d.get("model"),
-                     d.get("outcome"), d.get("notes"),
-                     fold.get("watched-step"), d.get("reason"), d.get("needs"), d.get("tried"),
-                     d.get("created_at"), d.get("fired_at"), d.get("closed_at")),
-                )
-        self._conn.execute(
-            "DELETE FROM artifacts WHERE atype IN (%s)"
-            % ",".join("?" * len(self._STEP_FOLDED_ARTIFACTS)),
-            self._STEP_FOLDED_ARTIFACTS,
-        )
-        self._conn.execute("DELETE FROM artifacts WHERE atype = 'repo'")
-        self._conn.execute("DROP TABLE nodes")
-
-    def _orphan_owner(self, d):
-        owner = "%s.orphan" % d["id"]
-        self._conn.execute(
-            "INSERT OR IGNORE INTO items (id, title, description, state, created_at) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (owner, d.get("title") or d["id"],
-             "recovered owner for a step that had none before the item/step split",
-             d.get("state") or "ready", d.get("created_at")),
-        )
-        return owner
-
-    def _repo_artifact_of(self, item_id):
-        row = self._conn.execute(
-            "SELECT value FROM artifacts WHERE item_id = ? AND atype = 'repo' LIMIT 1", (item_id,)
-        ).fetchone()
-        return row[0] if row else None
-
-    def _step_artifact_folds(self):
-        folds = {}
-        rows = self._conn.execute(
-            "SELECT item_id, atype, value FROM artifacts WHERE atype IN (%s)"
-            % ",".join("?" * len(self._STEP_FOLDED_ARTIFACTS)),
-            self._STEP_FOLDED_ARTIFACTS,
-        ).fetchall()
-        for node_id, atype, value in rows:
-            folds.setdefault(node_id, {})[atype] = value
-        return folds
-
-    def _fold_comment_ledger_into_runs(self):
-        rows = self._conn.execute(
-            "SELECT item_id, atype, value FROM artifacts WHERE atype IN (%s)"
-            % ",".join("?" * len(self._RUN_FOLDED_ARTIFACTS)),
-            self._RUN_FOLDED_ARTIFACTS,
-        ).fetchall()
-        for step_id, atype, value in rows:
-            owner = self._conn.execute(
-                "SELECT parent, step FROM nodes WHERE id = ?", (step_id,)
-            ).fetchone()
-            if not owner or not owner[0]:
-                continue
-            run = self._conn.execute(
-                "SELECT id FROM phase_runs WHERE item = ? ORDER BY opened_at DESC LIMIT 1",
-                (owner[0],),
-            ).fetchone()
-            if run is None:
-                continue
-            column = (
-                "comments_handled_through" if atype == "feedback-watermark"
-                else "comments_dispatched_through"
-            )
-            self._conn.execute(
-                "UPDATE phase_runs SET %s = ? WHERE id = ?" % column, (value, run[0])
-            )
-        self._conn.execute(
-            "DELETE FROM artifacts WHERE atype IN (%s)"
-            % ",".join("?" * len(self._RUN_FOLDED_ARTIFACTS)),
-            self._RUN_FOLDED_ARTIFACTS,
-        )
-
-    _FOLDED_ARTIFACTS = ("branch", "pr", "content-pin", "content-pin-pr", "phase-run")
-
-    def _migrate_phase_artifacts_into_runs(self):
-        rows = self._conn.execute(
-            "SELECT item_id, atype, value, label FROM artifacts WHERE atype IN (%s)"
-            % ",".join("?" * len(self._FOLDED_ARTIFACTS)),
-            self._FOLDED_ARTIFACTS,
-        ).fetchall()
-        if not rows:
-            return
-        folded = {}
-        for item, atype, value, label in rows:
-            entry = folded.setdefault((item, label), {})
-            if atype == "phase-run":
-                try:
-                    entry["n"] = int(value)
-                except (TypeError, ValueError):
-                    pass
-            elif atype == "content-pin":
-                entry["content_pin"] = value
-            elif atype in ("branch", "pr"):
-                entry[atype] = value
-        now = self._now()
-        for (item, phase), entry in folded.items():
-            n = entry.get("n", 1)
-            pid = pass_id(item, n)
-            self._conn.execute(
-                "INSERT OR IGNORE INTO passes (id, item, n, state, opened_at) "
-                "VALUES (?, ?, ?, 'open', ?)",
-                (pid, item, n, now),
-            )
-            self._conn.execute(
-                "INSERT OR IGNORE INTO phase_runs "
-                "(id, item, pass_id, phase, branch, pr, content_pin, state, opened_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?)",
-                (run_id(pid, phase), item, pid, phase, entry.get("branch"), entry.get("pr"),
-                 entry.get("content_pin"), now),
-            )
-        self._conn.execute(
-            "DELETE FROM artifacts WHERE atype IN (%s)"
-            % ",".join("?" * len(self._FOLDED_ARTIFACTS)),
-            self._FOLDED_ARTIFACTS,
-        )
 
     def _row_to_step(self, row, blocked_by):
         d = dict(zip(_STEP_COLUMNS, row))
