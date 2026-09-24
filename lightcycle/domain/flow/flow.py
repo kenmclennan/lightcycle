@@ -1,6 +1,11 @@
 from dataclasses import replace
 
-from lightcycle.domain.flow.hooks import CI_FAILED_CAP, PR_FEEDBACK, REVIEW_ROUNDS_CAP
+from lightcycle.domain.flow.hooks import (
+    CI_FAILED_CAP,
+    HOOK_MIN_ARITY,
+    PR_FEEDBACK,
+    REVIEW_ROUNDS_CAP,
+)
 from lightcycle.domain.flow.step_def import StepDef
 from lightcycle.domain.flow.transition import Transition
 
@@ -38,13 +43,13 @@ class Flow:
                 if occ:
                     stages.add(occ[0])
         for occ in graph.hook_occurrences(PR_FEEDBACK):
-            if len(occ) > 1:
+            if len(occ) >= HOOK_MIN_ARITY[PR_FEEDBACK]:
                 stages.add(occ[1])
         for occ in graph.hook_occurrences(CI_FAILED_CAP):
-            if len(occ) > 3:
+            if len(occ) >= HOOK_MIN_ARITY[CI_FAILED_CAP]:
                 stages.add(occ[3])
         for occ in graph.hook_occurrences(REVIEW_ROUNDS_CAP):
-            if len(occ) > 2:
+            if len(occ) >= HOOK_MIN_ARITY[REVIEW_ROUNDS_CAP]:
                 stages.add(occ[2])
         stages.update(graph.nodes.keys())
         stages.update(graph.signals.keys())

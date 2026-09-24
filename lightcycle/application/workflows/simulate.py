@@ -11,6 +11,7 @@ from lightcycle.domain.contracts import FlowContracts, StepContract
 from lightcycle.domain.flow.flow import PROJECT_WORKSPACE, SPECS_WORKSPACE
 from lightcycle.domain.flow.hooks import (
     CI_FAILED_CAP,
+    HOOK_MIN_ARITY,
     MENTION_TOKEN,
     PR_CONFLICT,
     PR_FEEDBACK,
@@ -319,7 +320,7 @@ class WorkflowSimulateUseCase:
 
     def _mention_token(self, graph, stage):
         for occ in graph.hook_occurrences(MENTION_TOKEN):
-            if occ and occ[0] == stage and len(occ) > 1:
+            if occ and occ[0] == stage and len(occ) >= HOOK_MIN_ARITY[MENTION_TOKEN]:
                 return occ[1]
         return None
 
