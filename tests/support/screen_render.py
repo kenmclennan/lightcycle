@@ -715,6 +715,34 @@ def _report_today(size):
     return session
 
 
+def _slow_steps_store():
+    store = DemoStore(now=lambda: NOW.isoformat())
+    lc729 = store.item("LC-729", "Earlier reviews at the same stage", project="lightcycle")
+    lc730 = store.item("LC-730", "Review the slow step", project="lightcycle")
+    for n in range(20):
+        step = store.step("LC-729.%d" % (n + 1), step="review-code", role="agent", parent=lc729)
+        store.claim_ready("agent")
+        store.accrue_active_seconds([step], 60 * (n + 1))
+        store.record_attribution(step, 7 * (n + 1), {})
+        store.complete_node(step, "done")
+        store._records[step]["closed_at"] = _at(600 + n)
+    slow = store.step("LC-730.12", step="review-code", role="agent", parent=lc730)
+    store.claim_ready("agent")
+    store.accrue_active_seconds([slow], 3167.5)
+    store.record_attribution(slow, 87, {})
+    store.complete_node(slow, "done")
+    store._records[slow]["closed_at"] = _at(30)
+    return store
+
+
+def _report_with_slow_steps(size):
+    session = _launch(_slow_steps_store(), size=size)
+    session.press("]")
+    session.press("]")
+    session.press("]")
+    return session
+
+
 def _report_day_picker(size):
     session = _report_today(size)
     session.press("d")
@@ -1470,6 +1498,7 @@ SCREENS = {
     "automation#populated": _automation_populated,
     "automation#empty": _automation_empty,
     "report#with-automation": _report_with_automation,
+    "report#with-slow-steps": _report_with_slow_steps,
     "report#today": _report_today,
     "report#day-picker": _report_day_picker,
     "report#historical-day": _report_historical_day,

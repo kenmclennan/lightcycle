@@ -26,6 +26,7 @@ from lightcycle.domain.work.field_owner import (
 )
 from lightcycle.domain.work.item import Item
 from lightcycle.domain.work.park import Park
+from lightcycle.domain.work.slow_step import SlowKind, SlowStep, StageBaseline, slow_steps
 from lightcycle.domain.work.step import Step
 from lightcycle.domain.work.step_title import compose_step_title
 from lightcycle.domain.work.log_line import LogKind, LogLine
@@ -56,6 +57,7 @@ __all__ = [
     "UNSET_REFUSAL_REASONS",
     "all_states", "missing_for_state", "refuse_fields", "refuse_state", "render_field_refusal",
     "Item", "LogKind", "LogLine", "NodeQueue", "NodeSpec", "NodeView", "Park",
+    "SlowKind", "SlowStep", "StageBaseline", "slow_steps",
     "Step", "compose_step_title", "format_step_id", "node_id_key",
     "merge_condition_note", "ProjectIdentity", "ProjectedStep",
     "parse_timestamp",

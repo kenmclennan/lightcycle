@@ -29,6 +29,17 @@ def test_every_registered_screen_fits_the_viewport_without_scrolling(state):
         session.close()
 
 
+@pytest.mark.parametrize("width", [100, 140])
+def test_report_with_slow_steps_paints_the_count_and_the_keyed_step_row_at_each_width(width):
+    rows = render("report#with-slow-steps", size=(width, 30)).split("\n")
+    count_at = next(i for i, row in enumerate(rows) if "Slow Steps" in row and "1" in row)
+
+    assert "Escalations" in rows[count_at - 1]
+    assert "LC-730.12" in rows[count_at + 1]
+    assert "review-code - 52m active - waiting" in rows[count_at + 1]
+    assert "Starting Backlog Size" in rows[count_at + 2]
+
+
 def test_a_state_the_codebase_cannot_render_names_the_ones_it_can():
     with pytest.raises(KeyError) as excinfo:
         render("hub#not-a-state")
