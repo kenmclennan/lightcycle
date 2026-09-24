@@ -237,16 +237,22 @@ class MachineAdapter(MachinePort):
             return None
 
     def worktree_pids(self, path):
-        out = _run(["lsof", "+D", path, "-Fp"])
+        out = _run(["lsof", "-d", "cwd", "-Fpn"])
         if out is None:
             return []
+        roots = {os.path.normpath(path), os.path.realpath(path)}
         pids = []
+        current = None
         for line in out.splitlines():
             line = line.strip()
-            if not line.startswith("p"):
-                continue
-            try:
-                pids.append(int(line[1:]))
-            except ValueError:
-                continue
+            if line.startswith("p"):
+                try:
+                    current = int(line[1:])
+                except ValueError:
+                    current = None
+            elif line.startswith("n") and current is not None:
+                name = os.path.normpath(line[1:])
+                if any(name == r or name.startswith(r + os.sep) for r in roots):
+                    pids.append(current)
+                    current = None
         return pids

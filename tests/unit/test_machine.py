@@ -339,12 +339,23 @@ class TestMachineAdapterWorktreePids(unittest.TestCase):
     def setUp(self):
         self.adapter = MachineAdapter()
 
-    def test_returns_pids_parsed_from_lsof_p_lines(self):
+    def test_returns_pids_whose_cwd_is_the_worktree_or_below_it(self):
+        out = b"p1234\nfcwd\nn/repo/.worktrees/x\np5678\nfcwd\nn/repo/.worktrees/x/src/deep\n"
         with patch(
-            "lightcycle.adapters.machine.subprocess.run",
-            return_value=_proc(b"p1234\np5678\n"),
+            "lightcycle.adapters.machine.subprocess.run", return_value=_proc(out),
         ):
             self.assertEqual(self.adapter.worktree_pids("/repo/.worktrees/x"), [1234, 5678])
+
+    def test_omits_pids_whose_cwd_is_elsewhere(self):
+        out = (
+            b"p62232\nfcwd\nn/\n"
+            b"p4321\nfcwd\nn/repo/.worktrees/xylophone\n"
+            b"p1234\nfcwd\nn/repo/.worktrees/x\n"
+        )
+        with patch(
+            "lightcycle.adapters.machine.subprocess.run", return_value=_proc(out),
+        ):
+            self.assertEqual(self.adapter.worktree_pids("/repo/.worktrees/x"), [1234])
 
     def test_returns_empty_list_when_lsof_exits_non_zero(self):
         with patch(
@@ -366,14 +377,14 @@ class TestMachineAdapterWorktreePids(unittest.TestCase):
         ):
             self.assertEqual(self.adapter.worktree_pids("/repo/.worktrees/x"), [])
 
-    def test_invokes_lsof_scoped_to_the_given_path(self):
+    def test_asks_lsof_for_current_working_directories_only(self):
         mock_run = MagicMock(return_value=_proc(b""))
         with patch("lightcycle.adapters.machine.subprocess.run", mock_run):
             self.adapter.worktree_pids("/repo/.worktrees/x")
 
         argv = mock_run.call_args.args[0]
-        self.assertIn("/repo/.worktrees/x", argv)
-        self.assertIn("+D", argv)
+        self.assertEqual(argv[argv.index("-d") + 1], "cwd")
+        self.assertNotIn("+D", argv)
 
 
 class TestFakeMachineWorktreePids(unittest.TestCase):
