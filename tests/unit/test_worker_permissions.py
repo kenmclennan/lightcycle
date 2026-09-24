@@ -35,6 +35,12 @@ class TestWorkerPermittedAttach(unittest.TestCase):
     def test_attach_repo_forbidden(self):
         self.assertFalse(worker_permitted("attach", {"type": "repo"}))
 
+    def test_attach_resolves_forbidden(self):
+        self.assertFalse(worker_permitted("attach", {"type": "resolves"}))
+
+    def test_attach_resolved_by_forbidden(self):
+        self.assertFalse(worker_permitted("attach", {"type": "resolved-by"}))
+
     def test_attach_of_every_step_used_type_permitted(self):
         for t in (
             "spec", "spec-amendment", "comments-handled", "checks-run", "pr", "branch", "reflection",
@@ -65,7 +71,7 @@ class TestWorkerRefusalMessage(unittest.TestCase):
 
     def test_attach_message_names_the_forbidden_type_and_says_attach_is_otherwise_permitted(self):
         msg = worker_refusal_message("attach")
-        self.assertIn("type repo", msg)
+        self.assertIn("type repo, resolves, resolved-by", msg)
         self.assertIn("attach is otherwise permitted", msg)
 
     def test_attach_message_is_derived_from_the_forbidden_type_tuple(self):

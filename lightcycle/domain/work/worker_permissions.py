@@ -4,7 +4,7 @@ _SET_FORBIDDEN_FIELDS = (
     "title", "description", "project", "workflow", "backlog", "label", "step", "unset",
 )
 
-_ATTACH_FORBIDDEN_TYPES = ("repo",)
+_ATTACH_FORBIDDEN_TYPES = ("repo", "resolves", "resolved-by")
 
 
 def worker_permitted(verb, parsed_flags):
