@@ -132,8 +132,18 @@ class WorkflowSourceAdapter(WorkflowSourcePort):
         os.makedirs(self._origin_dir(origin), exist_ok=True)
         text = "url = %s\nref = %s\ncurrent = %s\n" % (
             _toml_str(url), _toml_str(ref or ""), _toml_str(current))
-        with open(os.path.join(self._origin_dir(origin), _REGISTRY), "w") as f:
-            f.write(text)
+        path = os.path.join(self._origin_dir(origin), _REGISTRY)
+        tmp = "%s.%d.tmp" % (path, os.getpid())
+        try:
+            with open(tmp, "w") as f:
+                f.write(text)
+            os.replace(tmp, path)
+        except BaseException:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+            raise
 
     def read_registry(self, origin):
         path = os.path.join(self._origin_dir(origin), _REGISTRY)

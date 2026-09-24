@@ -390,6 +390,10 @@ def main(argv=None):
         return 1
 
 
+def _prune_warning(origin, error):
+    return "lc workflow: %s is registered but pruning old versions failed: %s\n" % (origin, error)
+
+
 def cmd_workflow(argv):
     parser = build_parser(COMMANDS["workflow"])
     a = parser.parse_args(argv)
@@ -416,6 +420,8 @@ def cmd_workflow(argv):
             if resp.pruned:
                 msg += " (pruned %d)" % len(resp.pruned)
             print(msg)
+            if resp.prune_error:
+                sys.stderr.write(_prune_warning(resp.origin, resp.prune_error))
             return 0
         if a.sub == "init":
             resp = InitWorkflowOriginUseCase(
@@ -436,6 +442,8 @@ def cmd_workflow(argv):
                     print("upgraded %s @ %s" % (r.origin, r.sha))
                 else:
                     print("%s already current (%s)" % (r.origin, r.sha))
+                if r.prune_error:
+                    sys.stderr.write(_prune_warning(r.origin, r.prune_error))
             for f in resp.failures:
                 sys.stderr.write("lc workflow: %s: %s\n" % (f.origin, f.error))
             return 1 if resp.failures else 0

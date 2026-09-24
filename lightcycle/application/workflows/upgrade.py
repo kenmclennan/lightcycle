@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Optional
 
-from lightcycle.application.workflows.add import prune_origin
+from lightcycle.application.workflows.add import prune_origin_best_effort
 from lightcycle.application.workflows.bundle_check import (
     check_bundle_references,
     check_prompts,
@@ -22,6 +22,7 @@ class UpgradeResponse:
     sha: str
     changed: bool
     pruned: List[str] = field(default_factory=list)
+    prune_error: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -44,6 +45,7 @@ class UpgradeWorkflowSourceUseCase:
         self._fs = fs
 
     def execute(self, origin) -> UpgradeResponse:
+        keep_n = self._config.workflow_retention()
         registry = self._source.read_registry(origin)
         if registry is None:
             raise WorkflowSourceError(
@@ -77,9 +79,10 @@ class UpgradeWorkflowSourceUseCase:
             raise WorkflowSourceError("bundle prompts do not match this engine - %s" % detail)
         self._source.pin(origin, bundle)
         self._source.write_registry(origin, registry.url, registry.ref, bundle.sha)
-        pruned = prune_origin(self._source, self._store, origin, self._config.workflow_retention())
+        pruned, prune_error = prune_origin_best_effort(self._source, self._store, origin, keep_n)
         return UpgradeResponse(
-            origin=origin, sha=bundle.sha, changed=(bundle.sha != previous), pruned=pruned)
+            origin=origin, sha=bundle.sha, changed=(bundle.sha != previous),
+            pruned=pruned, prune_error=prune_error)
 
 
 class UpgradeWorkflowSourcesUseCase:

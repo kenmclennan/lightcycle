@@ -168,6 +168,23 @@ class TestRegistry(unittest.TestCase):
             OriginRegistration(url="github.com/acme/f", ref="main", current="abc123"),
         )
 
+    def test_failed_replace_leaves_the_previous_registry_byte_identical_and_no_temp_file(self):
+        adapter = _adapter()
+        adapter.write_registry("acme", "github.com/acme/f", "main", "abc123")
+        path = os.path.join(adapter._origin_dir("acme"), "origin.toml")
+        with open(path, "rb") as f:
+            before = f.read()
+        with mock.patch("lightcycle.adapters.workflow_source.os.replace", side_effect=OSError("boom")):
+            with self.assertRaises(OSError):
+                adapter.write_registry("acme", "github.com/acme/other", "dev", "def456")
+        with open(path, "rb") as f:
+            self.assertEqual(f.read(), before)
+        self.assertEqual(
+            adapter.read_registry("acme"),
+            OriginRegistration(url="github.com/acme/f", ref="main", current="abc123"),
+        )
+        self.assertEqual(os.listdir(adapter._origin_dir("acme")), ["origin.toml"])
+
     def test_read_missing_registry_is_none(self):
         self.assertIsNone(_adapter().read_registry("nope"))
 
