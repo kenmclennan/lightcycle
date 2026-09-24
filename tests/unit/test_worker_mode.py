@@ -71,6 +71,26 @@ class TestWorkerPermitted(unittest.TestCase):
         self.assertEqual(ctx.exception.code, 2)
 
 
+class TestAttachFlags(unittest.TestCase):
+    def test_type_is_parsed_from_every_argv_shape(self):
+        for argv, expected in (
+            (["X", "repo", "a/b"], "repo"),
+            (["X", "repo", "--replace", "--file", "f"], "repo"),
+            (["X", "--label", "l", "repo", "a/b"], "repo"),
+            (["X", "spec", "s"], "spec"),
+        ):
+            self.assertEqual(cli._attach_flags(argv)["type"], expected, argv)
+
+    def test_attach_repo_forbidden_and_spec_permitted_through_parsed_flags(self):
+        self.assertFalse(worker_permitted("attach", cli._attach_flags(["X", "repo", "a/b"])))
+        self.assertTrue(worker_permitted("attach", cli._attach_flags(["X", "spec", "s"])))
+
+    def test_malformed_argv_with_no_id_fails_via_argparse_not_the_gate(self):
+        with self.assertRaises(SystemExit) as ctx:
+            cli._attach_flags([])
+        self.assertEqual(ctx.exception.code, 2)
+
+
 class TestIsWorker(unittest.TestCase):
     def test_true_when_flag_set(self):
         self.assertTrue(Config(environ={"LC_WORKER": "1"}).is_worker())
@@ -129,6 +149,37 @@ class TestMainWorkerGateKeysOnLiveHome(unittest.TestCase):
                 rc = cli.main(["rm", "X"])
         self.assertEqual(rc, 0)
         self.assertNotIn("workers may not run", err.getvalue())
+
+
+class TestMainWorkerGateAttach(unittest.TestCase):
+    def _run(self, live, argv):
+        with mock.patch.object(cli, "Container", lambda: _GateContainer(live)), \
+                mock.patch.object(cli, "cmd_attach", lambda a: 0):
+            err = io.StringIO()
+            with redirect_stderr(err):
+                rc = cli.main(argv)
+        return rc, err.getvalue()
+
+    def test_worker_attaching_repo_on_the_live_home_refused(self):
+        for argv in (
+            ["attach", "X", "repo", "a/b"],
+            ["attach", "X", "repo", "a/b", "--replace"],
+            ["attach", "X", "--label", "l", "repo", "--file", "f"],
+        ):
+            rc, err = self._run(True, argv)
+            self.assertEqual(rc, 1, argv)
+            self.assertIn("workers may not attach an artifact of type repo", err)
+            self.assertIn("attach is otherwise permitted", err)
+
+    def test_worker_attaching_spec_on_the_live_home_not_refused(self):
+        rc, err = self._run(True, ["attach", "X", "spec", "s"])
+        self.assertEqual(rc, 0)
+        self.assertNotIn("workers may not", err)
+
+    def test_worker_attaching_repo_off_the_live_home_not_refused(self):
+        rc, err = self._run(False, ["attach", "X", "repo", "a/b"])
+        self.assertEqual(rc, 0)
+        self.assertNotIn("workers may not", err)
 
 
 if __name__ == "__main__":

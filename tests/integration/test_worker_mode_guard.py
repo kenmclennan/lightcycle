@@ -73,6 +73,15 @@ class TestWorkerModeGuard(unittest.TestCase):
         self.assertEqual(r.returncode, 1)
         self.assertIn("workers may not run 'workflow'", r.stderr)
 
+    def test_worker_cannot_attach_repo_on_the_live_home(self):
+        r = run_worker_against_live_home("attach", "X", "repo", "a/b")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("workers may not", r.stderr)
+
+    def test_worker_attaching_spec_on_the_live_home_is_not_guard_refused(self):
+        r = run_worker_against_live_home("attach", "X", "spec", "s")
+        self.assertNotIn("workers may not", r.stderr)
+
     def test_worker_against_temp_store_permitted(self):
         for args in (("rm", "X"), ("init",), ("set", "X", "--parent", "Y")):
             r = run_worker_against_temp_store(*args)

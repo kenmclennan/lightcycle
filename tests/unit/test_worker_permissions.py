@@ -31,6 +31,23 @@ class TestWorkerPermitted(unittest.TestCase):
         self.assertFalse(worker_permitted("rm", {"state": "waiting"}))
 
 
+class TestWorkerPermittedAttach(unittest.TestCase):
+    def test_attach_repo_forbidden(self):
+        self.assertFalse(worker_permitted("attach", {"type": "repo"}))
+
+    def test_attach_of_every_step_used_type_permitted(self):
+        for t in (
+            "spec", "spec-amendment", "comments-handled", "checks-run", "pr", "branch", "reflection",
+        ):
+            self.assertTrue(worker_permitted("attach", {"type": t}), t)
+
+    def test_attach_without_a_type_key_permitted(self):
+        self.assertTrue(worker_permitted("attach", {}))
+
+    def test_attach_type_comparison_is_exact(self):
+        self.assertTrue(worker_permitted("attach", {"type": "Repo"}))
+
+
 class TestWorkerRefusalMessage(unittest.TestCase):
     def test_message_lists_all_eight_verbs(self):
         self.assertIn(
@@ -45,6 +62,23 @@ class TestWorkerRefusalMessage(unittest.TestCase):
             self.assertIn(
                 "permitted: claim, done, set --state waiting", worker_refusal_message("rm")
             )
+
+    def test_attach_message_names_the_forbidden_type_and_says_attach_is_otherwise_permitted(self):
+        msg = worker_refusal_message("attach")
+        self.assertIn("type repo", msg)
+        self.assertIn("attach is otherwise permitted", msg)
+
+    def test_attach_message_is_derived_from_the_forbidden_type_tuple(self):
+        with mock.patch(
+            "lightcycle.domain.work.worker_permissions._ATTACH_FORBIDDEN_TYPES", ("repo", "resolves")
+        ):
+            self.assertIn("type repo, resolves", worker_refusal_message("attach"))
+
+    def test_message_for_other_verbs_is_unchanged_by_the_forbidden_type_tuple(self):
+        with mock.patch(
+            "lightcycle.domain.work.worker_permissions._ATTACH_FORBIDDEN_TYPES", ("repo", "resolves")
+        ):
+            self.assertNotIn("resolves", worker_refusal_message("rm"))
 
 
 if __name__ == "__main__":
