@@ -52,7 +52,7 @@ This table documents every `_SEED_KEYS` entry - `tests/unit/test_docs_reference_
 | `projects` | root under which project repos live |
 | `default-origin` | the workflow origin the spawner reads step prompts from. There is **no default workflow**: activation requires the item to carry `--workflow <origin>/<name>` |
 | `workflows-remote` | git remote for the built-in workflow origin. Seeded blank; `lc init` only pulls it once set (`lc config --edit`, then `lc workflow add <url> --name <origin>`) |
-| `workflow-retention` | pulled bundles kept per origin (plus any a live item pins) |
+| `workflow-retention` | pulled bundles kept per origin, minimum 1 (the current version and any a live item pins are always kept) |
 | `max-agents` | worker cap the pool fills to each tick; must be `>= 0` (`0` pauses admission for the tick) |
 | `poll-seconds` | pool tick interval |
 | `branch-prefix` | prefix for worktree branches |

@@ -111,6 +111,7 @@ _NUMERIC_RANGES = {
     "suspend-pressure": (0.0, 1.0),
     "resume-pressure": (0.0, 1.0),
     "max-agents": (0, None),
+    "workflow-retention": (1, None),
     "max-boot-seconds": (0, None),
     "max-session-seconds": (0, None),
     "stall-seconds": (0, None),
@@ -554,7 +555,7 @@ class Config:
         return self._required_int("backup-retention")
 
     def workflow_retention(self):
-        return self._required_int("workflow-retention")
+        return self._check_range("workflow-retention", self._required_int("workflow-retention"))
 
     def max_title_length(self):
         return self._required_int("max-title-length")

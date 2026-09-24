@@ -27,9 +27,11 @@ class AddResponse:
 
 
 def prune_origin(source, store, origin, keep_n):
-    pruned = versions_to_prune(
-        source.list_versions(origin), keep_n, pinned_shas(store, origin)
-    )
+    protected = pinned_shas(store, origin)
+    registration = source.read_registry(origin)
+    if registration is not None:
+        protected = set(protected) | {registration.current}
+    pruned = versions_to_prune(source.list_versions(origin), keep_n, protected)
     for sha in pruned:
         source.remove_version(origin, sha)
     return pruned

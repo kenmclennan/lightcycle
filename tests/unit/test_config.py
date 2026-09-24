@@ -506,6 +506,22 @@ class TestMaxTitleLength(unittest.TestCase):
         self.assertEqual(_cfg(max_title_length="72").max_title_length(), 72)
 
 
+class TestWorkflowRetention(unittest.TestCase):
+    def test_config_value_read(self):
+        self.assertEqual(_cfg(workflow_retention="3").workflow_retention(), 3)
+
+    def test_one_is_the_minimum(self):
+        self.assertEqual(_cfg(workflow_retention="1").workflow_retention(), 1)
+
+    def test_zero_is_refused(self):
+        with self.assertRaises(ConfigValueError):
+            _cfg(workflow_retention="0").workflow_retention()
+
+    def test_negative_is_refused(self):
+        with self.assertRaises(ConfigValueError):
+            _cfg(workflow_retention="-2").workflow_retention()
+
+
 class TestSpawnProtocol(unittest.TestCase):
     def test_spawn_id_absent_is_none(self):
         self.assertIsNone(_cfg().spawn_id())
