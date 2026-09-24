@@ -18,16 +18,14 @@ class CreateItemInput:
 @dataclass(frozen=True)
 class CreateItemResponse:
     id: str
-    defaulted: bool
 
 
 class CreateItemUseCase:
-    def __init__(self, store, config):
+    def __init__(self, store):
         self._store = store
-        self._config = config
 
     def execute(self, input: CreateItemInput) -> CreateItemResponse:
-        resolved = resolve_shortcode(self._store, self._config, input.project, input.repo)
+        resolved = resolve_shortcode(self._store, input.project, input.repo)
         project = input.project or resolved.project
         with self._store.transaction():
             tid = self._store.create_item(
@@ -38,4 +36,4 @@ class CreateItemUseCase:
                 self._store.add_artifact(tid, "repo", input.repo)
             if input.backlog:
                 link_resolves(self._store, tid, input.backlog)
-        return CreateItemResponse(id=tid, defaulted=resolved.defaulted)
+        return CreateItemResponse(id=tid)

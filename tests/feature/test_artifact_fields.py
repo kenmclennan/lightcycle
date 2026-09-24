@@ -33,7 +33,7 @@ def _flow(ctx):
 def _filed(ctx, spec, step):
     title = os.path.splitext(os.path.basename(spec))[0]
     rc, item, err = ctx["h"].run(
-        "new", "item", title, "--workflow", "lightcycle/spec-driven", "--description", "a description")
+        "new", "item", "--project", "app", title, "--workflow", "lightcycle/spec-driven", "--description", "a description")
     assert rc == 0, err
     item = item.strip()
     ctx["h"].run("attach", item, "spec", spec, "--label", "filed-spec")

@@ -414,7 +414,7 @@ class StoreContractBase:
 
     def test_story_artifacts_roundtrip(self):
         s = self.make_store()
-        sid = s.create_item("item: foo", "a description")
+        sid = s.create_item("item: foo", "a description", shortcode="GRID")
         s.add_artifact(sid, "spec", "specs/foo.md")
         arts = s.item_artifacts(sid)
         self.assertEqual(len(arts), 1)
@@ -423,7 +423,7 @@ class StoreContractBase:
 
     def test_add_artifact_still_appends_same_type(self):
         s = self.make_store()
-        sid = s.create_item("item: foo", "a description")
+        sid = s.create_item("item: foo", "a description", shortcode="GRID")
         s.add_artifact(sid, "feedback", "first note")
         s.add_artifact(sid, "feedback", "second note")
         arts = [a for a in s.item_artifacts(sid) if a.type == "feedback"]
@@ -431,7 +431,7 @@ class StoreContractBase:
 
     def test_replace_artifact_replaces_existing_same_type(self):
         s = self.make_store()
-        sid = s.create_item("item: foo", "a description")
+        sid = s.create_item("item: foo", "a description", shortcode="GRID")
         s.add_artifact(sid, "spec", "specs/old.md")
         s.replace_artifact(sid, "spec", "specs/new.md")
         arts = s.item_artifacts(sid)
@@ -440,7 +440,7 @@ class StoreContractBase:
 
     def test_replace_artifact_is_generic_for_any_type(self):
         s = self.make_store()
-        sid = s.create_item("item: foo", "a description")
+        sid = s.create_item("item: foo", "a description", shortcode="GRID")
         s.add_artifact(sid, "spec", "app-old")
         s.replace_artifact(sid, "spec", "app-new")
         arts = [a for a in s.item_artifacts(sid) if a.type == "spec"]
@@ -449,14 +449,14 @@ class StoreContractBase:
 
     def test_add_artifact_declared_kind_overrides_type_default(self):
         s = self.make_store()
-        sid = s.create_item("item: foo", "a description")
+        sid = s.create_item("item: foo", "a description", shortcode="GRID")
         s.add_artifact(sid, "pr", "https://gh/1", kind="text")
         arts = s.item_artifacts(sid)
         self.assertEqual(arts[0].kind, "text")
 
     def test_add_artifact_undeclared_kind_resolves_from_type_table(self):
         s = self.make_store()
-        sid = s.create_item("item: foo", "a description")
+        sid = s.create_item("item: foo", "a description", shortcode="GRID")
         s.add_artifact(sid, "pr", "https://gh/1")
         s.add_artifact(sid, "spec", "specs/foo.md")
         s.add_artifact(sid, "branch", "feat/x")
@@ -474,7 +474,7 @@ class StoreContractBase:
 
     def test_add_artifact_internal_defaults_false_and_persists_true(self):
         s = self.make_store()
-        sid = s.create_item("item: foo", "a description")
+        sid = s.create_item("item: foo", "a description", shortcode="GRID")
         s.add_artifact(sid, "pr", "https://gh/1")
         s.add_artifact(sid, "reflection", "{}", internal=True)
         arts = {a.type: a for a in s.item_artifacts(sid)}
@@ -483,7 +483,7 @@ class StoreContractBase:
 
     def test_replace_artifact_applies_declared_and_default_kind_and_internal(self):
         s = self.make_store()
-        sid = s.create_item("item: foo", "a description")
+        sid = s.create_item("item: foo", "a description", shortcode="GRID")
         s.add_artifact(sid, "pr", "https://gh/1")
         s.replace_artifact(sid, "pr", "https://gh/2", kind="text", internal=True)
         arts = [a for a in s.item_artifacts(sid) if a.type == "pr"]
@@ -493,20 +493,26 @@ class StoreContractBase:
 
     def test_create_item_is_a_top_level_todo(self):
         s = self.make_store()
-        tid = s.create_item("item: foo", "a description")
+        tid = s.create_item("item: foo", "a description", shortcode="GRID")
         node = s.get_node(tid)
         self.assertEqual(node.type, "item")
         self.assertIsNone(node.parent)
         self.assertEqual(node.state, "backlogged")
 
+    def test_an_explicit_shortcode_mints_a_counter_per_prefix(self):
+        s = self.make_store()
+        self.assertEqual(s.create_item("a", "d", shortcode="X"), "X-1")
+        self.assertEqual(s.create_item("b", "d", shortcode="X"), "X-2")
+        self.assertEqual(s.create_item("c", "d", shortcode="Y"), "Y-1")
+
     def test_create_item_with_description(self):
         s = self.make_store()
-        tid = s.create_item("my item", "detailed info")
+        tid = s.create_item("my item", "detailed info", shortcode="GRID")
         self.assertEqual(s.get_item(tid).description, "detailed info")
 
     def test_edit_item_title_and_description(self):
         s = self.make_store()
-        tid = s.create_item("old title", "old desc")
+        tid = s.create_item("old title", "old desc", shortcode="GRID")
         s.edit_node(tid, title="new title", description="new desc")
         t = s.get_item(tid)
         self.assertEqual(t.title, "new title")
@@ -514,7 +520,7 @@ class StoreContractBase:
 
     def test_edit_item_leaves_unspecified_fields_intact(self):
         s = self.make_store()
-        tid = s.create_item("title stays", "desc stays")
+        tid = s.create_item("title stays", "desc stays", shortcode="GRID")
         s.edit_node(tid, project="p1")
         t = s.get_item(tid)
         self.assertEqual(t.title, "title stays")
@@ -528,7 +534,7 @@ class StoreContractBase:
 
     def test_a_steps_item_is_fixed_at_creation(self):
         s = self.make_store()
-        item = s.create_item("owning item", "a description")
+        item = s.create_item("owning item", "a description", shortcode="GRID")
         tid = self._step(s, "a step", parent=item)
         s.edit_node(tid)
         self.assertEqual(s.get_step(tid).item, item)
@@ -541,7 +547,7 @@ class StoreContractBase:
 
     def test_edit_task_parent_omitted_leaves_parent_unchanged(self):
         s = self.make_store()
-        item = s.create_item("owning item", "a description")
+        item = s.create_item("owning item", "a description", shortcode="GRID")
         tid = self._step(s, "a step", parent=item)
         s.edit_node(tid)
         t = s.get_node(tid)
@@ -967,7 +973,7 @@ class StoreContractBase:
 
     def test_closed_stories_roundtrip(self):
         s = self.make_store()
-        sid = s.create_item("item: foo", "a description")
+        sid = s.create_item("item: foo", "a description", shortcode="GRID")
         s.add_artifact(sid, "spec", "specs/foo.md")
         s.complete_node(sid, "done")
         items = s.closed_items()
@@ -1038,7 +1044,7 @@ class StoreContractBase:
         sentinel = "SENTINEL-1999-01-01T00:00:00"
         s = self.make_store(now=lambda: sentinel)
 
-        item = s.create_item("t", "a description")
+        item = s.create_item("t", "a description", shortcode="GRID")
         self.assertEqual(s.get_node(item).created_at, sentinel)
 
         tid = s.create_step(step="build", role="agent", parent=item)
@@ -1070,7 +1076,7 @@ class StoreContractBase:
 
     def test_steps_at_step_created_at_set_and_orders_by_creation(self):
         s = self.make_store()
-        item = s.create_item("owner", "an owning item")
+        item = s.create_item("owner", "an owning item", shortcode="GRID")
         first = s.create_step(step="build", role="agent", parent=item)
         second = s.create_step(step="build", role="agent", parent=item)
         steps = {t.id: t for t in s.steps_at_step("build")}
@@ -1090,7 +1096,7 @@ class StoreContractBase:
 
     def test_all_steps_excludes_items(self):
         s = self.make_store()
-        item = s.create_item("todo item", "a description")
+        item = s.create_item("todo item", "a description", shortcode="GRID")
         step = self._step(s, "a step")
         ids = [t.id for t in s.all_steps()]
         self.assertEqual(ids, [step])
@@ -1133,7 +1139,7 @@ class StoreContractBase:
 
     def test_item_state_rolls_up_mixed_children(self):
         s = self.make_store()
-        item = s.create_item("item", "a description")
+        item = s.create_item("item", "a description", shortcode="GRID")
         done_step = self._step(s, "done step", role="agent", parent=item)
         self._step(s, "open step", role="agent", parent=item)
         s.complete_node(done_step, "done")
@@ -1141,7 +1147,7 @@ class StoreContractBase:
 
     def test_item_state_backlogged_when_all_children_done_but_item_never_closed(self):
         s = self.make_store()
-        item = s.create_item("item", "a description")
+        item = s.create_item("item", "a description", shortcode="GRID")
         a = self._step(s, "a", parent=item)
         b = self._step(s, "b", parent=item)
         s.complete_node(a, "done")
@@ -1150,14 +1156,14 @@ class StoreContractBase:
 
     def test_item_state_queued_when_all_children_queued(self):
         s = self.make_store()
-        item = s.create_item("item", "a description")
+        item = s.create_item("item", "a description", shortcode="GRID")
         self._step(s, "a", role="agent", parent=item)
         self._step(s, "b", role="agent", parent=item)
         self.assertEqual(s.get_node(item).state, "queued")
 
     def test_empty_item_state_backlogged(self):
         s = self.make_store()
-        item = s.create_item("item", "a description")
+        item = s.create_item("item", "a description", shortcode="GRID")
         self.assertEqual(s.get_node(item).state, "backlogged")
 
     def test_step_state_queued_when_in_progress_column_but_unassigned(self):
@@ -1168,7 +1174,7 @@ class StoreContractBase:
 
     def test_closed_empty_container_state_done(self):
         s = self.make_store()
-        item = s.create_item("item", "a description")
+        item = s.create_item("item", "a description", shortcode="GRID")
         s.complete_node(item, "done")
         self.assertEqual(s.get_node(item).state, "done")
 
@@ -1213,7 +1219,7 @@ class StoreContractBase:
 
     def test_replace_artifact_only_replaces_the_matching_label(self):
         s = self.make_store()
-        sid = s.create_item("item: foo", "a description")
+        sid = s.create_item("item: foo", "a description", shortcode="GRID")
         s.add_artifact(sid, "branch", "feat/spec", label="spec")
         s.add_artifact(sid, "branch", "feat/code", label="code")
 
@@ -1224,7 +1230,7 @@ class StoreContractBase:
 
     def test_replace_artifact_without_a_label_leaves_labelled_ones_alone(self):
         s = self.make_store()
-        sid = s.create_item("item: foo", "a description")
+        sid = s.create_item("item: foo", "a description", shortcode="GRID")
         s.add_artifact(sid, "pr", "https://gh/spec", label="spec")
         s.add_artifact(sid, "pr", "https://gh/plain")
 
@@ -1235,7 +1241,7 @@ class StoreContractBase:
 
     def test_node_view_of_an_item_shows_its_own_artifacts(self):
         s = self.make_store()
-        item = s.create_item("item: foo", "a description")
+        item = s.create_item("item: foo", "a description", shortcode="GRID")
         s.add_artifact(item, "spec", "specs/foo.md")
 
         view = s.node_view(item)
@@ -1245,7 +1251,7 @@ class StoreContractBase:
 
     def test_node_view_of_a_step_still_shows_its_parent_item_artifacts(self):
         s = self.make_store()
-        item = s.create_item("item: foo", "a description")
+        item = s.create_item("item: foo", "a description", shortcode="GRID")
         s.add_artifact(item, "spec", "specs/foo.md")
         step = self._step(s, "build: foo", parent=item)
 
@@ -1349,7 +1355,7 @@ class StoreContractBase:
     def test_goal_ids_do_not_disturb_node_ids(self):
         s = self.make_store()
         s.create_goal("g")
-        item = s.create_item("an item", "d")
+        item = s.create_item("an item", "d", shortcode="GRID")
         self.assertNotIn("G-1", [n.id for n in s.all_nodes()])
         self.assertIn(item, [n.id for n in s.all_nodes()])
 
@@ -1382,7 +1388,7 @@ class StoreContractBase:
     def test_goal_item_links_keep_order_and_allow_one_item_in_many_goals(self):
         s = self.make_store()
         g1, g2 = s.create_goal("a"), s.create_goal("b")
-        i1, i2 = s.create_item("x", "d"), s.create_item("y", "d")
+        i1, i2 = s.create_item("x", "d", shortcode="GRID"), s.create_item("y", "d", shortcode="GRID")
         s.link_goal_item(g1, i2)
         s.link_goal_item(g1, i1)
         s.link_goal_item(g2, i1)
@@ -1395,8 +1401,8 @@ class StoreContractBase:
     def test_delete_removes_goal_links_and_keeps_goal_log(self):
         s = self.make_store()
         gid = s.create_goal("a")
-        item = s.create_item("x", "d")
-        other = s.create_item("y", "d")
+        item = s.create_item("x", "d", shortcode="GRID")
+        other = s.create_item("y", "d", shortcode="GRID")
         s.link_goal_item(gid, item)
         s.link_goal_item(gid, other)
         s.add_goal_log(gid, "kept title", "kept")

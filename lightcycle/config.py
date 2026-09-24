@@ -58,7 +58,6 @@ class ResolvedSetting:
 _SEED_KEYS = [
     ("projects", "~/workspace/projects"),
     ("branch-prefix", "feat"),
-    ("shortcode", "PROJ"),
     ("default-origin", "lightcycle"),
     ("workflows-remote", ""),
     ("max-agents", "5"),
@@ -387,9 +386,6 @@ class Config:
 
     def branch_prefix(self):
         return self._required_str("branch-prefix")
-
-    def shortcode(self):
-        return self._required_str("shortcode")
 
     def default_origin(self):
         return self._required_str("default-origin")

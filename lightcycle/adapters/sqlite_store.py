@@ -835,8 +835,9 @@ class SqliteStore(StorePort):
         return self._rows_to_items(self._conn.execute(sql, params).fetchall())
 
     def _mint_id(self, parent, shortcode=None):
-        prefix = shortcode or self.shortcode()
-        namespace = parent if parent is not None else prefix
+        if parent is None and not shortcode:
+            raise ValueError("create_item needs an explicit shortcode or id; nothing fills one in")
+        namespace = parent if parent is not None else shortcode
         row = self._conn.execute(
             "INSERT INTO counters (namespace, next) VALUES (?, 2) "
             "ON CONFLICT(namespace) DO UPDATE SET next = next + 1 "
@@ -845,7 +846,7 @@ class SqliteStore(StorePort):
         ).fetchone()
         n = row[0]
         if parent is None:
-            return "%s-%d" % (prefix, n)
+            return "%s-%d" % (shortcode, n)
         return format_step_id(parent, n)
 
     def _mint_or_adopt(self, explicit_id, parent, shortcode=None):
@@ -1018,9 +1019,6 @@ class SqliteStore(StorePort):
 
     def closed_items(self):
         return self._select_items("state = 'done'")
-
-    def shortcode(self):
-        return self._config.shortcode()
 
     def snapshot_nodes(self):
         result = []

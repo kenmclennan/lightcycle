@@ -6,103 +6,110 @@ from tests.support.fake_store import FakeStore
 from tests.support.step_factory import create_owned_step
 
 
-class FakeConfig:
-    def __init__(self, shortcode="XY"):
-        self._shortcode = shortcode
-
-    def shortcode(self):
-        return self._shortcode
+def _store_with_app():
+    store = FakeStore()
+    store.add_project("acme/app", shortcode="APP")
+    return store
 
 
 class TestCreateItemUseCase(unittest.TestCase):
     def test_happy_path_returns_id_and_creates_a_backlogged_item(self):
-        store = FakeStore()
+        store = _store_with_app()
         b1 = create_owned_step(store, "backlog one", role="human")
-        resp = CreateItemUseCase(store, FakeConfig()).execute(
-            CreateItemInput(title="an item", description="a description", backlog=[b1])
+        resp = CreateItemUseCase(store).execute(
+            CreateItemInput(title="an item", description="a description", project="app", backlog=[b1])
         )
         self.assertEqual(store.get_node(resp.id).state, "backlogged")
         self.assertEqual(
             [(a.type, a.value) for a in store.item_artifacts(resp.id)], [("resolves", b1)]
         )
 
+    def test_a_successful_create_no_longer_reports_a_defaulted_flag(self):
+        store = _store_with_app()
+        resp = CreateItemUseCase(store).execute(
+            CreateItemInput(title="an item", description="a description", project="app")
+        )
+        self.assertFalse(hasattr(resp, "defaulted"))
+
     def test_repo_attaches_a_repo_artifact(self):
         store = FakeStore()
-        resp = CreateItemUseCase(store, FakeConfig()).execute(
+        store.add_project("acme/lightcycle", shortcode="LC")
+        resp = CreateItemUseCase(store).execute(
             CreateItemInput(title="an item", description="a description", repo="lightcycle")
         )
         self.assertEqual(store.get_item(resp.id).repo, "lightcycle")
 
     def test_multiple_backlog_ids_link_in_order(self):
-        store = FakeStore()
+        store = _store_with_app()
         b1 = create_owned_step(store, "backlog one", role="human")
         b2 = create_owned_step(store, "backlog two", role="human")
-        resp = CreateItemUseCase(store, FakeConfig()).execute(
-            CreateItemInput(title="an item", description="a description", backlog=[b1, b2])
+        resp = CreateItemUseCase(store).execute(
+            CreateItemInput(
+                title="an item", description="a description", project="app", backlog=[b1, b2]
+            )
         )
         self.assertEqual(
             [(a.type, a.value) for a in store.item_artifacts(resp.id)],
             [("resolves", b1), ("resolves", b2)],
         )
 
+    def _refused(self, store, **fields):
+        with self.assertRaises(UseCaseError) as ctx:
+            CreateItemUseCase(store).execute(
+                CreateItemInput(title="an item", description="a description", **fields)
+            )
+        return str(ctx.exception)
+
     def test_unregistered_project_raises_naming_the_project_and_creates_nothing(self):
         store = FakeStore()
-        with self.assertRaises(UseCaseError) as ctx:
-            CreateItemUseCase(store, FakeConfig()).execute(
-                CreateItemInput(
-                    title="an item", description="a description", project="ghost/repo"
-                )
-            )
-        self.assertIn("ghost/repo", str(ctx.exception))
+        self.assertIn("ghost/repo", self._refused(store, project="ghost/repo"))
         self.assertEqual(store.all_nodes(), [])
 
     def test_ambiguous_project_raises_and_creates_nothing(self):
         store = FakeStore()
         store.add_project("acme/app", shortcode="ACME")
         store.add_project("other/app", shortcode="OTHER")
-        with self.assertRaises(UseCaseError) as ctx:
-            CreateItemUseCase(store, FakeConfig()).execute(
-                CreateItemInput(title="an item", description="a description", project="app")
-            )
-        self.assertIn("app", str(ctx.exception))
+        self.assertIn("app", self._refused(store, project="app"))
         self.assertEqual(store.all_nodes(), [])
 
     def test_shortcodeless_project_raises_and_creates_nothing(self):
         store = FakeStore()
         store.add_project("acme/ghost", local_path="/x")
-        with self.assertRaises(UseCaseError) as ctx:
-            CreateItemUseCase(store, FakeConfig()).execute(
-                CreateItemInput(
-                    title="an item", description="a description", project="acme/ghost"
-                )
-            )
-        self.assertIn("acme/ghost", str(ctx.exception))
+        self.assertIn("acme/ghost", self._refused(store, project="acme/ghost"))
+        self.assertEqual(store.all_nodes(), [])
+
+    def test_neither_project_nor_repo_raises_and_creates_nothing(self):
+        store = FakeStore()
+        self._refused(store)
+        self.assertEqual(store.all_nodes(), [])
+
+    def test_unregistered_repo_raises_and_creates_no_node_or_repo_artifact(self):
+        store = FakeStore()
+        self.assertIn("ghost/repo", self._refused(store, repo="ghost/repo"))
+        self.assertEqual(store.all_nodes(), [])
+
+    def test_shortcodeless_repo_raises_and_creates_nothing(self):
+        store = FakeStore()
+        store.add_project("acme/ghost", local_path="/x")
+        self.assertIn("registered but has no shortcode", self._refused(store, repo="acme/ghost"))
         self.assertEqual(store.all_nodes(), [])
 
     def test_registered_repo_with_no_project_derives_shortcode_and_project(self):
         store = FakeStore()
         store.add_project("kenmclennan/lightcycle", shortcode="LC")
-        resp = CreateItemUseCase(store, FakeConfig(shortcode="XY")).execute(
+        resp = CreateItemUseCase(store).execute(
             CreateItemInput(
                 title="an item", description="a description", repo="kenmclennan/lightcycle"
             )
         )
-        self.assertFalse(resp.defaulted)
+        self.assertTrue(resp.id.startswith("LC-"))
         self.assertEqual(store.get_item(resp.id).project, "lightcycle")
-
-    def test_unregistered_repo_with_no_project_defaults_and_leaves_project_unset(self):
-        store = FakeStore()
-        resp = CreateItemUseCase(store, FakeConfig()).execute(
-            CreateItemInput(title="an item", description="a description", repo="ghost/repo")
-        )
-        self.assertTrue(resp.defaulted)
-        self.assertIsNone(store.get_item(resp.id).project)
 
     def test_explicit_project_wins_over_a_different_registered_repo(self):
         store = FakeStore()
         store.add_project("acme/app", shortcode="ACME")
         store.add_project("kenmclennan/lightcycle", shortcode="LC")
-        resp = CreateItemUseCase(store, FakeConfig()).execute(
+        resp = CreateItemUseCase(store).execute(
             CreateItemInput(
                 title="an item", description="a description",
                 project="acme/app", repo="kenmclennan/lightcycle",

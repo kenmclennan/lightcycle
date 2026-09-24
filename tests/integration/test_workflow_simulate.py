@@ -113,7 +113,6 @@ def _seed_config(home):
     lines = [
         "projects: %s" % os.path.join(home, "projects"),
         "specs: %s" % os.path.join(home, "specs"),
-        "shortcode: SIM",
         "branch-prefix: feat",
         "default-origin: acme",
         "max-agents: 5",
@@ -222,8 +221,6 @@ class SimulateTestCase(unittest.TestCase):
         os.makedirs(specs_root, exist_ok=True)
         os.makedirs(projects_root, exist_ok=True)
         cfg_path = os.path.join(store_home, "config")
-        with open(cfg_path, "w") as f:
-            f.write("shortcode: SIM\n")
         store_config = Config(environ={"LC_HOME": store_home, "LC_CONFIG": cfg_path})
         store = SqliteStore(store_config)
         store.add_project(SPECS_WORKSPACE, local_path=specs_root)

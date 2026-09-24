@@ -5,7 +5,7 @@ from lightcycle.application.errors import UseCaseError
 from lightcycle.domain.work import ProjectIdentity
 from lightcycle.domain.work.project_identity import reserved_shortcode_reason
 from lightcycle.ports.git import GitReadError
-from lightcycle.ports.store import ProjectResolutionError
+from lightcycle.ports.store import ProjectNotRegisteredError, ProjectResolutionError
 
 
 @dataclass(frozen=True)
@@ -100,7 +100,7 @@ class ProjectRegistry:
     def find(self, ref):
         matches = self._match(ref)
         if not matches:
-            raise ProjectResolutionError(
+            raise ProjectNotRegisteredError(
                 "project '%s' is not registered - run `lc project add <owner/name> --path <dir>`"
                 % ref
             )

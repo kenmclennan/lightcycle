@@ -166,8 +166,6 @@ class SimulationContainer:
         for d in (self.home, self.specs_root, self.projects_root):
             os.makedirs(d, exist_ok=True)
         cfg_path = os.path.join(self.home, "config")
-        with open(cfg_path, "w") as f:
-            f.write("shortcode: SIM\n")
 
         from lightcycle.domain.flow.flow import SPECS_WORKSPACE
 

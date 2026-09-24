@@ -44,8 +44,7 @@ lc project add owner/myapp --path ./myapp   # a project is its github identity i
 
 # 3. drive some work in
 item=$(lc new item "health endpoint" --description "$(cat health-brief.md)" \
-  --workflow lightcycle/spec-driven)           # a todo item carrying its brief, e.g. MYAPP-1
-lc attach $item repo myapp                     # the target repo
+  --workflow lightcycle/spec-driven --repo myapp)   # a todo item carrying its brief and target repo, e.g. MYAPP-1
 lc set $item --state active                    # files spec-writer; it authors the spec on a spec PR
 
 # 4. run the pool (separate terminal) and watch
@@ -116,7 +115,7 @@ signals:                    # stage  metric-name  outcome
 **Selecting a workflow.** There is no default; selection lives on the item:
 
 ```bash
-lc new item "ship the thing" --workflow lightcycle/spec-driven
+lc new item "ship the thing" --description "<...>" --project myapp --workflow lightcycle/spec-driven
 lc set <item> --state active                                     # uses the item's workflow
 lc set <item> --state active --workflow lightcycle/spec-driven   # or name it at activation
 ```
@@ -131,7 +130,7 @@ The mutating CLI is a small set of generic primitives over nodes; the read views
 
 | Command | What it does |
 | --- | --- |
-| `lc new <type> "<title>" --description "<...>" [--parent/--workflow/--project/--repo/--backlog]` | create a node; `<type>` is `item`\|`step` (validated); `--description` is required on an item - it is the brief the entry step reads; `<type> step` also requires `--step <name>`, the workflow step name that determines `role` (resolved against `--workflow`, or `--parent`'s pinned workflow), and `--parent <item>` names its owning item |
+| `lc new <type> "<title>" --description "<...>" [--parent/--workflow/--project/--repo/--backlog]` | create a node; `<type>` is `item`\|`step` (validated); `--description` is required on an item - it is the brief the entry step reads - and so is a project: `--project` or a registered `--repo` resolving to a shortcode, else the create is refused; `<type> step` also requires `--step <name>`, the workflow step name that determines `role` (resolved against `--workflow`, or `--parent`'s pinned workflow), and `--parent <item>` names its owning item |
 | `lc set <id> [--state/--title/--description/--workflow/--project/--label/--step/--notes/--needs/--reason/--tried/--backlog/--unset]` | update a node. The type decides which flags and states are legal, and `lc set` refuses at the boundary rather than silently ignoring one: an **item** takes `title description project workflow label backlog step` and the state `active` (plans it - files its entry step); a **step** takes `title notes needs reason tried label` and the states `ready` and `waiting`, and `waiting` requires `--needs` and `--reason`. An empty string is never a value - it is refused rather than silently applied; `--unset <field>` (repeatable) clears `description`/`project`/`workflow` on an item or `notes` on a step instead |
 | `lc show <id>` | one node as JSON (artifacts, resume-state) |
 | `lc done <id> [<outcome>]` | close a node; a **step** done-with-outcome advances the flow; an item force-closes its open steps |

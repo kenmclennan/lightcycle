@@ -10,6 +10,10 @@ class ProjectResolutionError(Exception):
     pass
 
 
+class ProjectNotRegisteredError(ProjectResolutionError):
+    pass
+
+
 class StoreError(Exception):
     pass
 
