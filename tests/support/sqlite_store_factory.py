@@ -15,24 +15,11 @@ def make_sqlite_store(now=None, extra_config=None):
     return SqliteStore(config, now=now)
 
 
-def make_legacy_sqlite_store(rows, artifacts=()):
-    from tests.support.legacy_store import plant_legacy_nodes
-
-    root = tempfile.mkdtemp()
-    cfg_path = os.path.join(root, "config")
-    config = Config(environ={"LC_HOME": root, "LC_CONFIG": cfg_path})
-    store = SqliteStore(config)
-    db_path = store._db_path
-    store.release()
-    plant_legacy_nodes(db_path, rows, artifacts)
-    return SqliteStore(config)
-
-
-def plant_legacy_db(config, rows=(), artifacts=()):
+def plant_legacy_db(config, rows=()):
     from tests.support.legacy_store import plant_legacy_nodes
 
     store = SqliteStore(config)
     db_path = store._db_path
     store.release()
-    plant_legacy_nodes(db_path, rows, artifacts)
+    plant_legacy_nodes(db_path, rows)
     return db_path

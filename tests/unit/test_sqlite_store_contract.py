@@ -43,12 +43,28 @@ class TestRemovedMigrationsLeaveNoDanglingReferences(unittest.TestCase):
             "_status_indexes",
             "_backup_before_collapse",
             "_backup_before_action_rename",
+            "_migrate_close_reason_to_outcome",
+            "_migrate_artifact_fields",
+            "_migrate_resume_fields",
+            "_migrate_detach_items_from_themes",
+            "_migrate_collapse_step_roles",
+            "_migrate_brief_artifacts_into_description",
+            "_migrate_phase_artifacts_into_runs",
+            "_migrate_split_nodes",
+            "_fold_comment_ledger_into_runs",
+            "_step_artifact_folds",
+            "_orphan_owner",
+            "_repo_artifact_of",
+            "_STEP_FOLDED_ARTIFACTS",
+            "_RUN_FOLDED_ARTIFACTS",
+            "_FOLDED_ARTIFACTS",
         ):
             self.assertFalse(hasattr(SqliteStore, name), name)
 
     def test_removed_rename_maps_are_gone(self):
         self.assertFalse(hasattr(sqlite_store, "_ACTION_STEP_RENAMES"))
         self.assertFalse(hasattr(sqlite_store, "_ACTION_ROLE_RENAMES"))
+        self.assertFalse(hasattr(sqlite_store, "_INTERNAL_ARTIFACT_TYPES"))
 
 
 if __name__ == "__main__":
