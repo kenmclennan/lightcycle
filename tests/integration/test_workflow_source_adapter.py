@@ -245,6 +245,14 @@ class TestListingAndRemoval(unittest.TestCase):
         adapter.remove_origin("acme")
         self.assertEqual(adapter.list_origins(), [])
 
+    def test_list_versions_ignores_a_leftover_pin_tmp_directory(self):
+        repo, head = _make_source_repo()
+        adapter = _adapter()
+        bundle = adapter.fetch(repo, "main")
+        target = adapter.pin("acme", bundle)
+        os.makedirs(os.path.join(os.path.dirname(target), "abc.123.tmp"))
+        self.assertEqual(adapter.list_versions("acme"), [bundle.sha])
+
 
 class _Config:
     def workflow_retention(self):

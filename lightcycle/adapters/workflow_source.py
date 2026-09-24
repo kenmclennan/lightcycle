@@ -164,7 +164,8 @@ class WorkflowSourceAdapter(WorkflowSourcePort):
         d = self._origin_dir(origin)
         if not os.path.isdir(d):
             return []
-        entries = [(e.name, e.stat().st_mtime) for e in os.scandir(d) if e.is_dir()]
+        entries = [(e.name, e.stat().st_mtime) for e in os.scandir(d)
+                   if e.is_dir() and not e.name.endswith(".tmp")]
         entries.sort(key=lambda e: e[1], reverse=True)
         return [name for name, _ in entries]
 
