@@ -115,6 +115,8 @@ class TestScaffoldedSimulateYmlSequence(unittest.TestCase):
         with self.assertRaises(ConfigError) as cm:
             add_before_init.execute(url=project_dir, ref="HEAD", name="ci-bundle")
         self.assertIn("workflow-retention", str(cm.exception))
+        self.assertIsNone(add_before_init._source.read_registry("ci-bundle"))
+        self.assertEqual(add_before_init._source.list_versions("ci-bundle"), [])
 
         config_after_init = _real_config()
         config_after_init.ensure_config()

@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Optional
 
 from lightcycle.application.workflows.bundle_check import (
     check_bundle_references,
@@ -14,6 +14,7 @@ from lightcycle.application.workflows.pinned import pinned_shas
 from lightcycle.domain.workflows.contract import ENGINE_CONTRACT, contract_compatible
 from lightcycle.domain.workflows.retention import versions_to_prune
 from lightcycle.domain.workflows.source import parse_source_manifest
+from lightcycle.ports.store import StoreError
 from lightcycle.ports.workflow_source import WorkflowSourceError
 
 
@@ -22,6 +23,7 @@ class AddResponse:
     origin: str
     sha: str
     pruned: List[str] = field(default_factory=list)
+    prune_error: Optional[str] = None
 
 
 def prune_origin(source, store, origin, keep_n):
@@ -33,6 +35,13 @@ def prune_origin(source, store, origin, keep_n):
     return pruned
 
 
+def prune_origin_best_effort(source, store, origin, keep_n):
+    try:
+        return prune_origin(source, store, origin, keep_n), None
+    except (OSError, StoreError, WorkflowSourceError) as e:
+        return [], str(e)
+
+
 class AddWorkflowSourceUseCase:
     def __init__(self, source, store, config, fs):
         self._source = source
@@ -41,6 +50,7 @@ class AddWorkflowSourceUseCase:
         self._fs = fs
 
     def execute(self, url, ref, name) -> AddResponse:
+        keep_n = self._config.workflow_retention()
         bundle = self._source.fetch(url, ref)
         manifest = parse_source_manifest(bundle.manifest)
         origin = name or manifest.name
@@ -76,5 +86,6 @@ class AddWorkflowSourceUseCase:
             raise WorkflowSourceError("bundle prompts do not match this engine - %s" % detail)
         self._source.pin(origin, bundle)
         self._source.write_registry(origin, url, ref, bundle.sha)
-        pruned = prune_origin(self._source, self._store, origin, self._config.workflow_retention())
-        return AddResponse(origin=origin, sha=bundle.sha, pruned=pruned)
+        pruned, prune_error = prune_origin_best_effort(self._source, self._store, origin, keep_n)
+        return AddResponse(
+            origin=origin, sha=bundle.sha, pruned=pruned, prune_error=prune_error)

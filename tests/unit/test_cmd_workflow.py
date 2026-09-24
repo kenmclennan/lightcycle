@@ -108,6 +108,18 @@ class FakeSource:
         self.registries.pop(origin, None)
 
 
+class _PruneFailingSource(FakeSource):
+    def __init__(self, failing_origins):
+        super().__init__()
+        self.prune_failing = set(failing_origins)
+        self.armed = False
+
+    def list_versions(self, origin):
+        if self.armed and origin in self.prune_failing:
+            raise OSError("disk unreadable")
+        return super().list_versions(origin)
+
+
 class FakeConfig:
     def __init__(self, projects_root="/projects"):
         self._projects_root = projects_root
@@ -216,6 +228,37 @@ class TestCmdWorkflow(unittest.TestCase):
         self.assertIn("only owned stages carry a phase", err)
         self.assertIn("review-conflict", err)
         self.assertEqual(self.source.list_origins(), [])
+
+    def test_add_prune_failure_warns_on_stderr_and_exits_zero(self):
+        source = _PruneFailingSource({"acme"})
+        source.armed = True
+        cli.set_container(FakeContainer(source, self.store))
+        source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
+        rc, out, err = call(cli.cmd_workflow, "add", "u")
+        self.assertEqual(rc, 0)
+        self.assertIn("added acme @ sha1", out)
+        self.assertEqual(len(err.strip().splitlines()), 1)
+        self.assertIn("acme", err)
+        self.assertIn("disk unreadable", err)
+
+    def test_upgrade_prune_failure_warns_and_still_upgrades_later_origins(self):
+        source = _PruneFailingSource({"first"})
+        cli.set_container(FakeContainer(source, self.store))
+        source.add_remote("u1", 'name = "first"\ncontract = 1\n', "sha1")
+        source.add_remote("u2", 'name = "second"\ncontract = 1\n', "sha1")
+        call(cli.cmd_workflow, "add", "u1")
+        call(cli.cmd_workflow, "add", "u2")
+        source.armed = True
+        source.add_remote("u1", 'name = "first"\ncontract = 1\n', "sha2")
+        source.add_remote("u2", 'name = "second"\ncontract = 1\n', "sha2")
+        rc, out, err = call(cli.cmd_workflow, "upgrade")
+        self.assertEqual(rc, 0)
+        self.assertIn("upgraded first @ sha2", out)
+        self.assertIn("upgraded second @ sha2", out)
+        self.assertEqual(len(err.strip().splitlines()), 1)
+        self.assertIn("first", err)
+        self.assertIn("disk unreadable", err)
+        self.assertEqual(source.read_registry("second").current, "sha2")
 
     def test_upgrade_no_origin_upgrades_all_registered(self):
         self.source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")

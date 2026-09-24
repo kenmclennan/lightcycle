@@ -6,6 +6,7 @@ from lightcycle.adapters.fsio import FsAdapter
 from lightcycle.adapters.scaffold import ScaffoldAdapter
 from lightcycle.application.workflows.add import AddWorkflowSourceUseCase
 from lightcycle.application.workflows.init_origin import InitWorkflowOriginUseCase
+from lightcycle.config import ConfigError
 from lightcycle.domain.workflows.contract import ENGINE_CONTRACT
 from lightcycle.application.workflows.list import ListWorkflowSourcesUseCase
 from lightcycle.application.workflows.remove import RemoveWorkflowSourceUseCase
@@ -88,6 +89,38 @@ class FakeConfig:
 
     def set_personal_origin(self, name):
         self.personal_origin_set = name
+
+
+class _PruneFailingSource(FakeSource):
+    def list_versions(self, origin):
+        raise OSError("disk unreadable")
+
+
+class _WriteFailsOnceSource(FakeSource):
+    def __init__(self):
+        super().__init__()
+        self.write_failures = 1
+
+    def write_registry(self, origin, url, ref, current):
+        if self.write_failures:
+            self.write_failures -= 1
+            raise OSError("disk full")
+        super().write_registry(origin, url, ref, current)
+
+
+class _RetentionRaisesConfig(FakeConfig):
+    def workflow_retention(self):
+        raise ConfigError("workflow-retention is not set")
+
+
+class _FetchCountingSource(FakeSource):
+    def __init__(self):
+        super().__init__()
+        self.fetches = 0
+
+    def fetch(self, url, ref):
+        self.fetches += 1
+        return super().fetch(url, ref)
 
 
 def _add(source, store=None, config=None):
@@ -210,6 +243,42 @@ class TestAdd(unittest.TestCase):
         self.assertTrue(source.has_version("acme", "sha1"))
 
 
+class TestAddCommitOrdering(unittest.TestCase):
+    def test_clean_run_reports_no_prune_error(self):
+        source = FakeSource()
+        source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
+        resp = _add(source).execute(url="u", ref="main", name=None)
+        self.assertIsNone(resp.prune_error)
+
+    def test_config_error_leaves_nothing_registered_and_fetches_nothing(self):
+        source = _FetchCountingSource()
+        source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
+        with self.assertRaises(ConfigError):
+            _add(source, config=_RetentionRaisesConfig()).execute(url="u", ref="main", name=None)
+        self.assertEqual(source.registries, {})
+        self.assertEqual(source.materialized, {})
+        self.assertEqual(source.fetches, 0)
+
+    def test_prune_failure_after_the_registry_write_is_reported_not_raised(self):
+        source = _PruneFailingSource()
+        source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
+        resp = _add(source).execute(url="u", ref="main", name=None)
+        self.assertEqual(source.read_registry("acme").current, "sha1")
+        self.assertEqual(resp.pruned, [])
+        self.assertIn("disk unreadable", resp.prune_error)
+
+    def test_write_registry_failure_after_pin_is_healed_by_rerunning_add(self):
+        source = _WriteFailsOnceSource()
+        source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
+        with self.assertRaises(OSError):
+            _add(source).execute(url="u", ref="main", name=None)
+        self.assertIsNone(source.read_registry("acme"))
+        resp = _add(source).execute(url="u", ref="main", name=None)
+        self.assertEqual(resp.sha, "sha1")
+        self.assertEqual(source.read_registry("acme").current, "sha1")
+        self.assertEqual(source.materialized["acme"], ["sha1"])
+
+
 class TestUpgrade(unittest.TestCase):
     def test_upgrade_pulls_new_sha_and_reports_changed(self):
         source = FakeSource()
@@ -256,6 +325,40 @@ class TestUpgrade(unittest.TestCase):
         source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha3")
         UpgradeWorkflowSourceUseCase(source, store, cfg, fs).execute("acme")
         self.assertEqual(set(source.materialized["acme"]), {"sha1", "sha3"})
+
+
+class TestUpgradeCommitOrdering(unittest.TestCase):
+    def _registered(self, source):
+        source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
+        _add(source).execute(url="u", ref="main", name=None)
+        source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha2")
+
+    def test_clean_run_reports_no_prune_error(self):
+        source = FakeSource()
+        self._registered(source)
+        cfg = FakeConfig()
+        resp = UpgradeWorkflowSourceUseCase(source, FakeStore(), cfg, FsAdapter(cfg)).execute("acme")
+        self.assertIsNone(resp.prune_error)
+
+    def test_config_error_leaves_the_prior_registration_and_fetches_nothing(self):
+        source = _FetchCountingSource()
+        self._registered(source)
+        fetches_before = source.fetches
+        cfg = _RetentionRaisesConfig()
+        with self.assertRaises(ConfigError):
+            UpgradeWorkflowSourceUseCase(source, FakeStore(), cfg, FsAdapter(cfg)).execute("acme")
+        self.assertEqual(source.read_registry("acme").current, "sha1")
+        self.assertEqual(source.materialized["acme"], ["sha1"])
+        self.assertEqual(source.fetches, fetches_before)
+
+    def test_prune_failure_after_the_registry_write_is_reported_not_raised(self):
+        source = _PruneFailingSource()
+        self._registered(source)
+        cfg = FakeConfig()
+        resp = UpgradeWorkflowSourceUseCase(source, FakeStore(), cfg, FsAdapter(cfg)).execute("acme")
+        self.assertEqual(source.read_registry("acme").current, "sha2")
+        self.assertEqual(resp.pruned, [])
+        self.assertIn("disk unreadable", resp.prune_error)
 
 
 class TestUpgradeAll(unittest.TestCase):
