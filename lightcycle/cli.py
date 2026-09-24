@@ -1865,12 +1865,22 @@ def _init_pull_default_origin():
             % (e, url, origin))
 
 
+CONFIG_EDIT_RESTART_NOTICE = (
+    "config saved - a running pool (`lc start`) and any open TUI (`lc tui`) keep "
+    "the old values until restarted"
+)
+
+
 def cmd_config(argv):
     a = build_parser(COMMANDS["config"]).parse_args(argv)
     if a.edit:
         _container.config.ensure_config()
         editor = _container.config.editor()
-        return _container.launcher.edit(editor, _container.config.config_path())
+        before = _container.config.config_mtime()
+        rc = _container.launcher.edit(editor, _container.config.config_path())
+        if rc == 0 and _container.config.config_mtime() != before:
+            print(CONFIG_EDIT_RESTART_NOTICE)
+        return rc
     p = _container.config.config_path()
     print("config: %s" % p)
     print("exists" if os.path.exists(p) else "not found - run `lc init` to seed it")

@@ -49,6 +49,7 @@ FOOTER_GLYPHS = {
     "claude-probing": Glyph("◐", "amber"),
     "upgrade-available": Glyph("⬆", "amber"),
     "pool-holding": Glyph("◐", "amber"),
+    "config-changed": Glyph("↻", "amber"),
     "pool-starting": Glyph("●", "amber"),
     "pool-stopping": Glyph("○", "amber"),
     "pool-start-timed-out": Glyph("●", "red"),

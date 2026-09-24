@@ -230,6 +230,12 @@ class Config:
         with open(p) as f:
             return frontmatter.parse_frontmatter(f.read())
 
+    def config_mtime(self):
+        try:
+            return os.stat(self.config_path()).st_mtime_ns
+        except OSError:
+            return None
+
     def reload(self):
         self._cached = None
         self._cached_path = None

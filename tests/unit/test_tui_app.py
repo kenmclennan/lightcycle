@@ -1052,6 +1052,48 @@ class TestFooterUpgradeSegment(unittest.TestCase):
         self.assertNotEqual(version_text.strip(), "")
 
 
+class TestConfigChangedHint(unittest.TestCase):
+    def _launch(self):
+        session = launch(make_test_container())
+        self.addCleanup(session.close)
+        return session
+
+    def _touch_config(self, session):
+        path = session.app._container.config.config_path()
+        st = os.stat(path).st_mtime_ns + 1_000_000_000
+        os.utime(path, ns=(st, st))
+        session.app._refresh_status_bar()
+        session.pause()
+
+    def test_hint_is_hidden_while_the_config_is_untouched(self):
+        session = self._launch()
+
+        widget, text, _ = _rendered_segment(session, "#status-config")
+
+        self.assertFalse(widget.display)
+        self.assertEqual(text.strip(), "")
+
+    def test_editing_the_config_after_launch_shows_a_restart_hint(self):
+        session = self._launch()
+
+        self._touch_config(session)
+
+        widget, text, style = _rendered_segment(session, "#status-config")
+        self.assertTrue(widget.display)
+        self.assertEqual(
+            text, "%s config changed - restart to apply" % FOOTER_GLYPHS["config-changed"].glyph
+        )
+        self.assertEqual(_colour_of(style), COLOURS["amber"].lower())
+
+    def test_hint_leaves_the_version_segment_rendered(self):
+        session = self._launch()
+
+        self._touch_config(session)
+
+        _, version_text, _ = _rendered_segment(session, "#status-version")
+        self.assertNotEqual(version_text.strip(), "")
+
+
 class TestPeriodicUpgradeCheck(unittest.TestCase):
     def _launch(self, upgrade_check=None, upgrade_check_seconds=3600):
         session = launch(

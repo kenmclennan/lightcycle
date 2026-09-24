@@ -1,5 +1,6 @@
 import argparse
 import datetime
+import os
 import sys
 
 from lightcycle.application.flow.engine_steps import (
@@ -405,6 +406,17 @@ def _priority_pool_holding(size):
     store, _scan, _coding = _populated_store()
     status = FakeMemoryGateStatus({"cap": 0})
     return _launch(store, size=size, workers=_pool_workers(2), memory_gate_status=status)
+
+
+def _priority_config_changed(size):
+    store, _scan, _coding = _populated_store()
+    session = _launch(store, size=size)
+    path = session.app._container.config.config_path()
+    edited = os.stat(path).st_mtime_ns + 1_000_000_000
+    os.utime(path, ns=(edited, edited))
+    session.app._refresh_status_bar()
+    session.pause()
+    return session
 
 
 def _worker_suspended_store():
@@ -1456,6 +1468,7 @@ SCREENS = {
     "priority-list#cost": _priority_cost,
     "priority-list#cost-not-recorded": _priority_cost_not_recorded,
     "priority-list#pool-holding": _priority_pool_holding,
+    "priority-list#config-changed": _priority_config_changed,
     "priority-list#worker-suspended": _priority_worker_suspended,
     "priority-list#engine-active": _priority_engine_active,
     "goals#normal": _goals_normal,
