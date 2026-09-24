@@ -95,13 +95,13 @@ class TickUseCase:
         max_agents = self._config.max_agents()
         try:
             pool = WorkerPool(self._workers.workers_state())
-            covered = pool.covered_steps(probe)
+            running = pool.running_steps(probe)
             slots = pool.free_slots(max_agents, probe)
             alive_count = max_agents - slots
             inflight_dict = pool.inflight(probe, input.now, self._config.max_boot_seconds())
             memory_result = self._memory_gate.execute(pool, probe, input.now)
         except RegistryUnreadable:
-            covered = set()
+            running = set()
             slots = 0
             alive_count = max_agents
             inflight_dict = {}
@@ -122,12 +122,12 @@ class TickUseCase:
                 self._spawner.spawn_worker(role)
                 spawned.append(role)
         hook_result = self._hook_completions.execute(input.since)
-        if covered and input.since is not None:
+        if running and input.since is not None:
             delta = min(
                 input.now - input.since, self._config.poll_seconds() * _ACTIVE_ACCRUAL_CAP_TICKS
             )
             if delta > 0:
-                self._store.accrue_active_seconds(covered, delta)
+                self._store.accrue_active_seconds(running, delta)
         return TickResponse(
             sweep=swept,
             spawned=spawned,

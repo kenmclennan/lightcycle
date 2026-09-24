@@ -28,6 +28,9 @@ class WorkerPool:
     def covered_steps(self, probe):
         return {w.step for w in self.alive(probe) if w.step}
 
+    def running_steps(self, probe):
+        return {w.step for w in self.alive(probe) if w.step and not w.suspended}
+
     def any_booting(self, probe, now, max_boot):
         return any(w.is_booting(now, max_boot) for w in self.alive(probe))
 
