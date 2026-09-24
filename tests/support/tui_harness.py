@@ -317,6 +317,16 @@ def _start_background_timers_paused(set_interval):
     return _set_interval
 
 
+def _start_filter_debounce_paused(set_timer):
+    def _set_timer(self, delay, callback=None, **kwargs):
+        if getattr(callback, "__name__", None) in ("_on_backlog_filter_settled", "_on_done_filter_settled"):
+            kwargs.setdefault("pause", True)
+        return set_timer(self, delay, callback, **kwargs)
+
+    return _set_timer
+
+
+LightcycleApp.set_timer = _start_filter_debounce_paused(LightcycleApp.set_timer)
 LightcycleApp.set_interval = _start_background_timers_paused(LightcycleApp.set_interval)
 NodeHubScreen.set_interval = _start_background_timers_paused(NodeHubScreen.set_interval)
 
