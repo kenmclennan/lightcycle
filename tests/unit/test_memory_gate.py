@@ -1,6 +1,7 @@
 import unittest
 
 from lightcycle.application.pool.memory_gate import MemoryGateUseCase
+from lightcycle.application.pool.pool_hold_status import PoolHoldStatusUseCase
 from lightcycle.domain.pool import WorkerPool
 from lightcycle.domain.pool.machine_headroom import MachineHeadroom
 from lightcycle.ports.memory_gate_status import MemoryGateStatusPort
@@ -34,6 +35,11 @@ class FakeConfig:
 
     def resume_pressure(self):
         return self._rp
+
+
+class FakeHoldConfig:
+    def max_agents(self):
+        return 5
 
 
 def _gate(workers, machine, config=None, worker_log=None, memory_gate_status=None):
@@ -262,7 +268,7 @@ class TestMemoryGateUseCase(unittest.TestCase):
         self.assertIsNone(result.suspended)
         self.assertEqual(workers.suspended, [])
 
-    def test_persisted_cap_stays_pool_only_when_the_veto_alone_zeroes_the_returned_cap(self):
+    def test_persisted_cap_is_the_admitted_cap_when_the_veto_alone_zeroes_it(self):
         workers = FakeWorkers(
             workers=[{"spawnid": "a", "pid": 1, "started": 1, "step": "s-1"}],
             alive_pids=(1,),
@@ -275,7 +281,10 @@ class TestMemoryGateUseCase(unittest.TestCase):
         )
 
         self.assertEqual(result.cap, 0)
-        self.assertIsNone(status.load()["cap"])
+        self.assertEqual(status.load()["cap"], 0)
+
+        hold = PoolHoldStatusUseCase(status, workers, FakeHoldConfig()).execute(workers.pid_alive)
+        self.assertTrue(hold.holding)
 
     def test_response_and_saved_status_carry_no_system_pressure(self):
         workers = FakeWorkers(
