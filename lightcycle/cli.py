@@ -340,6 +340,11 @@ def _set_flags(args):
     return vars(ns)
 
 
+def _attach_flags(args):
+    ns, _extras = build_parser(COMMANDS["attach"]).parse_known_args(args)
+    return vars(ns)
+
+
 def _workflow_flags(args):
     try:
         ns, _extras = build_parser(COMMANDS["workflow"]).parse_known_args(args)
@@ -374,6 +379,8 @@ def main(argv=None):
         parsed_flags = {}
         if cmd == "set":
             parsed_flags = _set_flags(argv[1:])
+        elif cmd == "attach":
+            parsed_flags = _attach_flags(argv[1:])
         elif cmd == "workflow":
             parsed_flags = _workflow_flags(argv[1:])
         if not worker_permitted(cmd, parsed_flags):
