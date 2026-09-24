@@ -2157,13 +2157,13 @@ class TestWorktree(unittest.TestCase):
 
     def test_reclaim_reuses_existing_branch(self):
         sid = self._file()
-        ws = _cli_mod._worktrees().ensure(sid)
+        ws = _cli_mod._worktrees().ensure(_cli_mod._container.store.get_node(sid))
         (Path(ws) / "f.txt").write_text("x")
         git_in(ws, "add", ".")
         git_in(ws, "commit", "-q", "-m", "w")
         git_in(self.root, "worktree", "remove", "--force", ws)
         self.assertFalse(os.path.isdir(ws))
-        ws2 = _cli_mod._worktrees().ensure(sid)
+        ws2 = _cli_mod._worktrees().ensure(_cli_mod._container.store.get_node(sid))
         self.assertEqual(ws, ws2)
         self.assertEqual(self._branch_of(ws2), "feat/%s-w" % sid)
         self.assertTrue(os.path.isfile(os.path.join(ws2, "f.txt")))
@@ -3478,7 +3478,7 @@ class TestWorktreePushTarget(unittest.TestCase):
 
     def test_branch_tracking_targets_feature_not_main(self):
         store, sid = self._make_store()
-        ws = self._svc(store).ensure(sid)
+        ws = self._svc(store).ensure(store.get_node(sid))
         self.assertIsNotNone(ws)
 
         remote = self._git(self.repo, "config", "branch.feat/my-feat.remote").stdout.strip()
@@ -3488,7 +3488,7 @@ class TestWorktreePushTarget(unittest.TestCase):
 
     def test_bare_force_push_lands_on_feature_branch(self):
         store, sid = self._make_store()
-        ws = self._svc(store).ensure(sid)
+        ws = self._svc(store).ensure(store.get_node(sid))
         self.assertIsNotNone(ws)
 
         (Path(ws) / "f.txt").write_text("hello")
@@ -3512,7 +3512,7 @@ class TestWorktreePushTarget(unittest.TestCase):
 
     def test_second_bare_force_push_after_amend_updates_feature_branch(self):
         store, sid = self._make_store()
-        ws = self._svc(store).ensure(sid)
+        ws = self._svc(store).ensure(store.get_node(sid))
         self.assertIsNotNone(ws)
 
         (Path(ws) / "f.txt").write_text("v1")

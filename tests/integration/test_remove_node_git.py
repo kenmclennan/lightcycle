@@ -30,11 +30,8 @@ class FakeWorktrees:
     def has_worktree_history(self, item):
         return True
 
-    def target_repo(self, item):
-        return self._target
-
-    def worktree_path(self, item):
-        return self._target
+    def worktrees_of(self, item):
+        return [(self._target, self._target)]
 
     def remove(self, item):
         self.removed.append(item)

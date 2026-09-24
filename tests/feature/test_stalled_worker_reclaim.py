@@ -93,8 +93,8 @@ class FakeWorktrees:
     def has_repo(self, item):
         return self.has_repo_result
 
-    def worktree_path(self, item):
-        return self.paths.get(item, "/worktrees/%s" % item)
+    def worktree_path(self, node):
+        return self.paths.get(node.item, "/worktrees/%s" % node.item)
 
 
 class TrackingStore(FakeStore):
@@ -211,7 +211,7 @@ def _advance_clock(ctx):
 
 @given("the step's worktree has uncommitted changes")
 def _dirty_worktree(ctx):
-    path = ctx["worktrees"].worktree_path(ctx["item"])
+    path = ctx["worktrees"].worktree_path(ctx["store"].get_node(ctx["step"]))
     ctx["git"].dirty.add(path)
 
 
@@ -266,7 +266,7 @@ def _not_freshly_started(ctx):
 @then("the uncommitted changes are committed before the step is reclaimed to ready")
 def _committed_before_reclaim(ctx):
     committed_roots = [root for root, _ in ctx["git"].commits]
-    assert ctx["worktrees"].worktree_path(ctx["item"]) in committed_roots
+    assert ctx["worktrees"].worktree_path(ctx["store"].get_node(ctx["step"])) in committed_roots
     kinds = [e[0] for e in ctx["events"]]
     assert kinds.index("commit") < kinds.index("reclaim")
     assert ctx["store"].get_node(ctx["step"]).state == State.QUEUED

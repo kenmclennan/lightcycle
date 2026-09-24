@@ -129,6 +129,28 @@ class ClaimStepUseCase:
             return self._flow.meta_for_step(stage, pin)
         return self._flow.meta_for_unpinned_step(stage)
 
+    def _workspace_agrees(self, t, ws, branch):
+        phase = self._flow.phase_for(t)
+        if ws is None or phase is None:
+            return True
+        run = self._store.current_run(t.item or t.id, phase)
+        if run is None:
+            return True
+        if run.branch == branch and self._worktrees.path_for_run(run) == ws:
+            return True
+        observation = (
+            "step '%s' (phase '%s') was claimed but its workspace '%s' and branch '%s' do not "
+            "match run %s of that phase" % (t.stage, phase, ws, branch, run.id)
+        )
+        decision = (
+            "inspect the item's open steps and runs, then correct or re-file the step; "
+            "no session was started in the mismatched workspace"
+        )
+        ParkStepUseCase(self._store).execute(
+            ParkInput(step=t.id, observation=observation, decision=decision)
+        )
+        return False
+
     def _context(self, t, pin=None, meta=None):
         if pin is None:
             pin = self._flow.workflow_for(t)
@@ -137,8 +159,10 @@ class ClaimStepUseCase:
         view = self._store.node_view(t.id)
         surface = node_read_surface(self._store, self._flow, view)
         item = t.item or t.id
-        ws = self._worktrees.ensure(item)
-        branch = self._worktrees.item_branch(item)
+        ws = self._worktrees.ensure(t)
+        branch = self._worktrees.item_branch(t)
+        if not self._workspace_agrees(t, ws, branch):
+            return None
         spec = next((a.value for a in view.item_artifacts if a.kind == "filepath"), None)
         spec_path = None
         if spec:

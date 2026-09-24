@@ -59,7 +59,7 @@ class NoOpWorktrees:
     def has_repo(self, item):
         return False
 
-    def worktree_path(self, item):
+    def worktree_path(self, node):
         return None
 
 

@@ -35,7 +35,7 @@ class ResolveCiUseCase:
             pr_value = run.pr if run else None
             if not pr_value:
                 continue
-            root = self._worktrees.worktree_path(step.item)
+            root = self._worktrees.worktree_path(step)
             if not root or not run.branch:
                 continue
             sha = self._git.remote_head_sha(root, run.branch)

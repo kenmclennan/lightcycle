@@ -36,8 +36,8 @@ class _Worktrees:
     def has_repo(self, item):
         return True
 
-    def worktree_path(self, item):
-        return "/tmp/wt/%s" % item
+    def worktree_path(self, node):
+        return "/tmp/wt/%s" % node.item
 
 
 class TestStopPool(unittest.TestCase):

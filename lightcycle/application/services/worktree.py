@@ -2,7 +2,6 @@ from lightcycle.application.errors import UseCaseError
 from lightcycle.application.setup.project_registry import ProjectRegistry
 from lightcycle.domain.flow.flow import PROJECT_WORKSPACE, SPECS_WORKSPACE
 from lightcycle.domain.runs import pass_number
-from lightcycle.domain.work import State
 from lightcycle.domain.workspace import Branch, Worktree
 from lightcycle.ports.git import GitReadError
 from lightcycle.ports.store import ProjectResolutionError
@@ -26,35 +25,27 @@ class WorktreeService:
     def has_worktree_history(self, item):
         return any(r.branch for r in self._store.runs_of(item))
 
-    def _active_step(self, item):
-        for child in self._store.children(item):
-            if getattr(child, "type", None) == "step" and child.state != State.DONE:
-                return child
-        return None
+    @staticmethod
+    def _item_of(node):
+        return getattr(node, "item", None) or node.id
 
-    def _workspace_node(self, item):
-        return self._active_step(item) or self._store.get_node(item)
-
-    def _workspace_of(self, item):
+    def _workspace_of(self, node):
         if self._flow is None:
             return PROJECT_WORKSPACE
-        return self._flow.workspace_for_node(self._workspace_node(item)) or PROJECT_WORKSPACE
+        return self._flow.workspace_for_node(node) or PROJECT_WORKSPACE
 
-    def _uses_specs_workspace(self, item):
-        return self._workspace_of(item) == SPECS_WORKSPACE
-
-    def _uses_item_repo(self, item):
-        return self._workspace_of(item) == PROJECT_WORKSPACE
+    def _uses_item_repo(self, node):
+        return self._workspace_of(node) == PROJECT_WORKSPACE
 
     def _repo_for_workspace(self, item, workspace):
         if workspace == PROJECT_WORKSPACE:
             return self._resolve_repo(self.item_repo(item))
         return self._resolve_repo(workspace)
 
-    def _phase(self, item):
+    def _phase(self, node):
         if self._flow is None:
             return None
-        return self._flow.phase_for(self._workspace_node(item))
+        return self._flow.phase_for(node)
 
     def item_repo(self, item):
         repo = self._item(item).repo
@@ -62,8 +53,8 @@ class WorktreeService:
             raise UseCaseError("item '%s' has no repo artifact" % item)
         return repo
 
-    def target_repo(self, item):
-        return self._repo_for_workspace(item, self._workspace_of(item))
+    def target_repo(self, node):
+        return self._repo_for_workspace(self._item_of(node), self._workspace_of(node))
 
     def _resolve_repo(self, repo):
         try:
@@ -71,8 +62,9 @@ class WorktreeService:
         except ProjectResolutionError as e:
             raise UseCaseError(str(e))
 
-    def _run(self, item, create=False):
-        phase = self._phase(item)
+    def _run(self, node, create=False):
+        item = self._item_of(node)
+        phase = self._phase(node)
         run = self._store.current_run(item, phase)
         if run is not None or not create:
             return run
@@ -80,16 +72,18 @@ class WorktreeService:
         pid = current.id if current else self._store.open_pass(item)
         return self._store.get_run(self._store.open_run(item, pid, phase))
 
-    def _target_for_phase(self, item, phase):
+    def _workspace_for_phase(self, item, phase):
         if self._flow is None:
-            return self._resolve_repo(self.item_repo(item))
+            return PROJECT_WORKSPACE
         node = self._store.get_node(item)
-        workspace = self._flow.workspace_for_phase(node, phase) or PROJECT_WORKSPACE
-        return self._repo_for_workspace(item, workspace)
+        return self._flow.workspace_for_phase(node, phase) or PROJECT_WORKSPACE
 
-    def _phase_key(self, item):
-        run = self._run(item)
-        return self._key_for(run) if run else self._phase(item)
+    def _target_for_phase(self, item, phase):
+        return self._repo_for_workspace(item, self._workspace_for_phase(item, phase))
+
+    def _phase_key(self, node):
+        run = self._run(node)
+        return self._key_for(run) if run else self._phase(node)
 
     @staticmethod
     def _key_for(run):
@@ -98,21 +92,22 @@ class WorktreeService:
             return run.phase
         return "%s-%d" % (run.phase, n)
 
-    def worktree_path(self, item):
-        return Worktree(item, self._phase_key(item)).path_in(self.target_repo(item))
+    def worktree_path(self, node):
+        return Worktree(self._item_of(node), self._phase_key(node)).path_in(self.target_repo(node))
 
-    def item_branch(self, item):
-        run = self._run(item)
+    def item_branch(self, node):
+        run = self._run(node)
         return run.branch if run else None
 
-    def _minted_branch(self, item):
+    def _minted_branch(self, node):
+        item = self._item_of(node)
         return Branch.for_feature(
             self._store.get_node(item).title, self._config.branch_prefix(),
-            ident=item, phase=self._phase_key(item)
+            ident=item, phase=self._phase_key(node)
         ).name
 
-    def _branch_for(self, item):
-        return self.item_branch(item) or self._minted_branch(item)
+    def _branch_for(self, node):
+        return self.item_branch(node) or self._minted_branch(node)
 
     def path_for_run(self, run):
         return Worktree(run.item, self._key_for(run)).path_in(self._target_for_phase(run.item, run.phase))
@@ -129,25 +124,26 @@ class WorktreeService:
         if delete_remote:
             self._git.delete_remote_branch(target, run.branch)
 
-    def _ensure_branch_artifact(self, item, branch):
-        run = self._run(item, create=True)
+    def _ensure_branch_artifact(self, node, branch):
+        run = self._run(node, create=True)
         if run.branch == branch:
             return
         self._store.set_branch(run.id, branch)
 
-    def ensure(self, item):
-        if self._uses_item_repo(item) and not self.has_repo(item):
+    def ensure(self, node):
+        item = self._item_of(node)
+        if self._uses_item_repo(node) and not self.has_repo(item):
             return None
-        target = self.target_repo(item)
+        target = self.target_repo(node)
         if not self._git.is_git_repo(target):
-            named = self.item_repo(item) if self._uses_item_repo(item) else target
+            named = self.item_repo(item) if self._uses_item_repo(node) else target
             raise UseCaseError(
                 "cannot set up workspace for %s: '%s' is not a git repo at %s"
                 % (item, named, target)
             )
-        branch = self._branch_for(item)
-        self._ensure_branch_artifact(item, branch)
-        path = self.worktree_path(item)
+        branch = self._branch_for(node)
+        self._ensure_branch_artifact(node, branch)
+        path = self.worktree_path(node)
         try:
             registered = self._git.worktree_registered(target, path)
         except GitReadError:
@@ -210,10 +206,23 @@ class WorktreeService:
                 % root
             )
 
+    def _releasable_runs(self, item):
+        branched = [run for run in self._store.runs_of(item) if run.branch]
+        if not branched:
+            return []
+        has_repo = self.has_repo(item)
+        return [
+            run
+            for run in branched
+            if has_repo or self._workspace_for_phase(item, run.phase) != PROJECT_WORKSPACE
+        ]
+
+    def worktrees_of(self, item):
+        return [
+            (self._target_for_phase(item, run.phase), self.path_for_run(run))
+            for run in self._releasable_runs(item)
+        ]
+
     def remove(self, item):
-        if not self.has_worktree_history(item):
-            return
-        if not self._uses_specs_workspace(item) and not self.has_repo(item):
-            return
-        for run in self._store.runs_of(item):
+        for run in self._releasable_runs(item):
             self.release_run(run)
