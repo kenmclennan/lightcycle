@@ -157,7 +157,7 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
         self.assertEqual(
             err,
             "--state waiting applies to a step, not an item; "
-            "an item takes --state active\n",
+            "an item takes --state active, --state backlogged\n",
         )
 
 
@@ -411,3 +411,54 @@ class TestCmdSetRefusesFlagsOutsideStateViaHarness(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestCmdSetBacklogged(unittest.TestCase):
+    def setUp(self):
+        self.store = FakeStore()
+        cli.set_container(FakeContainer(self.store))
+        self.item = self.store.create_item("an item", "a description")
+        self.pid = self.store.open_pass(self.item)
+        self.run = self.store.open_run(self.item, self.pid, "code")
+        self.step = self.store.create_step(step="build", role="agent", parent=self.item)
+
+    def test_an_idle_item_is_backlogged_with_exit_zero(self):
+        rc, out, err = call(cli.cmd_set, self.item, "--state", "backlogged")
+        self.assertEqual((rc, err), (0, ""))
+        self.assertEqual(self.store.children(self.item), [])
+
+    def test_a_guard_refusal_exits_one_and_leaves_the_store_alone(self):
+        self.store.set_pr(self.run, "https://github.com/o/r/pull/1")
+        rc, out, err = call(cli.cmd_set, self.item, "--state", "backlogged")
+        self.assertEqual(rc, 1)
+        self.assertIn("work in flight", err)
+        self.assertEqual(len(self.store.children(self.item)), 1)
+
+    def test_a_flag_combined_with_backlogged_is_refused_at_the_boundary(self):
+        for flag, value in (
+            ("--title", "x"), ("--description", "x"), ("--project", "x"),
+            ("--workflow", "x"), ("--label", "x"), ("--step", "x"),
+            ("--backlog", "x"), ("--depends", "x"),
+        ):
+            rc, out, err = call(cli.cmd_set, self.item, "--state", "backlogged", flag, value)
+            self.assertEqual(rc, 2, flag)
+            self.assertIn(flag, err)
+        rc, out, err = call(
+            cli.cmd_set, self.item, "--state", "backlogged", "--unset", "description"
+        )
+        self.assertEqual(rc, 2)
+        rc, out, err = call(cli.cmd_set, self.item, "--state", "backlogged", "--notes", "x")
+        self.assertEqual(rc, 2)
+        self.assertEqual(len(self.store.children(self.item)), 1)
+
+    def test_a_step_is_refused_naming_what_a_step_takes(self):
+        rc, out, err = call(cli.cmd_set, self.step, "--state", "backlogged")
+        self.assertEqual(rc, 2)
+        self.assertIn("--state ready", err)
+        self.assertIn("--state waiting", err)
+        self.assertEqual(len(self.store.children(self.item)), 1)
+
+    def test_an_unknown_state_lists_backlogged(self):
+        rc, out, err = call(cli.cmd_set, self.item, "--state", "bogus")
+        self.assertEqual(rc, 2)
+        self.assertIn("use active, backlogged, ready, waiting", err)

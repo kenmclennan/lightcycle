@@ -67,7 +67,7 @@ class TestRefuseState(unittest.TestCase):
             refuse_state("item", "waiting"),
             StateRefusal(
                 state="waiting", requested_type="item", owner="step",
-                allowed=("active",),
+                allowed=("active", "backlogged"),
             ),
         )
 
@@ -85,12 +85,22 @@ class TestRefuseState(unittest.TestCase):
             refuse_state("item", "bogus"),
             StateRefusal(
                 state="bogus", requested_type="item", owner=None,
-                allowed=("active", "ready", "waiting"),
+                allowed=("active", "backlogged", "ready", "waiting"),
+            ),
+        )
+
+    def test_backlogging_is_refused_on_a_step_and_names_what_it_takes(self):
+        self.assertEqual(
+            refuse_state("step", "backlogged"),
+            StateRefusal(
+                state="backlogged", requested_type="step", owner="item",
+                allowed=("ready", "waiting"),
             ),
         )
 
     def test_a_state_the_type_owns_is_accepted(self):
         self.assertIsNone(refuse_state("item", "active"))
+        self.assertIsNone(refuse_state("item", "backlogged"))
         self.assertIsNone(refuse_state("step", "ready"))
 
     def test_no_state_at_all_is_accepted(self):

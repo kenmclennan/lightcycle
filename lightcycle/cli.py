@@ -52,6 +52,9 @@ from lightcycle.application.goals import (
 )
 from lightcycle.application.work.activate_item import ActivateItemInput, ActivateItemUseCase
 from lightcycle.application.work.resolve_backlog import link_resolves
+from lightcycle.application.work.return_to_backlog import (
+    ReturnToBacklogInput, ReturnToBacklogUseCase,
+)
 from lightcycle.application.work.resolve_project_ref import resolve_project_ref
 from lightcycle.application.work.resolve_workflow_selection import (
     ResolveWorkflowSelectionInput,
@@ -1340,6 +1343,9 @@ def cmd_set(argv):
                 )
             )
             print(resp.step)
+            return 0
+        if a.state == State.BACKLOGGED.value:
+            ReturnToBacklogUseCase(_container.store).execute(ReturnToBacklogInput(item=a.id))
             return 0
         if a.state == State.WAITING.value:
             truthy_given = {f for f in given_values if getattr(a, f)}

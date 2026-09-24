@@ -16,6 +16,8 @@ stateDiagram-v2
   running --> waiting: worker lost, per-step spin cap parks it
   queued --> waiting: reassigned to a human
   waiting --> queued: resumed, reassigned to an agent role
+  queued --> backlogged: lc set --state backlogged, refused while a claim, branch or PR exists
+  waiting --> backlogged: lc set --state backlogged, refused while a claim, branch or PR exists
   done --> [*]
 ```
 
