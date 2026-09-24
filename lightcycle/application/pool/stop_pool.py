@@ -2,12 +2,13 @@ import time
 from dataclasses import dataclass, field
 from typing import List
 
-from lightcycle.domain.pool import WorkerPool
+from lightcycle.domain.pool import Worker, WorkerPool
 
 
 @dataclass(frozen=True)
 class StopPoolResponse:
     stopped: List[str] = field(default_factory=list)
+    survivors: List[Worker] = field(default_factory=list)
     reclaimed: List[str] = field(default_factory=list)
     preserved: List[str] = field(default_factory=list)
     capture_failed: List[str] = field(default_factory=list)
@@ -25,10 +26,11 @@ class StopPoolUseCase:
         alive = pool.alive(self._workers.pid_alive)
         for worker in alive:
             self._workers.kill(worker.pid)
-        self._wait_for_death({w.pid for w in alive}, shutdown_grace_seconds)
+        surviving_pids = self._wait_for_death({w.pid for w in alive}, shutdown_grace_seconds)
         swept = self._sweep.execute(now, max_boot, stall_seconds)
         return StopPoolResponse(
-            stopped=[w.spawnid for w in alive],
+            stopped=[w.spawnid for w in alive if w.pid not in surviving_pids],
+            survivors=[w for w in alive if w.pid in surviving_pids],
             reclaimed=list(swept.swept),
             preserved=list(swept.preserved),
             capture_failed=list(swept.capture_failed),
@@ -40,5 +42,6 @@ class StopPoolUseCase:
             self._workers.reap()
             pending = {pid for pid in pending if self._workers.pid_alive(pid)}
             if not pending or self._clock() >= deadline:
-                return
+                break
             self._sleep(0.05)
+        return pending
