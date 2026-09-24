@@ -28,12 +28,12 @@ class TestRestoreStoreAtomicity(unittest.TestCase):
         root = tempfile.mkdtemp()
         cfg_path = os.path.join(root, "config")
         with open(cfg_path, "w") as f:
-            f.write("shortcode: GRID\nbackups-dir: %s\n" % os.path.join(root, "backups"))
+            f.write("backups-dir: %s\n" % os.path.join(root, "backups"))
         config = Config(environ={"LC_HOME": root, "LC_CONFIG": cfg_path})
         store = SqliteStore(config)
         backup = SqliteBackupAdapter(config)
 
-        item = store.create_item("keep me", "a description")
+        item = store.create_item("keep me", "a description", shortcode="GRID")
         name = backup.create_snapshot(now=1234567890.0)
 
         snapshot_path = os.path.join(root, "backups", name)

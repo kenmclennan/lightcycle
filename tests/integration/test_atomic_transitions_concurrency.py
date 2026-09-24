@@ -23,11 +23,8 @@ def _drain(q, expected):
     return results
 
 
-def _make_root(shortcode="GRID"):
-    root = tempfile.mkdtemp()
-    with open(os.path.join(root, "config"), "w") as f:
-        f.write("shortcode: %s\n" % shortcode)
-    return root
+def _make_root():
+    return tempfile.mkdtemp()
 
 
 def _store_for(root, spawn_id=None):
@@ -176,7 +173,7 @@ def _create_item_worker(root, spawn_id, barrier, q):
     try:
         store = _store_for(root, spawn_id)
         barrier.wait()
-        item_id = store.create_item("title %s" % spawn_id, "description")
+        item_id = store.create_item("title %s" % spawn_id, "description", shortcode="GRID")
         q.put((spawn_id, item_id))
         store.release()
     except Exception as exc:
@@ -219,7 +216,7 @@ class TestConcurrentPassOpening(unittest.TestCase):
     def test_concurrent_open_pass_yields_distinct_pass_numbers(self):
         root = _make_root()
         seed = _store_for(root)
-        item_id = seed.create_item("title", "description")
+        item_id = seed.create_item("title", "description", shortcode="GRID")
         seed.release()
 
         n = 8

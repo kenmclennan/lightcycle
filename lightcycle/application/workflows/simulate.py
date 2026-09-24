@@ -20,6 +20,7 @@ from lightcycle.domain.flow.simulate_plan import build_coverage_plan
 from lightcycle.domain.runs import RUN_FIELDS
 from lightcycle.domain.work.state import State
 
+SIMULATION_SHORTCODE = "SIM"
 _ADVANCING_HOOKS = (PR_MERGE, PR_CONFLICT)
 _SIMULATABLE_RUN_FIELDS = ("pr", "branch")
 
@@ -119,7 +120,8 @@ class WorkflowSimulateUseCase:
 
     def _seed_item(self, pin, graph):
         item_id = self._store.create_item(
-            "simulate: %s" % pin, "simulated walk of %s" % pin, workflow=pin)
+            "simulate: %s" % pin, "simulated walk of %s" % pin, workflow=pin,
+            shortcode=SIMULATION_SHORTCODE)
         entry_meta = self._flow.meta_for_step(graph.entry, pin)
         needed = set(graph.requires) | StepContract.from_meta(entry_meta).required_inputs()
         repo_name = "repo-%s" % item_id.replace("/", "-")

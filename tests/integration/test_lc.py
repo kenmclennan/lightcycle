@@ -108,7 +108,6 @@ def write_config(projects=None, specs=None):
     if specs is not None:
         lines.append("specs: %s" % specs)
     lines += [
-        "shortcode: xy",
         "branch-prefix: feat",
         "default-origin: lightcycle",
         "max-agents: 5",
@@ -313,6 +312,9 @@ def _file_compat(argv):
                     ("workflow", "--workflow")):
         if opts.get(k):
             nargs += [flag, opts[k]]
+    if not opts.get("project"):
+        _cli_mod._container.store.add_project("acme/app", shortcode="APP")
+        nargs += ["--project", "app"]
     rc, item, err = call(_cli_mod.cmd_new, *nargs)
     item = item.strip()
     if rc:
@@ -347,6 +349,7 @@ def _fake_setUp(test, *, steps=False, contract_steps=False):
         write_contract_steps(test.root)
     test.store = FakeStore()
     test.store.add_project(SPECS_WORKSPACE, local_path=test.root)
+    test.store.add_project("acme/app", shortcode="APP")
     inject_container(test, store=test.store, home=test.root, config_path=cfg)
 
 
@@ -1154,7 +1157,8 @@ class TestAdd(unittest.TestCase):
         _fake_setUp(self)
 
     def test_new_item_is_an_untethered_todo(self):
-        rc, out, err = call(_cli_mod.cmd_new, "item", "look at X later", "--description", "a description")
+        self.store.add_project("acme/app", shortcode="APP")
+        rc, out, err = call(_cli_mod.cmd_new, "item", "look at X later", "--project", "app", "--description", "a description")
         self.assertEqual(rc, 0, err)
         new = out.strip()
         self.assertTrue(new)
@@ -1165,6 +1169,7 @@ class TestAdd(unittest.TestCase):
         self.assertEqual(t["title"], "look at X later")
 
     def test_new_item_with_repo_attaches_repo_artifact(self):
+        self.store.add_project("acme/lightcycle", shortcode="LC")
         rc, out, err = call(_cli_mod.cmd_new, "item", "look at X later", "--repo", "lightcycle", "--description", "a description")
         self.assertEqual(rc, 0, err)
         new = out.strip()
@@ -1192,17 +1197,20 @@ class TestAdd(unittest.TestCase):
         self.assertEqual(self.store.all_nodes(), [])
 
     def test_new_item_refuses_a_parent_and_creates_nothing(self):
-        owner = call(_cli_mod.cmd_new, "item", "an owning item", "--description", "a description")[1].strip()
+        self.store.add_project("acme/app", shortcode="APP")
+        owner = call(_cli_mod.cmd_new, "item", "an owning item", "--project", "app", "--description", "a description")[1].strip()
         before = self.store.all_nodes()
         rc, out, err = call(_cli_mod.cmd_new, "item", "a nested item", "--parent", owner, "--description", "a description")
         self.assertEqual(rc, 2)
         self.assertIn("top-level", err)
         self.assertEqual(self.store.all_nodes(), before)
 
-    def test_new_item_with_no_project_reports_the_defaulted_prefix(self):
+    def test_new_item_with_neither_project_nor_repo_refuses_naming_both_fixes(self):
         rc, out, err = call(_cli_mod.cmd_new, "item", "look at X later", "--description", "a description")
-        self.assertEqual(rc, 0, err)
-        self.assertIn("xy", err)
+        self.assertEqual(rc, 1)
+        self.assertIn("--project", err)
+        self.assertIn("lc project add <repo> --shortcode <PREFIX>", err)
+        self.assertEqual(self.store.all_nodes(), [])
 
     def test_new_item_with_registered_repo_and_no_project_derives_project_and_no_warning(self):
         self.store.add_project("kenmclennan/lightcycle", shortcode="LC")
@@ -1215,20 +1223,44 @@ class TestAdd(unittest.TestCase):
         rc2, out2, _ = call(_cli_mod.cmd_show, new)
         t = json.loads(out2)
         self.assertEqual(t["project"], "lightcycle")
-        self.assertNotIn("no --project given", err)
+        self.assertEqual(err, "")
 
-    def test_new_item_with_unregistered_repo_and_no_project_defaults_and_warns_naming_repo(self):
+    def test_new_item_with_unregistered_repo_and_no_project_refuses_naming_repo_and_both_fixes(self):
         rc, out, err = call(
             _cli_mod.cmd_new, "item", "look at X later",
             "--repo", "ghost/repo", "--description", "a description",
         )
-        self.assertEqual(rc, 0, err)
-        new = out.strip()
-        rc2, out2, _ = call(_cli_mod.cmd_show, new)
-        t = json.loads(out2)
-        self.assertIsNone(t["project"])
+        self.assertEqual(rc, 1)
         self.assertIn("ghost/repo", err)
-        self.assertIn("xy", err)
+        self.assertIn("lc project add ghost/repo --shortcode <PREFIX>", err)
+        self.assertIn("--project", err)
+        self.assertEqual(self.store.all_nodes(), [])
+
+    def test_new_item_with_repo_registered_without_a_shortcode_gives_the_project_flags_refusal(self):
+        self.store.add_project("acme/ghost", local_path="/x")
+        by_repo = call(
+            _cli_mod.cmd_new, "item", "look at X later", "--repo", "acme/ghost",
+            "--description", "a description",
+        )
+        by_project = call(
+            _cli_mod.cmd_new, "item", "look at X later", "--project", "acme/ghost",
+            "--description", "a description",
+        )
+        self.assertEqual(by_repo[0], 1)
+        self.assertIn("registered but has no shortcode", by_repo[2])
+        self.assertEqual(by_repo[2], by_project[2])
+        self.assertEqual(self.store.all_nodes(), [])
+
+    def test_new_item_with_ambiguous_repo_refuses_with_the_registry_ambiguity(self):
+        self.store.add_project("acme/app", shortcode="ACME")
+        self.store.add_project("other/app", shortcode="OTHER")
+        rc, out, err = call(
+            _cli_mod.cmd_new, "item", "look at X later", "--repo", "app",
+            "--description", "a description",
+        )
+        self.assertEqual(rc, 1)
+        self.assertIn("ambiguous", err)
+        self.assertEqual(self.store.all_nodes(), [])
 
 
 class TestProjectScanCli(unittest.TestCase):
@@ -1471,34 +1503,34 @@ class TestItemBacklogLink(unittest.TestCase):
         _fake_setUp(self)
 
     def test_new_item_links_backlog(self):
-        rc, out, _ = call(_cli_mod.cmd_new, "item", "a backlog item", "--description", "a description")
+        rc, out, _ = call(_cli_mod.cmd_new, "item", "--project", "app", "a backlog item", "--description", "a description")
         backlog = out.strip()
-        rc2, out2, err2 = call(_cli_mod.cmd_new, "item", "the work", "--backlog", backlog, "--description", "a description")
+        rc2, out2, err2 = call(_cli_mod.cmd_new, "item", "--project", "app", "the work", "--backlog", backlog, "--description", "a description")
         self.assertEqual(rc2, 0, err2)
         tid = out2.strip()
         arts = self.store.item_artifacts(tid)
         self.assertEqual([(a.type, a.value) for a in arts], [("resolves", backlog)])
 
     def test_new_item_links_multiple_backlog_ids(self):
-        rc, out, _ = call(_cli_mod.cmd_new, "item", "a backlog item", "--description", "a description")
+        rc, out, _ = call(_cli_mod.cmd_new, "item", "--project", "app", "a backlog item", "--description", "a description")
         b1 = out.strip()
-        rc, out, _ = call(_cli_mod.cmd_new, "item", "another backlog item", "--description", "a description")
+        rc, out, _ = call(_cli_mod.cmd_new, "item", "--project", "app", "another backlog item", "--description", "a description")
         b2 = out.strip()
-        rc2, out2, err2 = call(_cli_mod.cmd_new, "item", "the work", "--backlog", b1, "--backlog", b2, "--description", "a description")
+        rc2, out2, err2 = call(_cli_mod.cmd_new, "item", "--project", "app", "the work", "--backlog", b1, "--backlog", b2, "--description", "a description")
         self.assertEqual(rc2, 0, err2)
         tid = out2.strip()
         arts = self.store.item_artifacts(tid)
         self.assertEqual([(a.type, a.value) for a in arts], [("resolves", b1), ("resolves", b2)])
 
     def test_new_item_unknown_backlog_errors(self):
-        rc, _, err = call(_cli_mod.cmd_new, "item", "the work", "--backlog", "does-not-exist", "--description", "a description")
+        rc, _, err = call(_cli_mod.cmd_new, "item", "--project", "app", "the work", "--backlog", "does-not-exist", "--description", "a description")
         self.assertNotEqual(rc, 0)
         self.assertIn("does-not-exist", err)
 
     def test_set_links_backlog(self):
-        rc, out, _ = call(_cli_mod.cmd_new, "item", "a backlog item", "--description", "a description")
+        rc, out, _ = call(_cli_mod.cmd_new, "item", "--project", "app", "a backlog item", "--description", "a description")
         backlog = out.strip()
-        rc, out, _ = call(_cli_mod.cmd_new, "item", "the work", "--description", "a description")
+        rc, out, _ = call(_cli_mod.cmd_new, "item", "--project", "app", "the work", "--description", "a description")
         tid = out.strip()
         rc2, _, err2 = call(_cli_mod.cmd_set, tid, "--backlog", backlog)
         self.assertEqual(rc2, 0, err2)
@@ -1541,7 +1573,7 @@ class TestNewStep(unittest.TestCase):
         _fake_setUp(self, steps=True)
 
     def _active_item(self):
-        rc, item, err = call(_cli_mod.cmd_new, "item", "an item", "--workflow", "lightcycle/spec-driven", "--description", "a description")
+        rc, item, err = call(_cli_mod.cmd_new, "item", "--project", "app", "an item", "--workflow", "lightcycle/spec-driven", "--description", "a description")
         self.assertEqual(rc, 0, err)
         item = item.strip()
         rc, entry_step, err = call(_cli_mod.cmd_set, item, "--state", "active")
@@ -1890,7 +1922,7 @@ class TestReviewGateWithRealLibrary(unittest.TestCase):
         os.environ["LC_CONFIG"] = write_config(projects=self.root, specs=self.root)
         write_real_library_bundle(self.root)
         self.store = FakeStore()
-        self.store.add_project("acme/widget", local_path=tempfile.mkdtemp())
+        self.store.add_project("acme/widget", shortcode="WID", local_path=tempfile.mkdtemp())
         self._orig = _cli_mod._container
         _cli_mod.set_container(_cli_mod.Container(store=self.store, machine=FakeMachine()))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
@@ -1899,7 +1931,7 @@ class TestReviewGateWithRealLibrary(unittest.TestCase):
 
     def _armed_item(self):
         rc, item, err = call(
-            _cli_mod.cmd_new, "item", "widget", "--description", "the settled design")
+            _cli_mod.cmd_new, "item", "--project", "widget", "widget", "--description", "the settled design")
         self.assertEqual(rc, 0, err)
         item = item.strip()
         call(_cli_mod.cmd_attach, item, "repo", "widget")
@@ -1923,7 +1955,7 @@ class TestReviewGateWithRealLibrary(unittest.TestCase):
 
     def test_arming_without_repo_fails_fast_with_no_step_created(self):
         rc, item, err = call(
-            _cli_mod.cmd_new, "item", "widget", "--description", "the settled design")
+            _cli_mod.cmd_new, "item", "--project", "widget", "widget", "--description", "the settled design")
         item = item.strip()
         rc2, out, err2 = call(_cli_mod.cmd_set, item, "--state", "active", "--workflow", "lightcycle/spec-driven")
         self.assertEqual(rc2, 1)
@@ -2700,7 +2732,7 @@ class TestInboxBacklog(unittest.TestCase):
         write_workflow_from_steps(self.root)
 
     def test_inbox_shows_action_and_blocked_only(self):
-        call(_cli_mod.cmd_new, "item", "a seed", "--description", "a description")
+        call(_cli_mod.cmd_new, "item", "--project", "app", "a seed", "--description", "a description")
         host = self.store.create_item("host", "a description", workflow="lightcycle/spec-driven")
         self.store.create_step(step="ready-merge", role="human", parent=host)
         self.store.create_step(step="build", role="human", parent=host)
@@ -2711,7 +2743,7 @@ class TestInboxBacklog(unittest.TestCase):
         self.assertNotIn("a seed", out)
 
     def test_backlog_shows_todo_only(self):
-        call(_cli_mod.cmd_new, "item", "a seed", "--description", "a description")
+        call(_cli_mod.cmd_new, "item", "--project", "app", "a seed", "--description", "a description")
         create_owned_step(self.store, "merge: z", step="ready-merge", role="human")
         _, out, _ = call(_cli_mod.cmd_backlog)
         self.assertNotIn("[todo]", out)
@@ -2726,14 +2758,14 @@ class TestInboxBacklog(unittest.TestCase):
         self.assertEqual(len([l for l in out.splitlines() if l.strip()]), 1)
 
     def test_backlog_limit_n(self):
-        call(_cli_mod.cmd_new, "item", "seed one", "--description", "a description")
-        call(_cli_mod.cmd_new, "item", "seed two", "--description", "a description")
-        call(_cli_mod.cmd_new, "item", "seed three", "--description", "a description")
+        call(_cli_mod.cmd_new, "item", "--project", "app", "seed one", "--description", "a description")
+        call(_cli_mod.cmd_new, "item", "--project", "app", "seed two", "--description", "a description")
+        call(_cli_mod.cmd_new, "item", "--project", "app", "seed three", "--description", "a description")
         _, out, _ = call(_cli_mod.cmd_backlog, "2")
         self.assertEqual(len([l for l in out.splitlines() if l.strip()]), 2)
 
     def test_backlog_with_unregistered_project_refuses_and_prints_no_rows(self):
-        call(_cli_mod.cmd_new, "item", "a seed", "--description", "a description")
+        call(_cli_mod.cmd_new, "item", "--project", "app", "a seed", "--description", "a description")
         rc, out, err = call(_cli_mod.cmd_backlog, "--project", "totally-made-up")
         self.assertEqual(rc, 1)
         self.assertIn("totally-made-up", err)
@@ -3549,13 +3581,13 @@ class TestSetWorkflow(unittest.TestCase):
         _fake_setUp(self, steps=True)
 
     def test_new_item_with_workflow_stores_the_bare_selector_unresolved(self):
-        rc, item, err = call(_cli_mod.cmd_new, "item", "an item", "--workflow", _DEFAULT_WORKFLOW, "--description", "a description")
+        rc, item, err = call(_cli_mod.cmd_new, "item", "--project", "app", "an item", "--workflow", _DEFAULT_WORKFLOW, "--description", "a description")
         item = item.strip()
         self.assertEqual(rc, 0, err)
         self.assertEqual(self.store.get_node(item).workflow, _DEFAULT_WORKFLOW)
 
     def test_set_workflow_resolves_to_a_pin_and_prints_it(self):
-        rc, item, err = call(_cli_mod.cmd_new, "item", "an item", "--description", "a description")
+        rc, item, err = call(_cli_mod.cmd_new, "item", "--project", "app", "an item", "--description", "a description")
         item = item.strip()
         rc, out, err = call(_cli_mod.cmd_set, item, "--workflow", _DEFAULT_WORKFLOW)
         pin = "%s@%s" % (_DEFAULT_WORKFLOW, _SHA)
@@ -3564,7 +3596,7 @@ class TestSetWorkflow(unittest.TestCase):
         self.assertEqual(self.store.get_node(item).workflow, pin)
 
     def test_set_workflow_unknown_name_fails_and_does_not_store(self):
-        rc, item, err = call(_cli_mod.cmd_new, "item", "an item", "--description", "a description")
+        rc, item, err = call(_cli_mod.cmd_new, "item", "--project", "app", "an item", "--description", "a description")
         item = item.strip()
         rc, out, err = call(
             _cli_mod.cmd_set, item, "--workflow", "lightcycle/does-not-exist")
@@ -3573,7 +3605,7 @@ class TestSetWorkflow(unittest.TestCase):
         self.assertIsNone(self.store.get_node(item).workflow)
 
     def test_set_workflow_unpulled_origin_fails_and_does_not_store(self):
-        rc, item, err = call(_cli_mod.cmd_new, "item", "an item", "--description", "a description")
+        rc, item, err = call(_cli_mod.cmd_new, "item", "--project", "app", "an item", "--description", "a description")
         item = item.strip()
         rc, out, err = call(_cli_mod.cmd_set, item, "--workflow", "ghost/whatever")
         self.assertNotEqual(rc, 0)
@@ -3581,7 +3613,7 @@ class TestSetWorkflow(unittest.TestCase):
         self.assertIsNone(self.store.get_node(item).workflow)
 
     def test_activating_with_an_unknown_workflow_fails_cleanly_instead_of_crashing(self):
-        rc, item, err = call(_cli_mod.cmd_new, "item", "an item", "--description", "a description")
+        rc, item, err = call(_cli_mod.cmd_new, "item", "--project", "app", "an item", "--description", "a description")
         item = item.strip()
         rc, out, err = call(
             _cli_mod.cmd_set, item, "--state", "active", "--workflow", "lightcycle/does-not-exist")
@@ -3590,7 +3622,7 @@ class TestSetWorkflow(unittest.TestCase):
         self.assertEqual(self.store.get_node(item).state, "backlogged")
 
     def test_set_workflow_overwriting_an_active_items_pin_still_resolves(self):
-        rc, item, err = call(_cli_mod.cmd_new, "item", "an item", "--workflow", "lightcycle/spec-driven", "--description", "a description")
+        rc, item, err = call(_cli_mod.cmd_new, "item", "--project", "app", "an item", "--workflow", "lightcycle/spec-driven", "--description", "a description")
         item = item.strip()
         rc, _, err = call(_cli_mod.cmd_set, item, "--state", "active")
         self.assertEqual(rc, 0, err)
@@ -3601,7 +3633,7 @@ class TestSetWorkflow(unittest.TestCase):
         self.assertEqual(self.store.get_node(item).workflow, pin)
 
     def test_set_workflow_resolved_pin_survives_the_next_complete(self):
-        rc, item, err = call(_cli_mod.cmd_new, "item", "an item", "--description", "a description")
+        rc, item, err = call(_cli_mod.cmd_new, "item", "--project", "app", "an item", "--description", "a description")
         item = item.strip()
         rc, step_id, err = call(
             _cli_mod.cmd_set, item, "--state", "active", "--workflow", _DEFAULT_WORKFLOW)
@@ -3619,7 +3651,7 @@ class TestSetWorkflow(unittest.TestCase):
         )
 
     def test_set_workflow_rejects_an_unqualified_name(self):
-        rc, item, err = call(_cli_mod.cmd_new, "item", "an item", "--description", "a description")
+        rc, item, err = call(_cli_mod.cmd_new, "item", "--project", "app", "an item", "--description", "a description")
         item = item.strip()
         rc, out, err = call(_cli_mod.cmd_set, item, "--workflow", "solo")
         self.assertNotEqual(rc, 0)
@@ -3632,7 +3664,7 @@ class TestSetWorkflow(unittest.TestCase):
         self.assertIn("unknown node", err)
 
     def test_repointing_an_item_with_no_shadowing_descendants_warns_nothing(self):
-        rc, item, err = call(_cli_mod.cmd_new, "item", "an item", "--workflow", "lightcycle/spec-driven", "--description", "a description")
+        rc, item, err = call(_cli_mod.cmd_new, "item", "--project", "app", "an item", "--workflow", "lightcycle/spec-driven", "--description", "a description")
         item = item.strip()
         rc, out, err = call(_cli_mod.cmd_set, item, "--workflow", _DEFAULT_WORKFLOW)
         self.assertEqual(rc, 0, err)

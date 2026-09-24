@@ -8,8 +8,6 @@ from lightcycle.config import Config
 
 def _config(root):
     cfg_path = os.path.join(root, "config")
-    with open(cfg_path, "w") as f:
-        f.write("shortcode: GRID\n")
     return Config(environ={"LC_HOME": root, "LC_CONFIG": cfg_path})
 
 

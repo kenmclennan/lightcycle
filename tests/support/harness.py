@@ -72,6 +72,7 @@ class Harness:
         _write_bundle(self.root, roles, extra_steps=extra_steps, workflow_text=workflow_text)
         self.store = FakeStore()
         self.store.add_project(SPECS_WORKSPACE, local_path=self.root)
+        self.store.add_project("acme/app", shortcode="APP")
         self._github = github
         inject_container(
             self, store=self.store, home=self.root, config_path=self._cfg, github=github

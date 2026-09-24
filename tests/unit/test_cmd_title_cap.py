@@ -24,9 +24,6 @@ class FakeConfig:
     def max_title_length(self):
         return self._cap
 
-    def shortcode(self):
-        return "XY"
-
 
 class FakeContainer:
     def __init__(self, store, cap=72):
@@ -48,7 +45,11 @@ class TestCmdNewTitleCap(unittest.TestCase):
         self.assertEqual(self.store.all_nodes(), [])
 
     def test_new_item_title_at_cap_is_accepted(self):
-        rc, out, err = call(cli.cmd_new, "item", "x" * self.cap, "--description", "a description")
+        self.store.add_project("acme/app", shortcode="APP")
+        rc, out, err = call(
+            cli.cmd_new, "item", "x" * self.cap, "--description", "a description",
+            "--project", "app",
+        )
         self.assertEqual(rc, 0)
 
 

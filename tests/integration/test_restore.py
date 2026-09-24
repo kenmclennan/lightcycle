@@ -27,7 +27,6 @@ def call(fn, *args):
 def _config(home, backups_dir):
     cfg_path = os.path.join(tempfile.mkdtemp(), "config")
     Path(cfg_path).write_text(
-        "shortcode: xy\n"
         "backups-dir: %s\n"
         "backup-interval-minutes: 15\n"
         "backup-retention: 96\n" % backups_dir

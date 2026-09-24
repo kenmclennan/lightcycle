@@ -48,7 +48,6 @@ This table documents every `_SEED_KEYS` entry - `tests/unit/test_docs_reference_
 | key | meaning |
 | --- | --- |
 | `projects` | root under which project repos live |
-| `shortcode` | id prefix for new top-level nodes (e.g. `LC` gives `LC-1`) |
 | `default-origin` | the workflow origin the spawner reads step prompts from. There is **no default workflow**: activation requires the item to carry `--workflow <origin>/<name>` |
 | `workflows-remote` | git remote for the built-in workflow origin. Seeded blank; `lc init` only pulls it once set (`lc config --edit`, then `lc workflow add <url> --name <origin>`) |
 | `workflow-retention` | pulled bundles kept per origin (plus any a live item pins) |

@@ -10,7 +10,7 @@ class TestCloseItemAtomicity(unittest.TestCase):
     def test_partial_failure_leaves_store_in_its_pre_call_state(self):
         store = make_sqlite_store()
         backlog = create_owned_step(store, "a backlog item", role="human")
-        item = store.create_item("my item", "a description")
+        item = store.create_item("my item", "a description", shortcode="GRID")
         child = store.create_step(step="build", role="agent", parent=item)
         store.add_artifact(item, "resolves", backlog, internal=True)
 

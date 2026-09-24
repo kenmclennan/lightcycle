@@ -39,7 +39,7 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
 
     def test_create_task_roundtrips_structured_attrs(self):
         s = self._store()
-        item = s.create_item("an item", "a description")
+        item = s.create_item("an item", "a description", shortcode="GRID")
         tid = s.create_step(step="build", role="agent", parent=item)
         t = s.get_step(tid)
         self.assertEqual((t.role, t.stage, t.item), ("agent", "build", item))
@@ -56,7 +56,7 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
 
     def test_story_artifacts_roundtrip(self):
         s = self._store()
-        sid = s.create_item("item: foo", "a description")
+        sid = s.create_item("item: foo", "a description", shortcode="GRID")
         s.add_artifact(sid, "spec", "specs/foo.md", "the spec")
         arts = s.item_artifacts(sid)
         self.assertEqual(
@@ -106,24 +106,24 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
 
     def test_tasks_closed_since_excludes_stories(self):
         s = self._store()
-        sid = s.create_item("closed item", "a description")
+        sid = s.create_item("closed item", "a description", shortcode="GRID")
         s.complete_node(sid, "merged")
         results = s.nodes_closed_since("2000-01-01")
         self.assertNotIn(sid, [t.id for t in results])
 
     def test_closed_unretroed_items_returns_closed_items(self):
         s = self._store()
-        sid = s.create_item("closed item", "a description")
+        sid = s.create_item("closed item", "a description", shortcode="GRID")
         s.complete_node(sid, "merged")
         self.assertIn(sid, [t.id for t in s.closed_unretroed_items()])
 
     def test_closed_unretroed_items_excludes_open_and_retroed_and_origin(self):
         s = self._store()
-        s.create_item("open item", "a description")
-        retroed = s.create_item("retroed item", "a description")
+        s.create_item("open item", "a description", shortcode="GRID")
+        retroed = s.create_item("retroed item", "a description", shortcode="GRID")
         s.complete_node(retroed, "merged")
         s.label_add(retroed, "retroed")
-        origin = s.create_item("origin item", "a description")
+        origin = s.create_item("origin item", "a description", shortcode="GRID")
         s.complete_node(origin, "merged")
         s.label_add(origin, "retro-origin")
         ids = [t.id for t in s.closed_unretroed_items()]
@@ -132,7 +132,7 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
 
     def test_closed_unretroed_passes_returns_a_closed_pass_of_a_still_open_item(self):
         s = self._store()
-        item = s.create_item("looping item", "a description")
+        item = s.create_item("looping item", "a description", shortcode="GRID")
         pid = s.open_pass(item)
         s.close_pass(pid)
         self.assertIn(pid, [p.id for p in s.closed_unretroed_passes()])
@@ -140,20 +140,20 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
     def test_closed_unretroed_passes_excludes_closed_item_open_retroed_and_origin(self):
         s = self._store()
 
-        closed_item = s.create_item("closed item", "a description")
+        closed_item = s.create_item("closed item", "a description", shortcode="GRID")
         closed_item_pass = s.open_pass(closed_item)
         s.close_pass(closed_item_pass)
         s.complete_node(closed_item, "merged")
 
-        open_item = s.create_item("open item", "a description")
+        open_item = s.create_item("open item", "a description", shortcode="GRID")
         open_pass = s.open_pass(open_item)
 
-        retroed_item = s.create_item("retroed pass item", "a description")
+        retroed_item = s.create_item("retroed pass item", "a description", shortcode="GRID")
         retroed_pass = s.open_pass(retroed_item)
         s.close_pass(retroed_pass)
         s.label_add(retroed_pass, "retroed")
 
-        origin_item = s.create_item("origin pass item", "a description")
+        origin_item = s.create_item("origin pass item", "a description", shortcode="GRID")
         origin_pass = s.open_pass(origin_item)
         s.close_pass(origin_pass)
         s.label_add(origin_pass, "retro-origin")
@@ -166,22 +166,22 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
 
     def test_last_n_closed_items_returns_closed_items(self):
         s = self._store()
-        first = s.create_item("first", "a description")
+        first = s.create_item("first", "a description", shortcode="GRID")
         s.complete_node(first, "merged")
-        second = s.create_item("second", "a description")
+        second = s.create_item("second", "a description", shortcode="GRID")
         s.complete_node(second, "merged")
         results = s.last_n_closed_items(1)
         self.assertEqual(len(results), 1)
 
     def test_last_n_closed_items_excludes_open_items(self):
         s = self._store()
-        s.create_item("open item", "a description")
+        s.create_item("open item", "a description", shortcode="GRID")
         results = s.last_n_closed_items(10)
         self.assertEqual(results, [])
 
     def test_last_n_closed_items_excludes_nested_steps(self):
         s = self._store()
-        item = s.create_item("item", "a description")
+        item = s.create_item("item", "a description", shortcode="GRID")
         step = s.create_step(parent=item)
         s.complete_node(step, "done")
         s.complete_node(item, "merged")
@@ -198,7 +198,7 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
 
     def test_edit_keeps_a_steps_id_and_everything_hanging_off_it(self):
         s = self._store()
-        item = s.create_item("item", "a description")
+        item = s.create_item("item", "a description", shortcode="GRID")
         blocker = s.create_step(parent=item)
         step = s.create_step(parent=item)
         s.dep_add(step, blocker)
@@ -222,7 +222,7 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
         workflow = graph_text_from_metas(metas, entry="build")
         flow = FlowService(FakeFs(metas, workflow=workflow), s)
 
-        item = s.create_item("add refunds", "a description")
+        item = s.create_item("add refunds", "a description", shortcode="GRID")
         resp = ActivateItemUseCase(s, flow, None, None).execute(
             ActivateItemInput(item=item, workflow="standard")
         )
@@ -233,8 +233,8 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
     def test_cmd_set_backlog_links_the_resolved_backlog_to_the_item(self):
         s = self._store()
         cli.set_container(Container(store=s))
-        item = s.create_item("owning item", "a description")
-        backlog_item = s.create_item("a backlog todo", "a description")
+        item = s.create_item("owning item", "a description", shortcode="GRID")
+        backlog_item = s.create_item("a backlog todo", "a description", shortcode="GRID")
         out, err = io.StringIO(), io.StringIO()
         with redirect_stdout(out), redirect_stderr(err):
             rc = cli.cmd_set([item, "--backlog", backlog_item]) or 0
@@ -278,7 +278,7 @@ class TestSqliteStoreAbandonedDispositionMigration(unittest.TestCase):
     def test_a_legacy_aborted_disposition_is_migrated_to_abandoned_on_reopen(self):
         s = make_sqlite_store()
         config = s._config
-        item = s.create_item("an item", "a description")
+        item = s.create_item("an item", "a description", shortcode="GRID")
         s.complete_node(item, "wontfix", disposition="aborted")
         s.release()
 
@@ -289,7 +289,7 @@ class TestSqliteStoreAbandonedDispositionMigration(unittest.TestCase):
     def test_the_migration_is_idempotent_on_a_second_reopen(self):
         s = make_sqlite_store()
         config = s._config
-        item = s.create_item("an item", "a description")
+        item = s.create_item("an item", "a description", shortcode="GRID")
         s.complete_node(item, "wontfix", disposition="aborted")
         s.release()
         first = self._reopen(config)
@@ -302,7 +302,7 @@ class TestSqliteStoreAbandonedDispositionMigration(unittest.TestCase):
     def test_a_completed_item_is_untouched_by_the_migration(self):
         s = make_sqlite_store()
         config = s._config
-        item = s.create_item("an item", "a description")
+        item = s.create_item("an item", "a description", shortcode="GRID")
         s.complete_node(item, "done", disposition="completed")
         s.release()
 
@@ -491,7 +491,7 @@ class TestSqliteStoreAddsColumnsToTablesThatAlreadyExist(unittest.TestCase):
 
     def test_reading_a_run_works_after_the_columns_are_added(self):
         s = self._store_without_the_ledger_columns()
-        item = s.create_item("an item", "a description")
+        item = s.create_item("an item", "a description", shortcode="GRID")
         pid = s.open_pass(item)
         s.open_run(item, pid, "code")
         self.assertIsNone(s.runs_of(item)[0].comments_handled_through)
@@ -562,7 +562,7 @@ class TestSqliteStoreAddsTheHistoryIndex(unittest.TestCase):
 class TestSqliteStoreAddsDispositionToItems(unittest.TestCase):
     def _store_without_disposition(self):
         s = make_sqlite_store()
-        item = s.create_item("an item", "a description")
+        item = s.create_item("an item", "a description", shortcode="GRID")
         s.complete_node(item, "done")
         s._conn.execute("ALTER TABLE items RENAME TO items_old")
         s._conn.execute(
@@ -601,7 +601,7 @@ class TestSqliteStoreAddsDispositionToItems(unittest.TestCase):
 class TestSqliteStoreAddsNoteToItems(unittest.TestCase):
     def _store_without_note(self):
         s = make_sqlite_store()
-        item = s.create_item("an item", "a description")
+        item = s.create_item("an item", "a description", shortcode="GRID")
         s.complete_node(item, "done")
         s._conn.execute("ALTER TABLE items RENAME TO items_old")
         s._conn.execute(
@@ -689,8 +689,6 @@ class TestSqliteStoreAddsClaimEpochToSteps(unittest.TestCase):
 class TestSqliteStoreTranslatesSqliteErrors(unittest.TestCase):
     def _config(self, root):
         cfg_path = os.path.join(root, "config")
-        with open(cfg_path, "w") as f:
-            f.write("shortcode: GRID\n")
         return Config(environ={"LC_HOME": root, "LC_CONFIG": cfg_path})
 
     def test_corrupt_store_surfaces_store_error_not_sqlite_operational_error(self):
@@ -705,8 +703,6 @@ class TestSqliteStoreTranslatesSqliteErrors(unittest.TestCase):
 class TestSqliteStoreSchemaVersionFloor(unittest.TestCase):
     def _config(self, root):
         cfg_path = os.path.join(root, "config")
-        with open(cfg_path, "w") as f:
-            f.write("shortcode: GRID\n")
         return Config(environ={"LC_HOME": root, "LC_CONFIG": cfg_path})
 
     def test_fresh_store_is_stamped_current_and_usable(self):
@@ -844,8 +840,6 @@ CREATE TABLE history (node_id TEXT NOT NULL, seq INTEGER NOT NULL, state TEXT NO
 class TestSqliteStoreCloseReasonMigration(unittest.TestCase):
     def _config(self, root):
         cfg_path = os.path.join(root, "config")
-        with open(cfg_path, "w") as f:
-            f.write("shortcode: GRID\n")
         return Config(environ={"LC_HOME": root, "LC_CONFIG": cfg_path})
 
     def _seed_legacy_store(self, root):
@@ -895,8 +889,6 @@ class TestSqliteStoreCloseReasonMigration(unittest.TestCase):
 class TestSqliteStoreArtifactFieldsMigration(unittest.TestCase):
     def _config(self, root):
         cfg_path = os.path.join(root, "config")
-        with open(cfg_path, "w") as f:
-            f.write("shortcode: GRID\n")
         return Config(environ={"LC_HOME": root, "LC_CONFIG": cfg_path})
 
     def _seed_legacy_store(self, root):
@@ -1000,8 +992,6 @@ CREATE TABLE items (
 class TestSqliteStoreUsageColumnsMigration(unittest.TestCase):
     def _config(self, root):
         cfg_path = os.path.join(root, "config")
-        with open(cfg_path, "w") as f:
-            f.write("shortcode: GRID\n")
         return Config(environ={"LC_HOME": root, "LC_CONFIG": cfg_path})
 
     def _seed_pre_usage_store(self, root):
@@ -1088,8 +1078,6 @@ class TestSqliteStoreUsageColumnsMigration(unittest.TestCase):
 class TestSqliteStoreDropsStepReflectionColumn(unittest.TestCase):
     def _config(self, root):
         cfg_path = os.path.join(root, "config")
-        with open(cfg_path, "w") as f:
-            f.write("shortcode: GRID\n")
         return Config(environ={"LC_HOME": root, "LC_CONFIG": cfg_path})
 
     def _seed_pre_usage_store(self, root):
@@ -1134,8 +1122,6 @@ class TestSqliteStoreDropsGoalStateOfPlayColumns(unittest.TestCase):
 
     def _config(self, root):
         cfg_path = os.path.join(root, "config")
-        with open(cfg_path, "w") as f:
-            f.write("shortcode: GRID\n")
         return Config(environ={"LC_HOME": root, "LC_CONFIG": cfg_path})
 
     def _plant_legacy_goal(self, root):
@@ -1193,8 +1179,6 @@ class TestSqliteStoreDropsGoalStateOfPlayColumns(unittest.TestCase):
 class TestSqliteStoreDropsStepTitleColumn(unittest.TestCase):
     def _config(self, root):
         cfg_path = os.path.join(root, "config")
-        with open(cfg_path, "w") as f:
-            f.write("shortcode: GRID\n")
         return Config(environ={"LC_HOME": root, "LC_CONFIG": cfg_path})
 
     def _seed_pre_usage_store(self, root):
@@ -1288,8 +1272,6 @@ class TestSqliteStoreGoalsMigration(unittest.TestCase):
 
     def _config(self, root):
         cfg_path = os.path.join(root, "config")
-        with open(cfg_path, "w") as f:
-            f.write("shortcode: GRID\n")
         return Config(environ={"LC_HOME": root, "LC_CONFIG": cfg_path})
 
     def _plant(self, root, goals, questions=()):

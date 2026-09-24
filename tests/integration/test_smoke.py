@@ -67,7 +67,7 @@ class SmokeTest(unittest.TestCase):
         ws = tempfile.mkdtemp()
         make_syncable_git_repo(ws)
         Path(cls.root, "grid.config").write_text(
-            "projects: %s\nspecs: %s\nshortcode: xy\n"
+            "projects: %s\nspecs: %s\n"
             "branch-prefix: feat\ndefault-origin: lightcycle\nmax-agents: 5\n"
             "worktree-retries: 6\n"
             "worktree-retry-sleep: 0.25\nmax-boot-seconds: 120\npoll-seconds: 5\n"
@@ -75,9 +75,11 @@ class SmokeTest(unittest.TestCase):
         )
         r = _tg("init", root=cls.root)
         assert r.returncode == 0, r.stderr
+        r = _tg("project", "add", "acme/app", "--shortcode", "APP", root=cls.root)
+        assert r.returncode == 0, r.stderr
 
     def test_add_with_description_and_edit(self):
-        r = _tg("new", "item", "my step", "--description", "detail here", root=self.root)
+        r = _tg("new", "item", "--project", "app", "my step", "--description", "detail here", root=self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
         tid = r.stdout.strip()
 
@@ -98,7 +100,7 @@ class SmokeTest(unittest.TestCase):
         self.assertEqual(shown["description"], "updated desc")
 
     def test_create_claim_done_advance_show(self):
-        r = _tg("new", "item", "smoke", "--description", "a description", root=self.root)
+        r = _tg("new", "item", "--project", "app", "smoke", "--description", "a description", root=self.root)
         self.assertEqual(r.returncode, 0, r.stderr)
         item_id = r.stdout.strip()
         r = _tg("attach", item_id, "spec", "specs/smoke.md", root=self.root)

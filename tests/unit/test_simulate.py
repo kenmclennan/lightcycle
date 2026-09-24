@@ -3,11 +3,12 @@ from types import SimpleNamespace
 
 from lightcycle.application.flow.claim_step import ClaimInput
 from lightcycle.application.workflows.simulate import (
-    WorkflowSimulateUseCase, _pass_end_coverage_violations, _phase_mismatch,
+    SIMULATION_SHORTCODE, WorkflowSimulateUseCase, _pass_end_coverage_violations, _phase_mismatch,
 )
 from lightcycle.domain.flow.simulate_plan import CoveragePlan, PlannedStep, PlannedWalk
 from tests.support.fake_git import FakeGit
 from tests.support.fake_store import FakeStore
+from tests.support.sqlite_store_factory import make_sqlite_store
 
 
 class TestPhaseMismatch(unittest.TestCase):
@@ -224,6 +225,23 @@ class TestPassBoundaryViolations(unittest.TestCase):
         violations = _use_case(store, FakeGit())._pass_boundary_violations(0, item, before_pass)
 
         self.assertEqual(violations, [])
+
+
+class TestSeedItem(unittest.TestCase):
+    def test_seeded_items_mint_under_the_simulation_shortcode_on_a_config_with_no_shortcode_key(self):
+        store = make_sqlite_store()
+        flow = SimpleNamespace(meta_for_step=lambda step, pin: {}, owner_of=lambda step, pin: "agent")
+        scaffold = SimpleNamespace(make_dir=lambda path: None)
+        uc = WorkflowSimulateUseCase(
+            store, flow, None, None, None, "/projects", FakeGit(), scaffold=scaffold,
+        )
+        graph = SimpleNamespace(entry="write-code", requires=())
+
+        first = uc._seed_item("origin/flow", graph)
+        second = uc._seed_item("origin/flow", graph)
+
+        self.assertEqual(SIMULATION_SHORTCODE, "SIM")
+        self.assertEqual([first, second], ["SIM-1", "SIM-2"])
 
 
 if __name__ == "__main__":

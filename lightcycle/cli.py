@@ -1137,7 +1137,7 @@ def cmd_new(argv):
             )
             return 2
         try:
-            resp = CreateItemUseCase(_container.store, _container.config).execute(
+            resp = CreateItemUseCase(_container.store).execute(
                 CreateItemInput(
                     title=a.title, description=a.description, project=a.project,
                     workflow=a.workflow, repo=a.repo, backlog=a.backlog,
@@ -1146,18 +1146,6 @@ def cmd_new(argv):
         except UseCaseError as e:
             sys.stderr.write("%s\n" % e)
             return 1
-        if resp.defaulted:
-            if a.repo:
-                sys.stderr.write(
-                    "no --project given and '%s' is not a registered project with a shortcode; "
-                    "minted with the global shortcode '%s'\n"
-                    % (a.repo, _container.config.shortcode())
-                )
-            else:
-                sys.stderr.write(
-                    "no --project given; minted with the global shortcode '%s'\n"
-                    % _container.config.shortcode()
-                )
         print(resp.id)
     else:
         if not a.step:

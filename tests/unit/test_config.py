@@ -51,15 +51,6 @@ class TestBranchPrefix(unittest.TestCase):
         self.assertEqual(_cfg(branch_prefix="wip").branch_prefix(), "wip")
 
 
-class TestShortcode(unittest.TestCase):
-    def test_missing_key_raises(self):
-        with self.assertRaises(ConfigError):
-            _cfg().shortcode()
-
-    def test_config_value_read(self):
-        self.assertEqual(_cfg(shortcode="GRID").shortcode(), "GRID")
-
-
 class TestMaxAgents(unittest.TestCase):
     def test_missing_key_raises(self):
         with self.assertRaises(ConfigError):
@@ -348,7 +339,7 @@ class TestEnsureConfig(unittest.TestCase):
         text = Path(p).read_text()
         self.assertIn("max-agents: 5", text)
         self.assertIn("branch-prefix: feat", text)
-        self.assertIn("shortcode: PROJ", text)
+        self.assertNotIn("shortcode: PROJ", text)
         self.assertIn("editor: vi", text)
         self.assertIn("worktree-retry-sleep: 0.25", text)
         self.assertIn("~/workspace/projects", text)
@@ -474,6 +465,25 @@ class TestObsoleteConfigKeys(unittest.TestCase):
         c = _cfg(retro_interval_items="5", old_flag="x")
         self.assertEqual(c.obsolete_config_keys(), ("retro-interval-items", "old-flag"))
         self.assertEqual(set(c.missing_config_keys()), {k for k, _ in _SEED_KEYS})
+
+
+class TestRetiredGlobalShortcodeKey(unittest.TestCase):
+    def test_a_freshly_seeded_config_has_no_shortcode_key_and_reports_nothing_obsolete(self):
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "config")
+        c = Config(environ={"LC_CONFIG": p})
+        c.ensure_config()
+        self.assertNotIn("shortcode", {k for k, _ in _SEED_KEYS})
+        self.assertNotRegex(Path(p).read_text(), r"(?m)^shortcode:")
+        self.assertEqual(c.obsolete_config_keys(), ())
+
+    def test_a_file_still_carrying_shortcode_loads_and_is_reported_obsolete(self):
+        c = _cfg(shortcode="PROJ")
+        self.assertEqual(c.obsolete_config_keys(), ("shortcode",))
+        self.assertFalse(hasattr(c, "shortcode"))
+
+    def test_resolved_settings_has_no_shortcode_entry(self):
+        self.assertNotIn("shortcode", {s.key for s in _cfg().resolved_settings()})
 
 
 class TestRenamedShortcodeKey(unittest.TestCase):
@@ -652,13 +662,13 @@ class TestPersonalOrigin(unittest.TestCase):
         self.assertIsNone(_cfg(personal_origin="").personal_origin())
 
     def test_set_replaces_seeded_empty_key_in_place_leaving_others_untouched(self):
-        c = _cfg(shortcode="PROJ", personal_origin="")
+        c = _cfg(branch_prefix="wip", personal_origin="")
         c.set_personal_origin("acme")
         self.assertEqual(c.personal_origin(), "acme")
-        self.assertEqual(c.shortcode(), "PROJ")
+        self.assertEqual(c.branch_prefix(), "wip")
 
     def test_set_again_with_a_different_name_overwrites(self):
-        c = _cfg(shortcode="PROJ", personal_origin="")
+        c = _cfg(branch_prefix="wip", personal_origin="")
         c.set_personal_origin("acme")
         c.set_personal_origin("other")
         self.assertEqual(c.personal_origin(), "other")
