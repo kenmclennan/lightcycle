@@ -1,5 +1,5 @@
 from lightcycle.application.flow.engine_steps import StepKind
-from lightcycle.domain.flow.hooks import CI_FAILED_CAP, PR_FEEDBACK
+from lightcycle.domain.flow.hooks import CI_FAILED_CAP, HOOK_MIN_ARITY, PR_FEEDBACK
 
 
 def format_usd(cost) -> str:
@@ -138,10 +138,10 @@ def _mermaid_stages(graph):
             if occ:
                 stages.add(occ[0])
     for occ in graph.hook_occurrences(PR_FEEDBACK):
-        if len(occ) > 1:
+        if len(occ) >= HOOK_MIN_ARITY[PR_FEEDBACK]:
             stages.add(occ[1])
     for occ in graph.hook_occurrences(CI_FAILED_CAP):
-        if len(occ) > 3:
+        if len(occ) >= HOOK_MIN_ARITY[CI_FAILED_CAP]:
             stages.add(occ[3])
     stages.update(graph.signals.keys())
     return stages
