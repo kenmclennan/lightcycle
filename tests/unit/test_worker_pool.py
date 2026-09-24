@@ -176,6 +176,30 @@ class TestWorkerPool(unittest.TestCase):
         pool = WorkerPool.from_state([{"spawnid": "sp", "pid": 1, "step": None}])
         self.assertEqual(pool.dead_steps_outside(probe(set()), claimed_ids=set()), set())
 
+    def test_covered_steps_still_includes_a_suspended_workers_step(self):
+        pool = WorkerPool.from_state(
+            [{"spawnid": "sp", "pid": 1, "step": "b-1", "suspended": True}]
+        )
+        self.assertEqual(pool.covered_steps(probe({1})), {"b-1"})
+
+    def test_running_steps_excludes_a_suspended_workers_step(self):
+        pool = WorkerPool.from_state(
+            [
+                {"spawnid": "frozen", "pid": 1, "step": "b-1", "suspended": True},
+                {"spawnid": "live", "pid": 2, "step": "b-2"},
+            ]
+        )
+        self.assertEqual(pool.running_steps(probe({1, 2})), {"b-2"})
+
+    def test_running_steps_excludes_a_dead_worker_and_one_with_no_step(self):
+        pool = WorkerPool.from_state(
+            [
+                {"spawnid": "dead", "pid": 1, "step": "b-1"},
+                {"spawnid": "idle", "pid": 2, "step": None},
+            ]
+        )
+        self.assertEqual(pool.running_steps(probe({2})), set())
+
 
 if __name__ == "__main__":
     unittest.main()

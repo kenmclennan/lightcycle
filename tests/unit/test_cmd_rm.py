@@ -68,6 +68,19 @@ class TestCmdRm(unittest.TestCase):
         self.assertIn(item, err)
         self.assertEqual(self.store.get_node(item).id, item)
 
+    def test_refuses_a_node_whose_step_is_held_by_a_suspended_worker(self):
+        item = self.store.create_item("feature", "a description")
+        step = self.store.create_step(step="build", role="agent", parent=item)
+        self.store.claim_ready("agent")
+        container = FakeContainer(self.store)
+        container.workers = FakeWorkers(
+            [{"step": step, "pid": 1, "suspended": True}], alive=True
+        )
+        cli.set_container(container)
+        rc, out, err = call(cli.cmd_rm, item)
+        self.assertNotEqual(rc, 0)
+        self.assertEqual(self.store.get_node(item).id, item)
+
 
 if __name__ == "__main__":
     unittest.main()

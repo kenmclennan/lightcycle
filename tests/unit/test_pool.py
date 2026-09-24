@@ -484,6 +484,22 @@ class TestSweep(unittest.TestCase):
         self.assertEqual(result.swept, [])
         self.assertIn(t, [n.id for n in s.claimed_steps()])
 
+    def test_suspended_worker_still_covers_its_step_so_it_is_not_reclaimed(self):
+        s = FakeStore()
+        held = create_owned_step(s, "h", step="build", role="agent")
+        s.update_state(held, "in_progress")
+        s.assign(held, "other-sp")
+        workers = FakeWorkers(
+            workers=[
+                {"spawnid": "frozen-sp", "pid": 111, "step": held, "started": 100,
+                 "suspended": True}
+            ],
+            alive_pids={111},
+        )
+        result = make_sweep(s, workers).execute(now=1000, max_boot=120, stall_seconds=1800)
+        self.assertEqual(result.swept, [])
+        self.assertIn(held, [n.id for n in s.claimed_steps()])
+
     def test_reclaiming_a_dirty_worktree_commits_it_before_reclaim(self):
         s = FakeStore()
         item = s.create_item("feature", "a description")
@@ -1191,6 +1207,35 @@ class TestTick(unittest.TestCase):
         )
         self.assertEqual(s.get_node(tid_a).active_seconds, 5.0)
         self.assertEqual(s.get_node(tid_b).active_seconds, 5.0)
+
+    def test_active_seconds_not_credited_while_the_worker_is_suspended(self):
+        s = FakeStore()
+        tid = create_owned_step(s, "b1", step="build", role="agent")
+        s.claim_ready("agent", "sp-1")
+        workers = FakeWorkers(
+            workers=[{"spawnid": "sp-1", "role": "agent", "pid": 1, "step": tid,
+                      "started": 900.0, "suspended": True}],
+            alive_pids={1},
+        )
+        make_tick(s, workers, FakeSpawner(), FakeConfig(max_agents=4)).execute(
+            TickInput(now=1005.0, since=1000.0)
+        )
+        self.assertIsNone(s.get_node(tid).active_seconds)
+
+    def test_active_seconds_accrue_again_once_the_worker_is_resumed(self):
+        s = FakeStore()
+        tid = create_owned_step(s, "b1", step="build", role="agent")
+        s.claim_ready("agent", "sp-1")
+        state = {"spawnid": "sp-1", "role": "agent", "pid": 1, "step": tid,
+                 "started": 900.0, "suspended": True}
+        make_tick(
+            s, FakeWorkers(workers=[state], alive_pids={1}), FakeSpawner(), FakeConfig(max_agents=4)
+        ).execute(TickInput(now=1005.0, since=1000.0))
+        resumed = dict(state, suspended=False)
+        make_tick(
+            s, FakeWorkers(workers=[resumed], alive_pids={1}), FakeSpawner(), FakeConfig(max_agents=4)
+        ).execute(TickInput(now=1010.0, since=1005.0))
+        self.assertEqual(s.get_node(tid).active_seconds, 5.0)
 
     def test_active_seconds_stays_none_without_a_live_worker(self):
         s = FakeStore()
