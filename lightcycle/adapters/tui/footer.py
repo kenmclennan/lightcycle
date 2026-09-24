@@ -13,6 +13,7 @@ class StatusBar(Horizontal):
         yield Static(id="status-pool")
         yield Static(id="status-claude")
         yield Static(id="status-hold")
+        yield Static(id="status-config")
         yield Static(id="status-version")
         yield Static(id="status-upgrade")
 
@@ -29,6 +30,7 @@ class StatusBar(Horizontal):
         upgrade_version,
         upgrade_error=None,
         hold=None,
+        config_changed=False,
     ):
         if pool_transition_kind == "start":
             glyph_key = "pool-start-timed-out" if pool_transition_expired else "pool-starting"
@@ -66,6 +68,17 @@ class StatusBar(Horizontal):
         else:
             hold_widget.update("")
             hold_widget.display = False
+
+        config_widget = self.query_one("#status-config", Static)
+        if config_changed:
+            config_glyph, config_colour = FOOTER_GLYPHS["config-changed"]
+            config_widget.update(
+                Text("%s config changed - restart to apply" % config_glyph, style=COLOURS[config_colour])
+            )
+            config_widget.display = True
+        else:
+            config_widget.update("")
+            config_widget.display = False
 
         self.query_one("#status-version", Static).update(Text("v%s" % version, style=COLOURS["dim"]))
 

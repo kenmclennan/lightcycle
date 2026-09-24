@@ -38,3 +38,12 @@ class TestConfigIsReadOnce(unittest.TestCase):
         self.config.load_config()
         self.config.set_personal_origin("mine")
         self.assertEqual(self.config.load_config().get("personal-origin"), "mine")
+
+    def test_config_mtime_moves_when_the_file_is_edited(self):
+        before = self.config.config_mtime()
+        os.utime(self.path, ns=(before + 1_000_000_000, before + 1_000_000_000))
+        self.assertNotEqual(self.config.config_mtime(), before)
+
+    def test_config_mtime_is_none_when_the_file_is_absent(self):
+        os.remove(self.path)
+        self.assertIsNone(self.config.config_mtime())

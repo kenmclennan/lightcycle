@@ -1625,6 +1625,9 @@ class LightcycleApp(App):
     #status-hold {{
         display: none;
     }}
+    #status-config {{
+        display: none;
+    }}
     #status-upgrade {{
         display: none;
     }}
@@ -1669,6 +1672,7 @@ class LightcycleApp(App):
         )
         self._upgrade_version = None
         self._upgrade_error = None
+        self._config_mtime_at_load = container.config.config_mtime()
         self._last_shape = None
         self._last_attention_ids = None
         self._last_priority_selection = None
@@ -1868,6 +1872,7 @@ class LightcycleApp(App):
             upgrade_version=self._upgrade_version,
             upgrade_error=self._upgrade_error,
             hold=hold,
+            config_changed=self._container.config.config_mtime() != self._config_mtime_at_load,
         )
 
     def _refresh_status_bar(self) -> None:

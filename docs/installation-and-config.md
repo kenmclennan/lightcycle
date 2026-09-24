@@ -43,6 +43,8 @@ Workflows are not shadowed or resolved through a chain: each item pins one sha-p
 
 The file is read **once per process**, not per lookup, so a long-running process keeps the values it started with: editing `max-agents` while `lc start` is running changes nothing until the pool is restarted. This is deliberate - a config re-read mid-operation would apply to some of an operation and not the rest, depending on call order. Short-lived commands (`lc show`, `lc done`) pick up an edit on their next invocation.
 
+Nothing re-reads the file mid-flight; instead the running processes are told. `lc config --edit` prints a notice, when the editor saved a change, that a running pool (`lc start`) and any open TUI keep the old values until restarted, and the TUI footer shows `↻ config changed - restart to apply` once the file's modification time moves past its value at launch.
+
 This table documents every `_SEED_KEYS` entry - `tests/unit/test_docs_reference_real_things.py` fails the build if a key is added without a row here. The twelve `price-*-per-mtok` keys are documented as one row, keyed by the pattern `price-<model>-<kind>-per-mtok`, rather than individually.
 
 | key | meaning |

@@ -26,12 +26,16 @@ class FakeContainer:
 
 
 class FakeLauncher:
-    def __init__(self, returncode=0):
+    def __init__(self, returncode=0, touches=False):
         self.returncode = returncode
+        self.touches = touches
         self.edited = None
 
     def edit(self, editor, path):
         self.edited = (editor, path)
+        if self.touches:
+            st = os.stat(path).st_mtime_ns + 1_000_000_000
+            os.utime(path, ns=(st, st))
         return self.returncode
 
 
@@ -146,6 +150,29 @@ class TestCmdConfig(unittest.TestCase):
         cli.set_container(FakeContainer(c, launcher))
         rc, _out, _err = call(cli.cmd_config, "--edit")
         self.assertEqual(rc, 1)
+
+    def test_edit_that_changed_the_file_says_running_processes_need_a_restart(self):
+        c = _cfg()
+        cli.set_container(FakeContainer(c, FakeLauncher(touches=True)))
+        rc, out, err = call(cli.cmd_config, "--edit")
+        self.assertEqual(rc, 0, err)
+        self.assertIn("lc start", out)
+        self.assertIn("lc tui", out)
+        self.assertIn("until restarted", out)
+
+    def test_edit_that_left_the_file_alone_says_nothing_about_restarting(self):
+        c = _cfg()
+        cli.set_container(FakeContainer(c, FakeLauncher()))
+        rc, out, err = call(cli.cmd_config, "--edit")
+        self.assertEqual(rc, 0, err)
+        self.assertNotIn("restarted", out)
+
+    def test_failed_editor_does_not_claim_a_saved_config(self):
+        c = _cfg()
+        cli.set_container(FakeContainer(c, FakeLauncher(returncode=1, touches=True)))
+        rc, out, _err = call(cli.cmd_config, "--edit")
+        self.assertEqual(rc, 1)
+        self.assertNotIn("restarted", out)
 
 
 if __name__ == "__main__":
