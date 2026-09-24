@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Dict, List
 
 from lightcycle.application.errors import UseCaseError
+from lightcycle.application.services.engine_fragments import with_engine_fragments
 from lightcycle.domain.health import Problem, fsck
 from lightcycle.domain.work.state import State
 from lightcycle.domain.workflows.contract import ENGINE_CONTRACT, contract_compatible
@@ -70,7 +71,16 @@ class DoctorUseCase:
                 ))
             current = self._workflow_source.current_sha(origin)
             if current and current != sha and self._workflow_source.has_version(origin, current):
-                changed = self._changed_step_roles(origin, sha, current)
+                try:
+                    changed = self._changed_step_roles(origin, sha, current)
+                except ValueError as e:
+                    pins.append(Problem(
+                        "pins",
+                        "%s cannot be compared with origin's current %s: %s" % (
+                            pin, format_pin(origin, name, current), e),
+                        n.id,
+                    ))
+                    continue
                 if changed:
                     pins.append(Problem(
                         "pins",
@@ -85,9 +95,11 @@ class DoctorUseCase:
         new_root = self._workflow_source.pinned_bundle(origin, new_sha)
         roles = set(self._workflow_bundle.step_roles(old_root)) | set(self._workflow_bundle.step_roles(new_root))
         changed = set()
+        old_roots = with_engine_fragments(old_root, self._config)
+        new_roots = with_engine_fragments(new_root, self._config)
         for role in roles:
-            old_step = self._workflow_bundle.parse_step(role, old_root)
-            new_step = self._workflow_bundle.parse_step(role, new_root)
+            old_step = self._workflow_bundle.parse_step(role, old_roots)
+            new_step = self._workflow_bundle.parse_step(role, new_roots)
             old_body = old_step.body if old_step else None
             new_body = new_step.body if new_step else None
             if old_body != new_body:

@@ -70,14 +70,20 @@ class FakeWorkflowSource:
 
 
 class FakeWorkflowBundle:
-    def __init__(self, bodies=None):
+    def __init__(self, bodies=None, errors=None):
         self.bodies = bodies or {}
+        self.errors = errors or {}
+        self.parsed_roots = []
 
     def step_roles(self, root):
         return sorted(self.bodies.get(root, {}))
 
     def parse_step(self, role, root):
-        body = self.bodies.get(root, {}).get(role)
+        self.parsed_roots.append(root)
+        if role in self.errors:
+            raise ValueError(self.errors[role])
+        primary = root[0] if isinstance(root, list) else root
+        body = self.bodies.get(primary, {}).get(role)
         return None if body is None else StepPrompt(meta={}, body=body)
 
 
@@ -188,6 +194,42 @@ class TestDoctorUseCase(unittest.TestCase):
         report = _uc(store, source, config, bundle).execute(DoctorInput())
         self.assertEqual(len(report.problems["pins"]), 1)
         self.assertIn("review-code", report.problems["pins"][0].message)
+
+    def test_drift_check_parses_steps_with_the_engine_fragments_root(self):
+        store = FakeStore()
+        item = store.create_item("item", "a description", workflow="acme/build@sha1")
+        store.update_state(item, "in_progress")
+        source = FakeWorkflowSource()
+        source.add_bundle("acme", "sha1", 1)
+        source.add_bundle("acme", "sha2", 1, current=True)
+        bundle = FakeWorkflowBundle({
+            ("acme", "sha1"): {"write-code": "body"},
+            ("acme", "sha2"): {"write-code": "body"},
+        })
+        config = _cfg(**_ALL_KEYS)
+        _uc(store, source, config, bundle).execute(DoctorInput())
+        self.assertTrue(bundle.parsed_roots)
+        for roots in bundle.parsed_roots:
+            self.assertEqual(roots[1], config.prompts_root())
+
+    def test_unparseable_step_reports_pins_problem_instead_of_raising(self):
+        store = FakeStore()
+        item = store.create_item("item", "a description", workflow="acme/build@sha1")
+        store.update_state(item, "in_progress")
+        source = FakeWorkflowSource()
+        source.add_bundle("acme", "sha1", 1)
+        source.add_bundle("acme", "sha2", 1, current=True)
+        bundle = FakeWorkflowBundle(
+            {("acme", "sha1"): {"write-code": "body"}, ("acme", "sha2"): {"write-code": "body"}},
+            errors={"write-code": "fragment 'plain-language' included by steps/write-code.md not found"},
+        )
+        config = _cfg(**_ALL_KEYS)
+        report = _uc(store, source, config, bundle).execute(DoctorInput())
+        self.assertFalse(report.healthy())
+        self.assertEqual(len(report.problems["pins"]), 1)
+        problem = report.problems["pins"][0]
+        self.assertEqual(problem.node_id, item)
+        self.assertIn("plain-language", problem.message)
 
     def test_current_sha_none_reports_no_drift_problem(self):
         store = FakeStore()
