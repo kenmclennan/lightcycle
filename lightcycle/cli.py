@@ -206,7 +206,7 @@ COMMAND_GROUPS = [
         ("workflow", "<add|upgrade|list|rm|check|describe|simulate> ...", "manage workflow sources and "
          "inspect workflows: check <origin>/<name> validates composition, describe <origin>/<name> "
          "shows its summary/shape, simulate <origin>/<name> dry-runs the bundle through the real "
-         "engine (no LLM/GitHub) to its terminals - separate from `lc upgrade`, which updates the engine"),
+         "engine (no LLM/GitHub) to its terminals, --trace also prints the walk taken - separate from `lc upgrade`, which updates the engine"),
     ]),
     ("Start working", [
         ("start", "[--once] [--detach]", "the agent pool: each tick, sweep stale claims, then fill up to LC_MAX_AGENTS (see `lc config`) workers from the ready queue; --detach spawns it in the background and returns immediately"),
@@ -406,7 +406,7 @@ def cmd_workflow(argv):
     if a.sub == "describe":
         return _workflow_describe(a.workflow, a.mermaid)
     if a.sub == "simulate":
-        return _workflow_simulate(a.workflow)
+        return _workflow_simulate(a.workflow, a.trace)
     c = _container
     try:
         if a.sub == "add":
@@ -801,7 +801,7 @@ def _workflow_describe(selector, as_mermaid=False):
     return 0
 
 
-def _workflow_simulate(selector):
+def _workflow_simulate(selector, trace=False):
     scratch = tempfile.mkdtemp(prefix="lc-simulate-")
     try:
         sim = SimulationContainer(_container, scratch)
@@ -817,9 +817,15 @@ def _workflow_simulate(selector):
             return 1
         if resp.ok:
             print("pass")
+            if trace:
+                for line in resp.trace:
+                    print(line)
             return 0
         for v in resp.violations:
             sys.stderr.write("%s\n" % v)
+        if trace:
+            for line in resp.trace:
+                sys.stderr.write("%s\n" % line)
         return 1
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
