@@ -183,9 +183,11 @@ class TestDashboardScaffold(unittest.TestCase):
         store = FakeStore()
         create_owned_step(store, "queued", step="build", role="agent")
 
-        session = launch(make_test_container(store=store), settle=False)
+        with patch.object(LightcycleApp, "_refresh") as refresh:
+            session = launch(make_test_container(store=store))
         self.addCleanup(session.close)
 
+        refresh.assert_called_once_with()
         self.assertFalse(session.app.query_one(PriorityTable).display)
         self.assertFalse(session.app.query_one("#empty-state", Static).display)
         self.assertFalse(session.app.query_one("#priority-list-floor", Static).display)
