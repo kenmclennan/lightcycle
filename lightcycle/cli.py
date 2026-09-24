@@ -1588,14 +1588,16 @@ def _upgrade_notice_lines(resp):
     return []
 
 
-def _stop_pool():
-    resp = StopPoolUseCase(_container.workers, _container.sweep(flow=_flow())).execute(
-        time.time(), _container.config.max_boot_seconds(),
-        _container.config.stall_seconds(),
-        shutdown_grace_seconds=_container.config.shutdown_grace_seconds(),
-    )
+def _stop_pool_lines(resp, grace_seconds):
     lines = ["lc start stopped: %d worker(s) stopped, %d step(s) reclaimed"
              % (len(resp.stopped), len(resp.reclaimed))]
+    if resp.survivors:
+        lines.append(
+            "  WARNING: %d worker(s) ignored SIGTERM and were still alive after the %ds grace: %s"
+            " - kill them by hand"
+            % (len(resp.survivors), grace_seconds,
+               ", ".join("%s (pid %d)" % (w.spawnid, w.pid) for w in resp.survivors))
+        )
     if resp.preserved:
         lines.append("  preserved uncommitted work on: %s" % ", ".join(resp.preserved))
     if resp.capture_failed:
@@ -1604,6 +1606,16 @@ def _stop_pool():
             % ", ".join(resp.capture_failed)
         )
     return lines
+
+
+def _stop_pool():
+    grace_seconds = _container.config.shutdown_grace_seconds()
+    resp = StopPoolUseCase(_container.workers, _container.sweep(flow=_flow())).execute(
+        time.time(), _container.config.max_boot_seconds(),
+        _container.config.stall_seconds(),
+        shutdown_grace_seconds=grace_seconds,
+    )
+    return _stop_pool_lines(resp, grace_seconds)
 
 
 def cmd_start(argv):

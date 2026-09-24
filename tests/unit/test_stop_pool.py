@@ -1,6 +1,6 @@
 import unittest
 
-from lightcycle.application.pool import StopPoolUseCase, SweepUseCase
+from lightcycle.application.pool import StopPoolResponse, StopPoolUseCase, SweepUseCase
 from lightcycle.application.pool.no_op_gates import (
     NoOpFs,
     NoOpGit,
@@ -8,6 +8,8 @@ from lightcycle.application.pool.no_op_gates import (
     NoOpStream,
     NoOpWorktrees,
 )
+from lightcycle.cli import _stop_pool_lines
+from lightcycle.domain.pool import Worker
 from lightcycle.domain.work import State
 from tests.support.fake_store import FakeStore
 from tests.support.fake_workers import FakeWorkers
@@ -133,6 +135,68 @@ class TestStopPool(unittest.TestCase):
         after = store.get_step(step)
         self.assertEqual(after.state, State.QUEUED)
         self.assertFalse(after.claimed_by)
+
+    def test_a_worker_that_dies_within_the_grace_is_stopped_and_not_a_survivor(self):
+        _store, _workers, _git, _step, uc = self._pool()
+        resp = uc.execute(now=100.0, max_boot=120, stall_seconds=1800)
+        self.assertEqual((resp.stopped, resp.survivors), (["spawn-1"], []))
+
+    def test_a_worker_still_alive_at_the_deadline_is_reported_as_a_survivor_not_stopped(self):
+        class _Stubborn(FakeWorkers):
+            def kill(self, pid):
+                self.killed.append(pid)
+
+        store = FakeStore()
+        item = store.create_item("an item", "a description")
+        step = store.create_step(step="build", role="agent", parent=item)
+        store.assign(step, "spawn-1")
+        store.update_state(step, State.RUNNING)
+        workers = _Stubborn(
+            alive_pids=(4242,),
+            workers=[{"spawnid": "spawn-1", "pid": 4242, "step": step, "started": 0, "role": "agent"}],
+        )
+        sweep = SweepUseCase(
+            store, workers, worktrees=_Worktrees(), git=_Git(), fs=NoOpFs(),
+            spin_port=NoOpSpinPort(), spin_cap=3, stream=NoOpStream(),
+        )
+        ticks = iter(range(1000))
+        uc = StopPoolUseCase(workers, sweep, sleep=lambda s: None, clock=lambda: next(ticks))
+
+        resp = uc.execute(now=100.0, max_boot=120, stall_seconds=1800, shutdown_grace_seconds=5)
+
+        self.assertEqual(resp.stopped, [])
+        self.assertEqual([(w.spawnid, w.pid) for w in resp.survivors], [("spawn-1", 4242)])
+
+    def test_wait_for_death_returns_the_pids_still_alive_at_the_deadline(self):
+        class _OneSurvives:
+            def reap(self):
+                pass
+
+            def pid_alive(self, pid, started=None):
+                return pid == 2
+
+        ticks = iter(range(1000))
+        uc = StopPoolUseCase(_OneSurvives(), sweep=None, sleep=lambda s: None, clock=lambda: next(ticks))
+
+        self.assertEqual(uc._wait_for_death({1, 2}, shutdown_grace_seconds=3), {2})
+
+
+class TestStopPoolLines(unittest.TestCase):
+    def test_a_clean_stop_carries_no_warning(self):
+        resp = StopPoolResponse(stopped=["a", "b"], reclaimed=["LC-1.1"])
+        self.assertEqual(
+            _stop_pool_lines(resp, 10),
+            ["lc start stopped: 2 worker(s) stopped, 1 step(s) reclaimed"],
+        )
+
+    def test_survivors_are_named_with_their_pids_and_the_grace_they_outlived(self):
+        survivor = Worker.from_state({"spawnid": "spawn-9", "pid": 777, "step": "LC-1.1", "started": 0, "role": "agent"})
+        resp = StopPoolResponse(stopped=["a", "b"], survivors=[survivor], reclaimed=["LC-1.1"])
+        lines = _stop_pool_lines(resp, 10)
+        self.assertEqual(lines[0], "lc start stopped: 2 worker(s) stopped, 1 step(s) reclaimed")
+        self.assertIn("1 worker(s) ignored SIGTERM", lines[1])
+        self.assertIn("10s grace", lines[1])
+        self.assertIn("spawn-9 (pid 777)", lines[1])
 
 
 if __name__ == "__main__":
