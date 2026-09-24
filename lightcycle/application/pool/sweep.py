@@ -33,7 +33,7 @@ class SweepUseCase:
         item = t.item or t.id
         if not self._worktrees.has_repo(item):
             return "not_checked"
-        path = self._worktrees.worktree_path(item)
+        path = self._worktrees.worktree_path(t)
         if not self._git.is_git_repo(path):
             return "not_checked"
         try:

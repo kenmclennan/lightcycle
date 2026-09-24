@@ -40,11 +40,10 @@ class RemoveNodeUseCase:
     def _worktree_dirty(self, node_id):
         if not self._worktrees.has_worktree_history(node_id):
             return False
-        if not self._worktrees.has_repo(node_id):
-            return False
-        target = self._worktrees.target_repo(node_id)
-        path = self._worktrees.worktree_path(node_id)
-        return self._git.worktree_registered(target, path) and self._git.has_uncommitted(path)
+        return any(
+            self._git.worktree_registered(target, path) and self._git.has_uncommitted(path)
+            for target, path in self._worktrees.worktrees_of(node_id)
+        )
 
     def execute(self, input: RemoveNodeInput) -> RemoveNodeResponse:
         try:

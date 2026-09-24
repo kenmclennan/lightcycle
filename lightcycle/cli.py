@@ -1424,13 +1424,23 @@ def cmd_attach(argv):
         LinkArtifactUseCase(_container.store, _flow()).execute(
             LinkArtifactInput(
                 item=a.id, atype=a.type, value=value, label=a.label, replace=a.replace,
-                internal=a.internal, kind=a.kind,
+                internal=a.internal, kind=a.kind, step=_acting_step_id(),
             )
         )
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
         return 1
     return 0
+
+
+def _acting_step_id():
+    spawnid = _container.config.spawn_id()
+    if not spawnid:
+        return None
+    try:
+        return _container.workers.step_for(spawnid)
+    except RegistryUnreadable:
+        return None
 
 
 def cmd_dep(argv):

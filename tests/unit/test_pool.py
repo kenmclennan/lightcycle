@@ -150,6 +150,7 @@ class FakeWorktrees:
         self.removed = []
         self._paths = paths or {}
         self._has_repo = has_repo
+        self.asked = []
 
     def remove(self, item):
         self.removed.append(item)
@@ -157,8 +158,9 @@ class FakeWorktrees:
     def has_repo(self, item):
         return self._has_repo
 
-    def worktree_path(self, item):
-        return self._paths.get(item, "/worktrees/%s" % item)
+    def worktree_path(self, node):
+        self.asked.append(node)
+        return self._paths.get(node.item, "/worktrees/%s" % node.item)
 
 
 class FakeCaptureGit:
@@ -517,6 +519,20 @@ class TestSweep(unittest.TestCase):
         self.assertEqual(result.preserved, [step])
         self.assertEqual(git.commits, [("/worktrees/%s" % item, "wip: preserved %s on reclaim" % step)])
         self.assertEqual(s.get_node(step).state, "queued")
+
+    def test_capture_resolves_the_worktree_from_the_reclaimed_step_not_another_open_one(self):
+        s = FakeStore()
+        item = s.create_item("feature", "a description")
+        s.create_step(step="spec-handle-feedback", role="agent", parent=item)
+        step = s.create_step(step="build", role="agent", parent=item)
+        s.update_state(step, "in_progress")
+        worktrees = FakeWorktrees()
+
+        make_sweep(s, FakeWorkers(), worktrees=worktrees, git=FakeCaptureGit()).execute(
+            now=1000, max_boot=120, stall_seconds=1800
+        )
+
+        self.assertEqual([(n.id, n.stage) for n in worktrees.asked], [(step, "build")])
 
     def test_reclaiming_a_clean_worktree_does_not_commit(self):
         s = FakeStore()

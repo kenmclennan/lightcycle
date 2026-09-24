@@ -126,8 +126,8 @@ class FakeWorktrees:
     def remove(self, item):
         self.removed.append(item)
 
-    def worktree_path(self, item):
-        return self.paths.get(item)
+    def worktree_path(self, node):
+        return self.paths.get(node.item)
 
 
 class FakeWorkers:

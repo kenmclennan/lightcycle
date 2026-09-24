@@ -91,8 +91,8 @@ class _Worktrees:
     def __init__(self, paths=None):
         self._paths = paths or {}
 
-    def worktree_path(self, item):
-        return self._paths[item]
+    def worktree_path(self, node):
+        return self._paths[node.item]
 
 
 def _uc(store, source, config, bundle):
@@ -440,6 +440,26 @@ class TestDoctorOrphans(unittest.TestCase):
         path = "/repo/.worktrees/%s-code" % item
         fs = FakeFs(dirs={"/repo/.worktrees": ["%s-code" % item]})
         report = self._report(store, fs, FakeMachine(), _Worktrees({item: path}))
+        self.assertEqual(report.problems["orphans"], [])
+
+    def test_two_claimed_steps_in_different_phases_expect_two_distinct_paths(self):
+        store = FakeStore()
+        store.add_project("acme", local_path="/repo")
+        item = store.create_item("item", "a description")
+        code = store.create_step(step="write-code", parent=item, role="agent")
+        spec = store.create_step(step="spec-handle-feedback", parent=item, role="agent")
+        store.update_state(code, "in_progress")
+        store.update_state(spec, "in_progress")
+        code_path = "/repo/.worktrees/%s-code" % item
+        spec_path = "/repo/.worktrees/%s-spec" % item
+
+        class _ByStage:
+            def worktree_path(self, node):
+                return {"write-code": code_path, "spec-handle-feedback": spec_path}[node.stage]
+
+        fs = FakeFs(dirs={"/repo/.worktrees": ["%s-code" % item, "%s-spec" % item]})
+        machine = FakeMachine(worktree_pids={code_path: [1], spec_path: [2]})
+        report = self._report(store, fs, machine, _ByStage())
         self.assertEqual(report.problems["orphans"], [])
 
     def test_unmatched_worktree_with_live_pids_reports_one_problem_naming_path_and_pids(self):

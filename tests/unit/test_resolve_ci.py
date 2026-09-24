@@ -109,6 +109,28 @@ _NO_HOOKS_FLOW = flow_from_metas({
 })
 
 
+class TestResolveCiActingStep(unittest.TestCase):
+    def test_the_worktree_is_resolved_from_the_poll_ci_step_not_another_open_step(self):
+        store = FakeStore()
+        item = store.create_item("building a thing", "a description")
+        plant_pr(store, item, _URL, branch=_BRANCH)
+        store.create_step(step="spec-handle-feedback", role="agent", parent=item)
+        poll = store.create_step(step="poll-ci", role="engine", parent=item)
+        asked = []
+
+        class _Worktrees:
+            def worktree_path(self, node):
+                asked.append(node)
+                return None
+
+        complete = CompleteStepUseCase(store, _FlowAdapter(_FLOW))
+        ResolveCiUseCase(
+            store, FakeGitHub(), FakeGit(), _Worktrees(), _FlowAdapter(_FLOW), complete
+        ).execute()
+
+        self.assertEqual([(n.id, n.stage) for n in asked], [(poll, "poll-ci")])
+
+
 class TestResolveCiUseCase(unittest.TestCase):
     def _setup(self, github, git, flow=_FLOW, worktree_path=_ROOT):
         store = FakeStore()

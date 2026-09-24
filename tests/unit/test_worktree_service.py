@@ -6,7 +6,9 @@ import unittest
 from lightcycle.adapters.scaffold import ScaffoldAdapter
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.services.worktree import WorktreeService
+from lightcycle.application.flow.passes import PassBook
 from lightcycle.domain.flow.flow import SPECS_WORKSPACE
+from lightcycle.domain.work import State
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_git import FakeGit
 from tests.support.fake_store import FakeStore
@@ -109,7 +111,7 @@ class TestWorktreePath(unittest.TestCase):
         )
         self.store.add_artifact(item, "repo", "saga")
 
-        path = self.svc.worktree_path(item)
+        path = self.svc.worktree_path(self.store.get_node(item))
 
         self.assertEqual(
             path, os.path.join("/home/u/workspace/projects", "saga", ".worktrees", item)
@@ -119,7 +121,7 @@ class TestWorktreePath(unittest.TestCase):
         item = self.store.create_item("story", "a description")
         self.store.add_artifact(item, "repo", "/elsewhere/app")
 
-        path = self.svc.worktree_path(item)
+        path = self.svc.worktree_path(self.store.get_node(item))
 
         self.assertEqual(path, os.path.join("/elsewhere/app", ".worktrees", item))
 
@@ -135,8 +137,8 @@ class TestWorktreePath(unittest.TestCase):
         )
         self.store.add_artifact(horde_item, "repo", "horde")
 
-        saga_path = self.svc.worktree_path(saga_item)
-        horde_path = self.svc.worktree_path(horde_item)
+        saga_path = self.svc.worktree_path(self.store.get_node(saga_item))
+        horde_path = self.svc.worktree_path(self.store.get_node(horde_item))
 
         self.assertEqual(
             os.path.dirname(os.path.dirname(saga_path)),
@@ -178,12 +180,12 @@ class TestWorktreePath(unittest.TestCase):
             return WorktreeService(self.store, git=None, fs=None, config=cfg,
                                    flow=_PhaseFlow(phase))
 
-        feat_path, code_path = svc("feature").worktree_path(item), svc("code").worktree_path(item)
+        feat_path, code_path = svc("feature").worktree_path(self.store.get_node(item)), svc("code").worktree_path(self.store.get_node(item))
         self.assertEqual(os.path.basename(feat_path), "%s-feature" % item)
         self.assertEqual(os.path.basename(code_path), "%s-code" % item)
         self.assertNotEqual(feat_path, code_path)
 
-        feat_branch, code_branch = svc("feature")._branch_for(item), svc("code")._branch_for(item)
+        feat_branch, code_branch = svc("feature")._branch_for(self.store.get_node(item)), svc("code")._branch_for(self.store.get_node(item))
         self.assertEqual(feat_branch, "feat/%s-feature-login-feature" % item)
         self.assertEqual(code_branch, "feat/%s-code-login-feature" % item)
         self.assertNotEqual(feat_branch, code_branch)
@@ -228,7 +230,7 @@ class TestSpecsWorkspace(unittest.TestCase):
             config=_Cfg("/home/u/workspace/projects"), flow=_FakeFlow(workspace="specs"),
         )
 
-        self.assertEqual(svc.target_repo(item), "/specs")
+        self.assertEqual(svc.target_repo(self.store.get_node(item)), "/specs")
 
     def test_target_repo_is_projects_root_repo_when_workflow_omits_workspace(self):
         item = self.store.create_item("story", "a description")
@@ -242,7 +244,7 @@ class TestSpecsWorkspace(unittest.TestCase):
         )
 
         self.assertEqual(
-            svc.target_repo(item), os.path.join("/home/u/workspace/projects", "saga")
+            svc.target_repo(self.store.get_node(item)), os.path.join("/home/u/workspace/projects", "saga")
         )
 
     def test_target_repo_without_a_flow_falls_back_to_project(self):
@@ -256,7 +258,7 @@ class TestSpecsWorkspace(unittest.TestCase):
         )
 
         self.assertEqual(
-            svc.target_repo(item), os.path.join("/home/u/workspace/projects", "saga")
+            svc.target_repo(self.store.get_node(item)), os.path.join("/home/u/workspace/projects", "saga")
         )
 
     def test_ensure_does_not_silently_skip_specs_workspace_without_a_repo_artifact(self):
@@ -268,7 +270,7 @@ class TestSpecsWorkspace(unittest.TestCase):
         )
 
         with self.assertRaises(UseCaseError):
-            svc.ensure(item)
+            svc.ensure(self.store.get_node(item))
         self.assertIn(("is_git_repo", "/specs"), git.calls)
 
     def test_remove_targets_specs_root_without_a_repo_artifact(self):
@@ -415,7 +417,7 @@ class TestPhaseLabelledBranch(unittest.TestCase):
             store, git=None, fs=None, config=_Cfg("/projects"), flow=_FakeFlow(workspace="project")
         )
 
-        self.assertIsNone(svc.item_branch(item))
+        self.assertIsNone(svc.item_branch(store.get_node(item)))
 
     def test_item_branch_reads_the_run_for_the_current_phase(self):
         store = FakeStore()
@@ -426,7 +428,7 @@ class TestPhaseLabelledBranch(unittest.TestCase):
             store, git=None, fs=None, config=_Cfg("/projects"), flow=_FakeFlow(workspace="project")
         )
 
-        self.assertEqual(svc.item_branch(item), "feat/x")
+        self.assertEqual(svc.item_branch(store.get_node(item)), "feat/x")
 
     def test_the_branch_lands_on_the_current_phases_run_leaving_the_others_alone(self):
         store = FakeStore()
@@ -437,7 +439,7 @@ class TestPhaseLabelledBranch(unittest.TestCase):
             store, git=None, fs=None, config=_Cfg("/projects"), flow=_FakeFlow(workspace="project")
         )
 
-        svc._ensure_branch_artifact(item, "feat/y")
+        svc._ensure_branch_artifact(store.get_node(item), "feat/y")
 
         self.assertEqual({r.phase: r.branch for r in store.runs_of(item)},
                          {"spec": "spec/x", "code": "feat/y"})
@@ -452,7 +454,7 @@ class TestEnsureNoSilentFailure(unittest.TestCase):
         git = FakeGit()
         svc = WorktreeService(self.store, git, fs=None, config=_Cfg("/projects"))
 
-        self.assertIsNone(svc.ensure(item))
+        self.assertIsNone(svc.ensure(self.store.get_node(item)))
         self.assertEqual(git.calls, [])
 
     def test_ensure_raises_when_repo_present_but_not_a_git_repo(self):
@@ -463,7 +465,7 @@ class TestEnsureNoSilentFailure(unittest.TestCase):
         svc = WorktreeService(self.store, git, fs=None, config=_Cfg("/projects"))
 
         with self.assertRaises(UseCaseError):
-            svc.ensure(item)
+            svc.ensure(self.store.get_node(item))
 
 
 class TestEnsureSyncsOrigin(unittest.TestCase):
@@ -486,7 +488,7 @@ class TestEnsureSyncsOrigin(unittest.TestCase):
         git = FakeGit(repos={target}, sync_result=True, base="origin/main")
         svc = WorktreeService(self.store, git, FakeFs(), _Cfg(self.projects_root), scaffold=ScaffoldAdapter())
 
-        svc.ensure(item)
+        svc.ensure(self.store.get_node(item))
 
         kinds = [c[0] for c in git.calls]
         self.assertIn("sync_to_origin", kinds)
@@ -500,7 +502,7 @@ class TestEnsureSyncsOrigin(unittest.TestCase):
         git = FakeGit(repos={target}, registered={path})
         svc = WorktreeService(self.store, git, FakeFs(), _Cfg(self.projects_root), scaffold=ScaffoldAdapter())
 
-        result = svc.ensure(item)
+        result = svc.ensure(self.store.get_node(item))
 
         self.assertEqual(result, path)
         self.assertNotIn("sync_to_origin", [c[0] for c in git.calls])
@@ -512,7 +514,7 @@ class TestEnsureSyncsOrigin(unittest.TestCase):
         svc = WorktreeService(self.store, git, FakeFs(), _Cfg(self.projects_root))
 
         with self.assertRaises(UseCaseError):
-            svc.ensure(item)
+            svc.ensure(self.store.get_node(item))
 
         kinds = [c[0] for c in git.calls]
         self.assertNotIn("worktree_base", kinds)
@@ -530,7 +532,7 @@ class TestEnsureSyncsOrigin(unittest.TestCase):
             scaffold=ScaffoldAdapter(),
         )
 
-        svc.ensure(item)
+        svc.ensure(self.store.get_node(item))
 
         self.assertIn(("sync_to_origin", target), git.calls)
 
@@ -543,7 +545,7 @@ class TestEnsureSyncsOrigin(unittest.TestCase):
         )
         svc = WorktreeService(self.store, git, FakeFs(), _Cfg(self.projects_root), scaffold=ScaffoldAdapter())
 
-        svc.ensure(item)
+        svc.ensure(self.store.get_node(item))
 
         kinds = [c[0] for c in git.calls]
         self.assertIn("worktree_registered", kinds)
@@ -557,7 +559,7 @@ class TestEnsureSyncsOrigin(unittest.TestCase):
         )
         svc = WorktreeService(self.store, git, FakeFs(), _Cfg(self.projects_root), scaffold=ScaffoldAdapter())
 
-        svc.ensure(item)
+        svc.ensure(self.store.get_node(item))
 
         kinds = [c[0] for c in git.calls]
         self.assertIn("sync_to_origin", kinds)
@@ -572,7 +574,7 @@ class TestEnsureSyncsOrigin(unittest.TestCase):
         svc = WorktreeService(self.store, git, FakeFs(), _Cfg(self.projects_root), scaffold=ScaffoldAdapter())
 
         with self.assertRaises(UseCaseError):
-            svc.ensure(item)
+            svc.ensure(self.store.get_node(item))
 
     def test_branch_is_recorded_even_when_worktree_add_fails(self):
         item = self._item_with_repo()
@@ -583,7 +585,7 @@ class TestEnsureSyncsOrigin(unittest.TestCase):
         svc = WorktreeService(self.store, git, FakeFs(), _Cfg(self.projects_root), scaffold=ScaffoldAdapter())
 
         with self.assertRaises(UseCaseError):
-            svc.ensure(item)
+            svc.ensure(self.store.get_node(item))
 
         self.assertTrue(svc.has_worktree_history(item))
 
@@ -673,27 +675,29 @@ class TestPhaseReEntry(unittest.TestCase):
         self.store.add_artifact(self.item, "repo", "saga")
 
     def _step(self, step):
-        return self.store.create_step(step=step, parent=self.item)
+        sid = self.store.create_step(step=step, parent=self.item)
+        self.step = self.store.get_node(sid)
+        return sid
 
     def test_a_first_pass_keeps_the_bare_phase_key(self):
         self._step("spec-writer")
         plant_run(self.store, self.item, "spec")
 
-        self.assertEqual(self.svc._phase_key(self.item), "spec")
+        self.assertEqual(self.svc._phase_key(self.step), "spec")
 
     def test_a_second_pass_gets_its_own_worktree_path(self):
         self._step("spec-writer")
         plant_run(self.store, self.item, "spec", "spec/one", n=1, state="merged")
         plant_run(self.store, self.item, "spec", n=2)
 
-        self.assertTrue(self.svc.worktree_path(self.item).endswith("-spec-2"))
+        self.assertTrue(self.svc.worktree_path(self.step).endswith("-spec-2"))
 
     def test_a_second_pass_through_a_phase_mints_a_new_branch(self):
         self._step("spec-writer")
         plant_run(self.store, self.item, "spec", "spec/one", n=1, state="merged")
         plant_run(self.store, self.item, "spec", n=2)
 
-        branch = self.svc._branch_for(self.item)
+        branch = self.svc._branch_for(self.step)
 
         self.assertNotEqual(branch, "spec/one")
         self.assertIn("spec-2", branch)
@@ -702,13 +706,13 @@ class TestPhaseReEntry(unittest.TestCase):
         self._step("spec-writer")
         plant_run(self.store, self.item, "spec", "spec/one")
 
-        self.assertEqual(self.svc._branch_for(self.item), "spec/one")
+        self.assertEqual(self.svc._branch_for(self.step), "spec/one")
 
     def test_the_run_holds_one_branch_and_replaces_it_rather_than_accumulating(self):
         self._step("spec-writer")
         plant_run(self.store, self.item, "spec", "spec/one")
 
-        self.svc._ensure_branch_artifact(self.item, "spec/two")
+        self.svc._ensure_branch_artifact(self.step, "spec/two")
 
         self.assertEqual([r.branch for r in self.store.runs_of(self.item)], ["spec/two"])
 
@@ -747,7 +751,7 @@ class TestPhaseReEntry(unittest.TestCase):
         plant_run(self.store, self.item, "spec", "spec/one", n=1, state="merged")
         plant_run(self.store, self.item, "spec", n=2)
 
-        self.assertTrue(self.svc.worktree_path(self.item).endswith("-spec-2"))
+        self.assertTrue(self.svc.worktree_path(self.step).endswith("-spec-2"))
 
 
 class TestNamedWorkspace(unittest.TestCase):
@@ -771,27 +775,165 @@ class TestNamedWorkspace(unittest.TestCase):
         )
 
     def test_a_named_workspace_resolves_to_that_registered_project(self):
-        target = self._svc("blueprints").target_repo(self.item)
+        target = self._svc("blueprints").target_repo(self.store.get_node(self.item))
 
         self.assertEqual(target, os.path.join(self.projects_root, "blueprints"))
 
     def test_the_default_workspace_still_uses_the_items_own_repo(self):
-        target = self._svc("project").target_repo(self.item)
+        target = self._svc("project").target_repo(self.store.get_node(self.item))
 
         self.assertEqual(target, os.path.join(self.projects_root, "saga"))
 
     def test_specs_resolves_through_the_project_registry_like_any_named_workspace(self):
-        target = self._svc("specs").target_repo(self.item)
+        target = self._svc("specs").target_repo(self.store.get_node(self.item))
 
         self.assertEqual(target, "/specs")
 
     def test_an_unregistered_workspace_name_fails_rather_than_silently_using_the_item_repo(self):
         with self.assertRaises(UseCaseError):
-            self._svc("not-a-project").target_repo(self.item)
+            self._svc("not-a-project").target_repo(self.store.get_node(self.item))
 
     def test_a_named_workspace_needs_no_repo_artifact_on_the_item(self):
         bare = self.store.create_item("no repo", "a description")
 
-        target = self._svc("blueprints").target_repo(bare)
+        target = self._svc("blueprints").target_repo(self.store.get_node(bare))
 
         self.assertEqual(target, os.path.join(self.projects_root, "blueprints"))
+
+
+class _TwoPhaseFlow:
+    _PHASES = {"spec-handle-feedback": "spec", "write-code": "code"}
+
+    def workflow_for(self, node):
+        return "spec-driven"
+
+    def load_graph(self, name=None):
+        return _Graph("project")
+
+    def phase_for(self, node):
+        return self._PHASES.get(getattr(node, "stage", None))
+
+    def phase_for_stage(self, stage, name=None):
+        return self._PHASES.get(stage)
+
+    def workspace_for_phase(self, node, phase):
+        return SPECS_WORKSPACE if phase == "spec" else "project"
+
+    def workspace_for_node(self, node):
+        return self.workspace_for_phase(node, self.phase_for(node))
+
+
+class TestClaimResolvesFromTheClaimedStep(unittest.TestCase):
+    def setUp(self):
+        self.store = FakeStore()
+        self.root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.root, True)
+        self.specs = os.path.join(self.root, "specs")
+        self.repo = os.path.join(self.root, "app")
+        self.store.add_project(SPECS_WORKSPACE, local_path=self.specs)
+        self.item = self.store.create_item("Login feature", "a description")
+        self.store.add_artifact(self.item, "repo", self.repo)
+        self.feedback = self._step("spec-handle-feedback")
+        self.code = self._step("write-code")
+        self.git = FakeGit(repos={self.specs, self.repo}, sync_result=True, base="origin/main")
+        self.svc = WorktreeService(
+            self.store, self.git, FakeFs(), _Cfg(self.root),
+            flow=_TwoPhaseFlow(), scaffold=ScaffoldAdapter(),
+        )
+
+    def _step(self, stage):
+        sid = self.store.create_step(step=stage, parent=self.item)
+        PassBook(self.store, _TwoPhaseFlow()).enrol(self.item, sid, stage)
+        return self.store.get_node(sid)
+
+    def _branches(self):
+        return {r.phase: r.branch for r in self.store.runs_of(self.item)}
+
+    def test_claiming_the_later_code_step_yields_the_code_worktree_and_branch(self):
+        runs_before = len(self.store.runs_of(self.item))
+
+        path = self.svc.ensure(self.code)
+
+        self.assertEqual(path, os.path.join(self.repo, ".worktrees", "%s-code" % self.item))
+        self.assertEqual(self.svc.item_branch(self.code), self._branches()["code"])
+        self.assertIn("code", self._branches()["code"])
+        self.assertIsNone(self._branches()["spec"])
+        self.assertEqual(len(self.store.runs_of(self.item)), runs_before)
+
+    def test_claiming_the_first_spec_step_yields_the_specs_worktree_and_run(self):
+        path = self.svc.ensure(self.feedback)
+
+        self.assertEqual(path, os.path.join(self.specs, ".worktrees", "%s-spec" % self.item))
+        self.assertIsNotNone(self._branches()["spec"])
+        self.assertIsNone(self._branches()["code"])
+
+    def test_the_claimed_step_is_the_only_open_step(self):
+        self.store.update_state(self.feedback.id, State.DONE)
+
+        path = self.svc.ensure(self.code)
+
+        self.assertEqual(path, os.path.join(self.repo, ".worktrees", "%s-code" % self.item))
+
+    def test_the_claimed_step_is_first_in_child_order(self):
+        path = self.svc.ensure(self.feedback)
+
+        self.assertEqual(os.path.dirname(os.path.dirname(path)), self.specs)
+
+
+class TestWorktreesOf(unittest.TestCase):
+    def setUp(self):
+        self.store = FakeStore()
+        self.store.add_project(SPECS_WORKSPACE, local_path="/specs")
+        self.item = self.store.create_item("Login feature", "a description")
+
+    def _svc(self):
+        return WorktreeService(
+            self.store, git=None, fs=None, config=_Cfg("/projects"), flow=_TwoPhaseFlow()
+        )
+
+    def test_a_mixed_item_returns_one_pair_per_run_with_a_branch(self):
+        self.store.add_artifact(self.item, "repo", "/elsewhere/app")
+        plant_run(self.store, self.item, "spec", "spec/x")
+        plant_run(self.store, self.item, "code", "feat/y")
+        plant_run(self.store, self.item, "spec", None, n=2)
+
+        pairs = self._svc().worktrees_of(self.item)
+
+        self.assertEqual(
+            pairs,
+            [
+                ("/specs", os.path.join("/specs", ".worktrees", "%s-spec" % self.item)),
+                ("/elsewhere/app", os.path.join("/elsewhere/app", ".worktrees", "%s-code" % self.item)),
+            ],
+        )
+
+    def test_a_repo_less_item_keeps_its_specs_run_and_drops_a_project_run(self):
+        plant_run(self.store, self.item, "spec", "spec/x")
+        plant_run(self.store, self.item, "code", "feat/y")
+
+        pairs = self._svc().worktrees_of(self.item)
+
+        self.assertEqual(
+            pairs, [("/specs", os.path.join("/specs", ".worktrees", "%s-spec" % self.item))]
+        )
+
+    def test_all_branchless_runs_return_nothing(self):
+        self.store.add_artifact(self.item, "repo", "/elsewhere/app")
+        plant_run(self.store, self.item, "spec")
+        plant_run(self.store, self.item, "code")
+
+        self.assertEqual(self._svc().worktrees_of(self.item), [])
+
+    def test_remove_releases_the_specs_and_code_runs_whichever_step_is_open(self):
+        self.store.add_artifact(self.item, "repo", "/elsewhere/app")
+        plant_run(self.store, self.item, "spec", "spec/x")
+        plant_run(self.store, self.item, "code", "feat/y")
+        self.store.create_step(step="spec-handle-feedback", parent=self.item)
+        git = FakeGit(repos={"/specs", "/elsewhere/app"})
+
+        WorktreeService(
+            self.store, git, fs=None, config=_Cfg("/projects"), flow=_TwoPhaseFlow()
+        ).remove(self.item)
+
+        self.assertIn(("delete_branch", "/specs", "spec/x"), git.calls)
+        self.assertIn(("delete_branch", "/elsewhere/app", "feat/y"), git.calls)

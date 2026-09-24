@@ -147,7 +147,7 @@ class DoctorUseCase:
         expected = set()
         for step in self._store.claimed_steps():
             try:
-                expected.add(self._worktrees.worktree_path(step.item))
+                expected.add(self._worktrees.worktree_path(step))
             except UseCaseError:
                 continue
         return expected

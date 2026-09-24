@@ -19,6 +19,7 @@ class LinkArtifactInput:
     replace: bool = False
     kind: Optional[str] = None
     internal: bool = False
+    step: Optional[str] = None
 
 
 class LinkArtifactUseCase:
@@ -86,10 +87,15 @@ class LinkArtifactUseCase:
             )
         if node.type != "item":
             raise UseCaseError("'%s' is not an item (type=%s)" % (input.item, node.type))
-        run = self._current_run(input.item)
+        acting = self._acting_step(input)
+        run = self._current_run(input.item, acting)
         if run is None:
+            scope = ""
+            if acting is not None and self._flow.phase_for(acting) is not None:
+                scope = " for phase '%s'" % self._flow.phase_for(acting)
             raise UseCaseError(
-                "item '%s' has no open phase run to attach '%s' to" % (input.item, input.atype)
+                "item '%s' has no open phase run%s to attach '%s' to"
+                % (input.item, scope, input.atype)
             )
         if input.atype == "pr":
             self._set_pr(run, input.value)
@@ -104,7 +110,20 @@ class LinkArtifactUseCase:
         else:
             self._store.set_pr(run.id, value)
 
-    def _current_run(self, item):
+    def _acting_step(self, input):
+        if not input.step or self._flow is None:
+            return None
+        try:
+            step = self._store.get_node(input.step)
+        except KeyError:
+            return None
+        if step.type != "step" or step.item != input.item:
+            return None
+        return step
+
+    def _current_run(self, item, acting=None):
+        if acting is not None and self._flow.phase_for(acting) is not None:
+            return self._store.current_run(item, self._flow.phase_for(acting))
         open_runs = self._store.open_runs_of(item)
         if not open_runs:
             return None

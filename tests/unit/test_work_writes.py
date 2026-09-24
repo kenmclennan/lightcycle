@@ -14,6 +14,7 @@ from lightcycle.application.work import (
 )
 from lightcycle.application.services.worktree import WorktreeService
 from lightcycle.domain.pool.worker import Worker
+from lightcycle.domain.work import State
 from lightcycle.ports.store import NodeNotFoundError
 from lightcycle.ports.workers import RegistryUnreadable
 from tests.support.fake_fs import FakeFs
@@ -68,6 +69,13 @@ class FakeWorktrees:
         self.removed.append(item)
 
 
+class _StagePhaseFlow:
+    _PHASES = {"spec-handle-feedback": "spec", "code-open-pr": "code"}
+
+    def phase_for(self, node):
+        return self._PHASES.get(getattr(node, "stage", None))
+
+
 class FakeWorktreesForRemove:
     def __init__(self, target="/projects/app", has_repo=True, has_worktree_history=True):
         self._target = target
@@ -81,11 +89,13 @@ class FakeWorktreesForRemove:
     def has_worktree_history(self, item):
         return self._has_worktree_history
 
-    def target_repo(self, item):
-        return self._target
-
     def worktree_path(self, item):
         return "/projects/app/.worktrees/%s" % item
+
+    def worktrees_of(self, item):
+        if not self._has_repo:
+            return []
+        return [(self._target, self.worktree_path(item))]
 
     def remove(self, item):
         self.removed.append(item)
@@ -262,6 +272,50 @@ class TestLinkArtifact(unittest.TestCase):
             LinkArtifactInput(item=sid, atype="repo", value="kenmclennan/lightcycle", replace=True)
         )
         self.assertEqual(s.get_item(sid).project, "acme/app")
+
+    def _two_phase_item(self):
+        s = FakeStore()
+        sid = s.create_item("st", "a description")
+        pid = s.open_pass(sid)
+        spec_run = s.open_run(sid, pid, "spec")
+        code_run = s.open_run(sid, pid, "code")
+        feedback = s.create_step(step="spec-handle-feedback", parent=sid)
+        open_pr = s.create_step(step="code-open-pr", parent=sid)
+        return s, sid, spec_run, code_run, feedback, open_pr
+
+    def test_attach_pr_with_an_acting_step_lands_on_that_steps_phase_run(self):
+        s, sid, spec_run, code_run, feedback, open_pr = self._two_phase_item()
+        LinkArtifactUseCase(s, _StagePhaseFlow()).execute(
+            LinkArtifactInput(item=sid, atype="pr", value="http://x/pull/9", step=open_pr)
+        )
+        self.assertEqual(s.get_run(code_run).pr, "http://x/pull/9")
+        self.assertIsNone(s.get_run(spec_run).pr)
+
+    def test_attach_pr_with_an_acting_step_and_no_open_run_for_its_phase_refuses(self):
+        s, sid, spec_run, code_run, feedback, open_pr = self._two_phase_item()
+        s.close_run(code_run, "merged")
+        with self.assertRaisesRegex(UseCaseError, "%s.*'code'" % sid):
+            LinkArtifactUseCase(s, _StagePhaseFlow()).execute(
+                LinkArtifactInput(item=sid, atype="pr", value="http://x/pull/9", step=open_pr)
+            )
+        self.assertIsNone(s.get_run(spec_run).pr)
+
+    def test_attach_pr_with_no_acting_step_keeps_the_first_open_step_rule(self):
+        s, sid, spec_run, code_run, feedback, open_pr = self._two_phase_item()
+        LinkArtifactUseCase(s, _StagePhaseFlow()).execute(
+            LinkArtifactInput(item=sid, atype="pr", value="http://x/pull/9")
+        )
+        self.assertEqual(s.get_run(spec_run).pr, "http://x/pull/9")
+        self.assertIsNone(s.get_run(code_run).pr)
+
+    def test_attach_pr_with_no_acting_step_falls_back_to_the_last_open_run(self):
+        s, sid, spec_run, code_run, feedback, open_pr = self._two_phase_item()
+        s.update_state(feedback, State.DONE)
+        s.update_state(open_pr, State.DONE)
+        LinkArtifactUseCase(s, _StagePhaseFlow()).execute(
+            LinkArtifactInput(item=sid, atype="pr", value="http://x/pull/9")
+        )
+        self.assertEqual(s.get_run(code_run).pr, "http://x/pull/9")
 
     def test_run_field_empty_pr_raises_and_leaves_run_unchanged(self):
         s = FakeStore()
@@ -692,10 +746,10 @@ class TestWorktreeServiceItemBranch(unittest.TestCase):
         s = FakeStore()
         sid = s.create_item("st", "a description")
         svc = WorktreeService(s, None, None, None)
-        self.assertIsNone(svc.item_branch(sid))
+        self.assertIsNone(svc.item_branch(s.get_node(sid)))
         rid = s.open_run(sid, s.open_pass(sid), None)
         s.set_branch(rid, "feat/x")
-        self.assertEqual(svc.item_branch(sid), "feat/x")
+        self.assertEqual(svc.item_branch(s.get_node(sid)), "feat/x")
 
 
 class TestWorktreeServiceBranchFor(unittest.TestCase):
@@ -703,7 +757,7 @@ class TestWorktreeServiceBranchFor(unittest.TestCase):
         s = FakeStore()
         sid = s.create_item("Branch name is the entire item title slugified (100+ chars); use the item id " "or a short truncated slug", "a description")
         svc = WorktreeService(s, None, None, FakeConfig())
-        branch = svc._branch_for(sid)
+        branch = svc._branch_for(s.get_node(sid))
         self.assertTrue(branch.startswith("feat/%s-" % sid))
         self.assertLessEqual(len(branch), len("feat/%s-" % sid) + 40)
 
@@ -713,7 +767,7 @@ class TestWorktreeServiceBranchFor(unittest.TestCase):
         rid = s.open_run(sid, s.open_pass(sid), None)
         s.set_branch(rid, "feat/custom-branch")
         svc = WorktreeService(s, None, None, FakeConfig())
-        self.assertEqual(svc._branch_for(sid), "feat/custom-branch")
+        self.assertEqual(svc._branch_for(s.get_node(sid)), "feat/custom-branch")
 
 
 class TestWorktreeServiceRemove(unittest.TestCase):

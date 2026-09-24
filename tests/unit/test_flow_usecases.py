@@ -94,20 +94,31 @@ class FakeWorktrees:
         self.released = getattr(self, "released", [])
         self.released.append(run.id)
 
-    def __init__(self, ensure_error=None, sync_specs_error=None, specs_path="/specs"):
+    def __init__(self, ensure_error=None, sync_specs_error=None, specs_path="/specs",
+                 workspace=None, branch=None, run_path=None):
         self.removed = []
         self._ensure_error = ensure_error
         self._sync_specs_error = sync_specs_error
         self._specs_path = specs_path
+        self._workspace = workspace
+        self._branch = branch
+        self._run_path = run_path
         self.sync_specs_calls = 0
+        self.ensured = []
+        self.branched = []
 
-    def ensure(self, item):
+    def ensure(self, node):
+        self.ensured.append(node)
         if self._ensure_error is not None:
             raise self._ensure_error
-        return None
+        return self._workspace
 
-    def item_branch(self, item):
-        return None
+    def item_branch(self, node):
+        self.branched.append(node)
+        return self._branch
+
+    def path_for_run(self, run):
+        return self._run_path
 
     def sync_specs(self):
         self.sync_specs_calls += 1
@@ -1103,6 +1114,99 @@ class TestNextStepTitleTracksTheItem(unittest.TestCase):
             compose_step_title(s.get_node(oid).stage, s.get_node(item).title),
             "open-pr: fix auth bug",
         )
+
+
+class _PhasedFlow(FlowService):
+    def __init__(self, phase, *args):
+        super().__init__(*args)
+        self._phase = phase
+
+    def phase_for(self, node):
+        return self._phase
+
+
+class TestClaimWorkspaceGuard(unittest.TestCase):
+    def _setup(self, worktrees, phase="code", spawn=None):
+        s = FakeStore()
+        item = s.create_item("i", "a description", workflow="standard", shortcode="GRID")
+        step = s.create_step(step="build", role="agent", parent=item)
+        rid = s.open_run(item, s.open_pass(item), phase)
+        s.set_branch(rid, "feat/x")
+        flow = _PhasedFlow(phase, FakeFs(METAS), s)
+        workers = FakeWorkers(assigned={spawn: step} if spawn else None)
+        uc = ClaimStepUseCase(s, flow, worktrees, workers, FakeConfig(spawn=spawn))
+        return s, step, uc
+
+    def test_a_workspace_that_disagrees_with_the_phases_run_parks_the_step_and_returns_no_work(self):
+        wt = FakeWorktrees(workspace="/wt/spec", branch="feat/x", run_path="/wt/code")
+        s, step, uc = self._setup(wt)
+
+        resp = uc.execute(ClaimInput(role="agent"))
+
+        self.assertIsNone(resp)
+        node = s.get_node(step)
+        self.assertEqual(node.role, "human")
+        self.assertNotEqual(node.state, State.QUEUED)
+        self.assertTrue((node.park.reason or "").strip())
+        self.assertTrue((node.park.needs or "").strip())
+        self.assertNotEqual(node.park.reason, node.park.needs)
+
+    def test_a_branch_that_disagrees_with_the_phases_run_parks_the_step(self):
+        wt = FakeWorktrees(workspace="/wt/code", branch="feat/other", run_path="/wt/code")
+        s, step, uc = self._setup(wt)
+
+        self.assertIsNone(uc.execute(ClaimInput(role="agent")))
+        self.assertEqual(s.get_node(step).role, "human")
+
+    def test_a_step_whose_phase_run_is_already_closed_is_not_parked(self):
+        wt = FakeWorktrees(workspace="/wt/code", branch=None, run_path="/wt/other")
+        s, step, uc = self._setup(wt)
+        s.close_run(s.runs_of(s.get_node(step).item)[0].id, "merged")
+
+        self.assertEqual(uc.execute(ClaimInput(role="agent")).workspace, "/wt/code")
+        self.assertEqual(s.get_node(step).role, "agent")
+
+    def test_an_agreeing_workspace_returns_the_response_unchanged(self):
+        wt = FakeWorktrees(workspace="/wt/code", branch="feat/x", run_path="/wt/code")
+        s, step, uc = self._setup(wt)
+
+        resp = uc.execute(ClaimInput(role="agent"))
+
+        self.assertEqual(resp.workspace, "/wt/code")
+        self.assertEqual(resp.branch, "feat/x")
+        self.assertEqual(s.get_node(step).role, "agent")
+
+    def test_the_guard_is_skipped_when_no_workspace_is_returned(self):
+        wt = FakeWorktrees(workspace=None, run_path="/never/compared")
+        s, step, uc = self._setup(wt)
+
+        self.assertEqual(uc.execute(ClaimInput(role="agent")).view.step.id, step)
+
+    def test_the_guard_is_skipped_when_the_step_has_no_phase(self):
+        wt = FakeWorktrees(workspace="/wt/any", branch="other", run_path="/wt/different")
+        s, step, uc = self._setup(wt, phase=None)
+
+        self.assertEqual(uc.execute(ClaimInput(role="agent")).workspace, "/wt/any")
+
+    def test_a_fresh_claim_resolves_from_the_claimed_step(self):
+        wt = FakeWorktrees()
+        s, step, uc = self._setup(wt)
+
+        uc.execute(ClaimInput(role="agent"))
+
+        self.assertEqual([n.id for n in wt.ensured], [step])
+        self.assertEqual([n.id for n in wt.branched], [step])
+
+    def test_an_in_flight_reentry_resolves_from_the_claimed_step(self):
+        wt = FakeWorktrees()
+        s, step, uc = self._setup(wt, spawn="sp1")
+        s.update_state(step, State.RUNNING)
+        s.assign(step, "sp1")
+
+        uc.execute(ClaimInput(role="agent"))
+
+        self.assertEqual([n.id for n in wt.ensured], [step])
+        self.assertEqual([n.id for n in wt.branched], [step])
 
 
 class TestClaimTask(unittest.TestCase):
