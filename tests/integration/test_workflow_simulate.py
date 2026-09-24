@@ -298,6 +298,41 @@ class TestCmdWorkflowSimulateDispatch(SimulateTestCase):
         self.assertEqual(rc, 1)
         self.assertIn("gave-up", err.getvalue())
 
+    def test_trace_flag_prints_the_walk_after_pass(self):
+        import io
+        from contextlib import redirect_stdout
+
+        selector = self._install(_WORKFLOW_TEXT, _STEPS)
+        out = io.StringIO()
+        with redirect_stdout(out):
+            rc = cli.cmd_workflow(["simulate", selector, "--trace"])
+        self.assertEqual(rc, 0)
+        lines = out.getvalue().splitlines()
+        self.assertEqual(lines[0], "pass")
+        self.assertRegex(out.getvalue(), r"walk 0: -> ")
+
+    def test_trace_flag_prints_the_walk_after_the_violations(self):
+        import io
+        from contextlib import redirect_stderr
+
+        selector = self._install(_NO_ESCALATE_EDGE_WORKFLOW_TEXT, _STEPS)
+        err = io.StringIO()
+        with redirect_stderr(err):
+            rc = cli.cmd_workflow(["simulate", selector, "--trace"])
+        self.assertEqual(rc, 1)
+        output = err.getvalue()
+        self.assertLess(output.index("gave-up"), output.index("walk 0: -> "))
+
+    def test_without_the_trace_flag_no_walk_lines_are_printed(self):
+        import io
+        from contextlib import redirect_stdout
+
+        selector = self._install(_WORKFLOW_TEXT, _STEPS)
+        out = io.StringIO()
+        with redirect_stdout(out):
+            cli.cmd_workflow(["simulate", selector])
+        self.assertEqual(out.getvalue().strip(), "pass")
+
 
 class TestRoutingSoundnessViolation(SimulateTestCase):
     def test_conflict_escalation_to_an_undeclared_outcome_is_a_violation(self):
