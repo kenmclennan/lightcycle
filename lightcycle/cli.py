@@ -385,7 +385,7 @@ def main(argv=None):
         return 2
     try:
         return fn(argv[1:]) or 0
-    except NodeNotFoundError as e:
+    except (NodeNotFoundError, ConfigError) as e:
         sys.stderr.write("%s\n" % e)
         return 1
 
