@@ -152,7 +152,7 @@ from lightcycle.application.setup import (
     upgrade,
 )
 from lightcycle.application.setup.upgrade import scan_venv_holders
-from lightcycle.adapters.sqlite_store import LiveStoreRefused
+from lightcycle.adapters.sqlite_store import LiveStoreRefused, SchemaVersionRefused
 from lightcycle.config import Config, ConfigError
 from lightcycle.container import (
     Container,
@@ -367,7 +367,7 @@ def main(argv=None):
         return cmd_upgrade(argv[1:])
     try:
         set_container(Container())
-    except LiveStoreRefused as e:
+    except (LiveStoreRefused, SchemaVersionRefused) as e:
         sys.stderr.write("%s\n" % e)
         return 1
     _container.config.reconcile_config()
