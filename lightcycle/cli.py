@@ -1627,6 +1627,13 @@ def _tick_failure_action(consecutive_failures, cap):
     return "raise" if consecutive_failures >= cap else "continue"
 
 
+def _advance_tick_state(prev_now, consecutive_failures, now, succeeded, cap):
+    if succeeded:
+        return now, 0, "continue"
+    consecutive_failures += 1
+    return prev_now, consecutive_failures, _tick_failure_action(consecutive_failures, cap)
+
+
 def _upgrade_notice_lines(resp):
     if resp.notice:
         return [resp.notice]
@@ -1718,16 +1725,17 @@ def cmd_start(argv):
             try:
                 result = _run_tick(tick, _container.worker_log, TickInput(now=now, since=prev_now), now)
             except Exception:
-                consecutive_failures += 1
-                if _tick_failure_action(consecutive_failures, tick_failure_cap) == "raise":
+                prev_now, consecutive_failures, action = _advance_tick_state(
+                    prev_now, consecutive_failures, now, False, tick_failure_cap)
+                if action == "raise":
                     raise
                 time.sleep(interval)
                 continue
-            consecutive_failures = 0
+            prev_now, consecutive_failures, _ = _advance_tick_state(
+                prev_now, consecutive_failures, now, True, tick_failure_cap)
             lines, prev_snapshot = _format_tick(result, prev_snapshot, now)
             for line in lines:
                 print(line)
-            prev_now = now
             time.sleep(interval)
     except KeyboardInterrupt:
         print("\nlc start stopping - press Ctrl-C again only if it hangs")
