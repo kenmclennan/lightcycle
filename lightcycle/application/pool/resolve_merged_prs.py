@@ -29,11 +29,15 @@ class ResolveMergedPrsUseCase:
         self._complete = complete
         self._check_content_pin = check_content_pin
 
-    def _disposition_for_close(self, item, flow, outcome):
+    def _disposition_for_close(self, item, flow, outcome, stage):
         disposition = flow.disposition_for(outcome)
         if disposition is not None:
             return disposition
-        step = active_step_any(self._store, item.id) or latest_step(self._store, item.id)
+        step = (
+            active_step_at(self._store, item.id, stage)
+            or active_step_any(self._store, item.id)
+            or latest_step(self._store, item.id)
+        )
         if step is not None:
             ParkStepUseCase(self._store).execute(
                 ParkInput(
@@ -85,7 +89,7 @@ class ResolveMergedPrsUseCase:
                         self._complete.execute(CompleteInput(step=step.id, outcome=merge_outcome))
                         merged.append(item.id)
                     else:
-                        disposition = self._disposition_for_close(item, flow, merge_outcome)
+                        disposition = self._disposition_for_close(item, flow, merge_outcome, stage)
                         if disposition is None:
                             continue
                         close.execute(
@@ -105,7 +109,7 @@ class ResolveMergedPrsUseCase:
                         self._complete.execute(CompleteInput(step=step.id, outcome=close_outcome))
                         abandoned.append(item.id)
                     else:
-                        disposition = self._disposition_for_close(item, flow, close_outcome)
+                        disposition = self._disposition_for_close(item, flow, close_outcome, stage)
                         if disposition is None:
                             continue
                         close.execute(

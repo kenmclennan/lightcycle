@@ -20,7 +20,7 @@ class MonitorPrsUseCase:
     def __init__(
         self, store, github, worktrees, flow_service, complete=None, *, git=None
     ):
-        check_content_pin = CheckContentPinUseCase(store, github)
+        check_content_pin = CheckContentPinUseCase(store, github, flow_service)
         self._resolve = ResolveMergedPrsUseCase(
             store, github, worktrees, flow_service, complete, check_content_pin
         )

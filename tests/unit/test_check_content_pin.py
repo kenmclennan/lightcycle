@@ -121,7 +121,7 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         item = store.create_item("guarded feature", "a description")
         plant_pr(store, item, self._URL)
         step = store.create_step(step="build", role="agent", parent=item)
-        cc = CheckContentPinUseCase(store, github)
+        cc = CheckContentPinUseCase(store, github, _FlowAdapter(f))
         phase = f.step_def(f.merge_stages()[0]).phase
         uc = _ContentPinRunner(store, cc, item, phase)
         return store, item, step, uc
@@ -176,6 +176,45 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         self.assertEqual(self._pin(store, item), "sha2")
         self.assertIsNone(store.get_node(step).notes)
         self.assertEqual(store.get_node(step).role, "agent")
+
+    def test_regression_parks_the_step_of_the_prs_own_phase_not_an_earlier_open_step(self):
+        flow = flow_from_metas(
+            {
+                "spec-fb": {
+                    "step": "spec-feedback",
+                    "phase": "spec",
+                    "routes": {"done": "ready-merge"},
+                },
+                "reviewer": {
+                    "step": "ready-merge",
+                    "phase": "code",
+                    "routes": {"merged": "cleanup"},
+                    "on_pr_merge": "merged",
+                },
+            },
+            disposition={"merged": "completed"},
+        )
+        gh = FakeGitHub(
+            head_shas={self._URL: "sha1"},
+            files_by_sha={(self._URL, "sha1"): frozenset({"a.py"})},
+        )
+        store = FakeStore()
+        item = store.create_item("guarded feature", "a description")
+        plant_pr(store, item, self._URL, phase="code")
+        spec_step = store.create_step(step="spec-feedback", role="agent", parent=item)
+        code_step = store.create_step(step="ready-merge", role="human", parent=item)
+        cc = CheckContentPinUseCase(store, gh, _FlowAdapter(flow))
+        uc = _ContentPinRunner(store, cc, item, "code")
+        uc.execute()
+
+        gh._head_shas[self._URL] = "sha2"
+        gh._files_by_sha[(self._URL, "sha2")] = frozenset()
+
+        uc.execute()
+
+        self.assertIn("a.py", store.get_node(code_step).notes)
+        self.assertIsNone(store.get_node(spec_step).notes)
+        self.assertEqual(store.get_node(spec_step).role, "agent")
 
     def test_regression_routes_the_active_step_to_a_human(self):
         gh = FakeGitHub(
@@ -390,7 +429,7 @@ class TestMonitorPrsContentPin(unittest.TestCase):
             id="%s.10" % item)
         store.complete_node(step_9, "done")
         store.complete_node(step_10, "done")
-        cc = CheckContentPinUseCase(store, gh)
+        cc = CheckContentPinUseCase(store, gh, _FlowAdapter(_FLOW))
         phase = _FLOW.step_def(_FLOW.merge_stages()[0]).phase
         uc = _ContentPinRunner(store, cc, item, phase)
         uc.execute()

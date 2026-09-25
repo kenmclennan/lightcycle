@@ -33,6 +33,17 @@ def active_step_any(store, item_id):
     return None
 
 
+def active_step_in_phase(store, flow_service, item_id, phase):
+    for child in store.children(item_id):
+        if (
+            child.type == "step"
+            and child.state != State.DONE
+            and flow_service.phase_for(child) == phase
+        ):
+            return child
+    return None
+
+
 def latest_step(store, item_id):
     steps = sorted(
         store.children(item_id),
