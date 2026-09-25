@@ -54,8 +54,10 @@ class ResolveMergedPrsUseCase:
             )
         return None
 
-    def _close_run(self, run, state):
-        self._store.close_run(run.id, state)
+    def _close_run_and_complete(self, run, state, step, outcome):
+        with self._store.transaction():
+            self._store.close_run(run.id, state)
+            self._complete.execute(CompleteInput(step=step.id, outcome=outcome))
         if self._worktrees is not None:
             self._worktrees.release_run(run)
 
@@ -66,6 +68,8 @@ class ResolveMergedPrsUseCase:
             if item.type != "item":
                 continue
             if not any(r.pr for r in self._store.open_runs_of(item.id)):
+                continue
+            if active_step_any(self._store, item.id) is None:
                 continue
             flow = flow_for(self._flow_service, item)
             resolved = False
@@ -85,8 +89,7 @@ class ResolveMergedPrsUseCase:
                         step = active_step_at(self._store, item.id, stage)
                         if step is None:
                             continue
-                        self._close_run(run, RunState.MERGED)
-                        self._complete.execute(CompleteInput(step=step.id, outcome=merge_outcome))
+                        self._close_run_and_complete(run, RunState.MERGED, step, merge_outcome)
                         merged.append(item.id)
                     else:
                         disposition = self._disposition_for_close(item, flow, merge_outcome, stage)
@@ -105,8 +108,7 @@ class ResolveMergedPrsUseCase:
                         step = active_step_at(self._store, item.id, stage)
                         if step is None:
                             continue
-                        self._close_run(run, RunState.ABANDONED)
-                        self._complete.execute(CompleteInput(step=step.id, outcome=close_outcome))
+                        self._close_run_and_complete(run, RunState.ABANDONED, step, close_outcome)
                         abandoned.append(item.id)
                     else:
                         disposition = self._disposition_for_close(item, flow, close_outcome, stage)
