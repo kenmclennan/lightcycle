@@ -153,7 +153,7 @@ class TestMonitorPrsSkipsPrlessItems(unittest.TestCase):
         store.create_item("backlog", "a description", workflow="lightcycle/spec-driven")
         _gh = FakeGitHub()
         uc = ResolveMergedPrsUseCase(
-            store, _gh, FakeWorktrees(), _TripwireFlow(), None, CheckContentPinUseCase(store, _gh)
+            store, _gh, FakeWorktrees(), _TripwireFlow(), None, CheckContentPinUseCase(store, _gh, _TripwireFlow())
         )
         result = uc.execute()
         self.assertEqual(result.merged, [])
@@ -213,7 +213,7 @@ class TestMonitorPrsMultiWorkflow(unittest.TestCase):
         worktrees = FakeWorktrees()
         github = FakeGitHub(merged_prs={code_url, spec_url})
         uc = ResolveMergedPrsUseCase(
-            store, github, worktrees, flow_service, None, CheckContentPinUseCase(store, github)
+            store, github, worktrees, flow_service, None, CheckContentPinUseCase(store, github, flow_service)
         )
 
         result = uc.execute()
@@ -300,7 +300,7 @@ class TestMonitorPrsMergeIntoAHumanStage(unittest.TestCase):
             role="human", parent=item)
         _gh = FakeGitHub(merged_prs={url})
         uc = ResolveMergedPrsUseCase(
-            store, _gh, FakeWorktrees(), flow_service, CompleteStepUseCase(store, flow_service), CheckContentPinUseCase(store, _gh)
+            store, _gh, FakeWorktrees(), flow_service, CompleteStepUseCase(store, flow_service), CheckContentPinUseCase(store, _gh, flow_service)
         )
         return store, item, step, uc
 
@@ -342,7 +342,7 @@ class TestMonitorPrsSpecMergeContinuesToCode(unittest.TestCase):
         github = FakeGitHub(merged_prs={spec_url})
         complete = CompleteStepUseCase(store, flow_service)
         uc = ResolveMergedPrsUseCase(
-            store, github, worktrees, flow_service, complete, CheckContentPinUseCase(store, github)
+            store, github, worktrees, flow_service, complete, CheckContentPinUseCase(store, github, flow_service)
         )
         return store, spec_item, uc, spec_url, worktrees, github
 
@@ -442,7 +442,7 @@ class TestMonitorPrsPhaseBoundarySameRepo(unittest.TestCase):
         complete = CompleteStepUseCase(store, flow_service)
         _gh = FakeGitHub(merged_prs={url})
         uc = ResolveMergedPrsUseCase(
-            store, _gh, worktrees, flow_service, complete, CheckContentPinUseCase(store, _gh)
+            store, _gh, worktrees, flow_service, complete, CheckContentPinUseCase(store, _gh, flow_service)
         )
 
         uc.execute()
@@ -462,7 +462,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
         )
         worktrees = FakeWorktrees()
         uc = ResolveMergedPrsUseCase(
-            store, github, worktrees, _FlowAdapter(flow or _FLOW), None, CheckContentPinUseCase(store, github)
+            store, github, worktrees, _FlowAdapter(flow or _FLOW), None, CheckContentPinUseCase(store, github, _FlowAdapter(flow or _FLOW))
         )
         return store, item, step, worktrees, uc
 
@@ -524,7 +524,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
         worktrees = FakeWorktrees()
         _gh = FakeGitHub(merged_prs={url})
         uc = ResolveMergedPrsUseCase(
-            store, _gh, worktrees, _FlowAdapter(_FLOW), None, CheckContentPinUseCase(store, _gh)
+            store, _gh, worktrees, _FlowAdapter(_FLOW), None, CheckContentPinUseCase(store, _gh, _FlowAdapter(_FLOW))
         )
 
         result = uc.execute()
@@ -541,7 +541,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
         worktrees = FakeWorktrees()
         _gh = FakeGitHub(merged_prs={url})
         uc = ResolveMergedPrsUseCase(
-            store, _gh, worktrees, _FlowAdapter(_FLOW), None, CheckContentPinUseCase(store, _gh)
+            store, _gh, worktrees, _FlowAdapter(_FLOW), None, CheckContentPinUseCase(store, _gh, _FlowAdapter(_FLOW))
         )
 
         result = uc.execute()
@@ -562,7 +562,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
         worktrees = FakeWorktrees()
         _gh = FakeGitHub(merged_prs={url})
         uc = ResolveMergedPrsUseCase(
-            store, _gh, worktrees, _FlowAdapter(_FLOW), None, CheckContentPinUseCase(store, _gh)
+            store, _gh, worktrees, _FlowAdapter(_FLOW), None, CheckContentPinUseCase(store, _gh, _FlowAdapter(_FLOW))
         )
 
         result = uc.execute()
@@ -578,7 +578,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
         worktrees = FakeWorktrees()
         github = FakeGitHub(merged_prs={"anything"})
         uc = ResolveMergedPrsUseCase(
-            store, github, worktrees, _FlowAdapter(_FLOW), None, CheckContentPinUseCase(store, github)
+            store, github, worktrees, _FlowAdapter(_FLOW), None, CheckContentPinUseCase(store, github, _FlowAdapter(_FLOW))
         )
 
         result = uc.execute()
@@ -591,7 +591,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
         worktrees = FakeWorktrees()
         _gh = FakeGitHub(merged_prs={"x"})
         uc = ResolveMergedPrsUseCase(
-            store, _gh, worktrees, _FlowAdapter(_FLOW), None, CheckContentPinUseCase(store, _gh)
+            store, _gh, worktrees, _FlowAdapter(_FLOW), None, CheckContentPinUseCase(store, _gh, _FlowAdapter(_FLOW))
         )
 
         result = uc.execute()
@@ -617,7 +617,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
         worktrees = FakeWorktrees()
         _gh = FakeGitHub(merged_prs={url})
         uc = ResolveMergedPrsUseCase(
-            store, _gh, worktrees, _FlowAdapter(arbitrary_flow), None, CheckContentPinUseCase(store, _gh)
+            store, _gh, worktrees, _FlowAdapter(arbitrary_flow), None, CheckContentPinUseCase(store, _gh, _FlowAdapter(arbitrary_flow))
         )
 
         result = uc.execute()
@@ -639,7 +639,7 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
         )
         worktrees = FakeWorktrees()
         uc = ResolveMergedPrsUseCase(
-            store, github, worktrees, _FlowAdapter(flow or _FLOW), None, CheckContentPinUseCase(store, github)
+            store, github, worktrees, _FlowAdapter(flow or _FLOW), None, CheckContentPinUseCase(store, github, _FlowAdapter(flow or _FLOW))
         )
         return store, item, step, worktrees, uc
 
@@ -718,7 +718,7 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
         worktrees = FakeWorktrees()
         _gh = FakeGitHub(closed_prs={url})
         uc = ResolveMergedPrsUseCase(
-            store, _gh, worktrees, _FlowAdapter(arbitrary_flow), None, CheckContentPinUseCase(store, _gh)
+            store, _gh, worktrees, _FlowAdapter(arbitrary_flow), None, CheckContentPinUseCase(store, _gh, _FlowAdapter(arbitrary_flow))
         )
 
         result = uc.execute()
@@ -751,7 +751,7 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
         complete = CompleteStepUseCase(store, flow_adapter)
         _gh = FakeGitHub(closed_prs={url})
         uc = ResolveMergedPrsUseCase(
-            store, _gh, worktrees, flow_adapter, complete, CheckContentPinUseCase(store, _gh)
+            store, _gh, worktrees, flow_adapter, complete, CheckContentPinUseCase(store, _gh, flow_adapter)
         )
 
         result = uc.execute()
@@ -773,7 +773,7 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
         worktrees = FakeWorktrees()
         _gh = FakeGitHub(closed_prs={url})
         uc = ResolveMergedPrsUseCase(
-            store, _gh, worktrees, _FlowAdapter(_FLOW), None, CheckContentPinUseCase(store, _gh)
+            store, _gh, worktrees, _FlowAdapter(_FLOW), None, CheckContentPinUseCase(store, _gh, _FlowAdapter(_FLOW))
         )
 
         result = uc.execute()
@@ -784,6 +784,35 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
         self.assertIn(item, worktrees.removed)
 
 
+
+
+class TestUndeclaredDispositionParksTheMergeStage(unittest.TestCase):
+    def test_a_merge_outcome_without_a_disposition_parks_the_merge_step_not_an_earlier_open_step(self):
+        flow = flow_from_metas(
+            {
+                "spec-fb": {"step": "spec-feedback", "routes": {"done": "await-ship"}},
+                "gatekeeper": {
+                    "step": "await-ship",
+                    "routes": {"shipped": "done-step"},
+                    "on_pr_merge": "shipped",
+                },
+            },
+        )
+        url = "https://github.com/x/y/pull/98"
+        store = FakeStore()
+        item = store.create_item("ship it", "a description")
+        plant_pr(store, item, url)
+        other = store.create_step(step="spec-feedback", role="agent", parent=item)
+        merge_step = store.create_step(step="await-ship", role="human", parent=item)
+        _gh = FakeGitHub(merged_prs={url})
+        uc = ResolveMergedPrsUseCase(
+            store, _gh, FakeWorktrees(), _FlowAdapter(flow), None, CheckContentPinUseCase(store, _gh, _FlowAdapter(flow))
+        )
+
+        uc.execute()
+
+        self.assertIn("does not declare", store.get_node(merge_step).park.reason)
+        self.assertIsNone(store.get_node(other).park.reason)
 
 
 class TestLatestStepOrdering(unittest.TestCase):

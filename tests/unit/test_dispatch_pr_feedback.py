@@ -604,7 +604,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
         plant_pr(store, item, url)
         store.create_step(step="ready-merge", role="human", parent=item
         )
-        check_content_pin = CheckContentPinUseCase(store, gh)
+        check_content_pin = CheckContentPinUseCase(store, gh, _FlowAdapter(_FLOW))
         resolve = ResolveMergedPrsUseCase(
             store, gh, FakeWorktrees(), _FlowAdapter(_FLOW), None, check_content_pin
         )
@@ -697,7 +697,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
                            role="agent", parent=item)
         gh = FakeGitHub(merged_prs={url}, conflicted_prs={url})
         complete = CompleteStepUseCase(store, _FlowAdapter(flow))
-        check_content_pin = CheckContentPinUseCase(store, gh)
+        check_content_pin = CheckContentPinUseCase(store, gh, _FlowAdapter(flow))
         resolve = ResolveMergedPrsUseCase(
             store, gh, FakeWorktrees(), _FlowAdapter(flow), complete, check_content_pin
         )

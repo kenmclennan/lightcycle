@@ -1,14 +1,23 @@
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
-from lightcycle.application.pool.pr_lookups import active_step_any, latest_step
+from lightcycle.application.pool.pr_lookups import (
+    active_step_any,
+    active_step_in_phase,
+    latest_step,
+)
 from lightcycle.domain.feedback import LC_MARKER, parse_decision
 from lightcycle.domain.work import State
 from lightcycle.ports.github import ReadFailure
 
 
 class CheckContentPinUseCase:
-    def __init__(self, store, github):
+    def __init__(self, store, github, flow_service):
         self._store = store
         self._github = github
+        self._flow_service = flow_service
+
+    def _step_for_phase(self, item_id, phase):
+        step = active_step_in_phase(self._store, self._flow_service, item_id, phase)
+        return step or active_step_any(self._store, item_id)
 
     def _unauthorized_drops(self, pr_value, dropped):
         top_level = self._github.comments_since(pr_value, 0.0)
@@ -69,7 +78,7 @@ class CheckContentPinUseCase:
                     "may have been lost; verify before merging.%s"
                     % (pin, head, ", ".join(sorted(reported)), thread_note)
                 )
-                step = active_step_any(self._store, item.id)
+                step = self._step_for_phase(item.id, phase)
                 if step is not None and step.state != State.RUNNING:
                     decision = (
                         "confirm whether the drop of %s was ordered by review, or should be "
