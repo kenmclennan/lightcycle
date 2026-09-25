@@ -24,10 +24,20 @@ def _imports_tui_harness(source):
     return False
 
 
-def _inner_worker_count(outer_workers, cores):
-    if not outer_workers or not outer_workers.isdigit() or int(outer_workers) < 1:
+def _positive_int(value):
+    if value and value.isdigit() and int(value) >= 1:
+        return int(value)
+    return None
+
+
+def _inner_worker_count(outer_workers, cores, max_agents=None):
+    outer = _positive_int(outer_workers)
+    pool = _positive_int(max_agents)
+    if pool:
+        return str(max(1, cores // pool // (outer or 1)))
+    if not outer:
         return "auto"
-    return str(max(1, cores // int(outer_workers)))
+    return str(max(1, cores // outer))
 
 
 def _tui_harness_test_files():
@@ -69,6 +79,23 @@ def test_inner_worker_count_shares_cores_with_the_outer_run(outer, cores, expect
     assert _inner_worker_count(outer, cores) == expected
 
 
+@pytest.mark.parametrize("outer,cores,max_agents,expected", [
+    ("1", 8, "5", "1"),
+    (None, 8, "5", "1"),
+    ("1", 16, "4", "4"),
+    ("2", 16, "4", "2"),
+    ("4", 16, "2", "2"),
+    ("1", 8, "16", "1"),
+    ("4", 8, None, "2"),
+    ("4", 8, "", "2"),
+    ("4", 8, "0", "2"),
+    ("4", 8, "junk", "2"),
+    (None, 8, "junk", "auto"),
+])
+def test_inner_worker_count_shares_cores_with_the_pool(outer, cores, max_agents, expected):
+    assert _inner_worker_count(outer, cores, max_agents) == expected
+
+
 def test_tui_suite_passes_with_empty_home_and_lc_home():
     files = _tui_harness_test_files()
     assert files
@@ -78,7 +105,11 @@ def test_tui_suite_passes_with_empty_home_and_lc_home():
     env["HOME"] = empty_home
     env["LC_HOME"] = empty_home
     env.pop("LC_CONFIG", None)
-    inner = _inner_worker_count(os.environ.get("PYTEST_XDIST_WORKER_COUNT"), os.cpu_count() or 1)
+    inner = _inner_worker_count(
+        os.environ.get("PYTEST_XDIST_WORKER_COUNT"),
+        os.cpu_count() or 1,
+        os.environ.get("LC_MAX_AGENTS"),
+    )
 
     result = subprocess.run(
         [sys.executable, "-m", "pytest", "-n", inner, "--dist=loadgroup", *files],
