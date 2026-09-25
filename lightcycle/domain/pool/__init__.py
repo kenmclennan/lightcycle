@@ -2,9 +2,7 @@ from lightcycle.domain.pool.attribution import AttributionEvent, ToolUsage, sum_
 from lightcycle.domain.pool.breaker import Breaker
 from lightcycle.domain.pool.ci_result import ci_outcome, failing_check
 from lightcycle.domain.pool.machine_headroom import MachineHeadroom
-from lightcycle.domain.pool.memory_admission import (
-    admission_cap, admission_veto, worker_to_resume, worker_to_suspend,
-)
+from lightcycle.domain.pool.memory_admission import admission_cap, worker_to_resume
 from lightcycle.domain.pool.plan import PoolPlan
 from lightcycle.domain.pool.rate_limit import RateLimitEvent
 from lightcycle.domain.pool.ready_queue import ReadyQueue
@@ -18,7 +16,7 @@ from lightcycle.domain.pool.worker_pool import WorkerPool
 __all__ = [
     "AttributionEvent", "Breaker", "MachineHeadroom", "ModelRates", "PoolPlan", "RateLimitEvent",
     "ReadyQueue", "SpinLedger", "StepSpin", "ToolUsage", "UsageEvent", "UsageResume", "Worker",
-    "WorkerPool", "admission_cap", "admission_veto", "ci_outcome",
+    "WorkerPool", "admission_cap", "ci_outcome",
     "failing_check", "price_tokens", "resolve_usage", "sum_attribution_events",
-    "sum_usage_events", "worker_to_resume", "worker_to_suspend",
+    "sum_usage_events", "worker_to_resume",
 ]

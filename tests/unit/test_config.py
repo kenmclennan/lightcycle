@@ -207,37 +207,23 @@ class TestTunables(unittest.TestCase):
 
 
 class TestMemoryConfig(unittest.TestCase):
-    def _full_cfg(self, environ=None):
-        return _cfg(
-            environ,
-            memory_reserve_fraction="0.25",
-            suspend_pressure="0.85",
-            resume_pressure="0.70",
-        )
+    def test_seeded_default_is_the_calibrated_reserve_fraction(self):
+        seeds = dict(_SEED_KEYS)
+        c = _cfg(memory_reserve_fraction=seeds["memory-reserve-fraction"])
+        self.assertEqual(c.memory_reserve_fraction(), 0.65)
 
-    def test_seeded_defaults_from_config(self):
-        c = self._full_cfg()
-        self.assertEqual(c.memory_reserve_fraction(), 0.25)
-        self.assertEqual(c.suspend_pressure(), 0.85)
-        self.assertEqual(c.resume_pressure(), 0.70)
+    def test_gate_seeds_carry_no_suspend_or_resume_pressure(self):
+        seeds = {k for k, _ in _SEED_KEYS}
+        self.assertNotIn("suspend-pressure", seeds)
+        self.assertNotIn("resume-pressure", seeds)
 
-    def test_missing_keys_raise(self):
+    def test_missing_key_raises(self):
         with self.assertRaises(ConfigError):
             _cfg().memory_reserve_fraction()
-        with self.assertRaises(ConfigError):
-            _cfg().suspend_pressure()
-        with self.assertRaises(ConfigError):
-            _cfg(suspend_pressure="0.85").resume_pressure()
 
-    def test_env_overrides_win(self):
-        c = self._full_cfg({
-            "LC_MEMORY_RESERVE_FRACTION": "0.1",
-            "LC_SUSPEND_PRESSURE": "0.9",
-            "LC_RESUME_PRESSURE": "0.6",
-        })
+    def test_env_override_wins(self):
+        c = _cfg({"LC_MEMORY_RESERVE_FRACTION": "0.1"}, memory_reserve_fraction="0.65")
         self.assertEqual(c.memory_reserve_fraction(), 0.1)
-        self.assertEqual(c.suspend_pressure(), 0.9)
-        self.assertEqual(c.resume_pressure(), 0.6)
 
     def test_env_override_without_config_key(self):
         self.assertEqual(
@@ -248,27 +234,6 @@ class TestMemoryConfig(unittest.TestCase):
         with self.assertRaises(ConfigError):
             _cfg(memory_reserve_fraction="nope").memory_reserve_fraction()
 
-    def test_malformed_env_fails_fast(self):
-        with self.assertRaises(ConfigError):
-            _cfg({"LC_SUSPEND_PRESSURE": "nope"}, suspend_pressure="0.85").suspend_pressure()
-
-    def test_resume_pressure_must_be_strictly_below_suspend_pressure(self):
-        with self.assertRaises(ConfigError):
-            _cfg(suspend_pressure="0.8", resume_pressure="0.8").resume_pressure()
-        with self.assertRaises(ConfigError):
-            _cfg(suspend_pressure="0.8", resume_pressure="0.9").resume_pressure()
-
-    def test_resume_pressure_strictly_below_resolves_cleanly(self):
-        self.assertEqual(
-            _cfg(suspend_pressure="0.85", resume_pressure="0.70").resume_pressure(), 0.70
-        )
-
-    def test_resume_pressure_invariant_checked_against_env_override(self):
-        with self.assertRaises(ConfigError):
-            _cfg(
-                {"LC_RESUME_PRESSURE": "0.9"}, suspend_pressure="0.85", resume_pressure="0.70",
-            ).resume_pressure()
-
     def test_memory_reserve_fraction_accepts_both_boundary_values(self):
         self.assertEqual(
             _cfg(memory_reserve_fraction="0.0").memory_reserve_fraction(), 0.0
@@ -276,10 +241,6 @@ class TestMemoryConfig(unittest.TestCase):
         self.assertEqual(
             _cfg(memory_reserve_fraction="1.0").memory_reserve_fraction(), 1.0
         )
-
-    def test_suspend_pressure_accepts_both_boundary_values(self):
-        self.assertEqual(_cfg(suspend_pressure="0.0").suspend_pressure(), 0.0)
-        self.assertEqual(_cfg(suspend_pressure="1.0").suspend_pressure(), 1.0)
 
     def test_memory_reserve_fraction_out_of_range_raises_naming_key_and_value(self):
         for raw in ("-0.1", "1.1"):
@@ -296,37 +257,14 @@ class TestMemoryConfig(unittest.TestCase):
         self.assertIn("memory-reserve-fraction", msg)
         self.assertIn("1.1", msg)
 
-    def test_suspend_pressure_out_of_range_raises_naming_key_and_value(self):
-        for raw in ("-0.1", "1.1"):
-            with self.assertRaises(ConfigError) as ctx:
-                _cfg(suspend_pressure=raw).suspend_pressure()
-            msg = str(ctx.exception)
-            self.assertIn("suspend-pressure", msg)
-            self.assertIn(raw, msg)
-
-    def test_suspend_pressure_out_of_range_via_env_raises(self):
-        with self.assertRaises(ConfigError) as ctx:
-            _cfg({"LC_SUSPEND_PRESSURE": "1.1"}).suspend_pressure()
-        msg = str(ctx.exception)
-        self.assertIn("suspend-pressure", msg)
-        self.assertIn("1.1", msg)
-
-    def test_resume_pressure_range_violation_reported_as_range_error_not_cross_check(self):
-        with self.assertRaises(ConfigError) as ctx:
-            _cfg(resume_pressure="-0.1", suspend_pressure="0.85").resume_pressure()
-        msg = str(ctx.exception)
-        self.assertIn("resume-pressure", msg)
-        self.assertNotIn("strictly below", msg)
-
-    def test_resume_pressure_surfaces_range_violation_on_suspend_pressure(self):
-        with self.assertRaises(ConfigError) as ctx:
-            _cfg(resume_pressure="0.70", suspend_pressure="1.5").resume_pressure()
-        self.assertIn("suspend-pressure", str(ctx.exception))
-
-    def test_resume_pressure_boundary_values_mutually_compatible(self):
-        self.assertEqual(
-            _cfg(resume_pressure="0.0", suspend_pressure="1.0").resume_pressure(), 0.0
+    def test_a_config_still_carrying_the_removed_pressure_keys_loads_and_reports_them_obsolete(self):
+        c = _cfg(
+            memory_reserve_fraction="0.65", suspend_pressure="0.85", resume_pressure="0.70",
         )
+        self.assertEqual(c.memory_reserve_fraction(), 0.65)
+        self.assertEqual(c.obsolete_config_keys(), ("suspend-pressure", "resume-pressure"))
+        self.assertFalse(hasattr(c, "suspend_pressure"))
+        self.assertFalse(hasattr(c, "resume_pressure"))
 
 
 class TestEnsureConfig(unittest.TestCase):

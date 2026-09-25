@@ -117,10 +117,6 @@ def kill(pid):
     _signal_group(pid, signal.SIGTERM)
 
 
-def signal_suspend(pid):
-    _signal_group(pid, signal.SIGSTOP)
-
-
 def signal_resume(pid):
     _signal_group(pid, signal.SIGCONT)
 
@@ -243,9 +239,6 @@ class WorkersAdapter(WorkersPort):
 
     def set_suspended(self, spawnid, suspended, at=None):
         return set_suspended(self._config.data_root(), spawnid, suspended, at)
-
-    def signal_suspend(self, pid):
-        return signal_suspend(pid)
 
     def signal_resume(self, pid):
         return signal_resume(pid)
