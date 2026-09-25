@@ -38,7 +38,7 @@ Turn it on with `tui-metrics: true` in `~/.lightcycle/config`, or `LC_TUI_METRIC
 
 ## Contention and the memory gate
 
-Before recording a figure taken with the pool at `max-agents`, check `lc config`'s current `memory-reserve-fraction`/`suspend-pressure`/`resume-pressure` values and state here whether [[LC-506]]'s admission/suspension gate was active or neutered on the machine the measurement was taken on - the brief recorded it neutered (`memory-reserve-fraction: 0`, `suspend-pressure: 0.99`) as of 2026-09-15; this can change, so record what was actually true at measurement time, not what a past write-up said.
+Before recording a figure taken with the pool at `max-agents`, check `lc config`'s current `memory-reserve-fraction` value and state here whether the memory gate (now admission-only) was active or neutered on the machine the measurement was taken on - the brief recorded it neutered (`memory-reserve-fraction: 0`, `suspend-pressure: 0.99`) as of 2026-09-15; this can change, so record what was actually true at measurement time, not what a past write-up said.
 
 ## Results (this item's measurement run, 2026-09-15)
 

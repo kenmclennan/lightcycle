@@ -9,7 +9,6 @@ class FakeWorkers(WorkersPort):
         self._delayed_death = delayed_death
         self._zombie_pids = set()
         self.killed = []
-        self.suspended = []
         self.resumed = []
 
     def workers_state(self):
@@ -71,9 +70,6 @@ class FakeWorkers(WorkersPort):
                 w["suspended"] = suspended
                 if suspended:
                     w["suspended_at"] = at
-
-    def signal_suspend(self, pid):
-        self.suspended.append(pid)
 
     def signal_resume(self, pid):
         self.resumed.append(pid)

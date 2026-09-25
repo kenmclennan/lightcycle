@@ -47,9 +47,5 @@ class WorkersPort(ABC):
         pass
 
     @abstractmethod
-    def signal_suspend(self, pid):
-        pass
-
-    @abstractmethod
     def signal_resume(self, pid):
         pass

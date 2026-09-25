@@ -139,9 +139,7 @@ def write_config(projects=None, specs=None):
         "shutdown-grace-seconds: 10",
         "tick-failure-cap: 5",
         "pool-upgrade-check-seconds: 900",
-        "memory-reserve-fraction: 0.25",
-        "suspend-pressure: 0.85",
-        "resume-pressure: 0.70",
+        "memory-reserve-fraction: 0.65",
     ]
     Path(p).write_text("".join(l + "\n" for l in lines))
     return p
