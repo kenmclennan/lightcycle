@@ -124,6 +124,20 @@ _CLOSE_ROUTES_TO_HUMAN_GATE_FLOW = flow_from_metas(
 )
 
 
+_ROUTES_TO_STAGE_FLOW = flow_from_metas(
+    {
+        "reviewer": {
+            "step": "ready-merge",
+            "routes": {"merged": "cleanup", "abandoned": "build"},
+            "on_pr_merge": "merged",
+            "on_pr_close": "abandoned",
+        },
+        "cleanup": {"step": "cleanup"},
+        "build": {"step": "build"},
+    }
+)
+
+
 class FakeWorktrees:
     def release_run(self, run, delete_remote=True):
         self.released = getattr(self, "released", [])
@@ -160,6 +174,49 @@ class TestMonitorPrsSkipsPrlessItems(unittest.TestCase):
         self.assertEqual(result.abandoned, [])
 
 
+
+
+class TestMonitorPrsSkipsItemsWithNoOpenStep(unittest.TestCase):
+    def _backlogged_with_pr(self, url):
+        store = FakeStore()
+        item = store.create_item("put back", "a description")
+        plant_pr(store, item, url)
+        return store, item
+
+    def _use_case(self, store, github):
+        return ResolveMergedPrsUseCase(
+            store, github, FakeWorktrees(), _FlowAdapter(_FLOW), None,
+            CheckContentPinUseCase(store, github, _FlowAdapter(_FLOW)),
+        )
+
+    def test_backlogged_item_whose_run_carries_a_merged_pr_is_not_closed(self):
+        url = "https://github.com/x/y/pull/61"
+        store, item = self._backlogged_with_pr(url)
+
+        result = self._use_case(store, FakeGitHub(merged_prs={url})).execute()
+
+        self.assertEqual(result.merged, [])
+        self.assertNotEqual(store.get_node(item).state, "done")
+        self.assertEqual(store.get_node(item).state, State.BACKLOGGED)
+
+    def test_backlogged_item_whose_run_carries_a_closed_pr_is_not_closed(self):
+        url = "https://github.com/x/y/pull/62"
+        store, item = self._backlogged_with_pr(url)
+
+        result = self._use_case(store, FakeGitHub(closed_prs={url})).execute()
+
+        self.assertEqual(result.abandoned, [])
+        self.assertEqual(store.get_node(item).state, State.BACKLOGGED)
+
+    def test_live_await_merge_step_still_closes_the_item_on_merge(self):
+        url = "https://github.com/x/y/pull/63"
+        store, item = self._backlogged_with_pr(url)
+        store.create_step(step="ready-merge", role="human", parent=item)
+
+        result = self._use_case(store, FakeGitHub(merged_prs={url})).execute()
+
+        self.assertEqual(result.merged, [item])
+        self.assertEqual(store.get_node(item).state, "done")
 
 
 class TestMonitorPrsMultiWorkflow(unittest.TestCase):
@@ -317,6 +374,48 @@ class TestMonitorPrsMergeIntoAHumanStage(unittest.TestCase):
         self.assertEqual(created[0].role, "human")
 
 
+
+
+class _RaisingComplete:
+    def execute(self, inp):
+        raise RuntimeError("completion failed")
+
+
+class TestMonitorPrsResolvePairIsOneTransaction(unittest.TestCase):
+    def _setup(self, github_kwargs):
+        store = FakeStore()
+        item = store.create_item("deliver", "a description")
+        url = "https://github.com/x/y/pull/71"
+        rid = plant_pr(store, item, url)
+        step = store.create_step(step="ready-merge", role="human", parent=item)
+        worktrees = FakeWorktrees()
+        github = FakeGitHub(**github_kwargs(url))
+        uc = ResolveMergedPrsUseCase(
+            store, github, worktrees, _FlowAdapter(_ROUTES_TO_STAGE_FLOW), _RaisingComplete(),
+            CheckContentPinUseCase(store, github, _FlowAdapter(_ROUTES_TO_STAGE_FLOW)),
+        )
+        return store, item, rid, step, worktrees, uc
+
+    def test_failed_completion_on_merge_leaves_the_run_open_for_the_next_tick(self):
+        store, item, rid, step, worktrees, uc = self._setup(lambda url: {"merged_prs": {url}})
+
+        with self.assertRaises(RuntimeError):
+            uc.execute()
+
+        self.assertEqual([r.id for r in store.open_runs_of(item)], [rid])
+        self.assertNotEqual(store.get_node(step).state, "done")
+        self.assertEqual(getattr(worktrees, "released", []), [])
+
+    def test_failed_completion_on_close_leaves_the_run_open_for_the_next_tick(self):
+        store, item, rid, step, worktrees, uc = self._setup(
+            lambda url: {"closed_prs": {url}}
+        )
+
+        with self.assertRaises(RuntimeError):
+            uc.execute()
+
+        self.assertEqual([r.id for r in store.open_runs_of(item)], [rid])
+        self.assertNotEqual(store.get_node(step).state, "done")
 
 
 class TestMonitorPrsSpecMergeContinuesToCode(unittest.TestCase):
