@@ -1,6 +1,7 @@
 import os
 import sys
 
+from lightcycle.adapters.sqlite_store import LiveStoreRefused, SchemaVersionRefused
 from lightcycle.adapters.worker_session import SessionError, plan_session, run, session_cwd
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.claim_step import ClaimInput, ClaimStepUseCase
@@ -8,7 +9,11 @@ from lightcycle.container import Container
 
 
 def main():
-    container = Container()
+    try:
+        container = Container()
+    except (LiveStoreRefused, SchemaVersionRefused) as e:
+        sys.stderr.write("worker_main: %s\n" % e)
+        return 1
     config = container.config
     role = config.worker_role()
     spawnid = config.spawn_id()
