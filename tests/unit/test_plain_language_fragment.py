@@ -127,6 +127,13 @@ class TestEnginePromptsResolve(unittest.TestCase):
         for needle in ("lc show", "notes", "park", "PARK RESOLVED:"):
             self.assertIn(needle, step_4)
 
+    def test_audit_step_5_puts_the_digest_in_the_artifact_and_a_short_summary_in_the_note(self):
+        with open(os.path.join(ENGINE_PROMPTS, "steps", "audit.md")) as f:
+            step_5 = next(l for l in f.read().splitlines() if l.startswith("5. "))
+        self.assertNotIn("same digest", step_5)
+        self.assertIn('--note "<short summary>"', step_5)
+        self.assertIn("full digest is in the `findings` artifact", step_5)
+
     def test_config_prompts_root_is_the_engine_dir(self):
         self.assertTrue(os.path.isfile(os.path.join(Config.prompts_root(None), "fragments", "plain-language.md")))
 
