@@ -9,8 +9,11 @@ def check_prompts(bundle, cli_surface, json_keys):
     texts = {}
     for role, text in bundle.steps.items():
         _, body = frontmatter.split_frontmatter(text)
-        if body:
-            texts["steps/%s.md" % role] = body
+        if not body:
+            continue
+        if body != text:
+            body = "\n" * (len(text.splitlines()) - len(body.split("\n"))) + body
+        texts["steps/%s.md" % role] = body
     return check_prompt_commands(texts, cli_surface, json_keys)
 
 

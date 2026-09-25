@@ -1,5 +1,7 @@
 import unittest
+from types import SimpleNamespace
 
+from lightcycle.application.workflows.bundle_check import check_prompts
 from lightcycle.application.workflows.prompt_check import check_prompt_commands
 from lightcycle.application.workflows.prompt_commands import json_field_reads, lc_calls
 from lightcycle.cli_commands import Arg, CommandSpec, flags_by_verb
@@ -72,6 +74,31 @@ class TestCheckRefusals(unittest.TestCase):
     def test_a_correct_prompt_is_accepted(self):
         text = 'take `.item` as ITEM, then `lc set X --state waiting --needs "a" --reason "b"`'
         self.assertEqual(self._check(text), [])
+
+
+class TestCheckPromptsLineNumbers(unittest.TestCase):
+    def _check(self, text):
+        bundle = SimpleNamespace(steps={"s": text})
+        return check_prompts(bundle, _SURFACE, _JSON_KEYS).get("steps/s.md", [])
+
+    def test_a_bad_call_reports_its_line_in_the_raw_file(self):
+        text = "---\nname: s\nphase: x\n---\n\n\nintro\n`lc set X --branch b`\n"
+        self.assertIn("line 8", self._check(text)[0])
+
+    def test_an_unknown_field_reports_its_line_in_the_raw_file(self):
+        text = "---\nname: s\n---\n\nintro\ntake `.parent` as ITEM\n"
+        self.assertIn("line 6", self._check(text)[0])
+
+    def test_a_span_inside_the_frontmatter_is_not_checked(self):
+        text = "---\ndescription: `lc set X --branch b`\n---\n\nprose\n"
+        self.assertEqual(self._check(text), [])
+
+    def test_a_file_without_frontmatter_keeps_its_line_numbers(self):
+        text = "intro\n\n`lc set X --branch b`\n"
+        self.assertIn("line 3", self._check(text)[0])
+
+    def test_a_file_that_is_only_frontmatter_has_no_entry(self):
+        self.assertEqual(self._check("---\nname: s\n---\n"), [])
 
 
 if __name__ == "__main__":
