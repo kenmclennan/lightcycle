@@ -219,6 +219,25 @@ def _headroom_linux(workers):
     )
 
 
+def _cwd_entries():
+    out = _run(["lsof", "-d", "cwd", "-Fpn"])
+    if out is None:
+        return []
+    entries = []
+    current = None
+    for line in out.splitlines():
+        line = line.strip()
+        if line.startswith("p"):
+            try:
+                current = int(line[1:])
+            except ValueError:
+                current = None
+        elif line.startswith("n") and current is not None:
+            entries.append((current, os.path.normpath(line[1:])))
+            current = None
+    return entries
+
+
 class MachineAdapter(MachinePort):
     def headroom(self, workers):
         if sys.platform == "darwin":
@@ -237,22 +256,20 @@ class MachineAdapter(MachinePort):
             return None
 
     def worktree_pids(self, path):
-        out = _run(["lsof", "-d", "cwd", "-Fpn"])
-        if out is None:
-            return []
         roots = {os.path.normpath(path), os.path.realpath(path)}
-        pids = []
-        current = None
-        for line in out.splitlines():
-            line = line.strip()
-            if line.startswith("p"):
-                try:
-                    current = int(line[1:])
-                except ValueError:
-                    current = None
-            elif line.startswith("n") and current is not None:
-                name = os.path.normpath(line[1:])
-                if any(name == r or name.startswith(r + os.sep) for r in roots):
-                    pids.append(current)
-                    current = None
-        return pids
+        return [
+            pid for pid, name in _cwd_entries()
+            if any(name == r or name.startswith(r + os.sep) for r in roots)
+        ]
+
+    def cwd_pids_under(self, root):
+        base = os.path.normpath(root)
+        roots = {base, os.path.realpath(root)}
+        found = {}
+        for pid, name in _cwd_entries():
+            for r in roots:
+                if name.startswith(r + os.sep):
+                    key = os.path.join(base, name[len(r) + 1:])
+                    found.setdefault(key, []).append(pid)
+                    break
+        return found
