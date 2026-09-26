@@ -7,6 +7,7 @@ import unittest
 from lightcycle.adapters.sqlite_store import SqliteStore
 from lightcycle.config import Config
 from lightcycle.domain.work import NodeSpec, State
+from tests.support.barrier_children import BARRIER_TIMEOUT, reap
 from tests.support.step_factory import create_owned_step
 
 _CTX = multiprocessing.get_context("spawn")
@@ -46,10 +47,10 @@ def _seed_claimed(root, spawn_id):
     return step_id
 
 
-def _claim_worker(root, spawn_id, barrier, q):
+def _claim_worker(root, spawn_id, barrier, q, barrier_timeout=BARRIER_TIMEOUT):
     try:
         store = _store_for(root, spawn_id)
-        barrier.wait()
+        barrier.wait(barrier_timeout)
         node = store.claim_ready("agent", spawn_id)
         q.put((spawn_id, node.id if node else None))
         store.release()
@@ -60,7 +61,7 @@ def _claim_worker(root, spawn_id, barrier, q):
 def _complete_worker(root, spawn_id, expected_assignee, step_id, barrier, q):
     try:
         store = _store_for(root, spawn_id)
-        barrier.wait()
+        barrier.wait(BARRIER_TIMEOUT)
         won, new_id = store.complete_step_atomic(
             step_id, "done", expected_assignee, _successor_spec(step_id, store.get_step(step_id).item))
         q.put((spawn_id, won, new_id))
@@ -83,10 +84,13 @@ class TestAtomicClaim(unittest.TestCase):
             _CTX.Process(target=_claim_worker, args=(root, "w%d" % i, barrier, q))
             for i in range(n)
         ]
-        for p in procs:
-            p.start()
-        for p in procs:
-            p.join(timeout=60)
+        try:
+            for p in procs:
+                p.start()
+            for p in procs:
+                p.join(timeout=60)
+        finally:
+            reap(procs)
 
         results = _drain(q, n)
         self.assertTrue(all(not str(tid).startswith("ERROR") for _, tid in results), results)
@@ -97,6 +101,22 @@ class TestAtomicClaim(unittest.TestCase):
         node = after.get_node(step_id)
         self.assertEqual(node.state, State.RUNNING)
         self.assertEqual(node.claimed_by, winners[0])
+
+
+class TestBarrierTimeout(unittest.TestCase):
+    def test_a_child_exits_on_its_own_when_the_barrier_never_completes(self):
+        root = _make_root()
+        barrier_timeout = 1
+        barrier = _CTX.Barrier(2)
+        q = _CTX.Queue()
+        proc = _CTX.Process(target=_claim_worker, args=(root, "w0", barrier, q, barrier_timeout))
+        try:
+            proc.start()
+            proc.join(timeout=barrier_timeout + 30)
+            self.assertFalse(proc.is_alive(), "the child is still waiting at a barrier its parent never completes")
+        finally:
+            reap([proc])
+        self.assertTrue(str(q.get(timeout=10)[1]).startswith("ERROR"))
 
 
 class TestAtomicComplete(unittest.TestCase):
@@ -110,10 +130,13 @@ class TestAtomicComplete(unittest.TestCase):
             _CTX.Process(target=_complete_worker, args=(root, "A", "A", step_id, barrier, q))
             for _ in range(2)
         ]
-        for p in procs:
-            p.start()
-        for p in procs:
-            p.join(timeout=60)
+        try:
+            for p in procs:
+                p.start()
+            for p in procs:
+                p.join(timeout=60)
+        finally:
+            reap(procs)
 
         results = _drain(q, 2)
         self.assertNotIn("ERROR", [r[1] for r in results], results)
@@ -172,7 +195,7 @@ class TestAtomicComplete(unittest.TestCase):
 def _create_item_worker(root, spawn_id, barrier, q):
     try:
         store = _store_for(root, spawn_id)
-        barrier.wait()
+        barrier.wait(BARRIER_TIMEOUT)
         item_id = store.create_item("title %s" % spawn_id, "description", shortcode="GRID")
         q.put((spawn_id, item_id))
         store.release()
@@ -183,7 +206,7 @@ def _create_item_worker(root, spawn_id, barrier, q):
 def _open_pass_worker(root, spawn_id, item_id, barrier, q):
     try:
         store = _store_for(root, spawn_id)
-        barrier.wait()
+        barrier.wait(BARRIER_TIMEOUT)
         pid = store.open_pass(item_id)
         q.put((spawn_id, pid))
         store.release()
@@ -201,10 +224,13 @@ class TestConcurrentMinting(unittest.TestCase):
             _CTX.Process(target=_create_item_worker, args=(root, "w%d" % i, barrier, q))
             for i in range(n)
         ]
-        for p in procs:
-            p.start()
-        for p in procs:
-            p.join(timeout=60)
+        try:
+            for p in procs:
+                p.start()
+            for p in procs:
+                p.join(timeout=60)
+        finally:
+            reap(procs)
 
         results = _drain(q, n)
         self.assertTrue(all(not str(r[1]).startswith("ERROR") for r in results), results)
@@ -226,10 +252,13 @@ class TestConcurrentPassOpening(unittest.TestCase):
             _CTX.Process(target=_open_pass_worker, args=(root, "w%d" % i, item_id, barrier, q))
             for i in range(n)
         ]
-        for p in procs:
-            p.start()
-        for p in procs:
-            p.join(timeout=60)
+        try:
+            for p in procs:
+                p.start()
+            for p in procs:
+                p.join(timeout=60)
+        finally:
+            reap(procs)
 
         results = _drain(q, n)
         self.assertTrue(all(not str(r[1]).startswith("ERROR") for r in results), results)
