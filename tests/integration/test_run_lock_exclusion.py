@@ -4,19 +4,20 @@ import tempfile
 import unittest
 
 from lightcycle.adapters.lock import acquire, holder_pid, lock_path, release
+from tests.support.barrier_children import BARRIER_TIMEOUT, reap
 
 CONTENDERS = 8
 
 
-def _contend(root, barrier, results):
-    barrier.wait()
+def _contend(root, barrier, results, barrier_timeout=BARRIER_TIMEOUT):
+    barrier.wait(barrier_timeout)
     acquired, pid, fd = acquire(root)
     results.put((acquired, pid, os.getpid()))
     if acquired:
-        barrier.wait()
+        barrier.wait(barrier_timeout)
         release(root, fd)
     else:
-        barrier.wait()
+        barrier.wait(barrier_timeout)
 
 
 class TestRunLockExclusion(unittest.TestCase):
@@ -31,13 +32,30 @@ class TestRunLockExclusion(unittest.TestCase):
             ctx.Process(target=_contend, args=(self.root, barrier, results))
             for _ in range(CONTENDERS)
         ]
-        for p in procs:
-            p.start()
-        for p in procs:
-            p.join(timeout=30)
+        try:
+            for p in procs:
+                p.start()
+            for p in procs:
+                p.join(timeout=30)
+        finally:
+            reap(procs)
         got = [results.get() for _ in range(CONTENDERS)]
         winners = [r for r in got if r[0]]
         self.assertEqual(len(winners), 1, "expected exactly one holder, got %d: %s" % (len(winners), got))
+
+    def test_a_contender_exits_on_its_own_when_the_barrier_never_completes(self):
+        ctx = multiprocessing.get_context("spawn")
+        barrier_timeout = 1
+        barrier = ctx.Barrier(2)
+        results = ctx.Queue()
+        proc = ctx.Process(target=_contend, args=(self.root, barrier, results, barrier_timeout))
+        try:
+            proc.start()
+            proc.join(timeout=barrier_timeout + 30)
+            self.assertFalse(proc.is_alive(), "the contender is still waiting at a barrier its parent never completes")
+        finally:
+            reap([proc])
+        self.assertNotEqual(proc.exitcode, 0)
 
     def test_a_stale_pid_file_from_a_dead_holder_does_not_block_acquisition(self):
         with open(lock_path(self.root), "w") as f:
