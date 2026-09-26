@@ -159,7 +159,8 @@ class DoctorUseCase:
             if not project.local_path:
                 continue
             wt_dir = self._fs.worktrees_dir(project.local_path)
-            for name in self._fs.list_dir(wt_dir):
+            existing = set(self._fs.list_dir(wt_dir))
+            for name in existing:
                 path = os.path.join(wt_dir, name)
                 if path in expected:
                     continue
@@ -171,4 +172,22 @@ class DoctorUseCase:
                     "worktree %s has no active worker but %d live process(es): %s" % (
                         path, len(pids), ", ".join(str(p) for p in pids)),
                 ))
+            problems += self._deleted_worktree_problems(wt_dir, existing)
         return problems
+
+    def _deleted_worktree_problems(self, wt_dir, existing):
+        by_worktree = {}
+        for cwd, pids in self._machine.cwd_pids_under(wt_dir).items():
+            name = os.path.relpath(cwd, wt_dir).split(os.sep)[0]
+            if name in existing:
+                continue
+            by_worktree.setdefault(name, []).extend(pids)
+        return [
+            Problem(
+                "orphans",
+                "worktree %s no longer exists but %d live process(es) remain: %s" % (
+                    os.path.join(wt_dir, name), len(pids),
+                    ", ".join(str(p) for p in sorted(pids))),
+            )
+            for name, pids in sorted(by_worktree.items())
+        ]

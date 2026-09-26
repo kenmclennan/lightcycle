@@ -387,6 +387,37 @@ class TestMachineAdapterWorktreePids(unittest.TestCase):
         self.assertNotIn("+D", argv)
 
 
+class TestMachineAdapterCwdPidsUnder(unittest.TestCase):
+    def setUp(self):
+        self.adapter = MachineAdapter()
+
+    def test_groups_pids_by_cwd_strictly_below_the_root(self):
+        out = (
+            b"p1\nfcwd\nn/repo/.worktrees/gone\n"
+            b"p2\nfcwd\nn/repo/.worktrees/gone/src\n"
+            b"p3\nfcwd\nn/repo/.worktrees/gone\n"
+            b"p4\nfcwd\nn/repo/.worktrees\n"
+            b"p5\nfcwd\nn/repo/.worktreesx/other\n"
+            b"p6\nfcwd\nn/elsewhere\n"
+        )
+        with patch(
+            "lightcycle.adapters.machine.subprocess.run", return_value=_proc(out),
+        ):
+            found = self.adapter.cwd_pids_under("/repo/.worktrees")
+
+        self.assertEqual(found, {
+            "/repo/.worktrees/gone": [1, 3],
+            "/repo/.worktrees/gone/src": [2],
+        })
+
+    def test_returns_empty_dict_when_lsof_exits_non_zero(self):
+        with patch(
+            "lightcycle.adapters.machine.subprocess.run",
+            return_value=_proc(b"", returncode=1),
+        ):
+            self.assertEqual(self.adapter.cwd_pids_under("/repo/.worktrees"), {})
+
+
 class TestFakeMachineWorktreePids(unittest.TestCase):
     def test_returns_the_configured_pids_for_the_given_path(self):
         machine = FakeMachine(worktree_pids={"/repo/.worktrees/x": [111, 222]})

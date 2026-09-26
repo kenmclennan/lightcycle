@@ -481,6 +481,44 @@ class TestDoctorOrphans(unittest.TestCase):
         report = self._report(store, fs, FakeMachine(), _Worktrees())
         self.assertEqual(report.problems["orphans"], [])
 
+    def test_process_in_a_deleted_worktree_reports_one_problem_naming_path_and_pids(self):
+        store = FakeStore()
+        store.add_project("acme", local_path="/repo")
+        fs = FakeFs(dirs={"/repo/.worktrees": []})
+        machine = FakeMachine(cwd_pids={
+            "/repo/.worktrees/LC-9-change": [41],
+            "/repo/.worktrees/LC-9-change/src": [42, 43],
+        })
+        report = self._report(store, fs, machine, _Worktrees())
+        self.assertEqual(len(report.problems["orphans"]), 1)
+        message = report.problems["orphans"][0].message
+        self.assertIn("/repo/.worktrees/LC-9-change", message)
+        for pid in ("41", "42", "43"):
+            self.assertIn(pid, message)
+
+    def test_process_in_an_expected_live_worktree_is_not_reported_as_deleted(self):
+        store = FakeStore()
+        store.add_project("acme", local_path="/repo")
+        item = store.create_item("item", "a description")
+        step = store.create_step(parent=item, role="agent")
+        store.update_state(step, "in_progress")
+        path = "/repo/.worktrees/%s-code" % item
+        fs = FakeFs(dirs={"/repo/.worktrees": ["%s-code" % item]})
+        machine = FakeMachine(cwd_pids={path: [7], path + "/src": [8]})
+        report = self._report(store, fs, machine, _Worktrees({item: path}))
+        self.assertEqual(report.problems["orphans"], [])
+
+    def test_process_in_an_existing_unexpected_worktree_is_reported_once(self):
+        store = FakeStore()
+        store.add_project("acme", local_path="/repo")
+        fs = FakeFs(dirs={"/repo/.worktrees": ["stray"]})
+        machine = FakeMachine(
+            worktree_pids={"/repo/.worktrees/stray": [5]},
+            cwd_pids={"/repo/.worktrees/stray": [5]},
+        )
+        report = self._report(store, fs, machine, _Worktrees())
+        self.assertEqual(len(report.problems["orphans"]), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

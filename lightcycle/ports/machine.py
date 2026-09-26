@@ -13,3 +13,7 @@ class MachinePort(ABC):
     @abstractmethod
     def worktree_pids(self, path):
         pass
+
+    @abstractmethod
+    def cwd_pids_under(self, root):
+        pass
