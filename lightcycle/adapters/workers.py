@@ -117,10 +117,6 @@ def kill(pid):
     _signal_group(pid, signal.SIGTERM)
 
 
-def signal_resume(pid):
-    _signal_group(pid, signal.SIGCONT)
-
-
 def register_worker(root, entry):
     with registry_lock(root):
         workers = workers_state(root)
@@ -194,17 +190,6 @@ def set_pid_started(root, spawnid, pid_started):
         write_workers(root, workers)
 
 
-def set_suspended(root, spawnid, suspended, at=None):
-    with registry_lock(root):
-        workers = workers_state(root)
-        for w in workers:
-            if w.get("spawnid") == spawnid:
-                w["suspended"] = suspended
-                if suspended:
-                    w["suspended_at"] = at
-        write_workers(root, workers)
-
-
 class WorkersAdapter(WorkersPort):
     def __init__(self, config):
         self._config = config
@@ -236,9 +221,3 @@ class WorkersAdapter(WorkersPort):
 
     def set_pid_started(self, spawnid, pid_started):
         return set_pid_started(self._config.data_root(), spawnid, pid_started)
-
-    def set_suspended(self, spawnid, suspended, at=None):
-        return set_suspended(self._config.data_root(), spawnid, suspended, at)
-
-    def signal_resume(self, pid):
-        return signal_resume(pid)

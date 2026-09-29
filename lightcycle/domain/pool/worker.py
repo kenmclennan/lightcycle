@@ -12,8 +12,6 @@ class Worker:
     pid_started: Optional[str] = None
     log: Optional[str] = None
     checked: bool = False
-    suspended: bool = False
-    suspended_at: Optional[float] = None
 
     @classmethod
     def from_state(cls, d) -> "Worker":
@@ -26,8 +24,6 @@ class Worker:
             pid_started=d.get("pid_started"),
             log=d.get("log"),
             checked=bool(d.get("checked", False)),
-            suspended=bool(d.get("suspended", False)),
-            suspended_at=d.get("suspended_at"),
         )
 
     def is_alive(self, probe):
@@ -37,8 +33,6 @@ class Worker:
         return self.step is None and (now - self.started) < max_boot
 
     def is_stalled(self, now, max_boot, stall_seconds, mtime_probe):
-        if self.suspended:
-            return False
         if self.step is None or self.is_booting(now, max_boot):
             return False
         mtime = mtime_probe(self.log)

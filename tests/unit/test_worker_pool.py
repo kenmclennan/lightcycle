@@ -48,24 +48,11 @@ class TestWorker(unittest.TestCase):
     def test_checked_defaults_to_false(self):
         self.assertFalse(Worker.from_state({"spawnid": "sp-1"}).checked)
 
-    def test_from_state_reads_suspended_and_suspended_at(self):
-        w = Worker.from_state({"spawnid": "sp-1", "suspended": True, "suspended_at": 500})
-        self.assertTrue(w.suspended)
-        self.assertEqual(w.suspended_at, 500)
-
-    def test_suspended_defaults_to_false(self):
-        w = Worker.from_state({"spawnid": "sp-1"})
-        self.assertFalse(w.suspended)
-        self.assertIsNone(w.suspended_at)
-
-    def test_is_stalled_false_when_suspended_regardless_of_stale_log(self):
-        w = Worker(step="b-1", started=0, log="/l/1.log", suspended=True)
-        self.assertFalse(
-            w.is_stalled(now=10000, max_boot=120, stall_seconds=1800, mtime_probe=lambda p: 0)
+    def test_from_state_of_a_legacy_flagged_entry_is_stall_eligible(self):
+        w = Worker.from_state(
+            {"spawnid": "sp-1", "step": "b-1", "started": 0, "log": "/l/1.log",
+             "suspended": True, "suspended_at": 5}
         )
-
-    def test_is_stalled_unaffected_when_not_suspended(self):
-        w = Worker(step="b-1", started=0, log="/l/1.log", suspended=False)
         self.assertTrue(
             w.is_stalled(now=10000, max_boot=120, stall_seconds=1800, mtime_probe=lambda p: 0)
         )
@@ -176,29 +163,14 @@ class TestWorkerPool(unittest.TestCase):
         pool = WorkerPool.from_state([{"spawnid": "sp", "pid": 1, "step": None}])
         self.assertEqual(pool.dead_steps_outside(probe(set()), claimed_ids=set()), set())
 
-    def test_covered_steps_still_includes_a_suspended_workers_step(self):
-        pool = WorkerPool.from_state(
-            [{"spawnid": "sp", "pid": 1, "step": "b-1", "suspended": True}]
-        )
-        self.assertEqual(pool.covered_steps(probe({1})), {"b-1"})
-
-    def test_running_steps_excludes_a_suspended_workers_step(self):
-        pool = WorkerPool.from_state(
-            [
-                {"spawnid": "frozen", "pid": 1, "step": "b-1", "suspended": True},
-                {"spawnid": "live", "pid": 2, "step": "b-2"},
-            ]
-        )
-        self.assertEqual(pool.running_steps(probe({1, 2})), {"b-2"})
-
-    def test_running_steps_excludes_a_dead_worker_and_one_with_no_step(self):
+    def test_covered_steps_excludes_a_dead_worker_and_one_with_no_step(self):
         pool = WorkerPool.from_state(
             [
                 {"spawnid": "dead", "pid": 1, "step": "b-1"},
                 {"spawnid": "idle", "pid": 2, "step": None},
             ]
         )
-        self.assertEqual(pool.running_steps(probe({2})), set())
+        self.assertEqual(pool.covered_steps(probe({2})), set())
 
 
 if __name__ == "__main__":

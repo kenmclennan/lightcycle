@@ -1,8 +1,7 @@
 import unittest
 
-from lightcycle.domain.pool import Worker
 from lightcycle.domain.pool.machine_headroom import MachineHeadroom
-from lightcycle.domain.pool.memory_admission import admission_cap, worker_to_resume
+from lightcycle.domain.pool.memory_admission import admission_cap
 
 
 class TestAdmissionCap(unittest.TestCase):
@@ -46,10 +45,6 @@ class TestAdmissionCap(unittest.TestCase):
         self.assertIsNone(admission_cap(headroom, 2, 0.25))
 
 
-def _worker(spawnid, started, suspended=False, suspended_at=None):
-    return Worker(spawnid=spawnid, pid=1, started=started, suspended=suspended, suspended_at=suspended_at)
-
-
 class TestAdmissionCapAtTheCalibratedCeiling(unittest.TestCase):
     def test_projected_exactly_at_the_ceiling_is_not_over(self):
         headroom = MachineHeadroom(pool_share=0.25, peak_worker_share=0.10)
@@ -62,25 +57,3 @@ class TestAdmissionCapAtTheCalibratedCeiling(unittest.TestCase):
     def test_projected_just_over_the_ceiling_floors_to_one_with_none_working(self):
         headroom = MachineHeadroom(pool_share=0.2501, peak_worker_share=0.10)
         self.assertEqual(admission_cap(headroom, 0, 0.65), 1)
-
-
-class TestWorkerToResume(unittest.TestCase):
-    def test_returns_the_most_recently_suspended(self):
-        workers = [
-            _worker("a", 1, suspended=True, suspended_at=10),
-            _worker("b", 2, suspended=True, suspended_at=30),
-        ]
-        self.assertEqual(worker_to_resume(workers).spawnid, "b")
-
-    def test_none_when_none_are_suspended(self):
-        self.assertIsNone(worker_to_resume([_worker("a", 1)]))
-
-    def test_none_when_there_are_no_workers(self):
-        self.assertIsNone(worker_to_resume([]))
-
-    def test_ignores_workers_that_are_not_suspended(self):
-        workers = [
-            _worker("a", 1, suspended=True, suspended_at=10),
-            _worker("b", 2),
-        ]
-        self.assertEqual(worker_to_resume(workers).spawnid, "a")

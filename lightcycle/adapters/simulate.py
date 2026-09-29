@@ -222,12 +222,6 @@ class NullWorkers(WorkersPort):
     def set_pid_started(self, spawnid, pid_started):
         self._refuse("set_pid_started")
 
-    def set_suspended(self, spawnid, suspended, at=None):
-        self._refuse("set_suspended")
-
-    def signal_resume(self, pid):
-        self._refuse("signal_resume")
-
 
 class SimulateConfig:
     def __init__(self, real_config, projects_root):

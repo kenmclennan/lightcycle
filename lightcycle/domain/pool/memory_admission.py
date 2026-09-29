@@ -6,8 +6,3 @@ def admission_cap(headroom, alive_count, memory_reserve_fraction):
     if projected > (1.0 - memory_reserve_fraction):
         return 1 if alive_count == 0 else 0
     return None
-
-
-def worker_to_resume(alive_workers):
-    candidates = [w for w in alive_workers if w.suspended]
-    return max(candidates, key=lambda w: w.suspended_at or 0, default=None)

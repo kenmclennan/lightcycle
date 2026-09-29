@@ -95,7 +95,7 @@ class TickUseCase:
         max_agents = self._config.max_agents()
         try:
             pool = WorkerPool(self._workers.workers_state())
-            running = pool.running_steps(probe)
+            running = pool.covered_steps(probe)
             slots = pool.free_slots(max_agents, probe)
             alive_count = max_agents - slots
             inflight_dict = pool.inflight(probe, input.now, self._config.max_boot_seconds())

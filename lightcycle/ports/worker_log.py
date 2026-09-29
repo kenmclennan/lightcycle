@@ -29,7 +29,3 @@ class WorkerLogPort(ABC):
     @abstractmethod
     def log_mtime(self, path):
         pass
-
-    @abstractmethod
-    def touch(self, path):
-        pass
