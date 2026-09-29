@@ -122,9 +122,6 @@ class FakeFs(FsPort, WorkflowBundlePort, WorkerLogPort):
     def log_mtime(self, path):
         return self._log_mtimes.get(path)
 
-    def touch(self, path):
-        self._log_mtimes[path] = float("inf")
-
     def worktrees_dir(self, root):
         return os.path.join(root, ".worktrees")
 

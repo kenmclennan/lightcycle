@@ -85,7 +85,6 @@ from lightcycle.application.work import (
 )
 from lightcycle.application.work.priority_rows import select_priority_rows
 from lightcycle.application.work.project_of import short_project_label
-from lightcycle.application.work.suspended_steps import suspended_step_ids
 from lightcycle.render import format_elapsed
 
 POLL_INTERVAL_SECONDS = 10
@@ -1676,7 +1675,6 @@ class LightcycleApp(App):
         self._last_shape = None
         self._last_attention_ids = None
         self._last_priority_selection = None
-        self._last_priority_suspended_steps = frozenset()
         self._selected_flat_index = 0
         self._view = "priority"
         self._priority_empty = True
@@ -1797,7 +1795,6 @@ class LightcycleApp(App):
         tick_start = time.perf_counter() if metrics_enabled else None
 
         lanes = StatusUseCase(self._container.store).execute().lanes
-        suspended_steps = suspended_step_ids(self._container.workers)
 
         selection = select_priority_rows(
             self._container.store, lanes, self._container.flow_service(),
@@ -1813,13 +1810,10 @@ class LightcycleApp(App):
         if had_prior_attention and newly_attention:
             self.bell()
 
-        self._active_row_ids = tuple(
-            s.owning_node.id for s in selection.active if s.node.id not in suspended_steps
-        )
+        self._active_row_ids = tuple(s.owning_node.id for s in selection.active)
         self._last_priority_selection = selection
-        self._last_priority_suspended_steps = suspended_steps
         if self._view == "priority":
-            self._render_priority_rows(selection, suspended_steps, shape)
+            self._render_priority_rows(selection, shape)
         self._last_shape = shape
 
         self._sync_active_glyph_animation()
@@ -1841,10 +1835,10 @@ class LightcycleApp(App):
                 _tui_metric_line(wall_seconds, rss_kb, self._now().timestamp())
             )
 
-    def _render_priority_rows(self, selection, suspended_steps, shape=None, force_rebuild=False) -> None:
+    def _render_priority_rows(self, selection, shape=None, force_rebuild=False) -> None:
         store = self._container.store
         attention_rows, active_rows, queued_rows = build_priority_rows_from_selection(
-            store, selection, suspended_steps,
+            store, selection,
         )
         rows = assemble_rows(attention_rows, active_rows, queued_rows)
         table = self.query_one(PriorityTable)
@@ -2062,7 +2056,7 @@ class LightcycleApp(App):
         if self._view == "priority":
             if self._last_priority_selection is not None:
                 self._render_priority_rows(
-                    self._last_priority_selection, self._last_priority_suspended_steps, force_rebuild=True,
+                    self._last_priority_selection, force_rebuild=True,
                 )
         elif self._view == "goals":
             self._refresh_goals_view()
@@ -2358,7 +2352,7 @@ class LightcycleApp(App):
         active_glyph = self._active_glyph_char()
         selected_id = self._selected_row_id(table)
         for row in rows:
-            icon_override = active_glyph if row.group == "active" and not row.suspended else None
+            icon_override = active_glyph if row.group == "active" else None
             cells = self._row_cells(
                 row, layout, row_budget, cursor=(row.id == selected_id), icon_override=icon_override
             )
@@ -2470,7 +2464,7 @@ class LightcycleApp(App):
         stacked_rows = {}
         for index, row in enumerate(rows):
             is_cursor = index == new_index
-            icon_override = active_glyph if row.group == "active" and not row.suspended else None
+            icon_override = active_glyph if row.group == "active" else None
             cells = self._row_cells(row, layout, row_budget, cursor=is_cursor, icon_override=icon_override)
             if layout.stacked:
                 stacked_rows[row.id] = (row, icon_override)

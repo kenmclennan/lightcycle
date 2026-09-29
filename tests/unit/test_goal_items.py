@@ -9,12 +9,9 @@ from lightcycle.application.goals import GoalItemsUseCase
 from lightcycle.application.work.item_partition import is_backlogged_item, is_closed_item
 from lightcycle.application.work.priority_rows import select_priority_rows
 from lightcycle.application.work.status import StatusUseCase
-from lightcycle.application.work.suspended_steps import suspended_step_ids
 from lightcycle.domain.work import State
-from lightcycle.ports.workers import RegistryUnreadable
 from tests.support.fake_fs import flow_from_metas
 from tests.support.fake_store import FakeStore
-from tests.support.fake_workers import FakeWorkers
 
 _FLOW = flow_from_metas(
     {
@@ -27,11 +24,6 @@ _FLOW = flow_from_metas(
 class FixedFlowService:
     def flow_for(self, node):
         return _FLOW
-
-
-class UnreadableWorkers(FakeWorkers):
-    def workers_state(self):
-        raise RegistryUnreadable("gone")
 
 
 class GoalItemsFixture(unittest.TestCase):
@@ -158,19 +150,17 @@ class TestGoalItemsUseCase(GoalItemsFixture):
         _, active_step = self.with_step("active", running=True)
         self.with_step("queued")
         self.with_step("held", deps=[active_step])
-        suspended = frozenset({active_step})
 
         result = self.execute()
-        goal_rows = assemble_rows(*build_priority_rows_from_selection(self.store, result.selection, suspended))
+        goal_rows = assemble_rows(*build_priority_rows_from_selection(self.store, result.selection))
         lanes = StatusUseCase(self.store).execute().lanes
         lane_rows = assemble_rows(
             *build_priority_rows_from_selection(
-                self.store, select_priority_rows(self.store, lanes, self.flow), suspended
+                self.store, select_priority_rows(self.store, lanes, self.flow)
             )
         )
 
         self.assertEqual(goal_rows, lane_rows)
-        self.assertTrue(any(r.suspended for r in goal_rows))
         self.assertTrue(any(r.dependency_icon for r in goal_rows))
 
 
@@ -201,33 +191,3 @@ class TestSharedPredicates(GoalItemsFixture):
         self.assertFalse(is_closed_item(open_item))
 
 
-class TestSuspendedStepIds(unittest.TestCase):
-    def test_returns_the_steps_of_suspended_workers_only(self):
-        workers = FakeWorkers(
-            workers=[
-                {"spawnid": "a", "pid": 1, "step": "S-1", "started": 0, "suspended": True, "suspended_at": 0},
-                {"spawnid": "b", "pid": 2, "step": "S-2", "started": 0},
-                {"spawnid": "c", "pid": 3, "started": 0, "suspended": True, "suspended_at": 0},
-            ],
-            alive_pids=(1, 2, 3),
-        )
-        self.assertEqual(suspended_step_ids(workers), frozenset({"S-1"}))
-
-    def test_a_dead_suspended_worker_does_not_suspend_a_step_a_live_worker_holds(self):
-        workers = FakeWorkers(
-            workers=[
-                {"spawnid": "dead", "pid": 1, "step": "S-1", "started": 0, "suspended": True, "suspended_at": 0},
-                {"spawnid": "live", "pid": 2, "step": "S-1", "started": 0},
-            ],
-            alive_pids=(2,),
-        )
-        self.assertEqual(suspended_step_ids(workers), frozenset())
-
-    def test_a_dead_suspended_worker_alone_suspends_nothing(self):
-        workers = FakeWorkers(
-            workers=[{"spawnid": "dead", "pid": 1, "step": "S-1", "started": 0, "suspended": True, "suspended_at": 0}],
-        )
-        self.assertEqual(suspended_step_ids(workers), frozenset())
-
-    def test_an_unreadable_registry_yields_the_empty_set(self):
-        self.assertEqual(suspended_step_ids(UnreadableWorkers()), frozenset())

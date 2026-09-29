@@ -2,7 +2,7 @@ import signal
 import unittest
 from unittest.mock import call, patch
 
-from lightcycle.adapters.workers import kill, signal_resume
+from lightcycle.adapters.workers import kill
 
 _OWN_PGID = 1000
 
@@ -44,15 +44,6 @@ class TestKillProcessGroup(unittest.TestCase):
         with patch("os.getpgid", side_effect=lambda pid: _OWN_PGID if pid == 0 else 2000), \
              patch("os.killpg", side_effect=OSError()):
             kill(4242)
-
-    def test_signal_resume_sends_exactly_sigcont_through_the_guarded_path(self):
-        with patch("os.getpgid", side_effect=lambda pid: _OWN_PGID if pid == 0 else 2000), \
-             patch("os.killpg") as killpg, \
-             patch("os.kill") as os_kill:
-            signal_resume(4242)
-        killpg.assert_called_once_with(2000, signal.SIGCONT)
-        os_kill.assert_not_called()
-
 
 if __name__ == "__main__":
     unittest.main()

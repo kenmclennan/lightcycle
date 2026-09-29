@@ -45,7 +45,6 @@ from lightcycle.adapters.tui.row_grid import (
     wrap_continuation,
 )
 from lightcycle.application.goals import GoalItemsUseCase, ShowGoalUseCase, log_entry_matches
-from lightcycle.application.work.suspended_steps import suspended_step_ids
 from lightcycle.domain.goals import goal_log_stamp
 
 GOAL_TAB_ORDER = ("overview", "log", "items")
@@ -354,9 +353,8 @@ class GoalHubScreen(Screen, inherit_bindings=False):
         return resolve_titles(self._container.store, "\n".join(t for t in texts if t))
 
     def _current_rows(self, result):
-        suspended = suspended_step_ids(self._container.workers)
         attention, active, queued = build_priority_rows_from_selection(
-            self._container.store, result.selection, suspended
+            self._container.store, result.selection
         )
         rows = assemble_rows(attention, active, queued)
         queued_glyph = STATE_GLYPHS["queued"]

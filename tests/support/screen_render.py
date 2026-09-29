@@ -419,38 +419,6 @@ def _priority_config_changed(size):
     return session
 
 
-def _worker_suspended_store():
-    store = DemoStore(now=lambda: _at(14))
-
-    suspended_item = store.item("LC-600.1", "Active step with a suspended worker", project="lightcycle")
-    suspended_step = store.step("LC-600.1.1", step="write-code", role="agent", parent=suspended_item)
-    store.assign(suspended_step, "worker-1")
-    store.update_state(suspended_step, State.RUNNING)
-
-    active_item = store.item("LC-600.2", "Active step, not suspended", project="lightcycle")
-    active_step = store.step("LC-600.2.1", step="write-code", role="agent", parent=active_item)
-    store.assign(active_step, "worker-2")
-    store.update_state(active_step, State.RUNNING)
-
-    queued_item = store.item("LC-600.3", "Queued step", project="lightcycle")
-    store.step("LC-600.3.1", step="write-code", role="agent", parent=queued_item)
-
-    return store, suspended_step
-
-
-def _priority_worker_suspended(size):
-    store, suspended_step = _worker_suspended_store()
-    workers = FakeWorkers(
-        workers=[
-            {"spawnid": "w-suspended", "pid": 1, "step": suspended_step, "started": 0,
-             "suspended": True, "suspended_at": 0},
-        ],
-        alive_pids=(1,),
-    )
-    status = FakeMemoryGateStatus({"pool_share": 0.05})
-    return _launch(store, size=size, workers=workers, memory_gate_status=status)
-
-
 def _engine_active_store():
     store = DemoStore(now=lambda: _at(4))
     item = store.item(
@@ -1469,7 +1437,6 @@ SCREENS = {
     "priority-list#cost-not-recorded": _priority_cost_not_recorded,
     "priority-list#pool-holding": _priority_pool_holding,
     "priority-list#config-changed": _priority_config_changed,
-    "priority-list#worker-suspended": _priority_worker_suspended,
     "priority-list#engine-active": _priority_engine_active,
     "goals#normal": _goals_normal,
     "goals#two-projects": _goals_two_projects,

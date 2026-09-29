@@ -23,7 +23,6 @@ STATE_GLYPHS = {
     "escalation": Glyph("▲", "red"),
     "active": Glyph("◆", "cyan"),
     "queued": Glyph("○", "dim"),
-    "suspended": Glyph("‖", "dim"),
 }
 
 ACTIVE_GLYPH_FRAMES = ("◇", "◈", "◆", "◈")

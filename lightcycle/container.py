@@ -103,9 +103,7 @@ class Container:
                 self.store, self.worker_log, self.workers, self.config, self.claude_stream,
             ),
             stream=self.claude_stream,
-            memory_gate=MemoryGateUseCase(
-                self.machine, self.workers, self.worker_log, self.config, self.memory_gate_status,
-            ),
+            memory_gate=MemoryGateUseCase(self.machine, self.config, self.memory_gate_status),
         )
 
     def sweep(self, flow=None):

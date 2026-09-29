@@ -1,5 +1,4 @@
 from dataclasses import dataclass, replace
-from functools import partial
 
 from lightcycle.adapters.tui.design_system import (
     DEPENDENCY_BLOCKED_EXTRA_GLYPH, HUMAN_STEP_GLYPH, STATE_GLYPHS,
@@ -27,7 +26,6 @@ class PriorityRow:
     step_colour: str
     cost: str
     time: str
-    suspended: bool = False
 
 
 def _project(store, node):
@@ -62,8 +60,8 @@ def _attention_row(store, node, flow):
     )
 
 
-def _active_row(store, node, flow, suspended=False):
-    glyph = STATE_GLYPHS["suspended"] if suspended else STATE_GLYPHS["active"]
+def _active_row(store, node, flow):
+    glyph = STATE_GLYPHS["active"]
     return PriorityRow(
         id=node.id,
         step_id=node.id,
@@ -77,7 +75,6 @@ def _active_row(store, node, flow, suspended=False):
         step_colour="dim",
         cost="",
         time="",
-        suspended=suspended,
     )
 
 
@@ -130,18 +127,15 @@ def _row_for(store, row_builder, selected):
     )
 
 
-def build_priority_rows(store, lanes, flow_service, suspended_steps=frozenset()):
+def build_priority_rows(store, lanes, flow_service):
     selection = select_priority_rows(store, lanes, flow_service)
-    return build_priority_rows_from_selection(store, selection, suspended_steps)
+    return build_priority_rows_from_selection(store, selection)
 
 
-def build_priority_rows_from_selection(store, selection, suspended_steps=frozenset()):
+def build_priority_rows_from_selection(store, selection):
     return (
         [_row_for(store, _attention_row, s) for s in selection.attention],
-        [
-            _row_for(store, partial(_active_row, suspended=s.node.id in suspended_steps), s)
-            for s in selection.active
-        ],
+        [_row_for(store, _active_row, s) for s in selection.active],
         [_row_for(store, _queued_row, s) for s in selection.queued],
     )
 

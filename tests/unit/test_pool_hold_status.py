@@ -98,28 +98,6 @@ class TestPoolHoldStatusUseCase(unittest.TestCase):
         self.assertEqual(result.alive, 2)
         self.assertEqual(result.max_agents, 9)
 
-    def test_holding_true_when_a_worker_is_suspended_even_though_cap_is_not_zero(self):
-        workers = FakeWorkers(
-            workers=[{"spawnid": "a", "pid": 1, "started": 1, "step": "s-1", "suspended": True}],
-            alive_pids=(1,),
-        )
-        result = PoolHoldStatusUseCase(
-            FakeMemoryGateStatus({"cap": 1}), workers, FakeConfig(),
-        ).execute(workers.pid_alive)
-
-        self.assertTrue(result.holding)
-
-    def test_is_not_holding_when_cap_is_not_zero_and_nothing_is_suspended(self):
-        workers = FakeWorkers(
-            workers=[{"spawnid": "a", "pid": 1, "started": 1, "step": "s-1"}],
-            alive_pids=(1,),
-        )
-        result = PoolHoldStatusUseCase(
-            FakeMemoryGateStatus({"cap": 1}), workers, FakeConfig(),
-        ).execute(workers.pid_alive)
-
-        self.assertFalse(result.holding)
-
 
 if __name__ == "__main__":
     unittest.main()
