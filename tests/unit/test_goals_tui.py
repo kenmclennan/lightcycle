@@ -83,19 +83,36 @@ class TestGoalsTab(unittest.TestCase):
         self.assertNotIn("beta", alpha)
         self.assertIn("beta", beta)
 
-    def test_goals_table_is_project_and_title_with_no_status_text(self):
+    def test_goals_table_is_project_title_and_status(self):
         store, _ = _goals_store()
         session = self._launch(store)
         session.press("[")
         table = session.app.query_one(GoalsTable)
         frame = _frame(session)
 
-        self.assertEqual(len(table.columns), 2)
+        self.assertEqual(len(table.columns), 3)
         self.assertIn("lightcycle", frame)
         self.assertEqual(table.row_count, 3)
         self.assertIn("Ship the goals record", frame)
-        for status in ("not started", "in progress", "done"):
-            self.assertNotIn(status, frame)
+        self.assertIn("not started", frame)
+
+    def test_a_done_goal_title_is_dimmed_and_struck_through(self):
+        store, gid = _goals_store()
+        store.update_goal(gid, status="done")
+        session = self._launch(store)
+        session.press("[")
+        strips = session.run(lambda: session.app.screen._compositor.render_strips())
+        title_segment = next(
+            seg for strip in strips for seg in strip if "Ship the goals record" in seg.text
+        )
+        self.assertTrue(title_segment.style.strike)
+
+    def test_an_archived_goal_is_hidden_from_the_tab_by_default(self):
+        store, gid = _goals_store()
+        store.update_goal(gid, status="archived")
+        session = self._launch(store)
+        session.press("[")
+        self.assertNotIn("Ship the goals record", _frame(session))
 
     def test_selecting_a_goal_pushes_the_goal_hub(self):
         store, gid = _goals_store()

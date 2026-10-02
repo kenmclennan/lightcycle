@@ -258,8 +258,10 @@ COMMAND_GROUPS = [
     ]),
     ("Goals", [
         ("goal", "<new|list|show|set|log|link|unlink> ...", "maintain a goal by hand: "
-         "new \"<title>\" --project <ref> [--description T], list, show <G-n>, set <G-n> [--title/"
-         "--description/--project/--status \"not started|in progress|done\"], log <G-n> \"<title>\" \"<body>\", "
+         "new \"<title>\" --project <ref> [--description T], list [--all - include archived], "
+         "show <G-n>, set <G-n> [--title/"
+         "--description/--project/--status \"not started|in progress|done|archived\"], "
+         "log <G-n> \"<title>\" \"<body>\", "
          "link/unlink <G-n> <item> - a goal is not a node and the flow engine never touches it"),
     ]),
     ("Feedback loop", [
@@ -1839,7 +1841,7 @@ def cmd_goal(argv):
             )))
             return 0
         if a.sub == "list":
-            for g in ListGoalsUseCase(store).execute():
+            for g in ListGoalsUseCase(store).execute(include_archived=a.all):
                 print("%s\t%s\t%s" % (g.id, g.status, g.title))
             return 0
         if a.sub == "show":
