@@ -17,7 +17,7 @@ class MemoryGateUseCase:
         self._config = config
         self._memory_gate_status = memory_gate_status
 
-    def execute(self, pool, probe, now) -> MemoryGateResponse:
+    def execute(self, pool, probe) -> MemoryGateResponse:
         alive = pool.alive(probe)
         headroom = self._machine.headroom(alive)
         pool_share = headroom.pool_share if headroom else None
