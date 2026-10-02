@@ -41,7 +41,7 @@ def _gate(machine, config=None, memory_gate_status=None):
 
 def _execute(workers, machine, **kwargs):
     pool = WorkerPool(workers.workers_state())
-    return _gate(machine, **kwargs).execute(pool, workers.pid_alive, now=1000)
+    return _gate(machine, **kwargs).execute(pool, workers.pid_alive)
 
 
 def _legacy_flagged(spawnid, pid, started=1):

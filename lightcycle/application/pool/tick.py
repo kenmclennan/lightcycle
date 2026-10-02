@@ -99,7 +99,7 @@ class TickUseCase:
             slots = pool.free_slots(max_agents, probe)
             alive_count = max_agents - slots
             inflight_dict = pool.inflight(probe, input.now, self._config.max_boot_seconds())
-            memory_result = self._memory_gate.execute(pool, probe, input.now)
+            memory_result = self._memory_gate.execute(pool, probe)
         except RegistryUnreadable:
             running = set()
             slots = 0
