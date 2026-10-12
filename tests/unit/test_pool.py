@@ -128,8 +128,8 @@ class FakeMemoryGate:
         )
         self.calls = []
 
-    def execute(self, pool, probe, now):
-        self.calls.append((pool, probe, now))
+    def execute(self, pool, probe):
+        self.calls.append((pool, probe))
         return self._response
 
 
