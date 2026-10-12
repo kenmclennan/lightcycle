@@ -121,6 +121,9 @@ COMMANDS = {
     "specs-dir": CommandSpec(prog="lc specs-dir", args=(
         Arg("--check", action="store_true"),
     )),
+    "knowledge-dir": CommandSpec(prog="lc knowledge-dir", args=(
+        Arg("--check", action="store_true"),
+    )),
     "done": CommandSpec(prog="lc done", args=(
         Arg("id"), Arg("outcome"),
         Arg(
@@ -217,7 +220,9 @@ COMMANDS = {
         Arg("--once", action="store_true"), Arg("--detach", action="store_true"),
     )),
     "stop": CommandSpec(prog="lc stop"),
-    "init": CommandSpec(prog="lc init"),
+    "init": CommandSpec(prog="lc init", args=(
+        Arg("--knowledge-path"),
+    )),
     "project": CommandSpec(prog="lc project", subparsers={
         "add": CommandSpec(prog="lc project add", args=(
             Arg("identity"), Arg("--shortcode"), Arg("--path"),

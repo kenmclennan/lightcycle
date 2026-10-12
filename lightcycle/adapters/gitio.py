@@ -140,9 +140,18 @@ def has_uncommitted(root):
     return proc.stdout.strip() != ""
 
 
+def _fallback_identity(root):
+    configured = git(root, "config", "user.name").stdout.strip() and git(
+        root, "config", "user.email"
+    ).stdout.strip()
+    if configured:
+        return []
+    return ["-c", "user.name=lightcycle", "-c", "user.email=lightcycle@localhost"]
+
+
 def commit_all(root, message):
     git(root, "add", "-A")
-    return git_ok(root, "commit", "-m", message)
+    return git_ok(root, *_fallback_identity(root), "commit", "-m", message)
 
 
 def has_tracked_changes(root):
@@ -205,6 +214,7 @@ def set_branch_upstream(root, branch, remote="origin"):
 
 
 def init_repo(root, branch="main"):
+    os.makedirs(root, exist_ok=True)
     proc = git(root, "init", "-q", "-b", branch)
     return GitOutcome(ok=proc.returncode == 0, detail=proc.stderr.strip())
 

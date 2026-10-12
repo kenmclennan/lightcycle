@@ -22,7 +22,7 @@ To install the engine **directly** - for engine development, or a host without C
 
 ```bash
 pipx install git+https://github.com/kenmclennan/lightcycle   # lc + lightcycle on PATH
-lc init                                                       # create ~/.lightcycle (store + config)
+lc init                                                       # create ~/.lightcycle (store + config) and the knowledge-base repo
 ```
 
 Everything that is _yours_ lives in **`~/.lightcycle/`** (config, store, logs, worktrees, and the workflow bundles pulled from origins) - separate from the installed engine, so a `pipx` upgrade never touches your data. `~/.lightcycle` is found by default (override with `$LC_HOME`).
@@ -35,7 +35,7 @@ claude            # complete login, then exit
 
 # 1. install + initialise
 pipx install git+https://github.com/kenmclennan/lightcycle
-lc init                              # creates ~/.lightcycle (store + config); pulls the built-in workflow origin
+lc init                              # creates ~/.lightcycle (store + config); creates the knowledge-base repo (`--knowledge-path` to relocate); pulls the built-in workflow origin
 lc config --edit                     # point `projects` + `specs` at your dirs (defaults: ~/workspace/{projects,specs})
 
 # 2. register a repo you want it to work in - any git repo, anywhere on disk
@@ -144,7 +144,7 @@ The mutating CLI is a small set of generic primitives over nodes; the read views
 
 | Command | What it does |
 | --- | --- |
-| `lc init` | create `~/.lightcycle` (store + config); run once |
+| `lc init` | create `~/.lightcycle` (store + config) and the knowledge-base repo; run once |
 | `lc project <add\|list\|rm\|scan>` | manage the project registry: `add <owner/name> [--shortcode X] [--path P]`, `list`, `rm <owner/name>`, `scan [dir] [--json]` discovers git repos under `dir` (default cwd) as registration candidates - read-only |
 | `lc config [--edit]` | show (or `--edit`) the lightcycle config: projects + specs roots |
 | `lc start [--once]` | the agent pool: sweep, then fill up to `LC_MAX_AGENTS` workers from the ready queue |

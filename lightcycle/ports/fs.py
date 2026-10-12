@@ -29,3 +29,7 @@ class FsPort(ABC):
     @abstractmethod
     def ensure_worktrees_ignored(self, git_dir):
         pass
+
+    @abstractmethod
+    def write_text(self, path, text):
+        pass

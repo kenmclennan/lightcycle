@@ -3,6 +3,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from lightcycle.adapters.gitio import GitAdapter
@@ -405,6 +406,33 @@ class TestGitAdapterRemoteHeadSha(unittest.TestCase):
         GitAdapter().remote_head_sha(consumer, "feat/x")
 
         self.assertEqual(_git(consumer, "status", "--porcelain").stdout, before_status)
+
+
+class TestCommitAllIdentity(unittest.TestCase):
+    def _no_identity_env(self):
+        return mock.patch.dict(
+            os.environ,
+            {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1", "HOME": tempfile.mkdtemp()},
+        )
+
+    def test_commits_with_fallback_identity_when_none_configured(self):
+        d = tempfile.mkdtemp()
+        with self._no_identity_env():
+            _git(d, "init", "-q", "-b", "main")
+            _git(d, "config", "user.useConfigOnly", "true")
+            (Path(d) / "README").write_text("x")
+
+            committed = GitAdapter().commit_all(d, "scaffold")
+
+            self.assertTrue(committed)
+            self.assertEqual(_git(d, "log", "-1", "--format=%an").stdout.strip(), "lightcycle")
+
+    def test_keeps_configured_identity(self):
+        d = _make_repo()
+        (Path(d) / "more").write_text("y")
+
+        self.assertTrue(GitAdapter().commit_all(d, "next"))
+        self.assertEqual(_git(d, "log", "-1", "--format=%an").stdout.strip(), "t")
 
 
 if __name__ == "__main__":

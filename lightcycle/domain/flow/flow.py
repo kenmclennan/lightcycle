@@ -10,6 +10,7 @@ from lightcycle.domain.flow.step_def import StepDef
 from lightcycle.domain.flow.transition import Transition
 
 SPECS_WORKSPACE = "specs"
+KNOWLEDGE_WORKSPACE = "knowledge"
 PROJECT_WORKSPACE = "project"
 
 
