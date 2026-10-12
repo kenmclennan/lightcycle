@@ -234,7 +234,9 @@ COMMANDS = {
         "new": CommandSpec(prog="lc goal new", args=(
             Arg("title"), Arg("--project"), Arg("--description"),
         )),
-        "list": CommandSpec(prog="lc goal list"),
+        "list": CommandSpec(prog="lc goal list", args=(
+            Arg("--all", action="store_true"),
+        )),
         "show": CommandSpec(prog="lc goal show", args=(Arg("id"),)),
         "set": CommandSpec(prog="lc goal set", args=(
             Arg("id"), Arg("--title"), Arg("--description"), Arg("--project"), Arg("--status"),

@@ -14,7 +14,7 @@ Current work is three fixed-order groups - needs-attention, active, queued - wit
 
 ## Goals
 
-The Goals tab is a one-column table of goal titles - no status, count, icon or badge. Selecting a goal opens a **goal hub**, a separate screen class from the node hub because a goal is not a node. It reuses the hub's tab strip and the description pane's shape and closes with escape or left. Its tabs, in order:
+The Goals tab is a table of project, title and status, omitting archived goals by default - no count, icon or badge. A `done` goal's title is dimmed and struck through, so it reads as finished at a glance. Selecting a goal opens a **goal hub**, a separate screen class from the node hub because a goal is not a node. It reuses the hub's tab strip and the description pane's shape and closes with escape or left. Its tabs, in order:
 
 - **Overview** - the goal's description as one scrolling document with headings and wiki-links rendered (see below). The header line above the tab strip carries the title, the hand-set status and the project; the goal id is a CLI handle and is not shown.
 - **Log** - the goal's decisions, newest first. Each entry is a header line (title left, in the shared heading style on every wrapped line, timestamp right-aligned as `YYYY-MM-DD HH:MM`), a blank line, the body, and a blank line. A `SEARCH` row above the log (focused with `/`) filters entries by a case-insensitive substring of title or body; it appears only when the goal has entries.

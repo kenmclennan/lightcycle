@@ -1,6 +1,6 @@
 from collections import namedtuple
 
-GOAL_STATUSES = ("not started", "in progress", "done")
+GOAL_STATUSES = ("not started", "in progress", "done", "archived")
 GOAL_DEFAULT_STATUS = "not started"
 
 Goal = namedtuple(

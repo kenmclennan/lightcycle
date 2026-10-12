@@ -880,13 +880,14 @@ class GoalsView(Vertical):
         table.show_header = False
         table.add_column("project", key="project")
         table.add_column("title", key="title")
+        table.add_column("status", key="status")
 
     @property
     def count(self) -> int:
         return self._count
 
     def apply_goals(self, goals) -> None:
-        shape = tuple((g.id, g.project, g.title) for g in goals)
+        shape = tuple((g.id, g.project, g.title, g.status) for g in goals)
         table = self.query_one(GoalsTable)
         if shape != self._last_shape:
             self._last_shape = shape
@@ -896,9 +897,12 @@ class GoalsView(Vertical):
             table.clear()
             for goal in goals:
                 project = short_project_label(goal.project)
+                done = goal.status == "done"
+                title_style = "%s strike" % COLOURS["dim"] if done else COLOURS["text"]
                 table.add_row(
                     Text(project, style=COLOURS["cyan"]),
-                    Text(goal.title, style=COLOURS["text"]),
+                    Text(goal.title, style=title_style),
+                    Text(goal.status, style=COLOURS["dim"]),
                     key=goal.id,
                 )
             if previous is not None:

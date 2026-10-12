@@ -128,6 +128,17 @@ class TestGoalUseCases(unittest.TestCase):
     def test_goal_is_not_a_worker_verb(self):
         self.assertFalse(worker_permitted("goal", {}))
 
+    def test_list_omits_archived_by_default_and_includes_with_the_flag(self):
+        s = self.store
+        archived = CreateGoalUseCase(s).execute(CreateGoalInput(title="old", project="acme"))
+        EditGoalUseCase(s).execute(EditGoalInput(id=archived, status="archived"))
+
+        self.assertEqual([g.id for g in ListGoalsUseCase(s).execute()], [self.goal])
+        self.assertEqual(
+            [g.id for g in ListGoalsUseCase(s).execute(include_archived=True)],
+            [self.goal, archived],
+        )
+
 
 class TestGoalCli(unittest.TestCase):
     def setUp(self):
@@ -170,6 +181,25 @@ class TestGoalCli(unittest.TestCase):
         self._run("new", "g", "--project", "lightcycle", "--description", "x")
         self.assertEqual(self._run("set", "G-1", "--description", "")[0], 0)
         self.assertEqual(self.store.get_goal("G-1").description, "")
+
+    def test_list_omits_archived_unless_all_is_passed(self):
+        self._run("new", "Keep", "--project", "lightcycle")
+        self._run("new", "Drop", "--project", "lightcycle")
+        self._run("set", "G-2", "--status", "archived")
+
+        rc, out, _ = self._run("list")
+        self.assertEqual((rc, out.strip()), (0, "G-1\tnot started\tKeep"))
+
+        rc, out, _ = self._run("list", "--all")
+        self.assertEqual(
+            (rc, out.strip()),
+            (0, "G-1\tnot started\tKeep\nG-2\tarchived\tDrop"),
+        )
+
+    def test_set_accepts_archived_status(self):
+        self._run("new", "g", "--project", "lightcycle")
+        self.assertEqual(self._run("set", "G-1", "--status", "archived")[0], 0)
+        self.assertEqual(self.store.get_goal("G-1").status, "archived")
 
     def test_new_refuses_a_missing_or_unresolvable_project_leaving_the_store_untouched(self):
         for argv in (("new", "g"), ("new", "g", "--project", "nonesuch")):
