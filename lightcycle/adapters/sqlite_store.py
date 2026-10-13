@@ -7,6 +7,7 @@ from dataclasses import asdict
 
 from lightcycle.adapters.fsio import DB_FILENAME
 from lightcycle.domain.feedback import RETRO_ORIGIN_LABEL, RETROED_LABEL
+from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE, LEGACY_KNOWLEDGE_WORKSPACE
 from lightcycle.domain.goals import GOAL_DEFAULT_STATUS, Goal, GoalLogEntry
 from lightcycle.domain.money import Cost
 from lightcycle.domain.pool import ToolUsage, UsageResume
@@ -315,6 +316,7 @@ class SqliteStore(StorePort):
         self._migrate_abandoned_disposition_value()
         self._migrate_goals_description_and_project()
         self._migrate_drop_goal_state_of_play_columns()
+        self._migrate_rename_knowledge_project()
         self._commit()
 
     def _commit(self):
@@ -446,6 +448,13 @@ class SqliteStore(StorePort):
         for name in ("state_of_play", "state_of_play_at", "state_of_play_step"):
             if name in cols:
                 self._conn.execute("ALTER TABLE goals DROP COLUMN %s" % name)
+
+    def _migrate_rename_knowledge_project(self):
+        self._conn.execute(
+            "UPDATE projects SET identity = ? WHERE identity = ? "
+            "AND NOT EXISTS (SELECT 1 FROM projects WHERE identity = ?)",
+            (GUIDANCE_WORKSPACE, LEGACY_KNOWLEDGE_WORKSPACE, GUIDANCE_WORKSPACE),
+        )
 
     def _migrate_abandoned_disposition_value(self):
         self._conn.execute(

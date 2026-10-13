@@ -535,38 +535,53 @@ class TestDoctorFacets(unittest.TestCase):
             files={"/kb/%s" % p: b"" for p in pages}, dirs={"/kb": ["languages"]},
         )
         store = FakeStore()
-        store.add_project("knowledge", local_path="/kb")
+        store.add_project("guidance", local_path="/kb")
         return store, fs
 
-    def test_no_facets_anywhere_is_clean_with_or_without_a_knowledge_base(self):
+    def test_both_identities_registered_is_one_problem_with_or_without_facets(self):
+        for facets in (None, ("kotlin",)):
+            store, fs = self._kb("kotlin.md")
+            store.add_project("knowledge", local_path="/old")
+            if facets:
+                store.add_project("acme/x", facets=facets)
+            problems = self._problems(store, fs)
+            self.assertEqual(len(problems), 1)
+            self.assertIn("knowledge", problems[0].message)
+            self.assertIn("guidance", problems[0].message)
+
+    def test_only_guidance_registered_reports_no_duplicate(self):
+        store, fs = self._kb()
+        self.assertEqual(self._problems(store, fs), [])
+
+    def test_no_facets_anywhere_is_clean_with_or_without_a_guidance_repo(self):
         store = FakeStore()
         store.add_project("acme/x")
         self.assertEqual(self._problems(store, FakeFs()), [])
         kb_store, fs = self._kb()
         self.assertEqual(self._problems(kb_store, fs), [])
 
-    def test_facets_without_a_registered_knowledge_base_is_one_problem(self):
+    def test_facets_without_a_registered_guidance_repo_is_one_problem(self):
         store = FakeStore()
         store.add_project("acme/x", facets=("kotlin", "spring"))
         problems = self._problems(store, FakeFs())
         self.assertEqual([p.message for p in problems], [
-            "facets are declared but no knowledge base is registered - run `lc init`"
+            "facets are declared but no guidance repo is registered - run `lc init`"
         ])
 
-    def test_knowledge_base_registered_without_a_path_is_one_problem(self):
+    def test_guidance_repo_registered_without_a_path_is_one_problem(self):
         store = FakeStore()
-        store.add_project("knowledge")
+        store.add_project("guidance")
         store.add_project("acme/x", facets=("kotlin",))
         self.assertEqual(len(self._problems(store, FakeFs())), 1)
 
-    def test_knowledge_base_path_missing_on_disk_is_one_problem(self):
+    def test_guidance_repo_path_missing_on_disk_is_one_problem(self):
         store = FakeStore()
-        store.add_project("knowledge", local_path="/kb")
+        store.add_project("guidance", local_path="/kb")
         store.add_project("acme/x", facets=("kotlin", "spring"))
         problems = self._problems(store, FakeFs())
         self.assertEqual([p.message for p in problems], [
-            "facets are declared but the knowledge base is missing at /kb - restore it, "
-            "or run `lc project rm knowledge` then `lc init`"
+            "facets are declared but the guidance repo is missing at /kb - restore it, "
+            "or run `lc project rm guidance` then `lc init`"
         ])
 
     def test_every_facet_with_a_page_is_clean(self):
@@ -579,8 +594,8 @@ class TestDoctorFacets(unittest.TestCase):
         store.add_project("acme/x", facets=("kotlin", "spring"))
         problems = self._problems(store, fs)
         self.assertEqual([p.message for p in problems], [
-            "project acme/x declares facet spring but the knowledge base has no concept page "
-            "for it - add spring.md under the knowledge base, or remove the facet with "
+            "project acme/x declares facet spring but the guidance repo has no concept page "
+            "for it - add spring.md under the guidance repo, or remove the facet with "
             "`lc project set acme/x --facets <remaining>`"
         ])
         self.assertIsNone(problems[0].node_id)

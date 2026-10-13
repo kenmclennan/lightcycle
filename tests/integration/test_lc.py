@@ -2053,11 +2053,11 @@ class TestInitAndStoreGuard(unittest.TestCase):
     def test_init_creates_store_and_is_idempotent(self):
         d = self._bare()
         cfg = self._cfg(d)
-        kb = os.path.join(d, "knowledge")
-        r = run_lc("init", "--knowledge-path", kb, root=d, config=cfg)
+        kb = os.path.join(d, "guidance")
+        r = run_lc("init", "--guidance-path", kb, root=d, config=cfg)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertTrue(os.path.exists(os.path.join(d, "store.db")))
-        r2 = run_lc("init", "--knowledge-path", kb, root=d, config=cfg)
+        r2 = run_lc("init", "--guidance-path", kb, root=d, config=cfg)
         self.assertEqual(r2.returncode, 0, r2.stderr)
 
     def test_run_without_store_errors(self):
@@ -2586,11 +2586,11 @@ class TestInitPullsWorkflows(unittest.TestCase):
             ["git", "-C", repo, *args], check=True, capture_output=True, text=True
         ).stdout.strip()
 
-    def test_init_creates_the_knowledge_base_with_one_skeleton_commit(self):
+    def test_init_creates_the_guidance_repo_with_one_skeleton_commit(self):
         from lightcycle.frontmatter import split_frontmatter
         rc, out, err = call(_cli_mod.cmd_init)
         self.assertEqual(rc, 0, err)
-        kb = os.path.join(self.home, "workspace", "knowledge")
+        kb = os.path.join(self.home, "workspace", "agent-guidance")
         self.assertIn(kb, out)
         self.assertEqual(self._git(kb, "rev-list", "--count", "HEAD"), "1")
         self.assertEqual(
@@ -2599,31 +2599,31 @@ class TestInitPullsWorkflows(unittest.TestCase):
         )
         meta, _ = split_frontmatter(Path(kb, "index.md").read_text())
         self.assertEqual(meta, {"okf_version": '"0.2"'})
-        rc, out, err = call(_cli_mod.cmd_knowledge_dir)
+        rc, out, err = call(_cli_mod.cmd_guidance_dir)
         self.assertEqual(out.strip(), kb)
 
-    def test_second_init_leaves_the_knowledge_base_head_unchanged(self):
+    def test_second_init_leaves_the_guidance_repo_head_unchanged(self):
         call(_cli_mod.cmd_init)
-        kb = os.path.join(self.home, "workspace", "knowledge")
+        kb = os.path.join(self.home, "workspace", "agent-guidance")
         head = self._git(kb, "rev-parse", "HEAD")
         rc, out, err = call(_cli_mod.cmd_init)
         self.assertEqual(rc, 0, err)
         self.assertEqual(self._git(kb, "rev-parse", "HEAD"), head)
 
-    def test_knowledge_base_inside_another_repo_becomes_its_own_repo(self):
+    def test_guidance_repo_inside_another_repo_becomes_its_own_repo(self):
         from lightcycle.adapters.gitio import is_repo_root
         outer = os.path.join(self.home, "outer")
         os.makedirs(outer)
         self._git(outer, "init", "-q", "-b", "main")
         kb = os.path.join(outer, "kb")
-        rc, out, err = call(_cli_mod.cmd_init, "--knowledge-path", kb)
+        rc, out, err = call(_cli_mod.cmd_init, "--guidance-path", kb)
         self.assertEqual(rc, 0, err)
         self.assertTrue(is_repo_root(kb))
 
     def test_init_refuses_an_existing_non_git_directory(self):
         kb = os.path.join(self.home, "plain")
         os.makedirs(kb)
-        rc, out, err = call(_cli_mod.cmd_init, "--knowledge-path", kb)
+        rc, out, err = call(_cli_mod.cmd_init, "--guidance-path", kb)
         self.assertEqual(rc, 1)
         self.assertIn(kb, err)
         self.assertEqual(os.listdir(kb), [])

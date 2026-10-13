@@ -121,7 +121,7 @@ from lightcycle.application.flow import (
     FlowCheckUseCase,
     UnblockInput,
 )
-from lightcycle.domain.flow.flow import KNOWLEDGE_WORKSPACE, SPECS_WORKSPACE
+from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE, SPECS_WORKSPACE
 from lightcycle.application.pool import (
     AcquireRunLockUseCase,
     BackfillUsageUseCase,
@@ -284,8 +284,8 @@ COMMAND_GROUPS = [
         ("spawn", "<role>", "spawn one worker for a role"),
         ("specs-dir", "[--check]", "print the resolved specs directory (absolute path); "
          "--check validates it against specs-remote"),
-        ("knowledge-dir", "[--check]", "print the resolved knowledge-base directory (absolute "
-         "path); --check validates it against the registered knowledge remote"),
+        ("guidance-dir", "[--check]", "print the resolved guidance repo directory (absolute "
+         "path); --check validates it against the registered guidance remote"),
     ]),
 ]
 
@@ -642,9 +642,9 @@ def cmd_specs_dir(argv):
     return _project_dir(SPECS_WORKSPACE, "specs-remote", a.check, "specs")
 
 
-def cmd_knowledge_dir(argv):
-    a = build_parser(COMMANDS["knowledge-dir"]).parse_args(argv)
-    return _project_dir(KNOWLEDGE_WORKSPACE, "knowledge remote", a.check, "knowledge")
+def cmd_guidance_dir(argv):
+    a = build_parser(COMMANDS["guidance-dir"]).parse_args(argv)
+    return _project_dir(GUIDANCE_WORKSPACE, "guidance remote", a.check, "guidance")
 
 
 def _workflow_check_dir(directory, name, as_json):
@@ -1779,13 +1779,13 @@ def cmd_init(argv):
     a = build_parser(COMMANDS["init"]).parse_args(argv)
     c = _container
     try:
-        r = InitGridUseCase(c.store, c.fs, c.config, c.git).execute(a.knowledge_path)
+        r = InitGridUseCase(c.store, c.fs, c.config, c.git).execute(a.guidance_path)
     except UseCaseError as e:
         sys.stderr.write("lc init: %s\n" % e)
         return 1
     print("lightcycle store already initialised" if r.existed else "lightcycle store initialised")
     print("config %s at %s" % ("created" if r.created else "already exists", r.config_path))
-    print("knowledge base %s at %s" % (r.knowledge_outcome, r.knowledge_path))
+    print("guidance repo %s at %s" % (r.guidance_outcome, r.guidance_path))
     _init_pull_default_origin()
     return 0
 

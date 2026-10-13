@@ -45,6 +45,8 @@ _GIT_IDENTITY_ENV = {
 def _tg(*args, root):
     env = {**os.environ, **_GIT_IDENTITY_ENV}
     env["LC_HOME"] = root
+    env["HOME"] = os.path.join(root, "home")
+    os.makedirs(env["HOME"], exist_ok=True)
     env["LC_CONFIG"] = os.path.join(root, "grid.config")
     return subprocess.run([sys.executable, LC, *args], capture_output=True, text=True, env=env)
 

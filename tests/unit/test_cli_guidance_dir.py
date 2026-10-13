@@ -3,14 +3,14 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 
 import lightcycle.cli as cli_mod
-from lightcycle.cli import cmd_knowledge_dir
+from lightcycle.cli import cmd_guidance_dir
 from lightcycle.container import Container
-from lightcycle.domain.flow.flow import KNOWLEDGE_WORKSPACE
+from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE
 from tests.support.fake_git import FakeGit
 from tests.support.fake_store import FakeStore
 
 
-class TestKnowledgeDir(unittest.TestCase):
+class TestGuidanceDir(unittest.TestCase):
     def setUp(self):
         self._orig = cli_mod._container
         self.addCleanup(lambda: cli_mod.set_container(self._orig))
@@ -22,12 +22,12 @@ class TestKnowledgeDir(unittest.TestCase):
         ))
         out, err = io.StringIO(), io.StringIO()
         with redirect_stdout(out), redirect_stderr(err):
-            rc = cmd_knowledge_dir(argv) or 0
+            rc = cmd_guidance_dir(argv) or 0
         return rc, out.getvalue(), err.getvalue()
 
     def _store(self, path="/kb", remote="git@github.com:x/kb.git"):
         store = FakeStore()
-        store.add_project(KNOWLEDGE_WORKSPACE, local_path=path, remote=remote)
+        store.add_project(GUIDANCE_WORKSPACE, local_path=path, remote=remote)
         return store
 
     def test_bare_prints_the_registered_path(self):
@@ -57,7 +57,7 @@ class TestKnowledgeDir(unittest.TestCase):
     def test_fails_when_not_registered(self):
         rc, out, err = self._run(FakeStore(), FakeGit(), [])
         self.assertEqual(rc, 1)
-        self.assertIn("no '%s' project registered" % KNOWLEDGE_WORKSPACE, err)
+        self.assertIn("no '%s' project registered" % GUIDANCE_WORKSPACE, err)
         self.assertIn("lc init", err)
 
 
