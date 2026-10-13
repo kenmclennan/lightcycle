@@ -4,10 +4,14 @@ from typing import Optional
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.setup.project_registry import ProjectRegistry
 from lightcycle.application.work.resolve_project_ref import resolve_project_ref
+from lightcycle.domain.guidance.guidance import parse_citation
 from lightcycle.domain.runs import RUN_FIELDS
 from lightcycle.domain.work import State
 from lightcycle.domain.workspace.isolation import has_worktrees_component
 from lightcycle.ports.store import NodeNotFoundError, ProjectResolutionError
+
+
+GUIDANCE_CITED = "guidance-cited"
 
 
 @dataclass(frozen=True)
@@ -38,6 +42,9 @@ class LinkArtifactUseCase:
         if input.atype in RUN_FIELDS:
             self._route_to_run(input)
             return
+        if input.atype == GUIDANCE_CITED:
+            self._record_citation(input)
+            return
         if input.replace:
             self._store.replace_artifact(
                 input.item, input.atype, input.value, input.label,
@@ -51,6 +58,52 @@ class LinkArtifactUseCase:
             )
         if input.atype == "repo":
             self._derive_project_if_unset(input.item, input.value)
+
+    def _record_citation(self, input):
+        step_id = input.item
+        try:
+            node = self._store.get_node(step_id)
+        except (KeyError, NodeNotFoundError):
+            node = None
+        if node is None or node.type != "step":
+            raise UseCaseError(
+                "'%s' is not a step - guidance-cited attaches to the step that was "
+                "delivered the guidance" % step_id
+            )
+        existing = self._store.item_artifacts(step_id)
+        delivered = []
+        for a in existing:
+            if a.type == "guidance-delivered":
+                delivered = [i for i in a.value.split("\n") if i]
+        if not delivered:
+            raise UseCaseError(
+                "step '%s' was delivered no guidance entries, so there is nothing to cite - "
+                "do not attach guidance-cited" % step_id
+            )
+        ids = parse_citation(input.value)
+        if not ids:
+            raise UseCaseError(
+                "guidance-cited on '%s' names no entry id - pass the delivered ids as a "
+                "comma-separated list" % step_id
+            )
+        undelivered = [i for i in ids if i not in delivered]
+        if undelivered:
+            raise UseCaseError(
+                "guidance-cited on '%s' names %s which were not delivered to that step - "
+                "delivered: %s; cite only entries from the guidance section in your prompt"
+                % (step_id, ", ".join(undelivered), ", ".join(delivered))
+            )
+        for a in existing:
+            if a.type == GUIDANCE_CITED:
+                raise UseCaseError(
+                    "step '%s' already has a guidance-cited record (%s) - cite once; "
+                    "the first record stands"
+                    % (step_id, ", ".join(i for i in a.value.split("\n") if i))
+                )
+        self._store.add_artifact(
+            step_id, GUIDANCE_CITED, "\n".join(ids), input.label,
+            internal=True, kind=input.kind,
+        )
 
     def _derive_project_if_unset(self, item, repo):
         try:

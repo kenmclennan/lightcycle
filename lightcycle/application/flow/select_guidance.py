@@ -23,7 +23,7 @@ class SelectGuidanceUseCase:
         except (ProjectNotRegisteredError, ProjectResolutionError):
             return ()
 
-    def execute(self, item_id, stage, pin):
+    def execute(self, item_id, stage, pin, step_id):
         project = self._store.get_project(GUIDANCE_WORKSPACE)
         if project is None or not project.local_path:
             return GuidanceSelection(notes=("no guidance repo is registered",))
@@ -40,7 +40,7 @@ class SelectGuidanceUseCase:
         ])
         delivered, skipped = fill(matched, self._config.guidance_budget_bytes())
         return GuidanceSelection(
-            section=render_section(delivered) if delivered else "",
+            section=render_section(delivered, step_id) if delivered else "",
             delivered=tuple(e.id for e in delivered),
             skipped=tuple(e.id for e in skipped),
             notes=notes,

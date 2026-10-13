@@ -117,12 +117,29 @@ def fill(entries, budget):
     return delivered, skipped
 
 
-def render_section(delivered):
+CITE_INSTRUCTION = (
+    "When an entry above changed what you did, cite it before you finish: run "
+    "`lc attach %s guidance-cited \"<id>[, <id>...]\"` once, listing every entry you "
+    "applied. Cite only entries that changed what you did, never one you only read."
+)
+
+
+def render_section(delivered, step_id):
     parts = [HEADING, INTRO]
     for entry in delivered:
         parts.append("### %s" % entry.id)
         parts.append(entry.body)
+    parts.append(CITE_INSTRUCTION % step_id)
     return "\n\n".join(parts)
+
+
+def parse_citation(value):
+    ids = []
+    for part in value.split(","):
+        part = part.strip()
+        if part and part not in ids:
+            ids.append(part)
+    return ids
 
 
 @dataclass(frozen=True)
