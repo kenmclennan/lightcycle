@@ -3,11 +3,15 @@ def node_read_surface(store, flow, view):
     item_id = getattr(step, "item", None) or step.id
     out = view.as_dict()
     if step.type == "step":
-        session_id = next(
-            (a.value for a in store.item_artifacts(step.id) if a.type == "session-id"), None
-        )
-        if session_id:
-            out["session_id"] = session_id
+        artifacts = {a.type: a.value for a in store.item_artifacts(step.id)}
+        if artifacts.get("session-id"):
+            out["session_id"] = artifacts["session-id"]
+        for artifact_type, field in (
+            ("guidance-delivered", "guidance_delivered"),
+            ("guidance-skipped", "guidance_skipped"),
+        ):
+            if artifact_type in artifacts:
+                out[field] = [i for i in artifacts[artifact_type].split("\n") if i]
     out["workflow"] = store.get_item(item_id).workflow
     out["passes"] = [p.as_dict() for p in store.passes_of(item_id)]
     out["runs"] = [r.as_dict() for r in store.runs_of(item_id)]

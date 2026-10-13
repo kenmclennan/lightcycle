@@ -35,6 +35,7 @@ _ENV_OVERRIDE_VARS = {
     "audit-shortcode": "LC_AUDIT_SHORTCODE",
     "summary-shortcode": "LC_SUMMARY_SHORTCODE",
     "memory-reserve-fraction": "LC_MEMORY_RESERVE_FRACTION",
+    "guidance-budget-bytes": "LC_GUIDANCE_BUDGET_BYTES",
 }
 
 _TRUE = ("true", "yes", "1", "on")
@@ -100,11 +101,13 @@ _SEED_KEYS = [
     ("audit-shortcode", "AUD"),
     ("summary-shortcode", "SUM"),
     ("memory-reserve-fraction", "0.65"),
+    ("guidance-budget-bytes", "6144"),
 ]
 
 _NUMERIC_RANGES = {
     "memory-reserve-fraction": (0.0, 1.0),
     "max-agents": (0, None),
+    "guidance-budget-bytes": (0, None),
     "workflow-retention": (1, None),
     "max-boot-seconds": (0, None),
     "max-session-seconds": (0, None),
@@ -492,6 +495,11 @@ class Config:
         env = self._env_float("LC_MEMORY_RESERVE_FRACTION", None)
         value = env if env is not None else self._required_float("memory-reserve-fraction")
         return self._check_range("memory-reserve-fraction", value)
+
+    def guidance_budget_bytes(self):
+        env = self._env_int("LC_GUIDANCE_BUDGET_BYTES", None)
+        value = env if env is not None else self._required_int("guidance-budget-bytes")
+        return self._check_range("guidance-budget-bytes", value)
 
     def audit_shortcode(self):
         env = self._env("LC_AUDIT_SHORTCODE")

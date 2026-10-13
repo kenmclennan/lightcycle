@@ -206,6 +206,25 @@ class TestTunables(unittest.TestCase):
             self.assertIn(key, str(ctx.exception), key)
 
 
+class TestGuidanceBudgetConfig(unittest.TestCase):
+    def test_seeded_default_is_6144(self):
+        seeds = dict(_SEED_KEYS)
+        self.assertEqual(seeds["guidance-budget-bytes"], "6144")
+        self.assertEqual(_cfg(guidance_budget_bytes=seeds["guidance-budget-bytes"]).guidance_budget_bytes(), 6144)
+
+    def test_env_override_wins(self):
+        c = _cfg({"LC_GUIDANCE_BUDGET_BYTES": "10"}, guidance_budget_bytes="6144")
+        self.assertEqual(c.guidance_budget_bytes(), 10)
+
+    def test_zero_is_allowed_and_negative_is_refused(self):
+        self.assertEqual(_cfg(guidance_budget_bytes="0").guidance_budget_bytes(), 0)
+        with self.assertRaises(ConfigError) as ctx:
+            _cfg(guidance_budget_bytes="-1").guidance_budget_bytes()
+        self.assertIn("guidance-budget-bytes", str(ctx.exception))
+        with self.assertRaises(ConfigError):
+            _cfg({"LC_GUIDANCE_BUDGET_BYTES": "-1"}).guidance_budget_bytes()
+
+
 class TestMemoryConfig(unittest.TestCase):
     def test_seeded_default_is_the_calibrated_reserve_fraction(self):
         seeds = dict(_SEED_KEYS)

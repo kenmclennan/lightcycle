@@ -35,6 +35,8 @@ The engine ships **zero runtime dependencies** (stdlib only). Dev/test tooling (
 
 `lc start` is a single long-lived loop. Each tick it reaps dead workers, sweeps stale claims, checks open PRs, then fills up to `max-agents` workers from the ready queue. A worker is an **ephemeral claude process** that claims exactly one step, runs it, and exits.
 
+A worker's system prompt is the step body plus, when guidance entries match, one `## Guidance for this project` section appended after it. The engine selects the stable, verified entries from the guidance repo whose facets are all declared by the item's project and whose steps name the claimed step, fills them within `guidance-budget-bytes`, and records the ids delivered and skipped on the step as the internal artifacts `guidance-delivered` and `guidance-skipped`, shown by `lc show` as `guidance_delivered` and `guidance_skipped`. A missing guidance repo or a malformed entry never blocks a spawn: it is written to the worker log and reported by `lc doctor` under `guidance`.
+
 ```mermaid
 graph LR
   loop[lc start loop] --> tick[each tick]
