@@ -13,9 +13,28 @@ ENGINE_STEP_DISPLAY = {
     DAILY_SUMMARY_STEP: "Writing the daily summary",
 }
 
+ENGINE_STEP_OUTCOMES = {
+    AUDIT_STEP: ("findings", "clean"),
+    FINDINGS_STEP: ("done", "filed", "reviewed"),
+    DAILY_SUMMARY_STEP: ("done", "abandoned"),
+}
+
 
 def engine_display_of(step):
     return ENGINE_STEP_DISPLAY.get(step)
+
+
+def engine_outcomes_of(step):
+    return ENGINE_STEP_OUTCOMES.get(step)
+
+
+def engine_outcomes_for_node(store, node):
+    labels = store.labels_of(node.item)
+    if node.stage in (AUDIT_STEP, FINDINGS_STEP) and RETRO_ORIGIN_LABEL in labels:
+        return engine_outcomes_of(node.stage)
+    if node.stage == DAILY_SUMMARY_STEP and SUMMARY_ORIGIN_LABEL in labels:
+        return engine_outcomes_of(node.stage)
+    return None
 
 
 class StepKind(Enum):
