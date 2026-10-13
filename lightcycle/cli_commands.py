@@ -2,6 +2,8 @@ import argparse
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
+from lightcycle.domain.work import cap_rules_help
+
 
 @dataclass(frozen=True)
 class Arg:
@@ -138,7 +140,7 @@ COMMANDS = {
         Arg(
             "--note", nargs="+",
             help="a note to forward to the next step, or to record on an item being closed; "
-            "unquoted multi-word is fine",
+            "unquoted multi-word is fine; " + cap_rules_help(),
         ),
         Arg("--disposition", choices=("completed", "abandoned")),
     )),
@@ -199,9 +201,9 @@ COMMANDS = {
     )),
     "set": CommandSpec(prog="lc set", args=(
         *(Arg("--%s" % opt) for opt in (
-            "title", "description", "project", "workflow", "label",
-            "needs", "reason", "tried", "step", "notes",
+            "title", "description", "project", "workflow", "label", "step", "notes",
         )),
+        *(Arg("--%s" % opt, help=cap_rules_help()) for opt in ("needs", "reason", "tried")),
         Arg("--state", help=(
             "item: active, or backlogged (removes its open steps; refused while a worker "
             "holds a step or an open run has a branch or PR); step: ready, waiting"

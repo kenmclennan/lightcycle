@@ -16,6 +16,7 @@ _SINGLE_QUOTE_RE = re.compile(r"(?<!\w)'(?=[^\s'])(.*?)(?<=\S)'(?!\w)", re.S)
 _LIST_MARKER_RE = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+")
 _SENTENCE_END_RE = re.compile(r"^(?P<stem>.*?)[.!?]+[\"')\]]*$")
 _ENUMERATOR_RE = re.compile(r"^\(?\d+\)?$")
+_NUMBER_STOP_RE = re.compile(r"^\d+\.$")
 _ABBREVIATIONS = frozenset(("e.g", "i.e", "vs", "cf", "approx"))
 _BREAK = "\x01"
 _SPAN_MARK = "\x00"
@@ -73,12 +74,21 @@ def _segments(paragraph):
     return " ".join(marked).split(_BREAK)
 
 
-def _ends_sentence(token):
+def _starts_capital(token):
+    stripped = token.lstrip("\"'([")
+    return bool(stripped) and stripped[0].isupper()
+
+
+def _ends_sentence(token, following):
     match = _SENTENCE_END_RE.match(token)
     if match is None:
         return False
     stem = match.group("stem").lower()
-    return stem not in _ABBREVIATIONS and not _ENUMERATOR_RE.match(stem)
+    if stem in _ABBREVIATIONS:
+        return False
+    if _NUMBER_STOP_RE.match(token):
+        return _starts_capital(following)
+    return not _ENUMERATOR_RE.match(stem)
 
 
 def _sentences(paragraph):
@@ -88,7 +98,7 @@ def _sentences(paragraph):
         current = []
         for index, token in enumerate(tokens):
             current.append(token)
-            if index + 1 < len(tokens) and _ends_sentence(token):
+            if index + 1 < len(tokens) and _ends_sentence(token, tokens[index + 1]):
                 sentences.append(current)
                 current = []
         if current:
@@ -137,16 +147,32 @@ def cap_breaches(text):
     return tuple(breaches)
 
 
+def cap_rules_help():
+    return (
+        "plain-language caps (a breach is refused and nothing is stored): "
+        "rule 2: at most %d paragraphs and %d words per note, at most %d sentences per "
+        "paragraph; rule 3: at most %d words per sentence"
+        % (MAX_PARAGRAPHS, MAX_WORDS, MAX_SENTENCES_PER_PARAGRAPH, MAX_SENTENCE_WORDS)
+    )
+
+
 def _render_breach(label, breach):
     if breach.kind == "sentence":
-        return '%s, rule 3: a sentence of %d words, at most %d: "%s"' % (
-            label, breach.count, breach.limit, breach.excerpt,
+        return (
+            '%s, rule 3: a sentence of %d words, at most %d (%d over); '
+            'split it into shorter sentences: "%s"'
+            % (label, breach.count, breach.limit, breach.count - breach.limit, breach.excerpt)
         )
     if breach.kind == "sentences":
-        return '%s, rule 2: paragraph %d has %d sentences, at most %d: "%s ..."' % (
-            label, breach.paragraph, breach.count, breach.limit, breach.excerpt,
+        return (
+            '%s, rule 2: paragraph %d has %d sentences, at most %d; split the paragraph: "%s ..."'
+            % (label, breach.paragraph, breach.count, breach.limit, breach.excerpt)
         )
-    return "%s, rule 2: %d %s, at most %d" % (label, breach.count, breach.kind, breach.limit)
+    if breach.kind == "paragraphs":
+        return "%s, rule 2: %d paragraphs, at most %d; merge or cut paragraphs" % (
+            label, breach.count, breach.limit,
+        )
+    return "%s, rule 2: %d words, at most %d; cut words" % (label, breach.count, breach.limit)
 
 
 def render_cap_refusal(fields):
