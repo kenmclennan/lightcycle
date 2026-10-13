@@ -566,6 +566,27 @@ class TestSqliteStoreSchemaVersionFloor(unittest.TestCase):
         conn.close()
         return config
 
+    def test_legacy_projects_table_without_facets_migrates_and_reads_no_facets(self):
+        root = tempfile.mkdtemp()
+        config = self._config(root)
+        first = SqliteStore(config)
+        db_path = first._db_path
+        first.release()
+        conn = sqlite3.connect(db_path)
+        conn.execute("DROP TABLE projects")
+        conn.execute(
+            "CREATE TABLE projects (identity TEXT PRIMARY KEY, shortcode TEXT, "
+            "local_path TEXT, remote TEXT)"
+        )
+        conn.execute("INSERT INTO projects VALUES ('acme/old', 'OLD', '/p/old', NULL)")
+        conn.commit()
+        conn.close()
+
+        store = SqliteStore(config)
+
+        self.assertEqual(store.get_project("acme/old").facets, ())
+        self.assertEqual(store.list_projects()[0].facets, ())
+
     def test_store_with_status_column_present_is_refused(self):
         root = tempfile.mkdtemp()
         self._legacy(root, "ALTER TABLE nodes ADD COLUMN status TEXT")

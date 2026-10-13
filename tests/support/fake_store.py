@@ -975,13 +975,16 @@ class FakeStore(StorePort):
     def goal_items(self, goal_id):
         return [i for g, i in self._goal_items if g == goal_id]
 
-    def add_project(self, identity, *, shortcode=None, local_path=None, remote=None):
+    def add_project(
+        self, identity, *, shortcode=None, local_path=None, remote=None, facets=None
+    ):
         existing = self._projects.get(identity)
         merged = ProjectEntry(
             identity=identity,
             shortcode=shortcode if shortcode is not None else (existing.shortcode if existing else None),
             local_path=local_path if local_path is not None else (existing.local_path if existing else None),
             remote=remote if remote is not None else (existing.remote if existing else None),
+            facets=tuple(facets) if facets is not None else (existing.facets if existing else ()),
         )
         self._projects[identity] = merged
 

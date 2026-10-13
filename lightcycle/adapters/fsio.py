@@ -30,6 +30,18 @@ def list_dir(path):
     return sorted(e.name for e in os.scandir(path) if e.is_dir())
 
 
+def list_files(root):
+    if not os.path.isdir(root):
+        return []
+    found = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+        for name in filenames:
+            full = os.path.join(dirpath, name)
+            found.append(os.path.relpath(full, root).replace(os.sep, "/"))
+    return sorted(found)
+
+
 def write_text(path, text):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
@@ -77,6 +89,9 @@ class FsAdapter(FsPort):
 
     def list_dir(self, path):
         return list_dir(path)
+
+    def list_files(self, root):
+        return list_files(root)
 
     def write_text(self, path, text):
         return write_text(path, text)

@@ -520,5 +520,87 @@ class TestDoctorOrphans(unittest.TestCase):
         self.assertEqual(len(report.problems["orphans"]), 1)
 
 
+
+class TestDoctorFacets(unittest.TestCase):
+    def _problems(self, store, fs):
+        source = FakeWorkflowSource()
+        source.add_bundle("acme", "sha1", 1, current=True)
+        report = DoctorUseCase(
+            store, source, _cfg(**_ALL_KEYS), FakeWorkflowBundle(), fs, FakeMachine(), _Worktrees(),
+        ).execute(DoctorInput())
+        return report.problems["facets"]
+
+    def _kb(self, *pages):
+        fs = FakeFs(
+            files={"/kb/%s" % p: b"" for p in pages}, dirs={"/kb": ["languages"]},
+        )
+        store = FakeStore()
+        store.add_project("knowledge", local_path="/kb")
+        return store, fs
+
+    def test_no_facets_anywhere_is_clean_with_or_without_a_knowledge_base(self):
+        store = FakeStore()
+        store.add_project("acme/x")
+        self.assertEqual(self._problems(store, FakeFs()), [])
+        kb_store, fs = self._kb()
+        self.assertEqual(self._problems(kb_store, fs), [])
+
+    def test_facets_without_a_registered_knowledge_base_is_one_problem(self):
+        store = FakeStore()
+        store.add_project("acme/x", facets=("kotlin", "spring"))
+        problems = self._problems(store, FakeFs())
+        self.assertEqual([p.message for p in problems], [
+            "facets are declared but no knowledge base is registered - run `lc init`"
+        ])
+
+    def test_knowledge_base_registered_without_a_path_is_one_problem(self):
+        store = FakeStore()
+        store.add_project("knowledge")
+        store.add_project("acme/x", facets=("kotlin",))
+        self.assertEqual(len(self._problems(store, FakeFs())), 1)
+
+    def test_knowledge_base_path_missing_on_disk_is_one_problem(self):
+        store = FakeStore()
+        store.add_project("knowledge", local_path="/kb")
+        store.add_project("acme/x", facets=("kotlin", "spring"))
+        problems = self._problems(store, FakeFs())
+        self.assertEqual([p.message for p in problems], [
+            "facets are declared but the knowledge base is missing at /kb - restore it, "
+            "or run `lc project rm knowledge` then `lc init`"
+        ])
+
+    def test_every_facet_with_a_page_is_clean(self):
+        store, fs = self._kb("languages/kotlin.md", "frameworks/spring.md")
+        store.add_project("acme/x", facets=("kotlin", "spring"))
+        self.assertEqual(self._problems(store, fs), [])
+
+    def test_a_missing_page_names_the_project_and_the_facet_only_for_that_facet(self):
+        store, fs = self._kb("languages/kotlin.md")
+        store.add_project("acme/x", facets=("kotlin", "spring"))
+        problems = self._problems(store, fs)
+        self.assertEqual([p.message for p in problems], [
+            "project acme/x declares facet spring but the knowledge base has no concept page "
+            "for it - add spring.md under the knowledge base, or remove the facet with "
+            "`lc project set acme/x --facets <remaining>`"
+        ])
+        self.assertIsNone(problems[0].node_id)
+
+    def test_index_md_is_not_a_concept_page(self):
+        store, fs = self._kb("index.md", "languages/index.md")
+        store.add_project("acme/x", facets=("index",))
+        self.assertEqual(len(self._problems(store, fs)), 1)
+
+    def test_page_match_is_case_sensitive(self):
+        store, fs = self._kb("CONVENTIONS.md")
+        store.add_project("acme/x", facets=("conventions",))
+        self.assertEqual(len(self._problems(store, fs)), 1)
+
+    def test_a_page_under_a_dot_directory_is_not_found(self):
+        store, fs = self._kb(".git/kotlin.md")
+        store.add_project("acme/x", facets=("kotlin",))
+        self.assertEqual(len(self._problems(store, fs)), 1)
+
+
+
 if __name__ == "__main__":
     unittest.main()

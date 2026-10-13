@@ -23,6 +23,10 @@ class FsPort(ABC):
         pass
 
     @abstractmethod
+    def list_files(self, root):
+        pass
+
+    @abstractmethod
     def ensure_logs_dir(self):
         pass
 

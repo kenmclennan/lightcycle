@@ -4,6 +4,7 @@ from typing import Dict, List
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.services.engine_fragments import with_engine_fragments
+from lightcycle.domain.flow.flow import KNOWLEDGE_WORKSPACE
 from lightcycle.domain.health import Problem, fsck
 from lightcycle.domain.work.state import State
 from lightcycle.domain.workflows.contract import ENGINE_CONTRACT, contract_compatible
@@ -44,6 +45,7 @@ class DoctorUseCase:
             "origin": self._origin_problems(),
             "config": self._config_problems(),
             "orphans": self._orphan_problems(),
+            "facets": self._facet_problems(),
         })
 
     def _in_flight_pins(self, nodes):
@@ -151,6 +153,40 @@ class DoctorUseCase:
             except UseCaseError:
                 continue
         return expected
+
+    def _facet_problems(self):
+        declaring = [p for p in self._store.list_projects() if p.facets]
+        if not declaring:
+            return []
+        kb = self._store.get_project(KNOWLEDGE_WORKSPACE)
+        if kb is None or not kb.local_path:
+            return [Problem(
+                "facets",
+                "facets are declared but no knowledge base is registered - run `lc init`",
+            )]
+        if not self._fs.exists(kb.local_path):
+            return [Problem(
+                "facets",
+                "facets are declared but the knowledge base is missing at %s - restore it, "
+                "or run `lc project rm %s` then `lc init`" % (kb.local_path, KNOWLEDGE_WORKSPACE),
+            )]
+        pages = {
+            name[: -len(".md")]
+            for name in (f.rsplit("/", 1)[-1] for f in self._fs.list_files(kb.local_path))
+            if name.endswith(".md") and name != "index.md"
+        }
+        problems = []
+        for project in declaring:
+            for facet in project.facets:
+                if facet not in pages:
+                    problems.append(Problem(
+                        "facets",
+                        "project %s declares facet %s but the knowledge base has no concept "
+                        "page for it - add %s.md under the knowledge base, or remove the facet "
+                        "with `lc project set %s --facets <remaining>`"
+                        % (project.identity, facet, facet, project.identity),
+                    ))
+        return problems
 
     def _orphan_problems(self):
         expected = self._expected_worktree_paths()

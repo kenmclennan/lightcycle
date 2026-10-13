@@ -39,6 +39,7 @@ from lightcycle.domain.work.plain_language_caps import (
     MAX_PARAGRAPHS, MAX_SENTENCES_PER_PARAGRAPH, MAX_SENTENCE_WORDS, MAX_WORDS, CapBreach,
     cap_breaches, render_cap_refusal,
 )
+from lightcycle.domain.work.project_facets import format_facets, parse_facets, unformat_facets
 from lightcycle.domain.work.project_identity import ProjectIdentity
 from lightcycle.domain.work.projected_step import ProjectedStep
 from lightcycle.domain.work.timestamp import parse_timestamp
@@ -66,6 +67,7 @@ __all__ = [
     "MAX_PARAGRAPHS", "MAX_SENTENCES_PER_PARAGRAPH", "MAX_SENTENCE_WORDS", "MAX_WORDS",
     "CapBreach", "cap_breaches", "render_cap_refusal",
     "merge_condition_note", "ProjectIdentity", "ProjectedStep",
+    "format_facets", "parse_facets", "unformat_facets",
     "parse_timestamp",
     "worker_log_filename",
     "WORKER_VERBS", "worker_permitted", "worker_refusal_message",

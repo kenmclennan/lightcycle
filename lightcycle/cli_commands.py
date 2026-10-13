@@ -225,7 +225,10 @@ COMMANDS = {
     )),
     "project": CommandSpec(prog="lc project", subparsers={
         "add": CommandSpec(prog="lc project add", args=(
-            Arg("identity"), Arg("--shortcode"), Arg("--path"),
+            Arg("identity"), Arg("--shortcode"), Arg("--path"), Arg("--facets"),
+        )),
+        "set": CommandSpec(prog="lc project set", args=(
+            Arg("identity"), Arg("--facets"),
         )),
         "list": CommandSpec(prog="lc project list"),
         "rm": CommandSpec(prog="lc project rm", args=(

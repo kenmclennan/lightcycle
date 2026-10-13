@@ -173,6 +173,18 @@ class FakeFs(FsPort, WorkflowBundlePort, WorkerLogPort):
     def list_dir(self, path):
         return sorted(self._dirs.get(path, []))
 
+    def list_files(self, root):
+        prefix = root.rstrip("/") + "/"
+        found = []
+        for path in self._files:
+            if not path.startswith(prefix):
+                continue
+            rel = path[len(prefix):]
+            if any(part.startswith(".") for part in rel.split("/")[:-1]):
+                continue
+            found.append(rel)
+        return sorted(found)
+
     def write_text(self, path, text):
         self.writes.append(path)
         self._files[path] = text.encode("utf-8")

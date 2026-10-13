@@ -3,6 +3,7 @@ from lightcycle.application.setup.init_grid import InitGridUseCase
 from lightcycle.application.setup.project_registry import (
     AddProjectInput,
     AddProjectUseCase,
+    SetProjectFacetsUseCase,
     ListProjectsUseCase,
     ProjectRegistry,
     RemoveProjectUseCase,
@@ -19,7 +20,7 @@ from lightcycle.application.setup.upgrade import (
 from lightcycle.application.setup.upgrade_notice import UpgradeNoticeResponse, UpgradeNoticeUseCase
 
 __all__ = [
-    "ExportSnapshotUseCase", "InitGridUseCase", "AddProjectInput", "AddProjectUseCase",
+    "ExportSnapshotUseCase", "InitGridUseCase", "AddProjectInput", "AddProjectUseCase", "SetProjectFacetsUseCase",
     "ListProjectsUseCase", "ProjectRegistry", "RemoveProjectUseCase", "ScanCandidate",
     "ScanProjectsUseCase",
     "RestoreInput", "RestoreStoreUseCase",

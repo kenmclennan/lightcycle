@@ -2,7 +2,9 @@ from abc import ABC, abstractmethod
 from collections import namedtuple
 
 
-ProjectEntry = namedtuple("ProjectEntry", "identity shortcode local_path remote")
+ProjectEntry = namedtuple(
+    "ProjectEntry", "identity shortcode local_path remote facets", defaults=((),)
+)
 ItemText = namedtuple("ItemText", "id title description notes")
 
 
@@ -400,7 +402,7 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def add_project(self, identity, *, shortcode=None, local_path=None, remote=None):
+    def add_project(self, identity, *, shortcode=None, local_path=None, remote=None, facets=None):
         pass
 
     @abstractmethod
