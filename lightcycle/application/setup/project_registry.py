@@ -2,7 +2,7 @@ import os
 from dataclasses import dataclass
 
 from lightcycle.application.errors import UseCaseError
-from lightcycle.domain.work import ProjectIdentity
+from lightcycle.domain.work import ProjectIdentity, parse_facets
 from lightcycle.domain.work.project_identity import reserved_shortcode_reason
 from lightcycle.ports.git import GitReadError
 from lightcycle.ports.store import ProjectNotRegisteredError, ProjectResolutionError
@@ -13,6 +13,7 @@ class AddProjectInput:
     identity: str
     shortcode: str = None
     path: str = None
+    facets: str = None
 
 
 @dataclass(frozen=True)
@@ -22,6 +23,7 @@ class AddProjectResponse:
     local_path: str
     remote: str
     changed: bool
+    facets: tuple = ()
 
 
 class AddProjectUseCase:
@@ -43,6 +45,7 @@ class AddProjectUseCase:
             identity = ProjectIdentity.parse(input.identity)
         except ValueError as e:
             raise UseCaseError(str(e))
+        facets = _parse(input.facets)
         existing = self._store.get_project(input.identity)
         shortcode = (
             input.shortcode or (existing.shortcode if existing else None)
@@ -63,15 +66,62 @@ class AddProjectUseCase:
             existing is None
             or existing.shortcode != shortcode
             or existing.local_path != local_path
+            or (facets is not None and facets != existing.facets)
         )
         if changed:
             self._store.add_project(
-                input.identity, shortcode=shortcode, local_path=local_path, remote=remote
+                input.identity, shortcode=shortcode, local_path=local_path, remote=remote,
+                facets=facets,
             )
+        current = facets if facets is not None else (existing.facets if existing else ())
         return AddProjectResponse(
             identity=input.identity, shortcode=shortcode, local_path=local_path,
-            remote=remote, changed=changed,
+            remote=remote, changed=changed, facets=current,
         )
+
+
+def _parse(text):
+    if text is None:
+        return None
+    try:
+        return parse_facets(text)
+    except ValueError as e:
+        raise UseCaseError(str(e))
+
+
+@dataclass(frozen=True)
+class SetProjectFacetsResponse:
+    identity: str
+    facets: tuple
+    changed: bool
+
+
+class SetProjectFacetsUseCase:
+    def __init__(self, store):
+        self._store = store
+
+    def execute(self, identity, facets_text):
+        if facets_text is None:
+            raise UseCaseError(
+                'nothing to set - pass --facets a,b,c (or --facets "" to clear them)'
+            )
+        facets = _parse(facets_text)
+        existing = self._store.get_project(identity)
+        if existing is None:
+            registered = [p.identity for p in self._store.list_projects()]
+            if registered:
+                raise UseCaseError(
+                    "project '%s' is not registered - registered: %s"
+                    % (identity, ", ".join(registered))
+                )
+            raise UseCaseError(
+                "project '%s' is not registered - none registered yet; run "
+                "`lc project add <owner/name> --path <dir> --facets a,b,c`" % identity
+            )
+        changed = existing.facets != facets
+        if changed:
+            self._store.add_project(identity, facets=facets)
+        return SetProjectFacetsResponse(identity=identity, facets=facets, changed=changed)
 
 
 class ListProjectsUseCase:

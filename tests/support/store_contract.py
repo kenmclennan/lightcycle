@@ -1226,6 +1226,31 @@ class StoreContractBase:
         identities = {p.identity for p in s.list_projects()}
         self.assertEqual(identities, {"acme/horde", "acme/saga"})
 
+    def test_project_facets_default_to_none(self):
+        s = self.make_store()
+        s.add_project("acme/horde")
+        self.assertEqual(s.get_project("acme/horde").facets, ())
+
+    def test_project_facets_round_trip_in_order(self):
+        s = self.make_store()
+        s.add_project("acme/horde", facets=("kotlin", "spring-boot"))
+        self.assertEqual(s.get_project("acme/horde").facets, ("kotlin", "spring-boot"))
+        self.assertEqual(s.list_projects()[0].facets, ("kotlin", "spring-boot"))
+
+    def test_project_facets_omitted_keeps_them(self):
+        s = self.make_store()
+        s.add_project("acme/horde", facets=("kotlin",))
+        s.add_project("acme/horde", shortcode="HORDE")
+        self.assertEqual(s.get_project("acme/horde").facets, ("kotlin",))
+
+    def test_project_facets_replace_and_empty_tuple_clears(self):
+        s = self.make_store()
+        s.add_project("acme/horde", facets=("kotlin",))
+        s.add_project("acme/horde", facets=("spring",))
+        self.assertEqual(s.get_project("acme/horde").facets, ("spring",))
+        s.add_project("acme/horde", facets=())
+        self.assertEqual(s.get_project("acme/horde").facets, ())
+
     def test_remove_project_deletes_the_entry(self):
         s = self.make_store()
         s.add_project("acme/horde", shortcode="HORDE")

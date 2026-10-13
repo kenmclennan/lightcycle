@@ -13,7 +13,7 @@ from lightcycle.domain.pool import ToolUsage, UsageResume
 from lightcycle.domain.runs import Pass, PhaseRun, RunState, run_id
 from lightcycle.domain.work import (
     Artifact, DailySummary, Item, NodeView, Park, State, Step, default_kind_for, derive_state,
-    format_step_id, merge_condition_note, role_state,
+    format_facets, format_step_id, merge_condition_note, role_state, unformat_facets,
 )
 from lightcycle.domain.workspace.isolation import refuses_live_store
 from lightcycle.ports.store import (
@@ -197,7 +197,8 @@ CREATE TABLE IF NOT EXISTS projects (
     identity   TEXT PRIMARY KEY,
     shortcode  TEXT,
     local_path TEXT,
-    remote     TEXT
+    remote     TEXT,
+    facets     TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS daily_summaries (
@@ -410,6 +411,9 @@ class SqliteStore(StorePort):
         ),
         "usage_backfill_log": (
             ("had_result_line", "INTEGER"),
+        ),
+        "projects": (
+            ("facets", "TEXT NOT NULL DEFAULT ''"),
         ),
     }
 
@@ -1653,40 +1657,52 @@ class SqliteStore(StorePort):
         ).fetchall()
         return [r[0] for r in rows]
 
-    def add_project(self, identity, *, shortcode=None, local_path=None, remote=None):
+    def add_project(
+        self, identity, *, shortcode=None, local_path=None, remote=None, facets=None
+    ):
         row = self._conn.execute(
-            "SELECT shortcode, local_path, remote FROM projects WHERE identity = ?", (identity,)
+            "SELECT shortcode, local_path, remote, facets FROM projects WHERE identity = ?",
+            (identity,),
         ).fetchone()
+        stored_facets = format_facets(facets) if facets is not None else None
         if row is None:
             self._conn.execute(
-                "INSERT INTO projects (identity, shortcode, local_path, remote) "
-                "VALUES (?, ?, ?, ?)",
-                (identity, shortcode, local_path, remote),
+                "INSERT INTO projects (identity, shortcode, local_path, remote, facets) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (identity, shortcode, local_path, remote, stored_facets or ""),
             )
         else:
             merged = (
                 shortcode if shortcode is not None else row[0],
                 local_path if local_path is not None else row[1],
                 remote if remote is not None else row[2],
+                stored_facets if stored_facets is not None else row[3],
             )
             self._conn.execute(
-                "UPDATE projects SET shortcode = ?, local_path = ?, remote = ? WHERE identity = ?",
+                "UPDATE projects SET shortcode = ?, local_path = ?, remote = ?, facets = ? "
+                "WHERE identity = ?",
                 (*merged, identity),
             )
         self._commit()
 
+    @staticmethod
+    def _project_entry(row):
+        return ProjectEntry(*row[:4], unformat_facets(row[4]))
+
     def get_project(self, identity):
         row = self._conn.execute(
-            "SELECT identity, shortcode, local_path, remote FROM projects WHERE identity = ?",
+            "SELECT identity, shortcode, local_path, remote, facets FROM projects "
+            "WHERE identity = ?",
             (identity,),
         ).fetchone()
-        return ProjectEntry(*row) if row else None
+        return self._project_entry(row) if row else None
 
     def list_projects(self):
         rows = self._conn.execute(
-            "SELECT identity, shortcode, local_path, remote FROM projects ORDER BY identity"
+            "SELECT identity, shortcode, local_path, remote, facets FROM projects "
+            "ORDER BY identity"
         ).fetchall()
-        return [ProjectEntry(*row) for row in rows]
+        return [self._project_entry(row) for row in rows]
 
     def remove_project(self, identity):
         cur = self._conn.execute("DELETE FROM projects WHERE identity = ?", (identity,))

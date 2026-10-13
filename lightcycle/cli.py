@@ -139,6 +139,7 @@ from lightcycle.application.pool import (
 from lightcycle.application.setup import (
     AddProjectInput,
     AddProjectUseCase,
+    SetProjectFacetsUseCase,
     InitGridUseCase,
     ListProjectsUseCase,
     ProcessListUnreadableError,
@@ -1799,20 +1800,33 @@ def cmd_project(argv):
     try:
         if a.sub == "add":
             r = AddProjectUseCase(c.store, c.git, c.config, c.fs).execute(
-                AddProjectInput(identity=a.identity, shortcode=a.shortcode, path=a.path)
+                AddProjectInput(
+                    identity=a.identity, shortcode=a.shortcode, path=a.path, facets=a.facets
+                )
             )
             if r.changed:
-                print("%s -> shortcode %s%s" % (
+                print("%s -> shortcode %s%s%s" % (
                     r.identity, r.shortcode,
-                    " at %s" % r.local_path if r.local_path else " (no local checkout)"
+                    " at %s" % r.local_path if r.local_path else " (no local checkout)",
+                    " facets %s" % ",".join(r.facets) if r.facets else "",
                 ))
             else:
                 print("%s already registered (shortcode %s)" % (r.identity, r.shortcode))
             return 0
+        if a.sub == "set":
+            r = SetProjectFacetsUseCase(c.store).execute(a.identity, a.facets)
+            if not r.changed:
+                print("%s facets unchanged" % r.identity)
+            elif r.facets:
+                print("%s -> facets %s" % (r.identity, ",".join(r.facets)))
+            else:
+                print("%s -> no facets" % r.identity)
+            return 0
         if a.sub == "list":
             for p in ListProjectsUseCase(c.store).execute():
-                print("%s\t%s\t%s" % (
-                    p.identity, p.shortcode or "-", p.local_path or "(not checked out)"
+                print("%s\t%s\t%s\t%s" % (
+                    p.identity, p.shortcode or "-", p.local_path or "(not checked out)",
+                    ",".join(p.facets),
                 ))
             return 0
         if a.sub == "rm":

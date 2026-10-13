@@ -40,6 +40,20 @@ class FsContractBase:
         fs = self.make_fs(files={"d/file.txt": b"x"}, dirs={"d": ["sub", "another"]})
         self.assertEqual(fs.list_dir(self.path("d")), ["another", "sub"])
 
+    def test_list_files_is_recursive_relative_and_sorted(self):
+        fs = self.make_fs(files={"kb/z.md": b"", "kb/languages/kotlin.md": b"", "kb/a.md": b""})
+        self.assertEqual(
+            fs.list_files(self.path("kb")), ["a.md", "languages/kotlin.md", "z.md"]
+        )
+
+    def test_list_files_skips_dot_directories(self):
+        fs = self.make_fs(files={"kb/.git/x.md": b"", "kb/ok.md": b""})
+        self.assertEqual(fs.list_files(self.path("kb")), ["ok.md"])
+
+    def test_list_files_is_empty_for_a_missing_root(self):
+        fs = self.make_fs()
+        self.assertEqual(fs.list_files(self.path("nowhere")), [])
+
     def test_worktrees_dir_joins_dot_worktrees(self):
         fs = self.make_fs()
         root = self.root()
