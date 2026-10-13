@@ -30,6 +30,12 @@ class TestWorkerPermitted(unittest.TestCase):
     def test_set_with_no_state_key_forbidden(self):
         self.assertFalse(worker_permitted("set", {}))
 
+    def test_workflow_set_is_refused_for_a_worker(self):
+        self.assertFalse(worker_permitted("workflow", {"sub": "set", "origin": "acme"}))
+
+    def test_workflow_check_dir_is_still_permitted(self):
+        self.assertTrue(worker_permitted("workflow", {"sub": "check", "dir": "/d"}))
+
     def test_a_verb_outside_worker_verbs_and_not_set_never_permitted(self):
         self.assertFalse(worker_permitted("rm", {"state": "waiting"}))
 

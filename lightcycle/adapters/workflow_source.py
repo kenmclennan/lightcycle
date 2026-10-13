@@ -128,10 +128,11 @@ class WorkflowSourceAdapter(WorkflowSourcePort):
             return []
         return sorted(e.name[:-3] for e in os.scandir(d) if e.name.endswith(".md"))
 
-    def write_registry(self, origin, url, ref, current):
+    def write_registry(self, origin, url, ref, current, writable):
         os.makedirs(self._origin_dir(origin), exist_ok=True)
-        text = "url = %s\nref = %s\ncurrent = %s\n" % (
-            _toml_str(url), _toml_str(ref or ""), _toml_str(current))
+        text = "url = %s\nref = %s\ncurrent = %s\nwritable = %s\n" % (
+            _toml_str(url), _toml_str(ref or ""), _toml_str(current),
+            "true" if writable else "false")
         path = os.path.join(self._origin_dir(origin), _REGISTRY)
         tmp = "%s.%d.tmp" % (path, os.getpid())
         try:
@@ -152,7 +153,8 @@ class WorkflowSourceAdapter(WorkflowSourcePort):
         with open(path, "rb") as f:
             data = tomllib.load(f)
         return OriginRegistration(
-            url=data.get("url"), ref=data.get("ref"), current=data.get("current"))
+            url=data.get("url"), ref=data.get("ref"), current=data.get("current"),
+            writable=data.get("writable") is True)
 
     def list_origins(self):
         root = self._root()

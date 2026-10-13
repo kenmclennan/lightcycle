@@ -149,7 +149,7 @@ class TestBundleResolution(unittest.TestCase):
         adapter = _adapter()
         bundle = adapter.fetch(repo, "main")
         adapter.pin("acme", bundle)
-        adapter.write_registry("acme", repo, "main", bundle.sha)
+        adapter.write_registry("acme", repo, "main", bundle.sha, False)
         self.assertEqual(adapter.pinned_bundle("acme", bundle.sha),
                          os.path.join(adapter._root(), "acme", bundle.sha))
         self.assertTrue(os.path.isdir(adapter.pinned_bundle("acme", bundle.sha)))
@@ -162,21 +162,43 @@ class TestBundleResolution(unittest.TestCase):
 class TestRegistry(unittest.TestCase):
     def test_write_then_read_roundtrips(self):
         adapter = _adapter()
-        adapter.write_registry("acme", "github.com/acme/f", "main", "abc123")
+        adapter.write_registry("acme", "github.com/acme/f", "main", "abc123", False)
         self.assertEqual(
             adapter.read_registry("acme"),
             OriginRegistration(url="github.com/acme/f", ref="main", current="abc123"),
         )
 
+    def test_writable_flag_roundtrips_both_ways(self):
+        adapter = _adapter()
+        adapter.write_registry("acme", "u", "main", "abc", True)
+        self.assertTrue(adapter.read_registry("acme").writable)
+        adapter.write_registry("acme", "u", "main", "abc", False)
+        self.assertFalse(adapter.read_registry("acme").writable)
+
+    def _hand_written(self, adapter, extra):
+        os.makedirs(adapter._origin_dir("acme"))
+        with open(os.path.join(adapter._origin_dir("acme"), "origin.toml"), "w") as f:
+            f.write('url = "u"\nref = "main"\ncurrent = "abc"\n' + extra)
+
+    def test_registration_without_writable_key_reads_read_only(self):
+        adapter = _adapter()
+        self._hand_written(adapter, "")
+        self.assertFalse(adapter.read_registry("acme").writable)
+
+    def test_non_boolean_writable_reads_read_only(self):
+        adapter = _adapter()
+        self._hand_written(adapter, 'writable = "yes"\n')
+        self.assertFalse(adapter.read_registry("acme").writable)
+
     def test_failed_replace_leaves_the_previous_registry_byte_identical_and_no_temp_file(self):
         adapter = _adapter()
-        adapter.write_registry("acme", "github.com/acme/f", "main", "abc123")
+        adapter.write_registry("acme", "github.com/acme/f", "main", "abc123", False)
         path = os.path.join(adapter._origin_dir("acme"), "origin.toml")
         with open(path, "rb") as f:
             before = f.read()
         with mock.patch("lightcycle.adapters.workflow_source.os.replace", side_effect=OSError("boom")):
             with self.assertRaises(OSError):
-                adapter.write_registry("acme", "github.com/acme/other", "dev", "def456")
+                adapter.write_registry("acme", "github.com/acme/other", "dev", "def456", False)
         with open(path, "rb") as f:
             self.assertEqual(f.read(), before)
         self.assertEqual(
@@ -190,7 +212,7 @@ class TestRegistry(unittest.TestCase):
 
     def test_write_then_read_roundtrips_a_missing_ref_as_empty_string(self):
         adapter = _adapter()
-        adapter.write_registry("acme", "github.com/acme/f", None, "abc123")
+        adapter.write_registry("acme", "github.com/acme/f", None, "abc123", False)
         self.assertEqual(
             adapter.read_registry("acme"),
             OriginRegistration(url="github.com/acme/f", ref="", current="abc123"),
@@ -237,7 +259,7 @@ class TestListingAndRemoval(unittest.TestCase):
         adapter = _adapter()
         bundle = adapter.fetch(repo, "main")
         adapter.pin("acme", bundle)
-        adapter.write_registry("acme", repo, "main", bundle.sha)
+        adapter.write_registry("acme", repo, "main", bundle.sha, False)
         self.assertEqual(adapter.list_origins(), ["acme"])
         self.assertEqual(adapter.list_versions("acme"), [bundle.sha])
         adapter.remove_version("acme", bundle.sha)

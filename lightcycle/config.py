@@ -27,6 +27,7 @@ _ENV_OVERRIDE_VARS = {
     "daily-summary-debounce-seconds": "LC_DAILY_SUMMARY_DEBOUNCE_SECONDS",
     "tui-autostart-pool": "LC_TUI_AUTOSTART_POOL",
     "tui-metrics": "LC_TUI_METRICS",
+    "developer-mode": "LC_DEVELOPER_MODE",
     "tui-upgrade-check-seconds": "LC_TUI_UPGRADE_CHECK_SECONDS",
     "pool-upgrade-check-seconds": "LC_POOL_UPGRADE_CHECK_SECONDS",
     "shutdown-grace-seconds": "LC_SHUTDOWN_GRACE_SECONDS",
@@ -79,6 +80,7 @@ _SEED_KEYS = [
     ("max-title-length", "72"),
     ("tui-autostart-pool", "false"),
     ("tui-metrics", "false"),
+    ("developer-mode", "false"),
     ("tui-upgrade-check-seconds", "900"),
     ("pool-upgrade-check-seconds", "900"),
     ("personal-origin", ""),
@@ -457,6 +459,12 @@ class Config:
         if env is not None:
             return env
         return self._required_bool("tui-metrics")
+
+    def developer_mode(self):
+        env = self._env_bool("LC_DEVELOPER_MODE", None)
+        if env is not None:
+            return env
+        return self._required_bool("developer-mode")
 
     def tui_upgrade_check_seconds(self):
         env = self._env_int("LC_TUI_UPGRADE_CHECK_SECONDS", None)

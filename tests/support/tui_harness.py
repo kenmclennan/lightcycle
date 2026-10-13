@@ -147,7 +147,7 @@ class FakeWorkflowSource(WorkflowSourcePort):
     def workflow_names(self, origin, sha):
         return []
 
-    def write_registry(self, origin, url, ref, current):
+    def write_registry(self, origin, url, ref, current, writable):
         pass
 
     def read_registry(self, origin):

@@ -19,6 +19,7 @@ class OriginRegistration:
     url: str
     ref: str
     current: str
+    writable: bool = False
 
 
 class WorkflowSourcePort(ABC):
@@ -55,7 +56,7 @@ class WorkflowSourcePort(ABC):
         pass
 
     @abstractmethod
-    def write_registry(self, origin, url, ref, current):
+    def write_registry(self, origin, url, ref, current, writable):
         pass
 
     @abstractmethod

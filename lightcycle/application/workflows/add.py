@@ -51,7 +51,7 @@ class AddWorkflowSourceUseCase:
         self._config = config
         self._fs = fs
 
-    def execute(self, url, ref, name) -> AddResponse:
+    def execute(self, url, ref, name, writable=False) -> AddResponse:
         keep_n = self._config.workflow_retention()
         bundle = self._source.fetch(url, ref)
         manifest = parse_source_manifest(bundle.manifest)
@@ -87,7 +87,7 @@ class AddWorkflowSourceUseCase:
         if detail:
             raise WorkflowSourceError("bundle prompts do not match this engine - %s" % detail)
         self._source.pin(origin, bundle)
-        self._source.write_registry(origin, url, ref, bundle.sha)
+        self._source.write_registry(origin, url, ref, bundle.sha, writable)
         pruned, prune_error = prune_origin_best_effort(self._source, self._store, origin, keep_n)
         return AddResponse(
             origin=origin, sha=bundle.sha, pruned=pruned, prune_error=prune_error)

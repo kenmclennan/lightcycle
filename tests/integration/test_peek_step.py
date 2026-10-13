@@ -35,7 +35,7 @@ class TestPeekStepUseCaseReadsTheOriginsCurrentBundle(unittest.TestCase):
             manifest='name = "acme"\ncontract = 1\n', sha="sha-new",
             steps={"write-code": "---\nmodel: x\n---\nnew body\n"}, workflows={}))
 
-        adapter.write_registry("acme", "https://example.invalid/acme", "main", "sha-new")
+        adapter.write_registry("acme", "https://example.invalid/acme", "main", "sha-new", False)
 
         store = FakeStore()
         item = store.create_item("an item", "a description", workflow="acme/build@sha-old")

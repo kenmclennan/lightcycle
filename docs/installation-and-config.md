@@ -77,6 +77,7 @@ This table documents every `_SEED_KEYS` entry - `tests/unit/test_docs_reference_
 | `review-rounds-cap` | consecutive review-reject rounds on one step a workflow's review-rounds-cap transition tolerates before it fires |
 | `tui-autostart-pool` | whether the TUI starts the pool loop automatically on launch |
 | `tui-metrics` | whether the TUI records its own per-tick refresh timing to the run log |
+| `developer-mode` | whether this machine develops lightcycle itself, so the engine and the plugin count as writable for routing a finding. Seeded `false`; override with `LC_DEVELOPER_MODE`. Nothing reads it yet beyond `lc config` |
 | `tui-upgrade-check-seconds` | how often the TUI rechecks for a new engine version in the background; `0` disables the periodic recheck (the check still runs once on launch); must be `>= 0` |
 | `pool-upgrade-check-seconds` | how often `lc start`'s pool loop rechecks for a new engine version while running; `0` disables the periodic recheck (the check still runs once at startup); must be `>= 0` |
 | `price-<model>-<kind>-per-mtok` | per-million-token USD pricing used for usage cost reporting, one key per `<model>` (`sonnet`/`opus`/`haiku`) x `<kind>` (`input`/`output`/`cache-write`/`cache-read`) - twelve keys total, defaults in `config.py`'s `_SEED_KEYS`; each must be `>= 0` |
@@ -86,10 +87,11 @@ This table documents every `_SEED_KEYS` entry - `tests/unit/test_docs_reference_
 Workflows come from pullable git **origins**, not the engine. `lc init` pulls the built-in `lightcycle` origin (from `workflows-remote`) into an immutable, sha-pinned bundle under `~/.lightcycle/workflows/<origin>/<sha>/`. Manage them with:
 
 ```
-lc workflow init <name>       # scaffold + register a personal workflow-origin repo
-lc workflow add <url>         # register + pull an origin
+lc workflow init <name>       # scaffold + register a personal workflow-origin repo (registered writable)
+lc workflow add <url> [--writable]  # register + pull an origin; read-only unless --writable
+lc workflow set <origin> --writable|--read-only  # change whether you can edit an origin
 lc workflow upgrade <origin>  # pull the latest, re-pin
-lc workflow list              # origins + on-disk bundle paths
+lc workflow list              # origins, each marked writable or read-only, + on-disk bundle paths
 lc workflow rm <origin>
 ```
 

@@ -960,6 +960,43 @@ class TestTuiMetrics(unittest.TestCase):
         self.assertEqual(dict(_SEED_KEYS)["tui-metrics"], "false")
 
 
+class TestDeveloperMode(unittest.TestCase):
+    def test_reads_true_and_false_from_the_config_file(self):
+        self.assertTrue(_cfg(developer_mode="true").developer_mode())
+        self.assertFalse(_cfg(developer_mode="false").developer_mode())
+
+    def test_accepts_the_documented_spellings_case_insensitively(self):
+        for raw in ("TRUE", "Yes", "1", "on"):
+            self.assertTrue(_cfg(developer_mode=raw).developer_mode(), raw)
+        for raw in ("FALSE", "No", "0", "off"):
+            self.assertFalse(_cfg(developer_mode=raw).developer_mode(), raw)
+
+    def test_a_value_that_is_neither_is_refused_naming_the_key(self):
+        with self.assertRaises(ConfigError) as e:
+            _cfg(developer_mode="maybe").developer_mode()
+        self.assertIn("developer-mode", str(e.exception))
+
+    def test_an_unset_value_is_refused_rather_than_defaulted(self):
+        with self.assertRaises(ConfigError) as e:
+            _cfg(max_agents="5").developer_mode()
+        self.assertIn("developer-mode", str(e.exception))
+
+    def test_the_env_var_overrides_the_file(self):
+        cfg = _cfg(environ={"LC_DEVELOPER_MODE": "true"}, developer_mode="false")
+        self.assertTrue(cfg.developer_mode())
+
+    def test_it_is_seeded_false_in_the_default_config(self):
+        self.assertEqual(dict(_SEED_KEYS)["developer-mode"], "false")
+
+    def test_reconcile_appends_it_to_a_config_without_it(self):
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "config")
+        Path(p).write_text("projects: /p\n")
+        added = Config(environ={"LC_CONFIG": p}).reconcile_config()
+        self.assertIn("developer-mode", added)
+        self.assertIn("developer-mode: false", Path(p).read_text())
+
+
 class TestTuiUpgradeCheckSeconds(unittest.TestCase):
     def test_reads_value_from_config_file(self):
         self.assertEqual(
