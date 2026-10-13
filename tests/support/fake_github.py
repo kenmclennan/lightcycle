@@ -4,7 +4,7 @@ from lightcycle.ports.github import GitHubEventsPort, ReadFailure
 class FakeGitHub(GitHubEventsPort):
     def __init__(self, merged_prs=(), closed_prs=(), conflicted_prs=(), push_time=0.0,
                  timed_comments=None, timed_reviews=None, head_shas=None, files_by_sha=None,
-                 check_runs_by_sha=None, failing_calls=()):
+                 check_runs_by_sha=None, failing_calls=(), issue_states=None):
         self._merged = set(merged_prs)
         self._closed = set(closed_prs)
         self._conflicted = set(conflicted_prs)
@@ -15,6 +15,16 @@ class FakeGitHub(GitHubEventsPort):
         self._files_by_sha = files_by_sha or {}
         self._check_runs_by_sha = check_runs_by_sha or {}
         self._failing_calls = set(failing_calls)
+        self._issue_states = issue_states or {}
+        self.issue_state_calls = []
+
+    def issue_state(self, url):
+        self.issue_state_calls.append(url)
+        if "issue_state" in self._failing_calls:
+            return ReadFailure(1, "boom")
+        if url not in self._issue_states:
+            return ReadFailure(1, "not found")
+        return self._issue_states[url]
 
     def is_merged(self, pr):
         if "is_merged" in self._failing_calls:

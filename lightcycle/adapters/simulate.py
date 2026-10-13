@@ -1,7 +1,7 @@
 import os
 
 from lightcycle.ports.git import GitOutcome, GitPort
-from lightcycle.ports.github import Comment, GitHubEventsPort
+from lightcycle.ports.github import Comment, GitHubEventsPort, ReadFailure
 from lightcycle.ports.teardown_ledger import TeardownLedgerPort
 from lightcycle.ports.workers import WorkersPort
 
@@ -166,6 +166,9 @@ class ScriptedGitHub(GitHubEventsPort):
 
     def is_closed_unmerged(self, pr):
         return False
+
+    def issue_state(self, url):
+        return ReadFailure(-1, "issues are not simulated")
 
     def last_push_time(self, pr):
         return 0.0

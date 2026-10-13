@@ -1089,3 +1089,31 @@ class TestVersion(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestGuidanceRetirementConfig(unittest.TestCase):
+    _CASES = (
+        ("guidance-unused-after-deliveries", "LC_GUIDANCE_UNUSED_AFTER_DELIVERIES",
+         "guidance_unused_after_deliveries"),
+        ("guidance-dormant-days", "LC_GUIDANCE_DORMANT_DAYS", "guidance_dormant_days"),
+    )
+
+    def test_seeded_default_is_sixty(self):
+        seeds = dict(_SEED_KEYS)
+        for key, _env, getter in self._CASES:
+            self.assertEqual(seeds[key], "60", key)
+            self.assertEqual(getattr(_cfg(**{key.replace("-", "_"): seeds[key]}), getter)(), 60)
+
+    def test_env_override_wins(self):
+        for key, env, getter in self._CASES:
+            c = _cfg({env: "7"}, **{key.replace("-", "_"): "60"})
+            self.assertEqual(getattr(c, getter)(), 7, key)
+
+    def test_zero_and_negative_are_refused_naming_the_key(self):
+        for key, env, getter in self._CASES:
+            for bad in ("0", "-1"):
+                with self.assertRaises(ConfigError) as ctx:
+                    getattr(_cfg(**{key.replace("-", "_"): bad}), getter)()
+                self.assertIn(key, str(ctx.exception))
+                with self.assertRaises(ConfigError):
+                    getattr(_cfg({env: bad}), getter)()

@@ -77,3 +77,7 @@ class GitHubEventsPort(ABC):
     @abstractmethod
     def check_runs(self, pr: str, sha: str) -> Union[Tuple[CheckRun, ...], ReadFailure]:
         pass
+
+    @abstractmethod
+    def issue_state(self, url: str) -> Union[str, ReadFailure]:
+        pass

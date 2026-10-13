@@ -110,3 +110,8 @@ class TestWorkerRefusalMessage(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestGuidanceVerbRefusedToWorkers(unittest.TestCase):
+    def test_guidance_is_not_a_worker_verb(self):
+        self.assertFalse(worker_permitted("guidance", {}))

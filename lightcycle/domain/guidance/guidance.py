@@ -17,6 +17,8 @@ class GuidanceEntry:
     facets: Tuple[str, ...]
     steps: Tuple[str, ...]
     body: str
+    covers: str = ""
+    stale_after: str = ""
 
     def is_candidate(self):
         return self.status == "stable" and self.verified
@@ -63,6 +65,8 @@ def classify(entry_id, meta, body):
         facets=facets,
         steps=steps,
         body=body.rstrip(),
+        covers=_scalar(meta.get("covers")),
+        stale_after=_scalar(meta.get("stale_after")),
     )
     return Classification(ENTRY, entry=entry)
 

@@ -695,3 +695,41 @@ class TestHeadSha(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+_ISSUE = "https://github.com/x/y/issues/3"
+
+
+class TestIssueState(unittest.TestCase):
+    def setUp(self):
+        self.adapter = GitHubEventsAdapter()
+
+    def test_closed_issue_returns_state_and_passes_a_timeout(self):
+        mock_run = MagicMock(return_value=_proc(json.dumps({"state": "CLOSED"})))
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            result = self.adapter.issue_state(_ISSUE)
+
+        self.assertEqual(result, "CLOSED")
+        self.assertEqual(
+            mock_run.call_args.args[0], ["gh", "issue", "view", _ISSUE, "--json", "state"])
+        self.assertIn("timeout", mock_run.call_args.kwargs)
+
+    def test_non_zero_exit_returns_read_failure(self):
+        mock_run = MagicMock(return_value=_proc("", returncode=1, stderr="not found"))
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            result = self.adapter.issue_state(_ISSUE)
+
+        self.assertEqual(result, ReadFailure(1, "not found"))
+
+    def test_timeout_returns_read_failure(self):
+        with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):
+            result = self.adapter.issue_state(_ISSUE)
+
+        self.assertIsInstance(result, ReadFailure)
+
+    def test_invalid_json_returns_read_failure(self):
+        mock_run = MagicMock(return_value=_proc("nope"))
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            result = self.adapter.issue_state(_ISSUE)
+
+        self.assertIsInstance(result, ReadFailure)
