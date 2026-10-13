@@ -37,7 +37,7 @@ from lightcycle.domain.work.node_view import NodeView
 from lightcycle.domain.work.note_condition import merge_condition_note
 from lightcycle.domain.work.plain_language_caps import (
     MAX_PARAGRAPHS, MAX_SENTENCES_PER_PARAGRAPH, MAX_SENTENCE_WORDS, MAX_WORDS, CapBreach,
-    cap_breaches, render_cap_refusal,
+    cap_breaches, cap_rules_help, render_cap_refusal,
 )
 from lightcycle.domain.work.project_facets import format_facets, parse_facets, unformat_facets
 from lightcycle.domain.work.project_identity import ProjectIdentity
@@ -65,7 +65,7 @@ __all__ = [
     "SlowKind", "SlowStep", "StageBaseline", "slow_steps",
     "Step", "compose_step_title", "format_step_id", "node_id_key",
     "MAX_PARAGRAPHS", "MAX_SENTENCES_PER_PARAGRAPH", "MAX_SENTENCE_WORDS", "MAX_WORDS",
-    "CapBreach", "cap_breaches", "render_cap_refusal",
+    "CapBreach", "cap_breaches", "cap_rules_help", "render_cap_refusal",
     "merge_condition_note", "ProjectIdentity", "ProjectedStep",
     "format_facets", "parse_facets", "unformat_facets",
     "parse_timestamp",

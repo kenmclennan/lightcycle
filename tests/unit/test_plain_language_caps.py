@@ -6,6 +6,7 @@ from lightcycle.domain.work import (
     MAX_SENTENCES_PER_PARAGRAPH,
     MAX_WORDS,
     cap_breaches,
+    cap_rules_help,
     render_cap_refusal,
 )
 
@@ -264,21 +265,23 @@ class TestRenderCapRefusal(unittest.TestCase):
         sentence = _words(34) + "."
         line = render_cap_refusal([("--note", sentence)]).splitlines()[1]
         self.assertEqual(
-            line, '--note, rule 3: a sentence of 34 words, at most 30: "%s"' % sentence
+            line,
+            '--note, rule 3: a sentence of 34 words, at most 30 (4 over); '
+            'split it into shorter sentences: "%s"' % sentence,
         )
 
     def test_sentences_line_quotes_ten_words_then_an_ellipsis(self):
         text = " ".join("Sentence %s here." % _words(2, "s%d" % i) for i in range(5))
         line = render_cap_refusal([("--note", text)]).splitlines()[1]
-        self.assertTrue(line.startswith("--note, rule 2: paragraph 1 has 5 sentences, at most 4:"))
+        self.assertTrue(line.startswith("--note, rule 2: paragraph 1 has 5 sentences, at most 4;"))
         self.assertTrue(line.endswith(' ..."'))
 
     def test_words_and_paragraphs_lines_carry_counts_only(self):
         paragraph = ". ".join(_words(10, "q%d" % i) for i in range(5))
         text = "\n\n".join([paragraph + "."] * 4)
         lines = render_cap_refusal([("--note", text)]).splitlines()[1:]
-        self.assertIn("--note, rule 2: 200 words, at most 180", lines)
-        self.assertIn("--note, rule 2: 4 paragraphs, at most 3", lines)
+        self.assertIn("--note, rule 2: 200 words, at most 180; cut words", lines)
+        self.assertIn("--note, rule 2: 4 paragraphs, at most 3; merge or cut paragraphs", lines)
 
     def test_one_line_per_breach(self):
         text = "\n\n".join([_words(31) + "."] * 4)
@@ -321,6 +324,46 @@ class TestRealNotes(unittest.TestCase):
 
     def test_lc_432_5_complies_and_holds_paths_and_a_test_count(self):
         self.assertEqual(cap_breaches(NOTE_LC_432_5), ())
+
+
+NOTE_COPILOT = (
+    "Copilot comment 4260604382 on GSI1 child enumeration contradicts the bound the spec "
+    "accepts in Design C step 1. Ken accepted that edge case, so it is answered on the PR "
+    "and not reworked."
+)
+
+
+class TestSplitAfterNumbers(unittest.TestCase):
+    def test_full_stop_after_a_number_before_a_capital_ends_the_sentence(self):
+        self.assertEqual(cap_breaches(NOTE_COPILOT), ())
+
+    def test_full_stop_after_a_number_before_lowercase_does_not_end_it(self):
+        text = "See step 1. then go on " + "word " * 30
+        self.assertEqual(_kinds(text), [(3, "sentence")])
+
+    def test_parenthesised_and_bracketed_enumerators_stay_whole(self):
+        text = "Do (1) this and 1) that. " + "Next. " * 3
+        self.assertEqual(cap_breaches(text), ())
+
+
+class TestRefusalShowsTheFix(unittest.TestCase):
+    def test_long_sentence_names_words_over_and_says_split(self):
+        out = render_cap_refusal([("--note", "word " * 34)])
+        self.assertIn("4 over", out)
+        self.assertIn("split it", out)
+
+    def test_crowded_paragraph_says_split_the_paragraph(self):
+        out = render_cap_refusal([("--note", "One. Two. Three. Four. Five.")])
+        self.assertIn("split the paragraph", out)
+
+    def test_too_many_paragraphs_says_merge_or_cut(self):
+        out = render_cap_refusal([("--note", "A.\n\nB.\n\nC.\n\nD.")])
+        self.assertIn("merge or cut paragraphs", out)
+
+    def test_help_lists_the_module_limits(self):
+        text = cap_rules_help()
+        for value in (MAX_PARAGRAPHS, MAX_WORDS, MAX_SENTENCES_PER_PARAGRAPH, MAX_SENTENCE_WORDS):
+            self.assertIn(str(value), text)
 
 
 if __name__ == "__main__":
