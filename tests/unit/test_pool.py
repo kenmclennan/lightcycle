@@ -38,7 +38,7 @@ from lightcycle.application.pool.retro_cadence import RetroCadenceResponse
 from lightcycle.application.pool.sweep import SweepResponse
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
-from lightcycle.cli import _tick_event_lines
+from lightcycle.cli import _drain_complete, _tick_event_lines
 from lightcycle.domain.pool import Breaker, SpinLedger, Worker
 from lightcycle.ports.git import GitReadError
 from lightcycle.ports.workers import RegistryUnreadable
@@ -94,6 +94,26 @@ class FakeWorkers:
 
     def mark_checked(self, spawnid):
         self.checked.append(spawnid)
+
+
+class CountingMonitor:
+    def __init__(self):
+        self.calls = 0
+
+    def execute(self):
+        self.calls += 1
+        return NoOpMonitor().execute()
+
+
+class FilingHookCompletions:
+    def __init__(self, store):
+        self._store = store
+        self.calls = 0
+
+    def execute(self, since):
+        self.calls += 1
+        self.filed = create_owned_step(self._store, "filed", step="build", role="agent", id="filed.1")
+        return NoOpHookCompletions().execute(since)
 
 
 class FakeBreakerGate:
@@ -963,6 +983,80 @@ class TestTick(unittest.TestCase):
         self.assertEqual(spawner.spawned, [])
         self.assertEqual(result.spawned, [])
         self.assertEqual(result.pool.free_slots, 0)
+
+    def test_drain_spawns_nothing_and_reports_draining_with_no_free_slots(self):
+        s = FakeStore()
+        create_owned_step(s, "b1", step="build", role="agent")
+        spawner = FakeSpawner()
+        result = make_tick(s, FakeWorkers(), spawner, FakeConfig(max_agents=4)).execute(
+            TickInput(now=1000.0, drain=True)
+        )
+        self.assertEqual(spawner.spawned, [])
+        self.assertEqual(result.spawned, [])
+        self.assertEqual(result.pool.free_slots, 0)
+        self.assertTrue(result.pool.draining)
+
+    def test_not_draining_still_spawns_the_same_ready_work(self):
+        s = FakeStore()
+        create_owned_step(s, "b1", step="build", role="agent")
+        spawner = FakeSpawner()
+        result = make_tick(s, FakeWorkers(), spawner, FakeConfig(max_agents=4)).execute(
+            TickInput(now=1000.0)
+        )
+        self.assertEqual(spawner.spawned, ["agent"])
+        self.assertFalse(result.pool.draining)
+
+    def test_drain_still_reaps_monitors_and_sweeps(self):
+        s = FakeStore()
+        workers = FakeWorkers(workers=[{"spawnid": "sp-1", "pid": 1, "started": 0}], alive_pids={1})
+        monitor = CountingMonitor()
+        make_tick(s, workers, FakeSpawner(), FakeConfig(max_agents=4), monitor=monitor).execute(
+            TickInput(now=1000.0, drain=True)
+        )
+        self.assertEqual(workers.reaped, 1)
+        self.assertEqual(monitor.calls, 1)
+        self.assertIn("probe", workers.calls)
+
+    def test_drain_leaves_a_step_filed_by_hook_completions_queued_and_unspawned(self):
+        s = FakeStore()
+        spawner = FakeSpawner()
+        hooks = FilingHookCompletions(s)
+        result = make_tick(
+            s, FakeWorkers(), spawner, FakeConfig(max_agents=4), hook_completions=hooks
+        ).execute(TickInput(now=1000.0, since=900.0, drain=True))
+        self.assertEqual(spawner.spawned, [])
+        self.assertEqual(result.spawned, [])
+        self.assertEqual(hooks.calls, 1)
+        self.assertEqual([t.id for t in s.ready_steps()], ["filed.1"])
+        self.assertIsNone(s.get_step("filed.1").claimed_by)
+
+    def test_drain_reports_the_alive_count_the_loop_exits_on(self):
+        alive = {}
+        for n in (5, 1, 0):
+            workers = FakeWorkers(
+                workers=[
+                    {"spawnid": "w%d" % i, "pid": i + 1, "step": "s%d" % i, "started": 0}
+                    for i in range(n)
+                ],
+                alive_pids={i + 1 for i in range(n)},
+            )
+            s = FakeStore()
+            for i in range(n):
+                create_owned_step(s, "s%d" % i, step="build", role="agent", id="s%d" % i)
+                s.claim_ready("agent", "w%d" % i)
+            result = make_tick(s, workers, FakeSpawner(), FakeConfig(max_agents=5)).execute(
+                TickInput(now=1000.0, drain=True)
+            )
+            alive[n] = (result.pool.alive, _drain_complete(result))
+        self.assertEqual(alive, {5: (5, False), 1: (1, False), 0: (0, True)})
+
+    def test_drain_never_completes_on_an_unreadable_registry(self):
+        workers = FakeWorkers(raise_workers_state=True)
+        result = make_tick(
+            FakeStore(), workers, FakeSpawner(), FakeConfig(max_agents=5)
+        ).execute(TickInput(now=1000.0, drain=True))
+        self.assertEqual(result.pool.alive, 5)
+        self.assertFalse(_drain_complete(result))
 
     def test_breaker_open_pre_reset_spawns_nothing(self):
         s = FakeStore()

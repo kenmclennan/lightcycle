@@ -127,8 +127,12 @@ from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE, SPECS_WORKSPACE
 from lightcycle.application.pool import (
     AcquireRunLockUseCase,
     BackfillUsageUseCase,
+    ClearDrainUseCase,
     DailySummaryCadenceUseCase,
+    DrainPoolUseCase,
     ListWorkersUseCase,
+    PoolDrainStatusUseCase,
+    PoolRunningUseCase,
     ReleaseRunLockUseCase,
     StartPoolUseCase,
     ResolveLogInput,
@@ -1655,6 +1659,8 @@ def _idle_reason(result):
         return "spin-open"
     if result.spawned:
         return None
+    if result.pool.draining:
+        return "draining"
     if result.pool.free_slots <= 0:
         return "no-free-slots"
     return "ready-role-already-inflight"
@@ -1739,6 +1745,28 @@ def _stop_pool():
     return _stop_pool_lines(resp, grace_seconds)
 
 
+def _drain_complete(result):
+    return result.pool.draining and result.pool.alive == 0
+
+
+def _drain_progress_lines(result, last_waiting):
+    waiting = result.pool.alive
+    if waiting == last_waiting:
+        return [], last_waiting
+    return ["lc start draining - waiting for %d worker(s)" % waiting], waiting
+
+
+def _shutdown_pool_lines():
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    lines = []
+    try:
+        lines.extend(_stop_pool())
+    except Exception as e:
+        sys.stderr.write("shutdown could not finish cleanly: %s\n" % e)
+    return lines
+
+
 def cmd_start(argv):
     a = build_parser(COMMANDS["start"]).parse_args(argv)
     if not require_store():
@@ -1758,6 +1786,7 @@ def cmd_start(argv):
     if not lock_result.acquired:
         sys.stderr.write("lc start already running, pid %d\n" % lock_result.holder_pid)
         return 1
+    ClearDrainUseCase(_container.drain).execute()
 
     def _stop(*_):
         raise KeyboardInterrupt
@@ -1785,12 +1814,16 @@ def cmd_start(argv):
         prev_now = time.time()
         consecutive_failures = 0
         tick_failure_cap = _container.config.tick_failure_cap()
+        last_waiting = None
         while True:
             now = time.time()
             for line in _upgrade_notice_lines(upgrade_cadence.execute(now)):
                 print(line)
+            drain = PoolDrainStatusUseCase(_container.drain, _container.workers).execute(True).draining
             try:
-                result = _run_tick(tick, _container.worker_log, TickInput(now=now, since=prev_now), now)
+                result = _run_tick(
+                    tick, _container.worker_log, TickInput(now=now, since=prev_now, drain=drain), now
+                )
             except Exception:
                 prev_now, consecutive_failures, action = _advance_tick_state(
                     prev_now, consecutive_failures, now, False, tick_failure_cap)
@@ -1803,23 +1836,39 @@ def cmd_start(argv):
             lines, prev_snapshot = _format_tick(result, prev_snapshot, now)
             for line in lines:
                 print(line)
+            if result.pool.draining:
+                progress, last_waiting = _drain_progress_lines(result, last_waiting)
+                for line in progress:
+                    print(line)
+                if _drain_complete(result):
+                    print("lc start drained - no workers running, stopping")
+                    for line in _shutdown_pool_lines():
+                        print(line)
+                    return 0
             time.sleep(interval)
     except KeyboardInterrupt:
         print("\nlc start stopping - press Ctrl-C again only if it hangs")
-        signal.signal(signal.SIGINT, signal.SIG_IGN)
-        signal.signal(signal.SIGTERM, signal.SIG_IGN)
-        try:
-            for line in _stop_pool():
-                print(line)
-        except Exception as e:
-            sys.stderr.write("shutdown could not finish cleanly: %s\n" % e)
+        for line in _shutdown_pool_lines():
+            print(line)
         return 0
     finally:
+        ClearDrainUseCase(_container.drain).execute()
         ReleaseRunLockUseCase(_container.lock).execute()
 
 
 def cmd_stop(argv):
-    build_parser(COMMANDS["stop"]).parse_args(argv)
+    a = build_parser(COMMANDS["stop"]).parse_args(argv)
+    if a.drain:
+        drained = DrainPoolUseCase(_container.lock, _container.drain).execute()
+        if drained.outcome == "no-pool":
+            sys.stderr.write("no pool running\n")
+            return 1
+        if drained.outcome == "already-draining":
+            print("pool already draining")
+            return 0
+        print("lc stop --drain asked pid %d to drain - it exits when its running workers finish"
+              % drained.pid)
+        return 0
     resp = StopPoolSignalUseCase(_container.lock, _container.workers).execute()
     if not resp.signalled:
         sys.stderr.write("no pool running\n")
@@ -2038,6 +2087,11 @@ def cmd_status(argv):
     if a.json:
         print(json.dumps({k: [t.as_dict() for t in v] for k, v in lanes.items()}, indent=2))
     else:
+        drain_status = PoolDrainStatusUseCase(_container.drain, _container.workers).execute(
+            PoolRunningUseCase(_container.lock).execute().running
+        )
+        if drain_status.draining:
+            print("pool draining (%d running)" % drain_status.running)
         flow_service = _flow()
         spin_ledger = _container.spin.load()
         for key in ("inbox", "active", "queue"):

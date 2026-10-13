@@ -23,6 +23,7 @@ class StatusBar(Horizontal):
         pool_running,
         pool_transition_kind=None,
         pool_transition_expired=False,
+        pool_draining_running=None,
         breaker_is_open,
         breaker_is_probing,
         breaker_reset_at,
@@ -38,6 +39,9 @@ class StatusBar(Horizontal):
         elif pool_transition_kind == "stop":
             glyph_key = "pool-stop-timed-out" if pool_transition_expired else "pool-stopping"
             label = "pool stop timed out" if pool_transition_expired else "pool stopping"
+        elif pool_draining_running is not None:
+            glyph_key = "pool-draining"
+            label = "pool draining (%d running)" % pool_draining_running
         else:
             glyph_key = "pool-running" if pool_running else "pool-stopped"
             label = "pool running" if pool_running else "pool not running"

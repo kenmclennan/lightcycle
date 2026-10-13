@@ -228,7 +228,7 @@ COMMANDS = {
     "start": CommandSpec(prog="lc start", args=(
         Arg("--once", action="store_true"), Arg("--detach", action="store_true"),
     )),
-    "stop": CommandSpec(prog="lc stop"),
+    "stop": CommandSpec(prog="lc stop", args=(Arg("--drain", action="store_true"),)),
     "init": CommandSpec(prog="lc init", args=(
         Arg("--guidance-path"),
     )),

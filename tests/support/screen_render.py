@@ -265,7 +265,7 @@ def _long_hierarchy_store(passes=4):
 
 
 def _launch(store, *, lock_running=True, breaker_open=False, size=DEFAULT_SIZE, fs=None, workers=None,
-            launcher=None, machine=None, memory_gate_status=None):
+            launcher=None, machine=None, memory_gate_status=None, drain=None):
     container = make_test_container(
         store=store,
         lock=FakeLock(running=lock_running),
@@ -278,6 +278,7 @@ def _launch(store, *, lock_running=True, breaker_open=False, size=DEFAULT_SIZE, 
         launcher=launcher,
         machine=machine,
         memory_gate_status=memory_gate_status,
+        drain=drain,
     )
     return launch(container, now=lambda: NOW, size=size)
 
@@ -406,6 +407,13 @@ def _priority_pool_holding(size):
     store, _scan, _coding = _populated_store()
     status = FakeMemoryGateStatus({"cap": 0})
     return _launch(store, size=size, workers=_pool_workers(2), memory_gate_status=status)
+
+
+def _priority_pool_draining(size):
+    from tests.support.fake_drain import FakeDrain
+
+    store, _scan, _coding = _populated_store()
+    return _launch(store, size=size, workers=_pool_workers(3), drain=FakeDrain(requested=True))
 
 
 def _priority_config_changed(size):
@@ -1436,6 +1444,7 @@ SCREENS = {
     "priority-list#cost": _priority_cost,
     "priority-list#cost-not-recorded": _priority_cost_not_recorded,
     "priority-list#pool-holding": _priority_pool_holding,
+    "priority-list#pool-draining": _priority_pool_draining,
     "priority-list#config-changed": _priority_config_changed,
     "priority-list#engine-active": _priority_engine_active,
     "goals#normal": _goals_normal,

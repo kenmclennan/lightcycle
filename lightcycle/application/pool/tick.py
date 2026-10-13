@@ -18,6 +18,7 @@ _ACTIVE_ACCRUAL_CAP_TICKS = 3
 class TickInput:
     now: float
     since: Optional[float] = None
+    drain: bool = False
 
 
 @dataclass(frozen=True)
@@ -27,6 +28,7 @@ class PoolState:
     ready: int
     inflight_count: int
     free_slots: int
+    draining: bool = False
 
 
 @dataclass(frozen=True)
@@ -113,6 +115,8 @@ class TickUseCase:
             slots = min(slots, memory_result.cap)
         if breaker_result.spin_open:
             slots = min(slots, 1)
+        if input.drain:
+            slots = 0
         inflight_total = sum(inflight_dict.values())
         ready_roles = ReadyQueue(self._store.ready_steps()).roles()
         ready_count = len(ready_roles)
@@ -142,6 +146,7 @@ class TickUseCase:
                 ready=ready_count,
                 inflight_count=inflight_total,
                 free_slots=slots,
+                draining=input.drain,
             ),
             breaker=BreakerState(
                 open=breaker.is_open,
