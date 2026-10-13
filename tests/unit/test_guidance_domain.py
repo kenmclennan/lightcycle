@@ -153,5 +153,18 @@ class TestParseCitation(unittest.TestCase):
         self.assertEqual(parse_citation("a/b"), ["a/b"])
 
 
+class TestClassifyRetirementFields(unittest.TestCase):
+    def test_covers_and_stale_after_are_populated(self):
+        r = classify("a/b", _meta(covers="https://github.com/x/y/issues/1", stale_after="2027-01-01"), "body")
+        self.assertEqual(r.kind, ENTRY)
+        self.assertEqual(r.entry.covers, "https://github.com/x/y/issues/1")
+        self.assertEqual(r.entry.stale_after, "2027-01-01")
+
+    def test_absent_fields_are_blank(self):
+        r = classify("a/b", _meta(), "body")
+        self.assertEqual(r.entry.covers, "")
+        self.assertEqual(r.entry.stale_after, "")
+
+
 if __name__ == "__main__":
     unittest.main()

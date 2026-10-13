@@ -42,6 +42,22 @@ class GitHubEventsAdapter(GitHubEventsPort):
             return ReadFailure(-1, "could not parse gh pr view JSON for state")
         return data.get("state", "")
 
+    def issue_state(self, url: str) -> Union[str, ReadFailure]:
+        try:
+            result = subprocess.run(
+                ["gh", "issue", "view", url, "--json", "state"], capture_output=True, text=True,
+                timeout=_GH_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired:
+            return _timeout_read_failure()
+        if result.returncode != 0:
+            return ReadFailure(result.returncode, result.stderr)
+        try:
+            data = json.loads(result.stdout)
+        except (json.JSONDecodeError, ValueError):
+            return ReadFailure(-1, "could not parse gh issue view JSON for state")
+        return data.get("state", "")
+
     def is_merged(self, pr: str) -> Union[bool, ReadFailure]:
         state = self._pr_state(pr)
         return state if isinstance(state, ReadFailure) else state == "MERGED"

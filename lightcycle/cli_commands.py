@@ -127,6 +127,9 @@ COMMANDS = {
     "specs-dir": CommandSpec(prog="lc specs-dir", args=(
         Arg("--check", action="store_true"),
     )),
+    "guidance": CommandSpec(prog="lc guidance", args=(
+        Arg("--json", action="store_true"),
+    )),
     "guidance-dir": CommandSpec(prog="lc guidance-dir", args=(
         Arg("--check", action="store_true"),
     )),

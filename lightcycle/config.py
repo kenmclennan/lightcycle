@@ -37,6 +37,8 @@ _ENV_OVERRIDE_VARS = {
     "summary-shortcode": "LC_SUMMARY_SHORTCODE",
     "memory-reserve-fraction": "LC_MEMORY_RESERVE_FRACTION",
     "guidance-budget-bytes": "LC_GUIDANCE_BUDGET_BYTES",
+    "guidance-unused-after-deliveries": "LC_GUIDANCE_UNUSED_AFTER_DELIVERIES",
+    "guidance-dormant-days": "LC_GUIDANCE_DORMANT_DAYS",
 }
 
 _TRUE = ("true", "yes", "1", "on")
@@ -104,12 +106,16 @@ _SEED_KEYS = [
     ("summary-shortcode", "SUM"),
     ("memory-reserve-fraction", "0.65"),
     ("guidance-budget-bytes", "6144"),
+    ("guidance-unused-after-deliveries", "60"),
+    ("guidance-dormant-days", "60"),
 ]
 
 _NUMERIC_RANGES = {
     "memory-reserve-fraction": (0.0, 1.0),
     "max-agents": (0, None),
     "guidance-budget-bytes": (0, None),
+    "guidance-unused-after-deliveries": (1, None),
+    "guidance-dormant-days": (1, None),
     "workflow-retention": (1, None),
     "max-boot-seconds": (0, None),
     "max-session-seconds": (0, None),
@@ -508,6 +514,16 @@ class Config:
         env = self._env_int("LC_GUIDANCE_BUDGET_BYTES", None)
         value = env if env is not None else self._required_int("guidance-budget-bytes")
         return self._check_range("guidance-budget-bytes", value)
+
+    def guidance_unused_after_deliveries(self):
+        env = self._env_int("LC_GUIDANCE_UNUSED_AFTER_DELIVERIES", None)
+        value = env if env is not None else self._required_int("guidance-unused-after-deliveries")
+        return self._check_range("guidance-unused-after-deliveries", value)
+
+    def guidance_dormant_days(self):
+        env = self._env_int("LC_GUIDANCE_DORMANT_DAYS", None)
+        value = env if env is not None else self._required_int("guidance-dormant-days")
+        return self._check_range("guidance-dormant-days", value)
 
     def audit_shortcode(self):
         env = self._env("LC_AUDIT_SHORTCODE")

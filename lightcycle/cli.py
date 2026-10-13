@@ -95,6 +95,7 @@ from lightcycle.application.work import (
 )
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.inspect import DoctorInput, DoctorUseCase
+from lightcycle.application.inspect.report_guidance import ReportGuidanceUseCase
 from lightcycle.application.workflows.add import AddWorkflowSourceUseCase
 from lightcycle.application.workflows.set_writable import SetOriginWritableUseCase
 from lightcycle.application.workflows.check_dir import (
@@ -285,6 +286,8 @@ COMMAND_GROUPS = [
         ("spawn", "<role>", "spawn one worker for a role"),
         ("specs-dir", "[--check]", "print the resolved specs directory (absolute path); "
          "--check validates it against specs-remote"),
+        ("guidance", "[--json]", "report each guidance entry's deliveries and citations and "
+         "flag retirement candidates (read-only; counts cover steps still in the store)"),
         ("guidance-dir", "[--check]", "print the resolved guidance repo directory (absolute "
          "path); --check validates it against the registered guidance remote"),
     ]),
@@ -656,6 +659,40 @@ def _project_dir(identity, remote_label, check, subject):
 def cmd_specs_dir(argv):
     a = build_parser(COMMANDS["specs-dir"]).parse_args(argv)
     return _project_dir(SPECS_WORKSPACE, "specs-remote", a.check, "specs")
+
+
+def _guidance_flags_text(row):
+    return "; ".join("%s (%s)" % (f.name, f.evidence) for f in row.flags) or "-"
+
+
+def cmd_guidance(argv):
+    a = build_parser(COMMANDS["guidance"]).parse_args(argv)
+    c = _container
+    try:
+        report = ReportGuidanceUseCase(c.store, c.fs, c.github, c.config).execute(time.time())
+    except UseCaseError as e:
+        sys.stderr.write("%s\n" % e)
+        return 1
+    if a.json:
+        print(json.dumps(report.as_dict(), indent=2))
+        return 0
+    lines = [("ID", "STATUS", "DELIVERED", "CITED", "LAST DELIVERED", "FLAGS")]
+    for r in report.rows:
+        lines.append((
+            r.id, r.status or "-", str(r.deliveries), str(r.citations),
+            r.last_delivered[:10] if r.last_delivered else "never", _guidance_flags_text(r),
+        ))
+    widths = [max(len(line[i]) for line in lines) for i in range(5)]
+    for line in lines:
+        print("  ".join(line[i].ljust(widths[i]) for i in range(5)) + "  " + line[5])
+    notes = list(report.notes)
+    for r in report.rows:
+        notes.extend("%s: %s" % (r.id, n) for n in r.notes)
+    if notes:
+        print("notes:")
+        for n in notes:
+            print(n)
+    return 0
 
 
 def cmd_guidance_dir(argv):
