@@ -1,5 +1,5 @@
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional
 
 from lightcycle.domain.work import Artifact, Item, worker_log_filename
@@ -17,11 +17,12 @@ class TraceNode:
     state: str
     log: Optional[str]
     role: Optional[str]
+    artifacts: List[Artifact] = field(default_factory=list)
 
     def as_dict(self):
         return {
             "id": self.id, "step": self.step, "state": self.state, "log": self.log,
-            "role": self.role,
+            "role": self.role, "artifacts": [a.as_dict() for a in self.artifacts],
         }
 
 
@@ -63,7 +64,7 @@ class TraceUseCase:
         steps = [
             TraceNode(
                 id=kt.id, step=kt.stage, state=kt.state, log=self._log_for_step(kt),
-                role=kt.role,
+                role=kt.role, artifacts=self._store.item_artifacts(kt.id),
             )
             for kt in self._store.children(input.item)
         ]

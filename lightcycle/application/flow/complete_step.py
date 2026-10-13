@@ -130,6 +130,7 @@ class CompleteStepUseCase:
         self._store.note(input.step, "outcome: %s" % input.outcome)
         self._mark_retroed()
         if fid is not None:
+            self._store.note(fid, "findings: lc show %s" % input.step)
             self._store.note(fid, input.note)
         self._cascade_close(t.item)
         return CompleteResponse(next_step=None)

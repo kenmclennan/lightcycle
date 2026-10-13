@@ -403,6 +403,16 @@ class TestCompleteStepEngineAudit(unittest.TestCase):
         self.assertEqual(human[0].stage, FINDINGS_STEP)
         self.assertEqual(human[0].state, "waiting")
 
+    def test_review_findings_notes_begin_by_naming_the_audit_step(self):
+        s = FakeStore()
+        self._reviewed_item(s)
+        batch = self._retro_batch(s)
+        aid = self._audit_step(s, batch)
+        self._uc(s).execute(CompleteInput(step=aid, outcome="findings", note="the digest"))
+        human = [c for c in s.children(batch) if c.role == "human"][0]
+        self.assertTrue(
+            (s.get_node(human.id).notes or "").startswith("findings: lc show %s\n" % aid))
+
     def test_findings_step_title_derives_from_the_batch_items_actual_title(self):
         s = FakeStore()
         batch = self._retro_batch(s, title="custom batch title")

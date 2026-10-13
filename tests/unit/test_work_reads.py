@@ -79,6 +79,17 @@ class TestTrace(unittest.TestCase):
         self.assertEqual(resp.steps[0].id, k)
         self.assertEqual(resp.steps[0].log, "/l/k.log")
 
+    def test_step_artifacts_appear_under_their_step_in_the_trace(self):
+        s = FakeStore()
+        sid = s.create_item("st", "d")
+        k = s.create_step(step="audit", role="agent", parent=sid)
+        s.add_artifact(k, "findings", "the digest")
+        resp = TraceUseCase(s, _Workers([]), _Config()).execute(TraceInput(item=sid))
+        self.assertEqual(
+            resp.as_dict()["steps"][0]["artifacts"][0]["type"], "findings")
+        self.assertEqual(
+            resp.as_dict()["steps"][0]["artifacts"][0]["value"], "the digest")
+
     def test_step_role_survives_to_the_trace(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")
