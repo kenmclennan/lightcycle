@@ -1,5 +1,6 @@
 from lightcycle.ports.backup import BackupPort
 from lightcycle.ports.breaker import BreakerPort
+from lightcycle.ports.drain import PoolDrainPort
 from lightcycle.ports.fs import FsPort
 from lightcycle.ports.git import GitPort
 from lightcycle.ports.github import GitHubEventsPort
@@ -27,6 +28,7 @@ __all__ = [
     "LauncherPort",
     "MachinePort",
     "MemoryGateStatusPort",
+    "PoolDrainPort",
     "RunLockPort",
     "ScaffoldPort",
     "SpawnerPort",

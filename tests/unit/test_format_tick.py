@@ -18,7 +18,7 @@ def _result(**kw):
         conflicted=[], ci_resolved=[], hook_completed=[], cadence_fired=[], backed_up=None,
         backup_pruned=[], alive=0, max_agents=4, ready=0, inflight_count=0, free_slots=0,
         breaker_open=False, breaker_reset_at=None, breaker_opened=False, breaker_closed=False,
-        breaker_rearmed=False, spin_open=False, spin_opened=False,
+        breaker_rearmed=False, spin_open=False, spin_opened=False, draining=False,
     )
     defaults.update(kw)
     return TickResponse(
@@ -38,6 +38,7 @@ def _result(**kw):
         pool=PoolState(
             alive=defaults["alive"], max_agents=defaults["max_agents"], ready=defaults["ready"],
             inflight_count=defaults["inflight_count"], free_slots=defaults["free_slots"],
+            draining=defaults["draining"],
         ),
         breaker=BreakerState(
             open=defaults["breaker_open"], reset_at=defaults["breaker_reset_at"],
@@ -178,6 +179,10 @@ class TestFormatTick(unittest.TestCase):
 
 
 class TestIdleReason(unittest.TestCase):
+    def test_draining_with_ready_work_returns_draining_ahead_of_no_free_slots(self):
+        result = _result(ready=2, spawned=[], free_slots=0, draining=True)
+        self.assertEqual(_idle_reason(result), "draining")
+
     def test_no_ready_steps_returns_none(self):
         result = _result(ready=0, spawned=[], breaker_open=True, free_slots=0)
         self.assertIsNone(_idle_reason(result))

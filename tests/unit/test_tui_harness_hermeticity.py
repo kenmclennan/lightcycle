@@ -10,6 +10,7 @@ from lightcycle.ports.backup import BackupPort
 from lightcycle.ports.git import GitPort
 from lightcycle.ports.spawner import SpawnerPort
 from tests.support import tui_harness
+from tests.support.fake_drain import FakeDrain
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_github import FakeGitHub
 from tests.support.fake_machine import FakeMachine
@@ -36,6 +37,7 @@ def _fully_faked_container(**overrides):
     kwargs = dict(
         store=FakeStore(),
         lock=FakeLock(),
+        drain=FakeDrain(),
         config=HermeticTuiConfig(),
         workflow_source=FakeWorkflowSource(),
         breaker=FakeBreakerPort(),

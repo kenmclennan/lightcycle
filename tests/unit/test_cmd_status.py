@@ -5,15 +5,21 @@ from unittest import mock
 
 import lightcycle.cli as cli_mod
 from lightcycle.cli import cmd_status
+from tests.support.fake_drain import FakeDrain
 from tests.support.fake_spin import FakeSpinPort
+from tests.support.fake_workers import FakeWorkers
+from tests.support.tui_harness import FakeLock
 from tests.support.fake_store import FakeStore
 from tests.support.factories import make_step
 
 
 class FakeContainer:
-    def __init__(self, store=None, spin=None):
+    def __init__(self, store=None, spin=None, lock=None, drain=None, workers=None):
         self.store = store
         self.spin = spin if spin is not None else FakeSpinPort()
+        self.lock = lock if lock is not None else FakeLock(running=False)
+        self.drain = drain if drain is not None else FakeDrain()
+        self.workers = workers if workers is not None else FakeWorkers()
 
 
 class _FixedFlowService:
@@ -75,3 +81,44 @@ class TestCmdStatusDisplayPhrase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestCmdStatusDraining(unittest.TestCase):
+    def setUp(self):
+        self._orig = cli_mod._container
+        self.addCleanup(lambda: cli_mod.set_container(self._orig))
+
+    def _run(self, *argv, running=True, requested=True, workers=None):
+        store = FakeStore()
+        cli_mod.set_container(FakeContainer(
+            store=store, lock=FakeLock(running=running), drain=FakeDrain(requested=requested),
+            workers=workers,
+        ))
+        out = io.StringIO()
+        with mock.patch.object(cli_mod, "_flow", lambda: _FixedFlowService({})), \
+                redirect_stdout(out):
+            rc = cmd_status(list(argv))
+        return rc, out.getvalue()
+
+    def test_plain_output_starts_with_the_draining_line_and_remaining_count(self):
+        workers = FakeWorkers(
+            workers=[{"spawnid": "w1", "pid": 1, "started": 0}, {"spawnid": "w2", "pid": 2, "started": 0}],
+            alive_pids=(1, 2),
+        )
+        _rc, out = self._run(workers=workers)
+        self.assertEqual(out.splitlines()[0], "pool draining (2 running)")
+
+    def test_plain_output_is_unchanged_when_not_draining(self):
+        _rc, draining = self._run()
+        _rc, idle = self._run(requested=False)
+        self.assertEqual(draining.splitlines()[1:], idle.splitlines())
+        self.assertFalse(idle.startswith("pool draining"))
+
+    def test_a_stale_marker_with_no_pool_shows_nothing(self):
+        _rc, out = self._run(running=False, requested=True)
+        self.assertNotIn("draining", out)
+
+    def test_json_output_is_identical_in_both_states(self):
+        _rc, draining = self._run("--json")
+        _rc, idle = self._run("--json", requested=False)
+        self.assertEqual(draining, idle)

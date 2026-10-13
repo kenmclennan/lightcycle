@@ -18,6 +18,11 @@ from lightcycle.application.pool.live_usage import LiveUsageAccrualUseCase
 from lightcycle.application.pool.memory_gate import MemoryGateResponse, MemoryGateUseCase
 from lightcycle.application.pool.monitor_prs import MonitorPrsUseCase
 from lightcycle.application.pool.pool_control import (
+    ClearDrainUseCase,
+    DrainPoolResponse,
+    DrainPoolUseCase,
+    PoolDrainStatus,
+    PoolDrainStatusUseCase,
     LiveWorkerCountUseCase,
     StartPoolResponse,
     StartPoolUseCase,
@@ -51,8 +56,11 @@ __all__ = [
     "BreakerGateUseCase",
     "BreakerStatusResponse",
     "BreakerStatusUseCase",
+    "ClearDrainUseCase",
     "DailySummaryCadenceResponse",
     "DailySummaryCadenceUseCase",
+    "DrainPoolResponse",
+    "DrainPoolUseCase",
     "HookCompletionsResponse",
     "HookCompletionsUseCase",
     "ListWorkersUseCase",
@@ -60,6 +68,8 @@ __all__ = [
     "MemoryGateResponse",
     "MemoryGateUseCase",
     "MonitorPrsUseCase",
+    "PoolDrainStatus",
+    "PoolDrainStatusUseCase",
     "PoolHoldResponse",
     "PoolHoldStatusUseCase",
     "PoolRunningResponse",

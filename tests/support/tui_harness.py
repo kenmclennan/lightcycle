@@ -12,6 +12,7 @@ from lightcycle.adapters.fsio import FsAdapter
 from lightcycle.adapters.github import GitHubEventsAdapter
 from lightcycle.adapters.gitio import GitAdapter
 from lightcycle.adapters.launcher import LauncherAdapter
+from lightcycle.adapters.drain import PoolDrainAdapter
 from lightcycle.adapters.lock import RunLockAdapter
 from lightcycle.adapters.machine import MachineAdapter
 from lightcycle.adapters.memory_gate_status import MemoryGateStatusAdapter
@@ -37,6 +38,7 @@ from lightcycle.ports.workflow_source import WorkflowSourcePort
 from lightcycle.adapters.tui.app import LightcycleApp
 from lightcycle.adapters.tui.design_system import ACTIVE_GLYPH_REST_INDEX
 from lightcycle.adapters.tui.hub import NodeHubScreen
+from tests.support.fake_drain import FakeDrain
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_github import FakeGitHub
 from tests.support.fake_machine import FakeMachine
@@ -240,6 +242,7 @@ _LIVE_ADAPTER_TYPES = {
     "config": Config,
     "store": SqliteStore,
     "lock": RunLockAdapter,
+    "drain": PoolDrainAdapter,
     "git": GitAdapter,
     "spawner": SpawnerAdapter,
     "workers": WorkersAdapter,
@@ -270,7 +273,7 @@ def make_test_container(store=None, lock=None, breaker=None, fs=None, workers=No
                          launcher=None, git=None, spawner=None, github=None, backup=None,
                          workflow_bundle=None, worker_log=None, autostart_pool=False,
                          machine=None, memory_gate_status=None, tui_metrics=False,
-                         upgrade_check_seconds=3600):
+                         upgrade_check_seconds=3600, drain=None):
     fs_double = fs or FakeFs()
     config = HermeticTuiConfig(
         autostart_pool=autostart_pool, tui_metrics=tui_metrics,
@@ -284,6 +287,7 @@ def make_test_container(store=None, lock=None, breaker=None, fs=None, workers=No
     container = Container(
         store=store_double,
         lock=lock or FakeLock(running=False),
+        drain=drain if drain is not None else FakeDrain(),
         config=config,
         workflow_source=FakeWorkflowSource(),
         breaker=breaker or FakeBreakerPort(),

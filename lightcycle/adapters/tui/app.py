@@ -65,7 +65,9 @@ from lightcycle.adapters.tui.row_grid import (
 from lightcycle.application.goals import ListGoalsUseCase
 from lightcycle.application.pool import (
     BreakerStatusUseCase,
+    DrainPoolUseCase,
     LiveWorkerCountUseCase,
+    PoolDrainStatusUseCase,
     PoolHoldStatusUseCase,
     PoolRunningUseCase,
     StartPoolUseCase,
@@ -102,6 +104,7 @@ PICKER_CANCELLED = object()
 
 POOL_PROMPT_CANCELLED = object()
 POOL_PROMPT_STOP = "stop"
+POOL_PROMPT_DRAIN = "drain"
 POOL_PROMPT_QUIT_LEAVE = "quit-leave"
 POOL_PROMPT_QUIT_STOP = "quit-stop"
 POOL_PROMPT_MIN_WIDTH = 52
@@ -1858,11 +1861,12 @@ class LightcycleApp(App):
         else:
             self._rebuild_table(table, rows)
 
-    def _render_status_bar(self, status_bar, running, breaker, hold) -> None:
+    def _render_status_bar(self, status_bar, running, breaker, hold, drain=None) -> None:
         status_bar.report(
             pool_running=running,
             pool_transition_kind=self._pool_transition_kind,
             pool_transition_expired=self._pool_transition_expired,
+            pool_draining_running=drain.running if drain is not None and drain.draining else None,
             breaker_is_open=breaker.is_open,
             breaker_is_probing=breaker.is_probing,
             breaker_reset_at=breaker.reset_at,
@@ -1879,6 +1883,7 @@ class LightcycleApp(App):
             self._clear_pool_transition()
         elif self._pool_transition_kind == "stop" and not running:
             self._clear_pool_transition()
+        drain = PoolDrainStatusUseCase(self._container.drain, self._container.workers).execute(running)
         breaker = BreakerStatusUseCase(self._container.breaker).execute(self._now().timestamp())
         hold = PoolHoldStatusUseCase(
             self._container.memory_gate_status, self._container.workers, self._container.config,
@@ -1888,7 +1893,7 @@ class LightcycleApp(App):
                 status_bar = screen.query_one(StatusBar)
             except NoMatches:
                 continue
-            self._render_status_bar(status_bar, running, breaker, hold)
+            self._render_status_bar(status_bar, running, breaker, hold, drain)
 
     def _begin_pool_transition(self, kind) -> None:
         self._pool_transition_kind = kind
@@ -2123,16 +2128,19 @@ class LightcycleApp(App):
             self._start_pool()
             self._begin_pool_transition("start")
             return
+        options = [(POOL_PROMPT_STOP, "Stop the pool")]
+        if not self._container.drain.requested():
+            options.append((POOL_PROMPT_DRAIN, "Drain: finish running work, then stop"))
+        options.append((POOL_PROMPT_CANCELLED, "Cancel"))
         self.push_screen(
-            PoolPromptScreen(
-                "Stop the pool?",
-                pool_prompt_body(self._live_worker_count()),
-                [(POOL_PROMPT_STOP, "Stop the pool"), (POOL_PROMPT_CANCELLED, "Cancel")],
-            ),
+            PoolPromptScreen("Stop the pool?", pool_prompt_body(self._live_worker_count()), options),
             self._on_stop_prompt_dismiss,
         )
 
     def _on_stop_prompt_dismiss(self, result) -> None:
+        if result == POOL_PROMPT_DRAIN:
+            DrainPoolUseCase(self._container.lock, self._container.drain).execute()
+            return
         if result != POOL_PROMPT_STOP:
             return
         StopPoolSignalUseCase(self._container.lock, self._container.workers).execute()

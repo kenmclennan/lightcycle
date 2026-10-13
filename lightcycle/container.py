@@ -3,6 +3,7 @@ import os
 from lightcycle.adapters.backup import SqliteBackupAdapter
 from lightcycle.adapters.breaker import BreakerAdapter
 from lightcycle.adapters.claude_stream import ClaudeStreamAdapter
+from lightcycle.adapters.drain import PoolDrainAdapter
 from lightcycle.adapters.fsio import FsAdapter
 from lightcycle.adapters.github import GitHubEventsAdapter
 from lightcycle.adapters.gitio import GitAdapter
@@ -28,6 +29,7 @@ class Container:
         github=None, lock=None, breaker=None, backup=None, workflow_source=None, launcher=None,
         spin=None, now=None, workflow_bundle=None, worker_log=None, scaffold=None, upgrade=None,
         claude_stream=None, machine=None, memory_gate_status=None,
+        drain=None,
     ):
         self.config = config if config is not None else Config()
         self.store = store if store is not None else SqliteStore(self.config, now=now)
@@ -42,6 +44,7 @@ class Container:
         self.scaffold = scaffold if scaffold is not None else ScaffoldAdapter()
         self.github = github if github is not None else GitHubEventsAdapter()
         self.lock = lock if lock is not None else RunLockAdapter(self.config)
+        self.drain = drain if drain is not None else PoolDrainAdapter(self.config)
         self.breaker = breaker if breaker is not None else BreakerAdapter(self.config)
         self.spin = spin if spin is not None else SpinAdapter(self.config)
         self.backup = backup if backup is not None else SqliteBackupAdapter(self.config)

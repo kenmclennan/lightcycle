@@ -51,6 +51,7 @@ FOOTER_GLYPHS = {
     "config-changed": Glyph("↻", "amber"),
     "pool-starting": Glyph("●", "amber"),
     "pool-stopping": Glyph("○", "amber"),
+    "pool-draining": Glyph("◑", "amber"),
     "pool-start-timed-out": Glyph("●", "red"),
     "pool-stop-timed-out": Glyph("○", "red"),
 }
