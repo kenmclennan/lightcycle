@@ -96,10 +96,10 @@ class TestProjectFacets(unittest.TestCase):
             SetProjectFacetsUseCase(self.store).execute("acme/x", "a_b")
         self.assertEqual(self.store.get_project("acme/x").facets, ("kotlin",))
 
-    def test_set_works_on_a_bare_identity_such_as_knowledge(self):
-        self.store.add_project("knowledge", local_path="/kb")
-        SetProjectFacetsUseCase(self.store).execute("knowledge", "okf")
-        self.assertEqual(self.store.get_project("knowledge").facets, ("okf",))
+    def test_set_works_on_a_bare_identity_such_as_guidance(self):
+        self.store.add_project("guidance", local_path="/kb")
+        SetProjectFacetsUseCase(self.store).execute("guidance", "okf")
+        self.assertEqual(self.store.get_project("guidance").facets, ("okf",))
 
 
 class TestCmdProjectFacets(unittest.TestCase):

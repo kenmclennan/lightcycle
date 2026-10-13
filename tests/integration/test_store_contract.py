@@ -287,6 +287,71 @@ class TestSqliteStoreAbandonedDispositionMigration(unittest.TestCase):
         self.assertEqual(reopened.get_node(item).disposition, "completed")
 
 
+class TestSqliteStoreRenamesTheKnowledgeProject(unittest.TestCase):
+    def _seeded(self, *identities):
+        s = make_sqlite_store()
+        config = s._config
+        db_path = s._db_path
+        s.release()
+        conn = sqlite3.connect(db_path)
+        for identity in identities:
+            conn.execute(
+                "INSERT INTO projects (identity, shortcode, local_path, remote, facets) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (identity, "SC-" + identity, "/path/" + identity, "git@x:" + identity, "a,b"),
+            )
+        conn.commit()
+        conn.close()
+        return config
+
+    def _row(self, store, identity):
+        project = store.get_project(identity)
+        if project is None:
+            return None
+        return (project.shortcode, project.local_path, project.remote, project.facets)
+
+    def test_knowledge_only_is_renamed_to_guidance_keeping_every_field(self):
+        config = self._seeded("knowledge", "acme/x")
+
+        reopened = SqliteStore(config)
+
+        self.assertEqual(
+            self._row(reopened, "guidance"),
+            ("SC-knowledge", "/path/knowledge", "git@x:knowledge", ("a", "b")),
+        )
+        self.assertIsNone(reopened.get_project("knowledge"))
+        self.assertEqual(
+            self._row(reopened, "acme/x"), ("SC-acme/x", "/path/acme/x", "git@x:acme/x", ("a", "b"))
+        )
+
+    def test_both_registered_are_left_exactly_as_seeded(self):
+        config = self._seeded("knowledge", "guidance", "acme/x")
+
+        reopened = SqliteStore(config)
+
+        self.assertEqual(
+            self._row(reopened, "knowledge"),
+            ("SC-knowledge", "/path/knowledge", "git@x:knowledge", ("a", "b")),
+        )
+        self.assertEqual(
+            self._row(reopened, "guidance"),
+            ("SC-guidance", "/path/guidance", "git@x:guidance", ("a", "b")),
+        )
+        self.assertIsNotNone(reopened.get_project("acme/x"))
+
+    def test_a_second_reopen_is_a_no_op(self):
+        config = self._seeded("knowledge")
+        SqliteStore(config).release()
+
+        again = SqliteStore(config)
+
+        self.assertEqual(
+            self._row(again, "guidance"),
+            ("SC-knowledge", "/path/knowledge", "git@x:knowledge", ("a", "b")),
+        )
+        self.assertIsNone(again.get_project("knowledge"))
+
+
 class TestSqliteStoreAddsColumnsToTablesThatAlreadyExist(unittest.TestCase):
     def _store_without_the_ledger_columns(self):
         s = make_sqlite_store()

@@ -4,8 +4,8 @@ import os
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.git_identity import require_git_identity
-from lightcycle.domain.flow.flow import KNOWLEDGE_WORKSPACE, SPECS_WORKSPACE
-from lightcycle.domain.knowledge.skeleton import (
+from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE, SPECS_WORKSPACE
+from lightcycle.domain.guidance.skeleton import (
     COMMIT_MESSAGE,
     CONVENTIONS_PATH,
     CONVENTIONS_TEXT,
@@ -14,7 +14,7 @@ from lightcycle.domain.knowledge.skeleton import (
 )
 
 _DEFAULT_SPECS_PATH = "~/workspace/specs"
-_DEFAULT_KNOWLEDGE_PATH = "~/workspace/knowledge"
+_DEFAULT_GUIDANCE_PATH = "~/workspace/agent-guidance"
 
 
 @dataclass(frozen=True)
@@ -22,8 +22,8 @@ class InitGridResponse:
     existed: bool
     created: bool
     config_path: str
-    knowledge_outcome: str = ""
-    knowledge_path: str = ""
+    guidance_outcome: str = ""
+    guidance_path: str = ""
 
 
 class InitGridUseCase:
@@ -33,53 +33,53 @@ class InitGridUseCase:
         self._config = config
         self._git = git
 
-    def execute(self, knowledge_path=None) -> InitGridResponse:
-        self._require_identity_if_creating(knowledge_path)
+    def execute(self, guidance_path=None) -> InitGridResponse:
+        self._require_identity_if_creating(guidance_path)
         existed = self._fs.store_ready()
         self._store.ensure_store()
         self._fs.ensure_logs_dir()
         created = self._config.ensure_config()
         self._ensure_specs_project()
-        outcome, path = self._ensure_knowledge_project(knowledge_path)
+        outcome, path = self._ensure_guidance_project(guidance_path)
         return InitGridResponse(
             existed=existed,
             created=created,
             config_path=self._config.config_path(),
-            knowledge_outcome=outcome,
-            knowledge_path=path,
+            guidance_outcome=outcome,
+            guidance_path=path,
         )
 
     def _require_identity_if_creating(self, requested):
-        wanted = self._config.expand_path(requested or _DEFAULT_KNOWLEDGE_PATH)
-        if self._store.get_project(KNOWLEDGE_WORKSPACE) is None and not self._fs.exists(wanted):
+        wanted = self._config.expand_path(requested or _DEFAULT_GUIDANCE_PATH)
+        if self._store.get_project(GUIDANCE_WORKSPACE) is None and not self._fs.exists(wanted):
             require_git_identity(self._git, wanted)
 
-    def _ensure_knowledge_project(self, requested):
-        wanted = self._config.expand_path(requested or _DEFAULT_KNOWLEDGE_PATH)
-        registered = self._store.get_project(KNOWLEDGE_WORKSPACE)
+    def _ensure_guidance_project(self, requested):
+        wanted = self._config.expand_path(requested or _DEFAULT_GUIDANCE_PATH)
+        registered = self._store.get_project(GUIDANCE_WORKSPACE)
         if registered is not None:
             if requested and wanted != registered.local_path:
                 raise UseCaseError(
-                    "knowledge base is already registered at %s, not %s - run "
+                    "guidance repo is already registered at %s, not %s - run "
                     "`lc project rm %s` first to move it"
-                    % (registered.local_path, wanted, KNOWLEDGE_WORKSPACE)
+                    % (registered.local_path, wanted, GUIDANCE_WORKSPACE)
                 )
             return "unchanged", registered.local_path
         if not self._fs.exists(wanted):
-            self._create_knowledge_repo(wanted)
-            self._store.add_project(KNOWLEDGE_WORKSPACE, local_path=wanted, remote=None)
+            self._create_guidance_repo(wanted)
+            self._store.add_project(GUIDANCE_WORKSPACE, local_path=wanted, remote=None)
             return "created", wanted
         if self._git.is_repo_root(wanted):
             self._store.add_project(
-                KNOWLEDGE_WORKSPACE, local_path=wanted, remote=self._git.remote_url(wanted)
+                GUIDANCE_WORKSPACE, local_path=wanted, remote=self._git.remote_url(wanted)
             )
             return "registered", wanted
         raise UseCaseError(
-            "knowledge base path %s exists and is not a git repo root - remove it, choose "
-            "another with --knowledge-path, or run `git init` in it" % wanted
+            "guidance repo path %s exists and is not a git repo root - remove it, choose "
+            "another with --guidance-path, or run `git init` in it" % wanted
         )
 
-    def _create_knowledge_repo(self, path):
+    def _create_guidance_repo(self, path):
         outcome = self._git.init_repo(path)
         if not outcome.ok:
             raise UseCaseError(self._creation_failure(path, outcome.detail))
@@ -89,7 +89,7 @@ class InitGridUseCase:
             raise UseCaseError(self._creation_failure(path, "the initial commit failed"))
 
     def _creation_failure(self, path, detail):
-        return "could not create the knowledge base at %s (%s) - remove it and re-run `lc init`" % (
+        return "could not create the guidance repo at %s (%s) - remove it and re-run `lc init`" % (
             path,
             detail or "git init failed",
         )
