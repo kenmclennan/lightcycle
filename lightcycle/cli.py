@@ -1035,6 +1035,11 @@ def cmd_trace(argv):
         for t in resp.steps:
             log = "  log:" + t.log if t.log else ""
             print("  step %s  %s  [%s]%s" % (t.id, t.step or "-", t.state, log))
+            for art in t.artifacts:
+                if art.type == "findings":
+                    print("    artifact findings: see lc show %s" % t.id)
+                else:
+                    print("    artifact %s" % art.type)
     return 0
 
 
