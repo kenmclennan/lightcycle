@@ -26,6 +26,7 @@ from lightcycle.adapters.worker_session import (
     session_cwd,
 )
 from lightcycle.adapters.claude_stream import parse_rate_limit_event, saw_session_activity
+from lightcycle.domain.guidance.guidance import GuidanceSelection
 from lightcycle.ports.workflow_bundle import StepPrompt
 from lightcycle.domain.pool.worker_session import (
     CLOSE,
@@ -100,6 +101,41 @@ class TestPlanSession(unittest.TestCase):
             lambda f, pin: StepPrompt(meta={"model": "opus"}, body="B-body"),
             self._never_reclaim, "agent")
         self.assertEqual(plan.workspace, "/work/item-1")
+
+    def test_default_selection_leaves_the_system_prompt_byte_identical(self):
+        plan = plan_session(
+            lambda role: self._resp("wfB/x@sha"),
+            lambda f, pin: StepPrompt(meta={"model": "opus"}, body="B-body\n\n"),
+            self._never_reclaim, "agent")
+        self.assertEqual(plan.sysprompt, "B-body\n\n")
+        self.assertEqual((plan.guidance_delivered, plan.guidance_skipped), ((), ()))
+
+    def test_a_selection_is_appended_after_the_step_body(self):
+        selection = GuidanceSelection(
+            section="## Guidance for this project\n\nx", delivered=("a",), skipped=("b",),
+            notes=("n",))
+        seen = []
+        plan = plan_session(
+            lambda role: self._resp("wfB/x@sha"),
+            lambda f, pin: StepPrompt(meta={"model": "opus"}, body="B-body\n\n"),
+            self._never_reclaim, "agent", guidance=lambda resp: seen.append(resp) or selection)
+        self.assertEqual(plan.sysprompt, "B-body\n\n## Guidance for this project\n\nx")
+        self.assertEqual(
+            (plan.guidance_delivered, plan.guidance_skipped, plan.guidance_notes, plan.guidance_recorded),
+            (("a",), ("b",), ("n",), True))
+        self.assertEqual(len(seen), 1)
+
+    def test_a_raising_selection_still_plans_with_an_unmodified_prompt_and_a_note(self):
+        def boom(resp):
+            raise RuntimeError("kaboom")
+
+        plan = plan_session(
+            lambda role: self._resp("wfB/x@sha"),
+            lambda f, pin: StepPrompt(meta={"model": "opus"}, body="B-body"),
+            self._never_reclaim, "agent", guidance=boom)
+        self.assertEqual(plan.sysprompt, "B-body")
+        self.assertEqual(plan.guidance_notes, ("kaboom",))
+        self.assertFalse(plan.guidance_recorded)
 
     def test_workspace_is_none_when_claim_has_none(self):
         plan = plan_session(

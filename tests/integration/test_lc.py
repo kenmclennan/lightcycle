@@ -3271,6 +3271,54 @@ class TestShowSurfacesSessionId(unittest.TestCase):
         self.assertEqual(json.loads(out)["session_id"], "sess-prior")
 
 
+class TestShowSurfacesGuidanceRecord(unittest.TestCase):
+    def setUp(self):
+        _fake_setUp(self)
+
+    def _step(self):
+        item = self.store.create_item("an item", "a description")
+        return item, self.store.create_step(step="build", role="agent", parent=item)
+
+    def test_show_surfaces_delivered_and_skipped_ids_as_lists(self):
+        _, step = self._step()
+        self.store.replace_artifact(step, "guidance-delivered", "a/b\nc", internal=True)
+        self.store.replace_artifact(step, "guidance-skipped", "d", internal=True)
+        rc, out, err = call(_cli_mod.cmd_show, step)
+        self.assertEqual(rc, 0, err)
+        data = json.loads(out)
+        self.assertEqual(data["guidance_delivered"], ["a/b", "c"])
+        self.assertEqual(data["guidance_skipped"], ["d"])
+
+    def test_an_empty_record_is_an_empty_list_not_absent(self):
+        _, step = self._step()
+        self.store.replace_artifact(step, "guidance-delivered", "", internal=True)
+        self.store.replace_artifact(step, "guidance-skipped", "", internal=True)
+        rc, out, err = call(_cli_mod.cmd_show, step)
+        self.assertEqual(rc, 0, err)
+        data = json.loads(out)
+        self.assertEqual((data["guidance_delivered"], data["guidance_skipped"]), ([], []))
+
+    def test_neither_field_appears_without_a_record(self):
+        _, step = self._step()
+        rc, out, err = call(_cli_mod.cmd_show, step)
+        data = json.loads(out)
+        self.assertNotIn("guidance_delivered", data)
+        self.assertNotIn("guidance_skipped", data)
+
+    def test_an_item_never_surfaces_the_fields(self):
+        item, _ = self._step()
+        self.store.replace_artifact(item, "guidance-delivered", "a", internal=True)
+        rc, out, err = call(_cli_mod.cmd_show, item)
+        self.assertNotIn("guidance_delivered", json.loads(out))
+
+    def test_claim_surfaces_the_record_of_a_prior_spawn(self):
+        _, step = self._step()
+        self.store.replace_artifact(step, "guidance-delivered", "a", internal=True)
+        rc, out, err = call(_cli_mod.cmd_claim, "agent")
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(json.loads(out)["guidance_delivered"], ["a"])
+
+
 class TestShowAndClaimAgreeOnSharedFields(unittest.TestCase):
     SHARED_KEYS = (
         "id", "item", "title", "stage", "pass", "role", "state", "claimed_by",

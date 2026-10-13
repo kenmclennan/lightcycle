@@ -11,6 +11,7 @@ from typing import Optional
 
 from lightcycle.adapters.claude_stream import parse_rate_limit_event
 from lightcycle.adapters.workers import workers_state
+from lightcycle.domain.guidance.guidance import GuidanceSelection
 from lightcycle.domain.pool.worker_session import CLOSE, NUDGE, SessionPolicy
 from lightcycle.ports.workers import RegistryUnreadable
 
@@ -26,9 +27,17 @@ class SessionPlan:
     workspace: Optional[str] = None
     stage: Optional[str] = None
     step_id: Optional[str] = None
+    guidance_delivered: tuple = ()
+    guidance_skipped: tuple = ()
+    guidance_notes: tuple = ()
+    guidance_recorded: bool = False
 
 
-def plan_session(claim, resolve, reclaim, role):
+def _no_guidance(resp):
+    return GuidanceSelection()
+
+
+def plan_session(claim, resolve, reclaim, role, guidance=_no_guidance):
     resp = claim(role)
     if resp is None:
         return None
@@ -41,10 +50,35 @@ def plan_session(claim, resolve, reclaim, role):
     if not model:
         reclaim(resp.view.step.id)
         raise SessionError("step %r has no 'model' in frontmatter" % step_file)
+    recorded = True
+    try:
+        selection = guidance(resp)
+    except Exception as e:
+        recorded = False
+        selection = GuidanceSelection(notes=(str(e) or type(e).__name__,))
+    sysprompt = agent.body
+    if selection.section:
+        sysprompt = agent.body.rstrip("\n") + "\n\n" + selection.section
     return SessionPlan(
-        model=model, sysprompt=agent.body, workspace=resp.workspace, stage=resp.view.step.stage,
-        step_id=resp.view.step.id,
+        model=model, sysprompt=sysprompt, workspace=resp.workspace, stage=resp.view.step.stage,
+        step_id=resp.view.step.id, guidance_delivered=selection.delivered,
+        guidance_skipped=selection.skipped, guidance_notes=selection.notes,
+        guidance_recorded=recorded,
     )
+
+
+def record_guidance(store, plan):
+    for note in plan.guidance_notes:
+        sys.stderr.write("worker_main: guidance: %s\n" % note)
+    if not plan.guidance_recorded:
+        return
+    try:
+        store.replace_artifact(
+            plan.step_id, "guidance-delivered", "\n".join(plan.guidance_delivered), internal=True)
+        store.replace_artifact(
+            plan.step_id, "guidance-skipped", "\n".join(plan.guidance_skipped), internal=True)
+    except Exception as e:
+        sys.stderr.write("worker_main: guidance: %s\n" % e)
 
 
 def session_cwd(workspace):

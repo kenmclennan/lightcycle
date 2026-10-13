@@ -3,8 +3,11 @@ from dataclasses import dataclass
 from typing import Dict, List
 
 from lightcycle.application.errors import UseCaseError
+from lightcycle.application.services.guidance_library import GuidanceLibrary
 from lightcycle.application.services.engine_fragments import with_engine_fragments
 from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE, LEGACY_KNOWLEDGE_WORKSPACE
+from lightcycle.config import ConfigError
+from lightcycle.domain.guidance.guidance import fill, matches_project, matches_step_key, order
 from lightcycle.domain.health import Problem, fsck
 from lightcycle.domain.work.state import State
 from lightcycle.domain.workflows.contract import ENGINE_CONTRACT, contract_compatible
@@ -46,6 +49,7 @@ class DoctorUseCase:
             "config": self._config_problems(),
             "orphans": self._orphan_problems(),
             "facets": self._guidance_registration_problems() + self._facet_problems(),
+            "guidance": self._guidance_problems(),
         })
 
     def _in_flight_pins(self, nodes):
@@ -170,6 +174,68 @@ class DoctorUseCase:
             ),
         )]
 
+    def _concept_pages(self, root):
+        return {
+            name[: -len(".md")]
+            for name in (f.rsplit("/", 1)[-1] for f in self._fs.list_files(root))
+            if name.endswith(".md") and name != "index.md"
+        }
+
+    def _guidance_problems(self):
+        repo = self._store.get_project(GUIDANCE_WORKSPACE)
+        if repo is None or not repo.local_path or not self._fs.exists(repo.local_path):
+            return []
+        entries, unreadable = GuidanceLibrary(self._fs).load(repo.local_path)
+        problems = [
+            Problem(
+                "guidance",
+                "entry %s cannot be delivered: %s - fix its front matter in the guidance repo"
+                % (name, reason),
+            )
+            for name, reason in unreadable
+        ]
+        pages = self._concept_pages(repo.local_path)
+        for entry in entries:
+            for facet in entry.facets:
+                if facet not in pages:
+                    problems.append(Problem(
+                        "guidance",
+                        "entry %s applies to facet %s but the guidance repo has no concept "
+                        "page for it - add %s.md under the guidance repo, or remove the facet "
+                        "from the entry" % (entry.id, facet, facet),
+                    ))
+            if entry.status == "stable" and not entry.verified:
+                problems.append(Problem(
+                    "guidance",
+                    "entry %s is stable but has no verified record - add `verified:` or "
+                    "set its status to draft" % entry.id,
+                ))
+        problems += self._budget_problems([e for e in entries if e.is_candidate()])
+        return problems
+
+    def _budget_problems(self, candidates):
+        try:
+            budget = self._config.guidance_budget_bytes()
+        except ConfigError:
+            return []
+        problems = []
+        for project in self._store.list_projects():
+            if project.identity == GUIDANCE_WORKSPACE:
+                continue
+            local = [e for e in candidates if matches_project(e, project.facets)]
+            keys = sorted({name for e in local for name in e.steps})
+            for key in [None] + keys:
+                _, skipped = fill(order([e for e in local if matches_step_key(e, key)]), budget)
+                if skipped:
+                    problems.append(Problem(
+                        "guidance",
+                        "project %s: entries for %s exceed guidance-budget-bytes (%d) and would "
+                        "be skipped: %s - shorten them or raise the budget" % (
+                            project.identity, key or "any step", budget,
+                            ", ".join(e.id for e in skipped)),
+                    ))
+        return problems
+
     def _facet_problems(self):
         declaring = [p for p in self._store.list_projects() if p.facets]
         if not declaring:
@@ -186,11 +252,7 @@ class DoctorUseCase:
                 "facets are declared but the guidance repo is missing at %s - restore it, "
                 "or run `lc project rm %s` then `lc init`" % (repo.local_path, GUIDANCE_WORKSPACE),
             )]
-        pages = {
-            name[: -len(".md")]
-            for name in (f.rsplit("/", 1)[-1] for f in self._fs.list_files(repo.local_path))
-            if name.endswith(".md") and name != "index.md"
-        }
+        pages = self._concept_pages(repo.local_path)
         problems = []
         for project in declaring:
             for facet in project.facets:
