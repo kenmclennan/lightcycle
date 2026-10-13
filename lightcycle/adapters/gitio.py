@@ -140,18 +140,20 @@ def has_uncommitted(root):
     return proc.stdout.strip() != ""
 
 
-def _fallback_identity(root):
-    configured = git(root, "config", "user.name").stdout.strip() and git(
-        root, "config", "user.email"
-    ).stdout.strip()
-    if configured:
-        return []
-    return ["-c", "user.name=lightcycle", "-c", "user.email=lightcycle@localhost"]
+def missing_identity(root):
+    probe = os.path.abspath(root)
+    while not os.path.isdir(probe) and os.path.dirname(probe) != probe:
+        probe = os.path.dirname(probe)
+    return [
+        key
+        for key in ("user.name", "user.email")
+        if not git(probe, "config", "--get", key).stdout.strip()
+    ]
 
 
 def commit_all(root, message):
     git(root, "add", "-A")
-    return git_ok(root, *_fallback_identity(root), "commit", "-m", message)
+    return git_ok(root, "commit", "-m", message)
 
 
 def has_tracked_changes(root):
@@ -276,6 +278,9 @@ class GitAdapter(GitPort):
 
     def commit_all(self, root, message):
         return commit_all(root, message)
+
+    def missing_identity(self, root):
+        return missing_identity(root)
 
     def has_tracked_changes(self, root):
         return has_tracked_changes(root)

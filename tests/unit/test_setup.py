@@ -88,6 +88,33 @@ class TestInitKnowledgeBase(unittest.TestCase):
         self.assertEqual(r.knowledge_outcome, "created")
         self.assertEqual(r.knowledge_path, "~/workspace/knowledge")
 
+    def test_missing_identity_refuses_before_writing_anything_naming_both_fixes(self):
+        git = FakeGit(missing_identity=["user.name", "user.email"])
+        store = FakeStore()
+        fs = FakeFs()
+        with self.assertRaises(UseCaseError) as caught:
+            InitGridUseCase(store, fs, FakeConfig(), git).execute()
+        message = str(caught.exception)
+        self.assertIn('git config --global user.name "<name>"', message)
+        self.assertIn('git config --global user.email "<email>"', message)
+        self.assertIsNone(store.get_project(KNOWLEDGE_WORKSPACE))
+        self.assertIsNone(store.get_project(SPECS_WORKSPACE))
+        self.assertEqual(fs.writes, [])
+        self.assertNotIn("init_repo", self._call_names(git))
+
+    def test_missing_identity_does_not_block_registering_an_existing_repo(self):
+        fs = FakeFs(dirs={"/kb": []})
+        git = FakeGit(repos={"/kb"}, missing_identity=["user.name", "user.email"])
+        r, store, fs, git = self._run(fs=fs, git=git, path="/kb")
+        self.assertEqual(r.knowledge_outcome, "registered")
+
+    def test_missing_identity_does_not_block_an_already_registered_knowledge_base(self):
+        store = FakeStore()
+        store.add_project(KNOWLEDGE_WORKSPACE, local_path="/kb", remote=None)
+        git = FakeGit(missing_identity=["user.name"])
+        r, store, fs, git = self._run(store=store, git=git)
+        self.assertEqual(r.knowledge_outcome, "unchanged")
+
     def test_repo_root_path_is_registered_with_its_origin_and_not_written_to(self):
         fs = FakeFs(dirs={"/kb": []})
         git = FakeGit(repos={"/kb"}, origin="git@x:kb.git")

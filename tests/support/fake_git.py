@@ -9,7 +9,8 @@ class FakeGit(GitPort, TeardownLedgerPort):
                  dirty=(), events=None, branches=(), base=None, raises=(),
                  remote_unreadable=(), sync_result=True, clone_result=True,
                  sync_default_result=True, worktree_add_fails=False,
-                 torn_down_branches=(), head_shas=None, init_ok=True, commit_ok=True):
+                 torn_down_branches=(), head_shas=None, init_ok=True, commit_ok=True,
+                 missing_identity=()):
         self._repos = set(repos) if repos is not None else None
         self._is_repo = is_repo
         self._origin = origin
@@ -28,6 +29,7 @@ class FakeGit(GitPort, TeardownLedgerPort):
         self._head_shas = head_shas or {}
         self._init_ok = init_ok
         self._commit_ok = commit_ok
+        self._missing_identity = list(missing_identity)
         self.calls = []
         self.commits = []
         self.remote_deletes = []
@@ -126,6 +128,10 @@ class FakeGit(GitPort, TeardownLedgerPort):
     def commit_all(self, root, message):
         self.calls.append(("commit_all", root, message))
         return self._commit_ok
+
+    def missing_identity(self, root):
+        self.calls.append(("missing_identity", root))
+        return list(self._missing_identity)
 
     def has_tracked_changes(self, root):
         return root in self.dirty

@@ -415,17 +415,34 @@ class TestCommitAllIdentity(unittest.TestCase):
             {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1", "HOME": tempfile.mkdtemp()},
         )
 
-    def test_commits_with_fallback_identity_when_none_configured(self):
+    def test_reports_both_keys_missing_when_no_identity_configured(self):
+        d = tempfile.mkdtemp()
+        with self._no_identity_env():
+            _git(d, "init", "-q", "-b", "main")
+
+            self.assertEqual(GitAdapter().missing_identity(d), ["user.name", "user.email"])
+
+    def test_reports_missing_identity_for_a_directory_that_does_not_exist_yet(self):
+        d = tempfile.mkdtemp()
+        with self._no_identity_env():
+            self.assertEqual(
+                GitAdapter().missing_identity(os.path.join(d, "later", "repo")),
+                ["user.name", "user.email"],
+            )
+
+    def test_reports_nothing_missing_when_identity_configured(self):
+        d = _make_repo()
+
+        self.assertEqual(GitAdapter().missing_identity(d), [])
+
+    def test_commit_all_fails_without_identity_and_invents_none(self):
         d = tempfile.mkdtemp()
         with self._no_identity_env():
             _git(d, "init", "-q", "-b", "main")
             _git(d, "config", "user.useConfigOnly", "true")
             (Path(d) / "README").write_text("x")
 
-            committed = GitAdapter().commit_all(d, "scaffold")
-
-            self.assertTrue(committed)
-            self.assertEqual(_git(d, "log", "-1", "--format=%an").stdout.strip(), "lightcycle")
+            self.assertFalse(GitAdapter().commit_all(d, "scaffold"))
 
     def test_keeps_configured_identity(self):
         d = _make_repo()

@@ -459,6 +459,31 @@ class TestInit(unittest.TestCase):
             ).execute("acme")
         self.assertEqual(git.calls, [])
 
+    def test_missing_identity_refuses_before_creating_the_directory(self):
+        root = tempfile.mkdtemp()
+        cfg = FakeConfig(projects_root=root)
+        git = FakeGit(missing_identity=["user.name", "user.email"])
+        with self.assertRaises(WorkflowSourceError) as caught:
+            InitWorkflowOriginUseCase(
+                cfg, git, FakeSource(), FakeStore(), ScaffoldAdapter(), FsAdapter(cfg)
+            ).execute("acme")
+        self.assertIn('git config --global user.name "<name>"', str(caught.exception))
+        self.assertIn('git config --global user.email "<email>"', str(caught.exception))
+        self.assertFalse(os.path.exists(os.path.join(root, "acme")))
+        self.assertNotIn("init_repo", [c[0] for c in git.calls])
+
+    def test_failed_scaffold_commit_refuses_naming_the_directory(self):
+        root = tempfile.mkdtemp()
+        project_dir = os.path.join(root, "acme")
+        cfg = FakeConfig(projects_root=root)
+        with self.assertRaises(WorkflowSourceError) as caught:
+            InitWorkflowOriginUseCase(
+                cfg, FakeGit(commit_ok=False), FakeSource(), FakeStore(),
+                ScaffoldAdapter(), FsAdapter(cfg)
+            ).execute("acme")
+        self.assertIn(project_dir, str(caught.exception))
+        self.assertIsNone(cfg.personal_origin_set)
+
     def test_creates_scaffold_registers_with_head_ref_and_sets_personal_origin(self):
         root = tempfile.mkdtemp()
         project_dir = os.path.join(root, "acme")

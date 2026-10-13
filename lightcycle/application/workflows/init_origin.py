@@ -1,6 +1,7 @@
 import os
 from dataclasses import dataclass
 
+from lightcycle.application.git_identity import require_git_identity
 from lightcycle.application.workflows.add import AddWorkflowSourceUseCase
 from lightcycle.domain.workflows.contract import ENGINE_CONTRACT
 from lightcycle.ports.workflow_source import WorkflowSourceError
@@ -44,10 +45,14 @@ class InitWorkflowOriginUseCase:
         if os.path.exists(project_dir):
             raise WorkflowSourceError(
                 "%s already exists; choose a different name or remove it first" % project_dir)
+        require_git_identity(self._git, project_dir, WorkflowSourceError)
         self._scaffold.make_dir(project_dir)
         _write_scaffold(project_dir, name, self._scaffold)
         self._git.init_repo(project_dir, "main")
-        self._git.commit_all(project_dir, "scaffold workflow-origin repo")
+        if not self._git.commit_all(project_dir, "scaffold workflow-origin repo"):
+            raise WorkflowSourceError(
+                "the scaffold commit failed in %s - check git's output there, then remove "
+                "the directory and retry" % project_dir)
         add_resp = AddWorkflowSourceUseCase(
             self._source, self._store, self._config, self._fs
         ).execute(url=project_dir, ref="HEAD", name=name)
