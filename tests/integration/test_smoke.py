@@ -33,8 +33,17 @@ stub
 """
 
 
+_GIT_IDENTITY_ENV = {
+    "GIT_CONFIG_COUNT": "2",
+    "GIT_CONFIG_KEY_0": "user.name",
+    "GIT_CONFIG_VALUE_0": "t",
+    "GIT_CONFIG_KEY_1": "user.email",
+    "GIT_CONFIG_VALUE_1": "t@t",
+}
+
+
 def _tg(*args, root):
-    env = dict(os.environ)
+    env = {**os.environ, **_GIT_IDENTITY_ENV}
     env["LC_HOME"] = root
     env["LC_CONFIG"] = os.path.join(root, "grid.config")
     return subprocess.run([sys.executable, LC, *args], capture_output=True, text=True, env=env)

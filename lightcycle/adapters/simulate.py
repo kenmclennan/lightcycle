@@ -118,6 +118,10 @@ class RecordingGit(GitPort, TeardownLedgerPort):
     def commit_all(self, root, message):
         self._record("commit_all", root, message)
 
+    def missing_identity(self, root):
+        self._record("missing_identity", root)
+        return []
+
     def has_tracked_changes(self, root):
         self._record("has_tracked_changes", root)
         return False

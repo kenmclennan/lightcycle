@@ -90,6 +90,10 @@ class GitPort(ABC):
         pass
 
     @abstractmethod
+    def missing_identity(self, root):
+        pass
+
+    @abstractmethod
     def has_tracked_changes(self, root):
         pass
 

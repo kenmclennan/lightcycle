@@ -3,6 +3,7 @@ from dataclasses import dataclass
 import os
 
 from lightcycle.application.errors import UseCaseError
+from lightcycle.application.git_identity import require_git_identity
 from lightcycle.domain.flow.flow import KNOWLEDGE_WORKSPACE, SPECS_WORKSPACE
 from lightcycle.domain.knowledge.skeleton import (
     COMMIT_MESSAGE,
@@ -33,6 +34,7 @@ class InitGridUseCase:
         self._git = git
 
     def execute(self, knowledge_path=None) -> InitGridResponse:
+        self._require_identity_if_creating(knowledge_path)
         existed = self._fs.store_ready()
         self._store.ensure_store()
         self._fs.ensure_logs_dir()
@@ -46,6 +48,11 @@ class InitGridUseCase:
             knowledge_outcome=outcome,
             knowledge_path=path,
         )
+
+    def _require_identity_if_creating(self, requested):
+        wanted = self._config.expand_path(requested or _DEFAULT_KNOWLEDGE_PATH)
+        if self._store.get_project(KNOWLEDGE_WORKSPACE) is None and not self._fs.exists(wanted):
+            require_git_identity(self._git, wanted)
 
     def _ensure_knowledge_project(self, requested):
         wanted = self._config.expand_path(requested or _DEFAULT_KNOWLEDGE_PATH)

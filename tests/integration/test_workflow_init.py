@@ -16,10 +16,11 @@ from lightcycle.ports.workflow_source import WorkflowSourceError
 from tests.support.fake_store import FakeStore
 
 _GIT_IDENTITY_ENV = {
-    "GIT_AUTHOR_NAME": "t",
-    "GIT_AUTHOR_EMAIL": "t@t",
-    "GIT_COMMITTER_NAME": "t",
-    "GIT_COMMITTER_EMAIL": "t@t",
+    "GIT_CONFIG_COUNT": "2",
+    "GIT_CONFIG_KEY_0": "user.name",
+    "GIT_CONFIG_VALUE_0": "t",
+    "GIT_CONFIG_KEY_1": "user.email",
+    "GIT_CONFIG_VALUE_1": "t@t",
 }
 
 

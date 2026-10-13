@@ -36,8 +36,17 @@ from tests.support.isolation import inject_container, make_syncable_git_repo
 _ABSENT_CONFIG = os.path.join(tempfile.mkdtemp(), "absent-config")
 
 
+_GIT_IDENTITY_ENV = {
+    "GIT_CONFIG_COUNT": "2",
+    "GIT_CONFIG_KEY_0": "user.name",
+    "GIT_CONFIG_VALUE_0": "t",
+    "GIT_CONFIG_KEY_1": "user.email",
+    "GIT_CONFIG_VALUE_1": "t@t",
+}
+
+
 def run_lc(*args, root=None, config=None):
-    env = dict(os.environ)
+    env = {**os.environ, **_GIT_IDENTITY_ENV}
     if root:
         env["LC_HOME"] = root
     else:
@@ -2539,6 +2548,7 @@ class TestInitPullsWorkflows(unittest.TestCase):
             "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
         })
         home_patch.start()
+        Path(self.home, ".gitconfig").write_text("[user]\n\tname = t\n\temail = t@t\n")
         self.addCleanup(home_patch.stop)
         self.addCleanup(shutil.rmtree, self.home, True)
         self.store = FakeStore()
@@ -2629,6 +2639,7 @@ class TestConfig(unittest.TestCase):
         self.home = tempfile.mkdtemp()
         home_patch = patch.dict(os.environ, {"HOME": self.home})
         home_patch.start()
+        Path(self.home, ".gitconfig").write_text("[user]\n\tname = t\n\temail = t@t\n")
         self.addCleanup(home_patch.stop)
         self.addCleanup(shutil.rmtree, self.home, True)
         _write_origin(self.root)
