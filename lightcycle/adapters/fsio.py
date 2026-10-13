@@ -30,6 +30,12 @@ def list_dir(path):
     return sorted(e.name for e in os.scandir(path) if e.is_dir())
 
 
+def write_text(path, text):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
+
+
 def ensure_logs_dir(root):
     d = os.path.join(root, "logs")
     os.makedirs(d, exist_ok=True)
@@ -71,6 +77,9 @@ class FsAdapter(FsPort):
 
     def list_dir(self, path):
         return list_dir(path)
+
+    def write_text(self, path, text):
+        return write_text(path, text)
 
     def ensure_logs_dir(self):
         return ensure_logs_dir(self._config.data_root())

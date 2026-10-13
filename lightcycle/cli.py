@@ -121,7 +121,7 @@ from lightcycle.application.flow import (
     FlowCheckUseCase,
     UnblockInput,
 )
-from lightcycle.domain.flow.flow import SPECS_WORKSPACE
+from lightcycle.domain.flow.flow import KNOWLEDGE_WORKSPACE, SPECS_WORKSPACE
 from lightcycle.application.pool import (
     AcquireRunLockUseCase,
     BackfillUsageUseCase,
@@ -283,6 +283,8 @@ COMMAND_GROUPS = [
         ("spawn", "<role>", "spawn one worker for a role"),
         ("specs-dir", "[--check]", "print the resolved specs directory (absolute path); "
          "--check validates it against specs-remote"),
+        ("knowledge-dir", "[--check]", "print the resolved knowledge-base directory (absolute "
+         "path); --check validates it against the registered knowledge remote"),
     ]),
 ]
 
@@ -607,32 +609,41 @@ def cmd_ready_roles(argv):
     return 0
 
 
-def cmd_specs_dir(argv):
-    a = build_parser(COMMANDS["specs-dir"]).parse_args(argv)
-    project = _container.store.get_project(SPECS_WORKSPACE)
+def _project_dir(identity, remote_label, check, subject):
+    project = _container.store.get_project(identity)
     if project is None or not project.local_path:
-        sys.stderr.write("no '%s' project registered - run `lc init`\n" % SPECS_WORKSPACE)
+        sys.stderr.write("no '%s' project registered - run `lc init`\n" % identity)
         return 1
     root = project.local_path
-    if not a.check:
+    if not check:
         print(root)
         return 0
     expected = project.remote
     if not expected:
-        sys.stderr.write("'%s' project has no remote registered\n" % SPECS_WORKSPACE)
+        sys.stderr.write("'%s' project has no remote registered\n" % identity)
         return 1
     if not _container.git.is_git_repo(root):
-        sys.stderr.write("specs dir %s is not a git repo\n" % root)
+        sys.stderr.write("%s dir %s is not a git repo\n" % (subject, root))
         return 1
     origin = _container.git.remote_url(root)
     if origin != expected:
         sys.stderr.write(
-            "specs dir %s origin (%s) does not match specs-remote (%s)\n"
-            % (root, origin or "none", expected)
+            "%s dir %s origin (%s) does not match %s (%s)\n"
+            % (subject, root, origin or "none", remote_label, expected)
         )
         return 1
-    print("ok: %s matches specs-remote (%s)" % (root, expected))
+    print("ok: %s matches %s (%s)" % (root, remote_label, expected))
     return 0
+
+
+def cmd_specs_dir(argv):
+    a = build_parser(COMMANDS["specs-dir"]).parse_args(argv)
+    return _project_dir(SPECS_WORKSPACE, "specs-remote", a.check, "specs")
+
+
+def cmd_knowledge_dir(argv):
+    a = build_parser(COMMANDS["knowledge-dir"]).parse_args(argv)
+    return _project_dir(KNOWLEDGE_WORKSPACE, "knowledge remote", a.check, "knowledge")
 
 
 def _workflow_check_dir(directory, name, as_json):
@@ -1764,10 +1775,16 @@ def cmd_stop(argv):
 
 
 def cmd_init(argv):
-    build_parser(COMMANDS["init"]).parse_args(argv)
-    r = InitGridUseCase(_container.store, _container.fs, _container.config).execute()
+    a = build_parser(COMMANDS["init"]).parse_args(argv)
+    c = _container
+    try:
+        r = InitGridUseCase(c.store, c.fs, c.config, c.git).execute(a.knowledge_path)
+    except UseCaseError as e:
+        sys.stderr.write("lc init: %s\n" % e)
+        return 1
     print("lightcycle store already initialised" if r.existed else "lightcycle store initialised")
     print("config %s at %s" % ("created" if r.created else "already exists", r.config_path))
+    print("knowledge base %s at %s" % (r.knowledge_outcome, r.knowledge_path))
     _init_pull_default_origin()
     return 0
 

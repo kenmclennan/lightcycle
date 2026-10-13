@@ -4,7 +4,7 @@
 
 ```
 pipx install git+https://github.com/kenmclennan/lightcycle
-lc init                 # create the store + seed the home config (run once)
+lc init                 # create the store, seed the home config, create + register the knowledge base (run once)
 ```
 
 The engine runs on system `python3` with zero runtime dependencies, so `lc` works without any venv activation.
@@ -33,7 +33,9 @@ graph TD
 
 - **Engine** (`~/.local/pipx/venvs/lightcycle`) - the code plus `prompts/` (the engine-owned agent prompts it spawns directly: `prompts/steps/audit.md`, `prompts/steps/daily-summary.md`). This is the only thing an upgrade changes; the engine ships no workflow library.
 - **Data** (`~/.lightcycle`, the `data_root`) - `store.db`, the `config` file, `logs/`, `.worktrees/` (isolated per-item checkouts), `backups/`, the `.lc-run.pid` singleton lock, and `workflows/<origin>/<sha>/` (the immutable, sha-pinned workflow bundles pulled from origins).
-- **Projects** - your repos, wherever they live. Each is named to lightcycle by registering it (`lc project add <owner/name> [--shortcode X] [--path P]`); the registry holds the identity, the shortcode ids are minted from, and the local path. A project carries no lightcycle config of its own, and there is no step or workflow override. `lc init` registers one project automatically, under the identity `specs` (defaulting to `~/workspace/specs`) - the `workspace: specs` value a spec-driven workflow declares resolves through this same registry entry, not a dedicated config key.
+- **Projects** - your repos, wherever they live. Each is named to lightcycle by registering it (`lc project add <owner/name> [--shortcode X] [--path P]`); the registry holds the identity, the shortcode ids are minted from, and the local path. A project carries no lightcycle config of its own, and there is no step or workflow override. `lc init` registers two projects automatically. The first has the identity `specs` (defaulting to `~/workspace/specs`) - the `workspace: specs` value a spec-driven workflow declares resolves through this same registry entry, not a dedicated config key. The second is the **knowledge base**, identity `knowledge`, defaulting to `~/workspace/knowledge`; `lc init --knowledge-path <dir>` overrides the path.
+
+  If the knowledge-base path does not exist, `lc init` creates it as a git repo with one commit holding index.md and CONVENTIONS.md. A path that is already a git repo root is registered as-is, with its `origin` as the remote, and nothing is written into it - clone a team's shared knowledge base there before running `lc init`. A path that exists but is not a repo root (including a directory inside another repo) is refused, naming the path. A second `lc init` changes nothing. To re-point it, run `lc project rm knowledge` then `lc init [--knowledge-path P]`. `lc knowledge-dir` prints the registered path and `lc knowledge-dir --check` verifies its `origin` matches the registered remote. lightcycle never creates a GitHub repository.
 
 Workflows are not shadowed or resolved through a chain: each item pins one sha-pinned bundle (`<origin>/<name>@<sha>`) and the loader reads the flow and steps from that pin. `LC_HOME` names the data home (the store); the integration tests point it at a throwaway store. Never run against the live store by hand.
 

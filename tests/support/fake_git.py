@@ -9,7 +9,7 @@ class FakeGit(GitPort, TeardownLedgerPort):
                  dirty=(), events=None, branches=(), base=None, raises=(),
                  remote_unreadable=(), sync_result=True, clone_result=True,
                  sync_default_result=True, worktree_add_fails=False,
-                 torn_down_branches=(), head_shas=None):
+                 torn_down_branches=(), head_shas=None, init_ok=True, commit_ok=True):
         self._repos = set(repos) if repos is not None else None
         self._is_repo = is_repo
         self._origin = origin
@@ -26,6 +26,8 @@ class FakeGit(GitPort, TeardownLedgerPort):
         self._worktree_add_fails = worktree_add_fails
         self._torn_down_branches = tuple(torn_down_branches)
         self._head_shas = head_shas or {}
+        self._init_ok = init_ok
+        self._commit_ok = commit_ok
         self.calls = []
         self.commits = []
         self.remote_deletes = []
@@ -51,6 +53,7 @@ class FakeGit(GitPort, TeardownLedgerPort):
 
     def init_repo(self, root, branch="main"):
         self.calls.append(("init_repo", root, branch))
+        return GitOutcome(ok=self._init_ok, detail="" if self._init_ok else "boom")
 
     def is_git_repo(self, root):
         self.calls.append(("is_git_repo", root))
@@ -122,6 +125,7 @@ class FakeGit(GitPort, TeardownLedgerPort):
 
     def commit_all(self, root, message):
         self.calls.append(("commit_all", root, message))
+        return self._commit_ok
 
     def has_tracked_changes(self, root):
         return root in self.dirty

@@ -89,6 +89,7 @@ class FakeFs(FsPort, WorkflowBundlePort, WorkerLogPort):
         self._store_ready = store_ready
         self._log_mtimes = log_mtimes or {}
         self.workflow_text_calls = []
+        self.writes = []
 
     def workflow_text(self, name, root=None):
         self.workflow_text_calls.append((name, root))
@@ -171,6 +172,10 @@ class FakeFs(FsPort, WorkflowBundlePort, WorkerLogPort):
 
     def list_dir(self, path):
         return sorted(self._dirs.get(path, []))
+
+    def write_text(self, path, text):
+        self.writes.append(path)
+        self._files[path] = text.encode("utf-8")
 
     def ensure_logs_dir(self):
         return "logs"

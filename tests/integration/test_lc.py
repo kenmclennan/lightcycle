@@ -2044,10 +2044,11 @@ class TestInitAndStoreGuard(unittest.TestCase):
     def test_init_creates_store_and_is_idempotent(self):
         d = self._bare()
         cfg = self._cfg(d)
-        r = run_lc("init", root=d, config=cfg)
+        kb = os.path.join(d, "knowledge")
+        r = run_lc("init", "--knowledge-path", kb, root=d, config=cfg)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertTrue(os.path.exists(os.path.join(d, "store.db")))
-        r2 = run_lc("init", root=d, config=cfg)
+        r2 = run_lc("init", "--knowledge-path", kb, root=d, config=cfg)
         self.assertEqual(r2.returncode, 0, r2.stderr)
 
     def test_run_without_store_errors(self):
@@ -2531,6 +2532,15 @@ class TestInitPullsWorkflows(unittest.TestCase):
         )
         os.environ["LC_HOME"] = self.root
         os.environ["LC_CONFIG"] = self.cfg
+        self.home = tempfile.mkdtemp()
+        home_patch = patch.dict(os.environ, {
+            "HOME": self.home,
+            "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+            "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
+        })
+        home_patch.start()
+        self.addCleanup(home_patch.stop)
+        self.addCleanup(shutil.rmtree, self.home, True)
         self.store = FakeStore()
         self._orig = _cli_mod._container
         _cli_mod.set_container(_cli_mod.Container(store=self.store, machine=FakeMachine()))
@@ -2561,6 +2571,53 @@ class TestInitPullsWorkflows(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         self.assertIn("workflows-remote", err)
 
+    def _git(self, repo, *args):
+        return subprocess.run(
+            ["git", "-C", repo, *args], check=True, capture_output=True, text=True
+        ).stdout.strip()
+
+    def test_init_creates_the_knowledge_base_with_one_skeleton_commit(self):
+        from lightcycle.frontmatter import split_frontmatter
+        rc, out, err = call(_cli_mod.cmd_init)
+        self.assertEqual(rc, 0, err)
+        kb = os.path.join(self.home, "workspace", "knowledge")
+        self.assertIn(kb, out)
+        self.assertEqual(self._git(kb, "rev-list", "--count", "HEAD"), "1")
+        self.assertEqual(
+            self._git(kb, "ls-tree", "-r", "--name-only", "HEAD").split("\n"),
+            ["CONVENTIONS.md", "index.md"],
+        )
+        meta, _ = split_frontmatter(Path(kb, "index.md").read_text())
+        self.assertEqual(meta, {"okf_version": '"0.2"'})
+        rc, out, err = call(_cli_mod.cmd_knowledge_dir)
+        self.assertEqual(out.strip(), kb)
+
+    def test_second_init_leaves_the_knowledge_base_head_unchanged(self):
+        call(_cli_mod.cmd_init)
+        kb = os.path.join(self.home, "workspace", "knowledge")
+        head = self._git(kb, "rev-parse", "HEAD")
+        rc, out, err = call(_cli_mod.cmd_init)
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(self._git(kb, "rev-parse", "HEAD"), head)
+
+    def test_knowledge_base_inside_another_repo_becomes_its_own_repo(self):
+        from lightcycle.adapters.gitio import is_repo_root
+        outer = os.path.join(self.home, "outer")
+        os.makedirs(outer)
+        self._git(outer, "init", "-q", "-b", "main")
+        kb = os.path.join(outer, "kb")
+        rc, out, err = call(_cli_mod.cmd_init, "--knowledge-path", kb)
+        self.assertEqual(rc, 0, err)
+        self.assertTrue(is_repo_root(kb))
+
+    def test_init_refuses_an_existing_non_git_directory(self):
+        kb = os.path.join(self.home, "plain")
+        os.makedirs(kb)
+        rc, out, err = call(_cli_mod.cmd_init, "--knowledge-path", kb)
+        self.assertEqual(rc, 1)
+        self.assertIn(kb, err)
+        self.assertEqual(os.listdir(kb), [])
+
 
 class TestConfig(unittest.TestCase):
     def setUp(self):
@@ -2569,6 +2626,11 @@ class TestConfig(unittest.TestCase):
         self.cfg = os.path.join(self.dir, "config")
         os.environ["LC_HOME"] = self.root
         os.environ["LC_CONFIG"] = self.cfg
+        self.home = tempfile.mkdtemp()
+        home_patch = patch.dict(os.environ, {"HOME": self.home})
+        home_patch.start()
+        self.addCleanup(home_patch.stop)
+        self.addCleanup(shutil.rmtree, self.home, True)
         _write_origin(self.root)
         self.store = FakeStore()
         self._orig = _cli_mod._container
