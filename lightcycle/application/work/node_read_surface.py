@@ -3,7 +3,9 @@ def node_read_surface(store, flow, view):
     item_id = getattr(step, "item", None) or step.id
     out = view.as_dict()
     if step.type == "step":
-        artifacts = {a.type: a.value for a in store.item_artifacts(step.id)}
+        step_artifacts = store.item_artifacts(step.id)
+        out["artifacts"] = [a.as_dict() for a in step_artifacts]
+        artifacts = {a.type: a.value for a in step_artifacts}
         if artifacts.get("session-id"):
             out["session_id"] = artifacts["session-id"]
         for artifact_type, field in (

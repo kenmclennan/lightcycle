@@ -2,7 +2,7 @@ import unittest
 
 from lightcycle.domain.guidance.guidance import (
     ENTRY, MALFORMED, NOT_GUIDANCE, GuidanceEntry, classify, fill, matches, matches_step_key,
-    order, render_section,
+    order, parse_citation, render_section,
 )
 
 
@@ -132,13 +132,25 @@ class TestOrderAndFill(unittest.TestCase):
 
 class TestRenderSection(unittest.TestCase):
     def test_section_text_is_pinned(self):
-        text = render_section([_entry("testing/a", body="first"), _entry("ci/b", body="second")])
+        text = render_section([_entry("testing/a", body="first"), _entry("ci/b", body="second")], "LC-1.2")
         self.assertEqual(
             text,
             "## Guidance for this project\n\n"
             "These entries come from the user's guidance repo. Cite an entry by its id.\n\n"
-            "### testing/a\n\nfirst\n\n### ci/b\n\nsecond",
+            "### testing/a\n\nfirst\n\n### ci/b\n\nsecond\n\n"
+            "When an entry above changed what you did, cite it before you finish: run "
+            "`lc attach LC-1.2 guidance-cited \"<id>[, <id>...]\"` once, listing every entry you "
+            "applied. Cite only entries that changed what you did, never one you only read.",
         )
+
+
+class TestParseCitation(unittest.TestCase):
+    def test_parse_shapes(self):
+        self.assertEqual(parse_citation("a, b"), ["a", "b"])
+        self.assertEqual(parse_citation("a,b"), ["a", "b"])
+        self.assertEqual(parse_citation("a, a, b"), ["a", "b"])
+        self.assertEqual(parse_citation(",  ,"), [])
+        self.assertEqual(parse_citation("a/b"), ["a/b"])
 
 
 if __name__ == "__main__":

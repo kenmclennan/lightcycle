@@ -3305,6 +3305,28 @@ class TestShowSurfacesGuidanceRecord(unittest.TestCase):
         self.assertNotIn("guidance_delivered", data)
         self.assertNotIn("guidance_skipped", data)
 
+    def test_show_lists_every_step_artifact_internal_ones_included(self):
+        _, step = self._step()
+        self.store.replace_artifact(step, "session-id", "sess-1", internal=True)
+        self.store.add_artifact(step, "guidance-cited", "a", internal=True)
+        rc, out, err = call(_cli_mod.cmd_show, step)
+        self.assertEqual(rc, 0, err)
+        arts = {a["type"]: a for a in json.loads(out)["artifacts"]}
+        self.assertEqual(arts["session-id"]["value"], "sess-1")
+        self.assertTrue(arts["guidance-cited"]["internal"])
+
+    def test_a_step_without_artifacts_shows_an_empty_list(self):
+        _, step = self._step()
+        rc, out, err = call(_cli_mod.cmd_show, step)
+        self.assertEqual(json.loads(out)["artifacts"], [])
+
+    def test_an_item_keeps_its_own_artifacts(self):
+        item, step = self._step()
+        self.store.add_artifact(item, "note", "n")
+        self.store.add_artifact(step, "guidance-cited", "a", internal=True)
+        rc, out, err = call(_cli_mod.cmd_show, item)
+        self.assertEqual([a["type"] for a in json.loads(out)["artifacts"]], ["note"])
+
     def test_an_item_never_surfaces_the_fields(self):
         item, _ = self._step()
         self.store.replace_artifact(item, "guidance-delivered", "a", internal=True)

@@ -35,7 +35,7 @@ def main():
             container.store.reclaim,
             role,
             guidance=lambda resp: select.execute(
-                resp.view.step.item, resp.view.step.stage, resp.pin),
+                resp.view.step.item, resp.view.step.stage, resp.pin, resp.view.step.id),
         )
     except (SessionError, UseCaseError) as e:
         sys.stderr.write("worker_main: %s\n" % e)
