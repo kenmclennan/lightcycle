@@ -1889,6 +1889,9 @@ def cmd_init(argv):
     print("config %s at %s" % ("created" if r.created else "already exists", r.config_path))
     print("guidance repo %s at %s" % (r.guidance_outcome, r.guidance_path))
     _init_pull_default_origin()
+    if r.guidance_refusal:
+        sys.stderr.write("lc init: guidance repo not created: %s\n" % r.guidance_refusal)
+        return 1
     return 0
 
 

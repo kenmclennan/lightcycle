@@ -24,6 +24,7 @@ class InitGridResponse:
     config_path: str
     guidance_outcome: str = ""
     guidance_path: str = ""
+    guidance_refusal: str = ""
 
 
 class InitGridUseCase:
@@ -34,25 +35,34 @@ class InitGridUseCase:
         self._git = git
 
     def execute(self, guidance_path=None) -> InitGridResponse:
-        self._require_identity_if_creating(guidance_path)
         existed = self._fs.store_ready()
         self._store.ensure_store()
         self._fs.ensure_logs_dir()
         created = self._config.ensure_config()
         self._ensure_specs_project()
-        outcome, path = self._ensure_guidance_project(guidance_path)
+        refusal = self._identity_refusal_if_creating(guidance_path)
+        if refusal:
+            outcome = "not created"
+            path = self._config.expand_path(guidance_path or _DEFAULT_GUIDANCE_PATH)
+        else:
+            outcome, path = self._ensure_guidance_project(guidance_path)
         return InitGridResponse(
             existed=existed,
             created=created,
             config_path=self._config.config_path(),
             guidance_outcome=outcome,
             guidance_path=path,
+            guidance_refusal=refusal,
         )
 
-    def _require_identity_if_creating(self, requested):
+    def _identity_refusal_if_creating(self, requested):
         wanted = self._config.expand_path(requested or _DEFAULT_GUIDANCE_PATH)
         if self._store.get_project(GUIDANCE_WORKSPACE) is None and not self._fs.exists(wanted):
-            require_git_identity(self._git, wanted)
+            try:
+                require_git_identity(self._git, wanted)
+            except UseCaseError as e:
+                return str(e)
+        return ""
 
     def _ensure_guidance_project(self, requested):
         wanted = self._config.expand_path(requested or _DEFAULT_GUIDANCE_PATH)

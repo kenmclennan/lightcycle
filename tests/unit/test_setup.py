@@ -104,19 +104,25 @@ class TestInitGuidanceRepo(unittest.TestCase):
         self.assertEqual(r.guidance_outcome, "created")
         self.assertEqual(r.guidance_path, "~/workspace/agent-guidance")
 
-    def test_missing_identity_refuses_before_writing_anything_naming_both_fixes(self):
+    def test_missing_identity_does_the_rest_and_reports_the_guidance_repo_uncreated(self):
         git = FakeGit(missing_identity=["user.name", "user.email"])
-        store = FakeStore()
-        fs = FakeFs()
-        with self.assertRaises(UseCaseError) as caught:
-            InitGridUseCase(store, fs, FakeConfig(), git).execute()
-        message = str(caught.exception)
-        self.assertIn('git config --global user.name "<name>"', message)
-        self.assertIn('git config --global user.email "<email>"', message)
+        r, store, fs, git = self._run(git=git)
+        self.assertEqual(r.guidance_outcome, "not created")
+        self.assertIn('git config --global user.name "<name>"', r.guidance_refusal)
+        self.assertIn('git config --global user.email "<email>"', r.guidance_refusal)
         self.assertIsNone(store.get_project(GUIDANCE_WORKSPACE))
-        self.assertIsNone(store.get_project(SPECS_WORKSPACE))
+        self.assertIsNotNone(store.get_project(SPECS_WORKSPACE))
         self.assertEqual(fs.writes, [])
         self.assertNotIn("init_repo", self._call_names(git))
+
+    def test_rerun_after_configuring_identity_creates_the_guidance_repo(self):
+        store = FakeStore()
+        fs = FakeFs()
+        InitGridUseCase(store, fs, FakeConfig(), FakeGit(missing_identity=["user.name"])).execute()
+        r = InitGridUseCase(store, fs, FakeConfig(), FakeGit()).execute()
+        self.assertEqual(r.guidance_outcome, "created")
+        self.assertEqual(r.guidance_refusal, "")
+        self.assertIsNotNone(store.get_project(GUIDANCE_WORKSPACE))
 
     def test_missing_identity_does_not_block_registering_an_existing_repo(self):
         fs = FakeFs(dirs={"/kb": []})

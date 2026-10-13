@@ -2566,6 +2566,24 @@ class TestInitPullsWorkflows(unittest.TestCase):
         self.assertIsNotNone(registry)
         self.assertEqual(registry.url, self.repo)
 
+    def test_init_without_a_git_identity_finishes_the_rest_then_exits_non_zero(self):
+        from lightcycle.adapters.gitio import GitAdapter
+
+        class NoIdentityGit(GitAdapter):
+            def missing_identity(self, root):
+                return ["user.name", "user.email"]
+
+        _cli_mod.set_container(
+            _cli_mod.Container(store=self.store, machine=FakeMachine(), git=NoIdentityGit())
+        )
+        rc, out, err = call(_cli_mod.cmd_init)
+        self.assertEqual(rc, 1)
+        self.assertIn("lightcycle store initialised", out)
+        self.assertIn("pulled lightcycle", out)
+        self.assertIn("guidance repo not created", err)
+        self.assertIn('git config --global user.name "<name>"', err)
+        self.assertFalse(os.path.exists(os.path.join(self.home, "workspace", "agent-guidance")))
+
     def test_init_is_idempotent_and_does_not_repull(self):
         call(_cli_mod.cmd_init)
         rc, out, err = call(_cli_mod.cmd_init)
