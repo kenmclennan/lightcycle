@@ -13,6 +13,7 @@ class OriginView:
     versions: List[str] = field(default_factory=list)
     pinned: List[str] = field(default_factory=list)
     workflows: List = field(default_factory=list)
+    writable: bool = False
 
 
 @dataclass(frozen=True)
@@ -48,5 +49,6 @@ class ListWorkflowSourcesUseCase:
                 versions=self._source.list_versions(name),
                 pinned=sorted(pinned_shas(self._store, name)),
                 workflows=self._workflows(name, current),
+                writable=registry.writable if registry else False,
             ))
         return ListResponse(origins=origins)

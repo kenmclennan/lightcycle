@@ -88,8 +88,8 @@ class FakeSource:
     def workflow_names(self, origin, sha):
         return []
 
-    def write_registry(self, origin, url, ref, current):
-        self.registries[origin] = OriginRegistration(url=url, ref=ref, current=current)
+    def write_registry(self, origin, url, ref, current, writable):
+        self.registries[origin] = OriginRegistration(url=url, ref=ref, current=current, writable=writable)
 
     def read_registry(self, origin):
         return self.registries.get(origin)
@@ -168,6 +168,39 @@ class TestCmdWorkflow(unittest.TestCase):
         rc, out, err = call(cli.cmd_workflow, "add", "u")
         self.assertEqual(rc, 0)
         self.assertIsNone(self.source.last_ref)
+
+    def test_add_writable_flag_registers_writable(self):
+        self.source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
+        rc, out, err = call(cli.cmd_workflow, "add", "u", "--writable")
+        self.assertEqual(rc, 0)
+        self.assertTrue(self.source.read_registry("acme").writable)
+
+    def test_set_flips_the_flag_and_reports(self):
+        self.source.registries["acme"] = OriginRegistration("u", "main", "sha1")
+        rc, out, err = call(cli.cmd_workflow, "set", "acme", "--writable")
+        self.assertEqual((rc, out.strip()), (0, "acme is now writable"))
+        rc, out, err = call(cli.cmd_workflow, "set", "acme", "--read-only")
+        self.assertEqual((rc, out.strip()), (0, "acme is now read-only"))
+        self.assertFalse(self.source.read_registry("acme").writable)
+
+    def test_set_unknown_origin_exits_1_naming_registered(self):
+        self.source.registries["acme"] = OriginRegistration("u", "main", "sha1")
+        rc, out, err = call(cli.cmd_workflow, "set", "nope", "--writable")
+        self.assertEqual(rc, 1)
+        self.assertIn("acme", err)
+
+    def test_set_requires_exactly_one_flag(self):
+        self.source.registries["acme"] = OriginRegistration("u", "main", "sha1")
+        self.assertNotEqual(call(cli.cmd_workflow, "set", "acme")[0], 0)
+        self.assertNotEqual(call(cli.cmd_workflow, "set", "acme", "--writable", "--read-only")[0], 0)
+
+    def test_list_line_shows_writable_or_read_only(self):
+        self.source.registries["a"] = OriginRegistration("u", "main", "sha1", True)
+        self.source.registries["b"] = OriginRegistration("u", "main", "sha1")
+        rc, out, err = call(cli.cmd_workflow, "list")
+        lines = [l for l in out.splitlines() if l.startswith(("a ", "b "))]
+        self.assertTrue(lines[0].endswith(", writable)"))
+        self.assertTrue(lines[1].endswith(", read-only)"))
 
     def test_add_name_override(self):
         self.source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")

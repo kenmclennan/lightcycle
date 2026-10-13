@@ -96,6 +96,7 @@ from lightcycle.application.work import (
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.inspect import DoctorInput, DoctorUseCase
 from lightcycle.application.workflows.add import AddWorkflowSourceUseCase
+from lightcycle.application.workflows.set_writable import SetOriginWritableUseCase
 from lightcycle.application.workflows.check_dir import (
     DIR_ORIGIN,
     DIR_SHA,
@@ -207,7 +208,7 @@ COMMAND_GROUPS = [
         ("config", "[--edit]", "show every resolved config setting, or edit the config file"),
         ("version", "", "print the lightcycle version"),
         ("upgrade", "[--check]", "upgrade lc in place from main if it's ahead; --check only reports"),
-        ("workflow", "<add|upgrade|list|rm|check|describe|simulate> ...", "manage workflow sources and "
+        ("workflow", "<add|upgrade|set|list|rm|check|describe|simulate> ...", "manage workflow sources and "
          "inspect workflows: check <origin>/<name> validates composition, describe <origin>/<name> "
          "shows its summary/shape, simulate <origin>/<name> dry-runs the bundle through the real "
          "engine (no LLM/GitHub) to its terminals, --trace also prints the walk taken - separate from `lc upgrade`, which updates the engine"),
@@ -430,7 +431,7 @@ def cmd_workflow(argv):
     try:
         if a.sub == "add":
             resp = AddWorkflowSourceUseCase(c.workflow_source, c.store, c.config, c.fs).execute(
-                url=a.url, ref=a.ref, name=a.name)
+                url=a.url, ref=a.ref, name=a.name, writable=a.writable)
             msg = "added %s @ %s" % (resp.origin, resp.sha)
             if resp.pruned:
                 msg += " (pruned %d)" % len(resp.pruned)
@@ -473,9 +474,14 @@ def cmd_workflow(argv):
                     line += ", ref=%s" % v.ref
                 if v.pinned:
                     line += ", %d pinned" % len(v.pinned)
+                line += ", writable" if v.writable else ", read-only"
                 print(line + ")")
                 for wf, summary in v.workflows:
                     print("  %s%s" % (wf, "  - %s" % summary if summary else ""))
+            return 0
+        if a.sub == "set":
+            resp = SetOriginWritableUseCase(c.workflow_source).execute(a.origin, a.writable)
+            print("%s is now %s" % (resp.origin, "writable" if resp.writable else "read-only"))
             return 0
         if a.sub == "rm":
             resp = RemoveWorkflowSourceUseCase(c.workflow_source, c.store).execute(a.origin)

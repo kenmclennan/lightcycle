@@ -8,6 +8,7 @@ from lightcycle.application.workflows.add import AddWorkflowSourceUseCase
 from lightcycle.application.workflows.init_origin import InitWorkflowOriginUseCase
 from lightcycle.config import ConfigError
 from lightcycle.domain.workflows.contract import ENGINE_CONTRACT
+from lightcycle.application.workflows.set_writable import SetOriginWritableUseCase
 from lightcycle.application.workflows.list import ListWorkflowSourcesUseCase
 from lightcycle.application.workflows.remove import RemoveWorkflowSourceUseCase
 from lightcycle.application.workflows.upgrade import (
@@ -55,8 +56,8 @@ class FakeSource:
     def has_version(self, origin, sha):
         return sha in self.materialized.get(origin, [])
 
-    def write_registry(self, origin, url, ref, current):
-        self.registries[origin] = OriginRegistration(url=url, ref=ref, current=current)
+    def write_registry(self, origin, url, ref, current, writable):
+        self.registries[origin] = OriginRegistration(url=url, ref=ref, current=current, writable=writable)
 
     def read_registry(self, origin):
         return self.registries.get(origin)
@@ -101,11 +102,11 @@ class _WriteFailsOnceSource(FakeSource):
         super().__init__()
         self.write_failures = 1
 
-    def write_registry(self, origin, url, ref, current):
+    def write_registry(self, origin, url, ref, current, writable):
         if self.write_failures:
             self.write_failures -= 1
             raise OSError("disk full")
-        super().write_registry(origin, url, ref, current)
+        super().write_registry(origin, url, ref, current, writable)
 
 
 class _RetentionRaisesConfig(FakeConfig):
@@ -348,6 +349,74 @@ class TestUpgrade(unittest.TestCase):
         self.assertEqual(source.materialized["acme"], ["sha2"])
 
 
+class TestWritable(unittest.TestCase):
+    def _added(self, writable=None):
+        source = FakeSource()
+        source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
+        kwargs = {} if writable is None else {"writable": writable}
+        _add(source).execute(url="u", ref="main", name=None, **kwargs)
+        return source
+
+    def test_add_defaults_to_read_only(self):
+        self.assertFalse(self._added().read_registry("acme").writable)
+
+    def test_add_writable_stores_true(self):
+        self.assertTrue(self._added(True).read_registry("acme").writable)
+
+    def _upgrade(self, source):
+        source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha2")
+        cfg = FakeConfig()
+        UpgradeWorkflowSourceUseCase(source, FakeStore(), cfg, FsAdapter(cfg)).execute("acme")
+
+    def test_upgrade_keeps_a_writable_origin_writable(self):
+        source = self._added(True)
+        self._upgrade(source)
+        self.assertEqual(source.read_registry("acme").current, "sha2")
+        self.assertTrue(source.read_registry("acme").writable)
+
+    def test_upgrade_keeps_a_legacy_registration_read_only(self):
+        source = self._added()
+        source.registries["acme"] = OriginRegistration("u", "main", "sha1")
+        self._upgrade(source)
+        self.assertFalse(source.read_registry("acme").writable)
+
+    def test_set_flips_only_the_flag(self):
+        source = self._added()
+        before = source.read_registry("acme")
+        SetOriginWritableUseCase(source).execute("acme", True)
+        after = source.read_registry("acme")
+        self.assertTrue(after.writable)
+        self.assertEqual((after.url, after.ref, after.current), (before.url, before.ref, before.current))
+        SetOriginWritableUseCase(source).execute("acme", False)
+        self.assertFalse(source.read_registry("acme").writable)
+
+    def test_set_unknown_origin_is_refused_naming_registered_ones(self):
+        source = self._added()
+        with self.assertRaises(WorkflowSourceError) as e:
+            SetOriginWritableUseCase(source).execute("nope", True)
+        self.assertIn("acme", str(e.exception))
+
+    def test_set_with_none_registered_says_so(self):
+        with self.assertRaises(WorkflowSourceError) as e:
+            SetOriginWritableUseCase(FakeSource()).execute("nope", True)
+        self.assertIn("none registered", str(e.exception))
+
+    def test_set_leaves_the_other_origin_untouched(self):
+        source = self._added(True)
+        source.registries["other"] = OriginRegistration("o", "", "s", False)
+        SetOriginWritableUseCase(source).execute("other", True)
+        SetOriginWritableUseCase(source).execute("acme", False)
+        self.assertFalse(source.read_registry("acme").writable)
+        self.assertTrue(source.read_registry("other").writable)
+
+    def test_list_reports_the_flag_per_origin(self):
+        source = self._added(True)
+        source.registries["other"] = OriginRegistration("o", "", "s", False)
+        views = {v.name: v for v in ListWorkflowSourcesUseCase(source, FakeStore()).execute().origins}
+        self.assertTrue(views["acme"].writable)
+        self.assertFalse(views["other"].writable)
+
+
 class TestUpgradeCommitOrdering(unittest.TestCase):
     def _registered(self, source):
         source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
@@ -503,6 +572,7 @@ class TestInit(unittest.TestCase):
         self.assertTrue(os.path.isfile(os.path.join(project_dir, "README.md")))
         self.assertEqual(source.last_ref, "HEAD")
         self.assertEqual(source.read_registry("acme").current, "sha1")
+        self.assertTrue(source.read_registry("acme").writable)
         self.assertEqual(cfg.personal_origin_set, "acme")
         self.assertIn(("init_repo", project_dir, "main"), git.calls)
         self.assertIn(("commit_all", project_dir, "scaffold workflow-origin repo"), git.calls)

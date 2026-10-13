@@ -55,7 +55,7 @@ class InitWorkflowOriginUseCase:
                 "the directory and retry" % project_dir)
         add_resp = AddWorkflowSourceUseCase(
             self._source, self._store, self._config, self._fs
-        ).execute(url=project_dir, ref="HEAD", name=name)
+        ).execute(url=project_dir, ref="HEAD", name=name, writable=True)
         self._config.set_personal_origin(name)
         return InitWorkflowOriginResponse(
             project_dir=project_dir, origin=add_resp.origin, sha=add_resp.sha)

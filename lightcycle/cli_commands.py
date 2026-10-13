@@ -74,13 +74,19 @@ COMMANDS = {
     )),
     "workflow": CommandSpec(prog="lc workflow", subparsers={
         "add": CommandSpec(prog="lc workflow add", args=(
-            Arg("url"), Arg("--ref"), Arg("--name"),
+            Arg("url"), Arg("--ref"), Arg("--name"), Arg("--writable", action="store_true"),
         )),
         "init": CommandSpec(prog="lc workflow init", args=(
             Arg("name"),
         )),
         "upgrade": CommandSpec(prog="lc workflow upgrade", args=(
             Arg("origin", nargs="?"),
+        )),
+        "set": CommandSpec(prog="lc workflow set", args=(
+            Arg("origin"),
+            MutexGroup(required=True, args=(
+                Arg("--writable", action="store_true"), Arg("--read-only", action="store_true"),
+            )),
         )),
         "list": CommandSpec(prog="lc workflow list"),
         "check": CommandSpec(prog="lc workflow check", args=(

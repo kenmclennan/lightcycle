@@ -78,7 +78,7 @@ class UpgradeWorkflowSourceUseCase:
         if detail:
             raise WorkflowSourceError("bundle prompts do not match this engine - %s" % detail)
         self._source.pin(origin, bundle)
-        self._source.write_registry(origin, registry.url, registry.ref, bundle.sha)
+        self._source.write_registry(origin, registry.url, registry.ref, bundle.sha, registry.writable)
         pruned, prune_error = prune_origin_best_effort(self._source, self._store, origin, keep_n)
         return UpgradeResponse(
             origin=origin, sha=bundle.sha, changed=(bundle.sha != previous),
