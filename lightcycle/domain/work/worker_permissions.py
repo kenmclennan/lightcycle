@@ -17,7 +17,11 @@ def worker_permitted(verb, parsed_flags):
             return False
         return parsed_flags.get("state") == "waiting"
     if verb == "workflow":
+        if parsed_flags.get("sub") == "list":
+            return True
         return parsed_flags.get("sub") == "check" and bool(parsed_flags.get("dir"))
+    if verb == "config":
+        return "edit" in parsed_flags and not parsed_flags["edit"]
     return False
 
 
@@ -26,6 +30,6 @@ def worker_refusal_message(verb):
         return "lc: workers may not attach an artifact of type %s - attach is otherwise permitted\n" % (
             ", ".join(_ATTACH_FORBIDDEN_TYPES),
         )
-    return "lc: workers may not run '%s' - permitted: %s, set --state waiting, workflow check --dir\n" % (
+    return "lc: workers may not run '%s' - permitted: %s, set --state waiting, workflow check --dir, workflow list, config\n" % (
         verb, ", ".join(WORKER_VERBS),
     )

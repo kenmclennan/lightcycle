@@ -26,7 +26,7 @@ class TestWorkerPermitted(unittest.TestCase):
         self.assertTrue(worker_permitted("peek", {}))
 
     def test_destructive_verbs_forbidden(self):
-        for v in ("rm", "init", "new", "start", "sweep", "dep", "config",
+        for v in ("rm", "init", "new", "start", "sweep", "dep",
                   "workflow", "backfill-usage"):
             self.assertFalse(worker_permitted(v, {}), v)
 

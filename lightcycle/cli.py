@@ -362,6 +362,14 @@ def _workflow_flags(args):
     return vars(ns)
 
 
+def _config_flags(args):
+    try:
+        ns, _extras = build_parser(COMMANDS["config"]).parse_known_args(args)
+    except SystemExit:
+        return {}
+    return vars(ns)
+
+
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv and argv[0] in ("version", "--version"):
@@ -392,6 +400,8 @@ def main(argv=None):
             parsed_flags = _attach_flags(argv[1:])
         elif cmd == "workflow":
             parsed_flags = _workflow_flags(argv[1:])
+        elif cmd == "config":
+            parsed_flags = _config_flags(argv[1:])
         if not worker_permitted(cmd, parsed_flags):
             sys.stderr.write(worker_refusal_message(cmd))
             return 1

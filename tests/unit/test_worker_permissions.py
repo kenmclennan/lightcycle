@@ -36,6 +36,18 @@ class TestWorkerPermitted(unittest.TestCase):
     def test_workflow_check_dir_is_still_permitted(self):
         self.assertTrue(worker_permitted("workflow", {"sub": "check", "dir": "/d"}))
 
+    def test_workflow_list_is_permitted_for_a_worker(self):
+        self.assertTrue(worker_permitted("workflow", {"sub": "list"}))
+
+    def test_config_read_is_permitted_for_a_worker(self):
+        self.assertTrue(worker_permitted("config", {"edit": False}))
+
+    def test_config_edit_is_refused_for_a_worker(self):
+        self.assertFalse(worker_permitted("config", {"edit": True}))
+
+    def test_config_with_unparsed_flags_is_refused_for_a_worker(self):
+        self.assertFalse(worker_permitted("config", {}))
+
     def test_a_verb_outside_worker_verbs_and_not_set_never_permitted(self):
         self.assertFalse(worker_permitted("rm", {"state": "waiting"}))
 

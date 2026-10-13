@@ -157,9 +157,12 @@ class TestWorkerMayCheckDir(unittest.TestCase):
     def test_every_other_workflow_form_is_refused(self):
         for args in (
             ["check", "o/spec-driven"], ["add", "url"], ["upgrade"], ["rm", "o"],
-            ["init", "n"], ["list"], ["describe", "o/n"], ["simulate", "o/n"], [],
+            ["init", "n"], ["describe", "o/n"], ["simulate", "o/n"], [],
         ):
             self.assertFalse(worker_permitted("workflow", cli._workflow_flags(args)), args)
+
+    def test_workflow_list_is_permitted(self):
+        self.assertTrue(worker_permitted("workflow", cli._workflow_flags(["list"])))
 
     def test_unparseable_workflow_args_are_refused(self):
         with redirect_stderr(io.StringIO()):

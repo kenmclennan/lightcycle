@@ -68,6 +68,16 @@ class TestWorkerModeGuard(unittest.TestCase):
         r = run_worker_against_live_home("workflow", "check", "--dir", tempfile.mkdtemp())
         self.assertNotIn("workers may not run", r.stderr)
 
+    def test_worker_may_run_workflow_list_and_config_on_the_live_home(self):
+        for args in (("workflow", "list"), ("config",)):
+            r = run_worker_against_live_home(*args)
+            self.assertNotIn("workers may not run", r.stderr, args)
+
+    def test_worker_cannot_edit_config_on_the_live_home(self):
+        r = run_worker_against_live_home("config", "--edit")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("workers may not run 'config'", r.stderr)
+
     def test_worker_still_cannot_add_a_workflow_on_the_live_home(self):
         r = run_worker_against_live_home("workflow", "add", "https://example.invalid/x")
         self.assertEqual(r.returncode, 1)
