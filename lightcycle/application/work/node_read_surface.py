@@ -1,3 +1,6 @@
+from lightcycle.application.flow.engine_steps import engine_outcomes_for_node
+
+
 def node_read_surface(store, flow, view):
     step = view.step
     item_id = getattr(step, "item", None) or step.id
@@ -32,6 +35,14 @@ def node_read_surface(store, flow, view):
             out["workflow_error"] = str(e)
         else:
             out["workflow_resolved"] = pin
+    if step.type == "step":
+        engine_valid = engine_outcomes_for_node(store, step)
+        if engine_valid is not None:
+            out["valid_outcomes"] = list(engine_valid)
+        elif out["workflow_resolved"]:
+            out["valid_outcomes"] = flow.outcomes_for(step.stage, out["workflow_resolved"])
+        else:
+            out["valid_outcomes"] = []
     if out["workflow_resolved"]:
         phase = flow.phase_for(step)
         if phase:

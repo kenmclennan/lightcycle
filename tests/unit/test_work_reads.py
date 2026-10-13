@@ -17,6 +17,7 @@ from lightcycle.application.work import (
     TraceUseCase,
 )
 from lightcycle.application.services.flow import FlowService
+from lightcycle.application.work.node_read_surface import node_read_surface
 from lightcycle.application.work.project_of import short_project_label
 from lightcycle.domain.pool.worker import Worker
 from tests.support.fake_fs import FakeFs, graph_text_from_metas
@@ -64,6 +65,32 @@ class TestShowNode(unittest.TestCase):
         resp = ShowNodeUseCase(s, _empty_flow(s)).execute(ShowNodeInput(step=tid))
         self.assertEqual(resp.view.step.id, tid)
         self.assertIn("item_artifacts", resp.as_dict())
+
+
+class TestShowNodeValidOutcomes(unittest.TestCase):
+    def _valid(self, s, flow, sid):
+        resp = ShowNodeUseCase(s, flow).execute(ShowNodeInput(step=sid))
+        return node_read_surface(s, flow, resp.view)["valid_outcomes"]
+
+    def test_engine_step_lists_its_declared_outcomes(self):
+        s = FakeStore()
+        item = s.create_item("batch", "a description")
+        s.label_add(item, "retro-origin")
+        sid = s.create_step(step="audit", role="agent", parent=item)
+        self.assertEqual(self._valid(s, _empty_flow(s), sid), ["findings", "clean"])
+
+    def test_workflow_step_lists_exactly_its_routed_outcomes(self):
+        s = FakeStore()
+        metas = {"reviewer": {"step": "review", "routes": {"done": "open-pr", "rejected": "build"}}}
+        flow = FlowService(FakeFs(metas), s)
+        item = s.create_item("st", "a description", workflow="spec-driven", shortcode="GRID")
+        sid = s.create_step(step="review", role="reviewer", parent=item)
+        self.assertEqual(self._valid(s, flow, sid), ["done", "rejected"])
+
+    def test_workflow_step_with_no_routes_lists_nothing(self):
+        s = FakeStore()
+        sid = create_owned_step(s, "build: x", step="build", role="agent")
+        self.assertEqual(self._valid(s, _flow_with_step(s, "build"), sid), [])
 
 
 class TestTrace(unittest.TestCase):

@@ -4,7 +4,7 @@ from typing import Optional
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.engine_steps import (
     AUDIT_STEP, DAILY_SUMMARY_STEP, FINDINGS_STEP, RETRO_ORIGIN_LABEL,
-    SUMMARY_ORIGIN_LABEL,
+    SUMMARY_ORIGIN_LABEL, engine_outcomes_for_node,
 )
 from lightcycle.domain.feedback import RETROED_LABEL
 from lightcycle.application.flow.next_step import NextStepResolver
@@ -49,6 +49,12 @@ class CompleteStepUseCase:
         t = self._store.get_node(input.step)
         if t.state == State.DONE:
             return CompleteResponse(next_step=None)
+        valid = engine_outcomes_for_node(self._store, t)
+        if valid is not None and input.outcome not in valid:
+            raise UseCaseError(
+                "no transition for step=%s outcome=%s; not closing. Valid outcomes: %s."
+                % (t.stage, input.outcome, ", ".join(valid))
+            )
         if self._is_retro_origin(t):
             if t.stage == AUDIT_STEP:
                 return self._complete_engine_audit(t, input)

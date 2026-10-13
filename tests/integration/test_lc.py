@@ -3501,6 +3501,43 @@ class TestShowSurfacesWorkflowResolution(unittest.TestCase):
         self.assertIsNotNone(d["workflow_error"])
 
 
+class TestValidOutcomesOnTheReadSurface(unittest.TestCase):
+    def setUp(self):
+        _fake_setUp(self, steps=True)
+
+    def _audit_step(self):
+        batch = self.store.create_item("batch", "a description")
+        self.store.label_add(batch, "retro-origin")
+        return self.store.create_step(step="audit", role="agent", parent=batch)
+
+    def test_show_lists_the_declared_outcomes_of_an_engine_step(self):
+        rc, out, err = call(_cli_mod.cmd_show, self._audit_step())
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(json.loads(out)["valid_outcomes"], ["findings", "clean"])
+
+    def test_show_lists_the_routed_outcomes_of_a_workflow_step(self):
+        item = self.store.create_item("item", "a description", workflow="%s@%s" % (_DEFAULT_WORKFLOW, _SHA))
+        step = self.store.create_step(step="build", role="agent", parent=item)
+        rc, out, err = call(_cli_mod.cmd_show, step)
+        self.assertEqual(rc, 0, err)
+        self.assertIsInstance(json.loads(out)["valid_outcomes"], list)
+
+    def test_show_lists_nothing_for_a_step_with_no_workflow(self):
+        item = self.store.create_item("item", "a description")
+        step = self.store.create_step(step="build", role="agent", parent=item)
+        rc, out, err = call(_cli_mod.cmd_show, step)
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(json.loads(out)["valid_outcomes"], [])
+
+    def test_done_refuses_an_undeclared_engine_outcome_and_leaves_the_step_open(self):
+        step = self._audit_step()
+        rc, out, err = call(_cli_mod.cmd_done, step, "bogus")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("findings", err)
+        self.assertIn("clean", err)
+        self.assertNotEqual(self.store.get_node(step).state, "done")
+
+
 class TestShowSurfacesPhaseAndPr(unittest.TestCase):
     _METAS = {
         "spec-await-merge": {"step": "spec-await-merge", "phase": "spec"},

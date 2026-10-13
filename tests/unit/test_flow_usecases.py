@@ -21,7 +21,9 @@ from lightcycle.application.flow import (
     UnblockInput,
     UnblockStepUseCase,
 )
-from lightcycle.application.flow.engine_steps import DAILY_SUMMARY_STEP, FINDINGS_STEP
+from lightcycle.application.flow.engine_steps import (
+    AUDIT_STEP, DAILY_SUMMARY_STEP, ENGINE_STEP_OUTCOMES, FINDINGS_STEP,
+)
 from lightcycle.application.flow.next_step import NextStepResolver
 from lightcycle.application.services.flow import FlowService
 from lightcycle.domain.work import State, compose_step_title
@@ -580,6 +582,54 @@ class TestCompleteStepDailySummary(unittest.TestCase):
         self.assertIsNone(row.summary)
         self.assertEqual(row.summarized_count, 0)
         self.assertEqual(row.dirty_since, dirty_since_before)
+
+
+class TestEngineStepOutcomes(unittest.TestCase):
+    def _uc(self, store):
+        return CompleteStepUseCase(store, flow_for(METAS, store), FakeWorktrees())
+
+    def _step(self, store, stage, label):
+        item = store.create_item("engine", "a description", shortcode="GRID")
+        store.label_add(item, label)
+        return item, store.create_step(step=stage, role="agent", parent=item)
+
+    def test_table_declares_exactly_the_outcomes_in_use(self):
+        self.assertEqual(
+            ENGINE_STEP_OUTCOMES,
+            {
+                AUDIT_STEP: ("findings", "clean"),
+                FINDINGS_STEP: ("done", "filed", "reviewed"),
+                DAILY_SUMMARY_STEP: ("done", "abandoned"),
+            },
+        )
+
+    def test_undeclared_outcome_is_refused_naming_the_valid_ones_and_closes_nothing(self):
+        for stage, label in (
+            (AUDIT_STEP, "retro-origin"),
+            (FINDINGS_STEP, "retro-origin"),
+            (DAILY_SUMMARY_STEP, "summary-origin"),
+        ):
+            s = FakeStore()
+            item, sid = self._step(s, stage, label)
+            with self.assertRaises(UseCaseError) as ctx:
+                self._uc(s).execute(CompleteInput(step=sid, outcome="bogus"))
+            for valid in ENGINE_STEP_OUTCOMES[stage]:
+                self.assertIn(valid, str(ctx.exception))
+            self.assertNotEqual(s.get_node(sid).state, "done")
+            self.assertNotEqual(s.get_node(item).state, "done")
+            self.assertNotIn("outcome: bogus", s.get_node(sid).notes or "")
+
+    def test_each_declared_outcome_still_closes_its_step(self):
+        for stage, label in (
+            (AUDIT_STEP, "retro-origin"),
+            (FINDINGS_STEP, "retro-origin"),
+            (DAILY_SUMMARY_STEP, "summary-origin"),
+        ):
+            for outcome in ENGINE_STEP_OUTCOMES[stage]:
+                s = FakeStore()
+                _, sid = self._step(s, stage, label)
+                self._uc(s).execute(CompleteInput(step=sid, outcome=outcome))
+                self.assertEqual(s.get_node(sid).state, "done")
 
 
 class TestCompleteStepCascadeClose(unittest.TestCase):

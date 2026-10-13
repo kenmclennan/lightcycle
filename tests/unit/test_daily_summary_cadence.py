@@ -261,7 +261,7 @@ class TestDailySummaryCadenceSettles(unittest.TestCase):
         clock.epoch = _epoch(day) + 900
 
         CompleteStepUseCase(store, flow_for(METAS, store)).execute(
-            CompleteInput(step=tid, outcome="failed"))
+            CompleteInput(step=tid, outcome="abandoned"))
 
         row = store.day_summary(day)
         self.assertEqual(row.generated_at, before)
