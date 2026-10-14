@@ -42,9 +42,6 @@ class _FakeFlow:
     def workflow_for(self, node):
         return "spec" if self._workspace == "specs" else "standard"
 
-    def project_for(self, node):
-        return None
-
     def load_graph(self, name=None):
         return _Graph(self._workspace)
 
