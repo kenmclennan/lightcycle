@@ -1,7 +1,7 @@
 import os
 
 from lightcycle.ports.git import GitOutcome, GitPort
-from lightcycle.ports.github import Comment, GitHubEventsPort, ReadFailure
+from lightcycle.ports.github import Comment, GitHubEventsPort, PrSync, ReadFailure
 from lightcycle.ports.teardown_ledger import TeardownLedgerPort
 from lightcycle.ports.workers import WorkersPort
 
@@ -193,11 +193,6 @@ class ScriptedGitHub(GitHubEventsPort):
     def last_push_time(self, pr):
         return 0.0
 
-    def is_conflicted(self, pr):
-        hit = pr in self._conflicted
-        self._conflicted.discard(pr)
-        return hit
-
     def comments_since(self, pr, since):
         items = self._feedback.pop(pr, [])
         return [c for c in items if c.created_at > since]
@@ -216,6 +211,17 @@ class ScriptedGitHub(GitHubEventsPort):
 
     def check_runs(self, pr, sha):
         return self._check_runs.get(pr, ())
+
+    def pr_sync_state(self, pr):
+        hit = pr in self._conflicted
+        self._conflicted.discard(pr)
+        return PrSync(False, hit, "", "sim@main")
+
+    def requires_up_to_date(self, base_key):
+        return False
+
+    def update_branch(self, pr, expected_head_sha):
+        return ReadFailure(-1, "branch updates are not simulated")
 
 
 class NullWorkers(WorkersPort):

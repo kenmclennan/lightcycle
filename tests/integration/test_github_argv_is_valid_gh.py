@@ -21,13 +21,15 @@ def _captured_argvs():
         adapter.is_merged(_PR)
         adapter.is_closed_unmerged(_PR)
         adapter.last_push_time(_PR)
-        adapter.is_conflicted(_PR)
         adapter.comments_since(_PR, 0.0)
         adapter.pull_comments(_PR, 0.0)
         adapter.reviews(_PR, 0.0)
         adapter.head_sha(_PR)
         adapter.changed_files(_PR, "deadbeef")
         adapter.check_runs(_PR, "deadbeef")
+        adapter.pr_sync_state(_PR)
+        adapter.requires_up_to_date("acme/widget@main")
+        adapter.update_branch(_PR, "deadbeef")
 
     return [c for c in calls if c and c[0] == "gh"]
 

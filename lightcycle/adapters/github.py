@@ -4,7 +4,9 @@ import re
 import subprocess
 from typing import Tuple, Union
 
-from lightcycle.ports.github import CheckRun, Comment, GitHubEventsPort, ReadFailure, Review
+from lightcycle.ports.github import (
+    CheckRun, Comment, GitHubEventsPort, PrSync, ReadFailure, Review,
+)
 
 _PR_URL_RE = re.compile(r"https://github\.com/([^/]+)/([^/]+)/pull/(\d+)")
 _GH_TIMEOUT_SECONDS = 30
@@ -65,22 +67,6 @@ class GitHubEventsAdapter(GitHubEventsPort):
     def is_closed_unmerged(self, pr: str) -> Union[bool, ReadFailure]:
         state = self._pr_state(pr)
         return state if isinstance(state, ReadFailure) else state == "CLOSED"
-
-    def is_conflicted(self, pr: str) -> Union[bool, ReadFailure]:
-        try:
-            result = subprocess.run(
-                ["gh", "pr", "view", pr, "--json", "mergeable,mergeStateStatus"],
-                capture_output=True, text=True, timeout=_GH_TIMEOUT_SECONDS)
-        except subprocess.TimeoutExpired:
-            return _timeout_read_failure()
-        if result.returncode != 0:
-            return ReadFailure(result.returncode, result.stderr)
-        try:
-            data = json.loads(result.stdout)
-        except (json.JSONDecodeError, ValueError):
-            return ReadFailure(-1, "could not parse gh pr view JSON for mergeable state")
-        return (data.get("mergeable") == "CONFLICTING"
-                or data.get("mergeStateStatus") == "DIRTY")
 
     def last_push_time(self, pr: str) -> Union[float, ReadFailure]:
         parts = _repo_parts(pr)
@@ -338,3 +324,89 @@ class GitHubEventsAdapter(GitHubEventsPort):
             )
 
         return result
+
+    def pr_sync_state(self, pr: str) -> Union[PrSync, ReadFailure]:
+        parts = _repo_parts(pr)
+        if not parts:
+            return ReadFailure(-1, "pr is not a parseable GitHub PR URL: %r" % pr)
+        owner, repo, _ = parts
+        try:
+            result = subprocess.run(
+                ["gh", "pr", "view", pr, "--json", "mergeable,mergeStateStatus,headRefOid,baseRefName"],
+                capture_output=True, text=True, timeout=_GH_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            return _timeout_read_failure()
+        if result.returncode != 0:
+            return ReadFailure(result.returncode, result.stderr)
+        try:
+            data = json.loads(result.stdout)
+        except (json.JSONDecodeError, ValueError):
+            return ReadFailure(-1, "could not parse gh pr view JSON for sync state")
+        return PrSync(
+            behind=data.get("mergeStateStatus") == "BEHIND",
+            conflicted=(data.get("mergeable") == "CONFLICTING"
+                        or data.get("mergeStateStatus") == "DIRTY"),
+            head_sha=data.get("headRefOid") or "",
+            base_key="%s/%s@%s" % (owner, repo, data.get("baseRefName") or ""),
+        )
+
+    def _gh_api_json(self, path):
+        try:
+            result = subprocess.run(
+                ["gh", "api", path], capture_output=True, text=True,
+                timeout=_GH_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            return _timeout_read_failure()
+        if result.returncode != 0:
+            return ReadFailure(result.returncode, result.stderr)
+        try:
+            return json.loads(result.stdout)
+        except (json.JSONDecodeError, ValueError):
+            return ReadFailure(-1, "could not parse gh api JSON for %s" % path)
+
+    def requires_up_to_date(self, base_key: str) -> Union[bool, ReadFailure]:
+        repo_path, _, base = base_key.partition("@")
+        rules = self._gh_api_json("repos/%s/rules/branches/%s" % (repo_path, base))
+        if isinstance(rules, ReadFailure):
+            return rules
+        if isinstance(rules, list) and any(
+            isinstance(r, dict) and r.get("type") == "required_status_checks"
+            and (r.get("parameters") or {}).get("strict_required_status_checks_policy") is True
+            for r in rules
+        ):
+            return True
+        try:
+            result = subprocess.run(
+                ["gh", "api",
+                 "repos/%s/branches/%s/protection/required_status_checks" % (repo_path, base)],
+                capture_output=True, text=True, timeout=_GH_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            return _timeout_read_failure()
+        if result.returncode != 0:
+            if "404" in result.stderr or "Not Found" in result.stderr \
+                    or "not protected" in result.stderr.lower():
+                return False
+            return ReadFailure(result.returncode, result.stderr)
+        try:
+            data = json.loads(result.stdout)
+        except (json.JSONDecodeError, ValueError):
+            return ReadFailure(-1, "could not parse gh api JSON for required status checks")
+        return isinstance(data, dict) and data.get("strict") is True
+
+    def update_branch(self, pr: str, expected_head_sha: str) -> Union[None, ReadFailure]:
+        parts = _repo_parts(pr)
+        if not parts:
+            return ReadFailure(-1, "pr is not a parseable GitHub PR URL: %r" % pr)
+        owner, repo, number = parts
+        try:
+            result = subprocess.run(
+                ["gh", "api", "-X", "PUT",
+                 "repos/%s/%s/pulls/%s/update-branch" % (owner, repo, number),
+                 "-f", "expected_head_sha=%s" % expected_head_sha,
+                 "-f", "update_method=rebase"],
+                capture_output=True, text=True, timeout=_GH_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            return _timeout_read_failure()
+        if result.returncode != 0:
+            return ReadFailure(result.returncode, result.stderr)
+        return None

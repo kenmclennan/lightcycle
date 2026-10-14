@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from lightcycle.adapters.github import GitHubEventsAdapter
-from lightcycle.ports.github import CheckRun, ReadFailure
+from lightcycle.ports.github import CheckRun, PrSync, ReadFailure
 
 _PR = "https://github.com/x/y/pull/7"
 
@@ -649,21 +649,21 @@ class TestIsConflicted(unittest.TestCase):
 
     def test_is_conflicted_returns_read_failure_on_timeout(self):
         with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):
-            result = self.adapter.is_conflicted(_PR)
+            result = self.adapter.pr_sync_state(_PR)
 
         self.assertIsInstance(result, ReadFailure)
 
     def test_non_zero_exit_returns_read_failure(self):
         mock_run = MagicMock(return_value=_proc("", returncode=1, stderr="gh: auth error"))
         with patch("lightcycle.adapters.github.subprocess.run", mock_run):
-            result = self.adapter.is_conflicted(_PR)
+            result = self.adapter.pr_sync_state(_PR)
 
         self.assertEqual(result, ReadFailure(1, "gh: auth error"))
 
     def test_invalid_json_returns_read_failure(self):
         mock_run = MagicMock(return_value=_proc("not json", returncode=0))
         with patch("lightcycle.adapters.github.subprocess.run", mock_run):
-            result = self.adapter.is_conflicted(_PR)
+            result = self.adapter.pr_sync_state(_PR)
 
         self.assertIsInstance(result, ReadFailure)
 
@@ -691,6 +691,147 @@ class TestHeadSha(unittest.TestCase):
             result = self.adapter.head_sha(_PR)
 
         self.assertIsInstance(result, ReadFailure)
+
+
+class TestPrSyncState(unittest.TestCase):
+    def setUp(self):
+        self.adapter = GitHubEventsAdapter()
+
+    def test_behind_payload(self):
+        payload = json.dumps(
+            {"mergeStateStatus": "BEHIND", "headRefOid": "abc123", "baseRefName": "main"}
+        )
+        mock_run = MagicMock(return_value=_proc(payload))
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            result = self.adapter.pr_sync_state(_PR)
+
+        self.assertEqual(result, PrSync(True, False, "abc123", "x/y@main"))
+        self.assertEqual(
+            mock_run.call_args[0][0],
+            ["gh", "pr", "view", _PR, "--json", "mergeable,mergeStateStatus,headRefOid,baseRefName"],
+        )
+
+    def test_unknown_is_not_behind(self):
+        payload = json.dumps(
+            {"mergeStateStatus": "UNKNOWN", "headRefOid": "abc123", "baseRefName": "main"}
+        )
+        with patch("lightcycle.adapters.github.subprocess.run",
+                   MagicMock(return_value=_proc(payload))):
+            result = self.adapter.pr_sync_state(_PR)
+
+        self.assertFalse(result.behind)
+
+    def test_failures(self):
+        for run in (
+            MagicMock(return_value=_proc("", returncode=1, stderr="auth")),
+            MagicMock(return_value=_proc("not json")),
+            MagicMock(side_effect=_timeout()),
+        ):
+            with patch("lightcycle.adapters.github.subprocess.run", run):
+                self.assertIsInstance(self.adapter.pr_sync_state(_PR), ReadFailure)
+
+
+class TestRequiresUpToDate(unittest.TestCase):
+    def setUp(self):
+        self.adapter = GitHubEventsAdapter()
+
+    def _run(self, *procs):
+        return patch("lightcycle.adapters.github.subprocess.run",
+                     MagicMock(side_effect=list(procs)))
+
+    def test_ruleset_strict(self):
+        rules = json.dumps([
+            {"type": "deletion"},
+            {"type": "required_status_checks",
+             "parameters": {"strict_required_status_checks_policy": True}},
+        ])
+        with self._run(_proc(rules)) as run:
+            result = self.adapter.requires_up_to_date("x/y@main")
+
+        self.assertIs(result, True)
+        self.assertEqual(run.call_args[0][0],
+                         ["gh", "api", "repos/x/y/rules/branches/main"])
+
+    def test_ruleset_not_strict_and_protection_strict(self):
+        rules = json.dumps([
+            {"type": "required_status_checks",
+             "parameters": {"strict_required_status_checks_policy": False}},
+        ])
+        with self._run(_proc(rules), _proc(json.dumps({"strict": True}))) as run:
+            result = self.adapter.requires_up_to_date("x/y@main")
+
+        self.assertIs(result, True)
+        self.assertEqual(
+            run.call_args[0][0],
+            ["gh", "api", "repos/x/y/branches/main/protection/required_status_checks"],
+        )
+
+    def test_protection_not_strict(self):
+        with self._run(_proc("[]"), _proc(json.dumps({"strict": False}))):
+            self.assertIs(self.adapter.requires_up_to_date("x/y@main"), False)
+
+    def test_not_protected_404_is_false(self):
+        not_protected = _proc("", returncode=1, stderr="gh: Branch not protected (HTTP 404)")
+        with self._run(_proc("[]"), not_protected):
+            self.assertIs(self.adapter.requires_up_to_date("x/y@main"), False)
+
+    def test_other_protection_error_is_read_failure(self):
+        with self._run(_proc("[]"), _proc("", returncode=1, stderr="HTTP 403")):
+            result = self.adapter.requires_up_to_date("x/y@main")
+
+        self.assertIsInstance(result, ReadFailure)
+
+    def test_rules_failures(self):
+        for first in (
+            _proc("", returncode=1, stderr="HTTP 500"),
+            _proc("not json"),
+        ):
+            with self._run(first):
+                self.assertIsInstance(
+                    self.adapter.requires_up_to_date("x/y@main"), ReadFailure
+                )
+
+    def test_timeouts(self):
+        with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):
+            self.assertIsInstance(
+                self.adapter.requires_up_to_date("x/y@main"), ReadFailure
+            )
+        with self._run(_proc("[]"), _timeout()):
+            self.assertIsInstance(
+                self.adapter.requires_up_to_date("x/y@main"), ReadFailure
+            )
+
+    def test_bad_protection_json_is_read_failure(self):
+        with self._run(_proc("[]"), _proc("not json")):
+            self.assertIsInstance(
+                self.adapter.requires_up_to_date("x/y@main"), ReadFailure
+            )
+
+
+class TestUpdateBranch(unittest.TestCase):
+    def setUp(self):
+        self.adapter = GitHubEventsAdapter()
+
+    def test_argv_pins_expected_head_and_rebases(self):
+        mock_run = MagicMock(return_value=_proc("{}"))
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            result = self.adapter.update_branch(_PR, "abc123")
+
+        self.assertIsNone(result)
+        self.assertEqual(
+            mock_run.call_args[0][0],
+            ["gh", "api", "-X", "PUT", "repos/x/y/pulls/7/update-branch",
+             "-f", "expected_head_sha=abc123", "-f", "update_method=rebase"],
+        )
+
+    def test_refusal_is_read_failure(self):
+        mock_run = MagicMock(return_value=_proc("", returncode=1, stderr="HTTP 422"))
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            self.assertEqual(self.adapter.update_branch(_PR, "abc"), ReadFailure(1, "HTTP 422"))
+
+    def test_timeout_is_read_failure(self):
+        with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):
+            self.assertIsInstance(self.adapter.update_branch(_PR, "abc"), ReadFailure)
 
 
 if __name__ == "__main__":
