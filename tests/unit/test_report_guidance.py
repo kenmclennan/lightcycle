@@ -6,10 +6,11 @@ import time
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 import lightcycle.cli as cli_mod
 from lightcycle.application.errors import UseCaseError
-from lightcycle.application.inspect.report_guidance import ReportGuidanceUseCase
+from lightcycle.application.inspect.report_guidance import ReportGuidanceUseCase, parse_since
 from lightcycle.config import Config
 from lightcycle.container import Container
 from tests.support.fake_fs import FakeFs
@@ -29,13 +30,18 @@ def _cfg():
     return Config(environ={"LC_CONFIG": path})
 
 
-def _entry(status="stable", covers=None, stale_after=None):
+def _entry(status="stable", covers=None, stale_after=None, facets=None, steps=None):
     lines = ["---", "type: Guidance", "status: %s" % status, "verified: ken"]
     if covers:
         lines.append("covers: %s" % covers)
     if stale_after:
         lines.append("stale_after: %s" % stale_after)
-    lines += ["applies-to:", "---", "", "body", ""]
+    lines.append("applies-to:")
+    if facets is not None:
+        lines.append("  facets: [%s]" % ", ".join(facets))
+    if steps is not None:
+        lines.append("  steps: [%s]" % ", ".join(steps))
+    lines += ["---", "", "body", ""]
     return "\n".join(lines).encode()
 
 
@@ -50,9 +56,10 @@ def _setup(files, github=None, added=None):
     return store, fs, github, ReportGuidanceUseCase(store, fs, git, github, _cfg())
 
 
-def _step(store, item, delivered, cited=None, created_at=None):
-    sid = store.create_step(step="write-code", role="agent", parent=item)
-    store.add_artifact(sid, "guidance-delivered", delivered, internal=True)
+def _step(store, item, delivered, cited=None, created_at=None, stage="write-code"):
+    sid = store.create_step(step=stage, role="agent", parent=item)
+    if delivered is not None:
+        store.add_artifact(sid, "guidance-delivered", delivered, internal=True)
     if cited is not None:
         store.add_artifact(sid, "guidance-cited", cited, internal=True)
     if created_at:
@@ -162,6 +169,121 @@ class TestCovers(unittest.TestCase):
         self.assertIn("WEIRD", row.notes[0])
 
 
+PIN = "lightcycle/spec-driven@466e42b44360f2ece519daf346d793768531a08e"
+
+
+def _item(store, repo=None, workflow=PIN):
+    item = store.create_item("t", "d", workflow=workflow)
+    if repo:
+        store.add_artifact(item, "repo", repo)
+    return item
+
+
+class TestOpportunity(unittest.TestCase):
+    def _store(self, files):
+        store, fs, gh, use = _setup(files)
+        store.add_project("kenmclennan/lightcycle", facets=["python", "cli"])
+        return store, use
+
+    def test_opportunity_counts_matching_spawns_and_work_lists_the_project(self):
+        store, use = self._store({
+            "py.md": _entry(facets=["python"]), "rs.md": _entry(facets=["rust"]),
+            "rv.md": _entry(steps=["review-code"]), "lc.md": _entry(steps=["lightcycle/write-code"]),
+            "other.md": _entry(steps=["elsewhere/write-code"]),
+        })
+        item = _item(store, "kenmclennan/lightcycle")
+        for _ in range(3):
+            _step(store, item, "")
+        report = use.execute(time.time())
+        rows = _rows(report)
+        self.assertEqual(rows["py"].opportunity, 3)
+        self.assertEqual(rows["rs"].opportunity, 0)
+        self.assertEqual(rows["rv"].opportunity, 0)
+        self.assertEqual(rows["lc"].opportunity, 3)
+        self.assertEqual(rows["other"].opportunity, 0)
+        self.assertEqual(report.spawns, 3)
+        self.assertEqual(report.projects, ({
+            "project": "kenmclennan/lightcycle", "registered": True,
+            "facets": ["python", "cli"], "spawns": 3,
+            "steps": [{"stage": "write-code", "origin": "lightcycle", "count": 3}],
+        },))
+
+    def test_unresolvable_projects_are_listed_unregistered_with_no_facets(self):
+        store, use = self._store({"any.md": _entry(), "py.md": _entry(facets=["python"])})
+        _step(store, _item(store), "")
+        _step(store, _item(store, "ghost/repo"), "")
+        _step(store, _item(store, "kenmclennan/lightcycle"), "")
+        _step(store, _item(store, "kenmclennan/lightcycle"), "")
+        report = use.execute(time.time())
+        rows = _rows(report)
+        self.assertEqual(rows["any"].opportunity, 4)
+        self.assertEqual(rows["py"].opportunity, 2)
+        by = {p["project"]: p for p in report.projects}
+        self.assertEqual(set(by), {None, "ghost/repo", "kenmclennan/lightcycle"})
+        self.assertEqual((by[None]["registered"], by[None]["facets"]), (False, []))
+        self.assertEqual((by["ghost/repo"]["registered"], by["ghost/repo"]["facets"]), (False, []))
+        self.assertEqual(report.projects[0]["project"], "kenmclennan/lightcycle")
+
+    def test_only_a_guidance_delivered_record_makes_a_spawn(self):
+        store, use = self._store({"any.md": _entry()})
+        item = _item(store, "kenmclennan/lightcycle")
+        _step(store, item, None)
+        _step(store, item, "")
+        report = use.execute(time.time())
+        self.assertEqual(report.spawns, 1)
+        self.assertEqual(_rows(report)["any"].opportunity, 1)
+
+    def test_since_bounds_every_count_and_a_boundary_date_is_included(self):
+        store, use = self._store({"any.md": _entry()})
+        item = _item(store, "kenmclennan/lightcycle")
+        _step(store, item, "any", cited="any", created_at="2026-10-01T00:00:00+01:00")
+        _step(store, item, "any", cited="any", created_at="2026-09-30T23:59:59+01:00")
+        report = use.execute(time.time(), "2026-10-01")
+        row = _rows(report)["any"]
+        self.assertEqual((row.deliveries, row.citations, row.opportunity), (1, 1, 1))
+        self.assertEqual((report.since, report.spawns), ("2026-10-01", 1))
+
+    def test_since_leaves_last_delivered_and_flags_alone(self):
+        store, use = self._store({"any.md": _entry()})
+        item = _item(store, "kenmclennan/lightcycle")
+        for _ in range(60):
+            _step(store, item, "any", created_at="2026-08-01T00:00:00+00:00")
+        row = _rows(use.execute(time.time(), "2026-10-01"))["any"]
+        self.assertEqual(row.deliveries, 0)
+        self.assertEqual(row.last_delivered, "2026-08-01T00:00:00+00:00")
+        self.assertIn("unused", [f.name for f in row.flags])
+
+    def test_no_window_reports_a_null_since(self):
+        store, use = self._store({"any.md": _entry()})
+        self.assertEqual(use.execute(time.time()).as_dict()["window"], {"since": None})
+
+    def test_a_deprecated_entry_reports_its_opportunity(self):
+        store, use = self._store({"old.md": _entry(status="deprecated")})
+        _step(store, _item(store, "kenmclennan/lightcycle"), "")
+        self.assertEqual(_rows(use.execute(time.time()))["old"].opportunity, 1)
+
+    def test_opportunity_consults_the_delivery_matcher(self):
+        store, use = self._store({"any.md": _entry()})
+        _step(store, _item(store, "kenmclennan/lightcycle"), "")
+        with mock.patch(
+            "lightcycle.application.inspect.report_guidance.matches", return_value=False
+        ) as matcher:
+            row = _rows(use.execute(time.time()))["any"]
+        self.assertTrue(matcher.called)
+        self.assertEqual(row.opportunity, 0)
+
+
+class TestParseSince(unittest.TestCase):
+    def test_bad_dates_are_refused(self):
+        for bad in ("2026-13-01", "10-01-2026", "2026-1-1"):
+            with self.assertRaises(UseCaseError):
+                parse_since(bad)
+
+    def test_a_real_date_and_none_pass(self):
+        self.assertEqual(parse_since("2026-10-01"), "2026-10-01")
+        self.assertIsNone(parse_since(None))
+
+
 class TestCmdGuidance(unittest.TestCase):
     def setUp(self):
         self._orig = cli_mod._container
@@ -184,14 +306,15 @@ class TestCmdGuidance(unittest.TestCase):
         rc, out, err = self._run(store, fs, ["--json"], use._git)
         self.assertEqual(rc, 0, err)
         data = json.loads(out)
-        self.assertEqual(set(data), {"entries", "notes"})
+        self.assertEqual(set(data), {"window", "work", "entries", "notes"})
         entry = data["entries"][0]
         self.assertEqual(entry["id"], "a")
         self.assertEqual(entry["status"], "stable")
         self.assertEqual((entry["deliveries"], entry["citations"]), (1, 0))
         self.assertEqual(entry["last_delivered"], "2026-10-01T09:30:00+01:00")
         self.assertEqual(set(entry), {
-            "id", "status", "deliveries", "citations", "last_delivered", "flags", "notes"})
+            "id", "status", "deliveries", "citations", "opportunity", "last_delivered", "flags",
+            "notes"})
 
     def test_text_prints_a_table(self):
         store, fs, gh, use = _setup({"a.md": _entry()})
@@ -209,3 +332,46 @@ class TestCmdGuidance(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestCmdGuidanceWindow(unittest.TestCase):
+    def setUp(self):
+        self._orig = cli_mod._container
+        self.addCleanup(lambda: cli_mod.set_container(self._orig))
+
+    def _run(self, argv):
+        store, fs, gh, use = _setup({"a.md": _entry(facets=["python"])})
+        store.add_project("kenmclennan/lightcycle", facets=["python"])
+        _step(store, _item(store, "kenmclennan/lightcycle"), "a",
+              created_at="2026-10-02T09:00:00+01:00")
+        cli_mod.set_container(Container(
+            config=_cfg(), git=use._git, store=store, spawner=object(), workers=object(),
+            fs=fs, github=FakeGitHub(), lock=object(), breaker=object(),
+        ))
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            rc = cli_mod.cmd_guidance(argv) or 0
+        return rc, out.getvalue(), err.getvalue()
+
+    def test_json_carries_window_work_and_opportunity(self):
+        rc, out, err = self._run(["--json", "--since", "2026-10-01"])
+        self.assertEqual(rc, 0, err)
+        data = json.loads(out)
+        self.assertEqual(data["window"], {"since": "2026-10-01"})
+        self.assertEqual(data["work"]["spawns"], 1)
+        self.assertEqual(data["work"]["projects"][0]["facets"], ["python"])
+        self.assertEqual(data["entries"][0]["opportunity"], 1)
+
+    def test_text_shows_window_column_and_work_block(self):
+        rc, out, err = self._run(["--since", "2026-10-01"])
+        self.assertEqual(rc, 0, err)
+        self.assertIn("window: since 2026-10-01", out)
+        self.assertIn("OPPORTUNITY", out)
+        self.assertIn("work (facets as registered now)", out)
+        self.assertIn("kenmclennan/lightcycle  facets: python  1 spawns: lightcycle/write-code 1", out)
+
+    def test_an_invalid_since_exits_1(self):
+        rc, out, err = self._run(["--since", "2026-13-01"])
+        self.assertEqual(rc, 1)
+        self.assertEqual(out, "")
+        self.assertIn("YYYY-MM-DD", err)

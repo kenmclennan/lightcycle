@@ -47,6 +47,7 @@ class GuidanceRow:
     last_delivered: Optional[str]
     flags: Tuple[Flag, ...] = ()
     notes: Tuple[str, ...] = ()
+    opportunity: int = 0
 
     def as_dict(self):
         return {
@@ -54,6 +55,7 @@ class GuidanceRow:
             "status": self.status,
             "deliveries": self.deliveries,
             "citations": self.citations,
+            "opportunity": self.opportunity,
             "last_delivered": self.last_delivered,
             "flags": [f.as_dict() for f in self.flags],
             "notes": list(self.notes),
@@ -133,10 +135,11 @@ def _stale(entry, now):
     return None, None
 
 
-def evaluate(entry, usage, thresholds, now, covers=None, added=None):
+def evaluate(entry, usage, thresholds, now, covers=None, added=None, opportunity=0):
     if entry.status == "deprecated":
         return GuidanceRow(
-            entry.id, entry.status, usage.deliveries, usage.citations, usage.last_delivered)
+            entry.id, entry.status, usage.deliveries, usage.citations, usage.last_delivered,
+            opportunity=opportunity)
     flags, notes = [], []
     flag, note = _unused(usage, thresholds)
     if flag:
@@ -160,17 +163,18 @@ def evaluate(entry, usage, thresholds, now, covers=None, added=None):
         notes.append(note)
     return GuidanceRow(
         entry.id, entry.status, usage.deliveries, usage.citations, usage.last_delivered,
-        tuple(flags), tuple(notes),
+        tuple(flags), tuple(notes), opportunity,
     )
 
 
 def build_rows(entries, usage_by_id: Dict[str, Usage], thresholds, now, covers_by_id=None,
-               added_by_id=None):
+               added_by_id=None, opportunity_by_id=None):
     covers_by_id = covers_by_id or {}
     added_by_id = added_by_id or {}
+    opportunity_by_id = opportunity_by_id or {}
     rows = [
         evaluate(e, usage_by_id.get(e.id, Usage()), thresholds, now, covers_by_id.get(e.id),
-                 added_by_id.get(e.id))
+                 added_by_id.get(e.id), opportunity_by_id.get(e.id, 0))
         for e in entries
     ]
     return sorted(rows, key=lambda r: (0 if r.flags else 1, r.id))

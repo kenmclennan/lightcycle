@@ -131,6 +131,8 @@ COMMANDS = {
     )),
     "guidance": CommandSpec(prog="lc guidance", args=(
         Arg("--json", action="store_true"),
+        Arg("--since", metavar="YYYY-MM-DD",
+            help="count steps created on/after date for deliveries, citations and opportunity"),
     )),
     "guidance-dir": CommandSpec(prog="lc guidance-dir", args=(
         Arg("--check", action="store_true"),
