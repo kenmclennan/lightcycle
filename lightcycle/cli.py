@@ -222,7 +222,7 @@ COMMAND_GROUPS = [
     ]),
     ("Start working", [
         ("start", "[--once] [--detach]", "the agent pool: each tick, sweep stale claims, then fill up to LC_MAX_AGENTS (see `lc config`) workers from the ready queue; --detach spawns it in the background and returns immediately"),
-        ("stop", "", "signal a detached pool to stop; reports the pid signalled"),
+        ("stop", "", "signal a detached pool to stop (--drain lets running workers finish first); reports the pid signalled"),
     ]),
     ("See what's happening", [
         ("status", "[--json]", "all lanes at once: inbox / active / queue / blocked"),

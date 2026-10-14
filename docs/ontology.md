@@ -78,7 +78,7 @@ Every stage name is an **action**. The stage and its markdown file are the same 
 - **watch-ci** (agent) - investigate a CI conclusion the engine already read: comment handling always, plus log-fetching and judgement on failure.
 - **review-code** (agent) - review the code on the PR.
 - **handle-feedback** (agent) - interpret PR feedback (`@lc` mention or a review bot) and decide rework / answer / ignore.
-- **cleanup** (human) - remove the worktree and branch; terminal.
+- **cleanup** (agent) - remove the worktree and branch; terminal.
 - **resolve-conflict** (agent) - rebase and resolve merge conflicts.
 - **review-conflict** (human) - the escalation endpoint when conflicts cannot be resolved.
 - **review-ci** (human) - the escalation endpoint when CI keeps failing past the cap instead of looping write-code forever.
