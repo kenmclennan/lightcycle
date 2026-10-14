@@ -1,4 +1,4 @@
-Plain language. Written for the reader, after the intent of ISO 24495-1 (relevant, findable, understandable, usable). Rules are cited by number.
+Plain language. Written for the reader, so the text is relevant, findable, understandable and usable. Rules are cited by number.
 
 **1. Lead with the conclusion.** The first sentence says where things stand, or what the reader must do or decide. Background and reasoning follow it, never precede it.
 
