@@ -1817,6 +1817,8 @@ def cmd_start(argv):
     def _stop(*_):
         raise KeyboardInterrupt
 
+    prior_int = signal.getsignal(signal.SIGINT)
+    prior_term = signal.getsignal(signal.SIGTERM)
     signal.signal(signal.SIGTERM, _stop)
     try:
         tick = _container.tick(flow=_flow())
@@ -1878,6 +1880,8 @@ def cmd_start(argv):
             print(line)
         return 0
     finally:
+        signal.signal(signal.SIGINT, prior_int)
+        signal.signal(signal.SIGTERM, prior_term)
         ClearDrainUseCase(_container.drain).execute()
         ReleaseRunLockUseCase(_container.lock).execute()
 

@@ -2,6 +2,7 @@ import io
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -1096,6 +1097,35 @@ class TestRun(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         self.assertEqual(calls["n"], 2)
         self.assertIn(tid, out)
+
+    def test_start_restores_sigint_and_sigterm_after_shutting_down(self):
+        before = (signal.getsignal(signal.SIGINT), signal.getsignal(signal.SIGTERM))
+        try:
+            with patch("time.sleep", side_effect=KeyboardInterrupt):
+                rc, out, err = call(_cli_mod.cmd_start)
+            after = (signal.getsignal(signal.SIGINT), signal.getsignal(signal.SIGTERM))
+        finally:
+            signal.signal(signal.SIGINT, before[0])
+            signal.signal(signal.SIGTERM, before[1])
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(after, before)
+
+    def test_a_child_spawned_after_start_shuts_down_still_dies_on_sigterm(self):
+        before = (signal.getsignal(signal.SIGINT), signal.getsignal(signal.SIGTERM))
+        child = None
+        try:
+            with patch("time.sleep", side_effect=KeyboardInterrupt):
+                call(_cli_mod.cmd_start)
+            child = subprocess.Popen(["sleep", "300"])
+            child.terminate()
+            returncode = child.wait(timeout=10)
+        finally:
+            signal.signal(signal.SIGINT, before[0])
+            signal.signal(signal.SIGTERM, before[1])
+            if child is not None and child.poll() is None:
+                child.kill()
+                child.wait()
+        self.assertEqual(returncode, -signal.SIGTERM)
 
 
 class TestRunSingletonLock(unittest.TestCase):
