@@ -229,6 +229,9 @@ class FlowService:
     def outcomes_for(self, stage, name=None):
         return sorted(self.load_flow(name).step_def(stage).routes.keys())
 
+    def routes_for(self, stage, name=None):
+        return dict(self.load_flow(name).step_def(stage).routes)
+
     def step_declared(self, stage, name=None):
         return self.load_flow(name).declared(stage)
 

@@ -39,10 +39,13 @@ def node_read_surface(store, flow, view):
         engine_valid = engine_outcomes_for_node(store, step)
         if engine_valid is not None:
             out["valid_outcomes"] = list(engine_valid)
+            out["routes"] = {}
         elif out["workflow_resolved"]:
             out["valid_outcomes"] = flow.outcomes_for(step.stage, out["workflow_resolved"])
+            out["routes"] = flow.routes_for(step.stage, out["workflow_resolved"])
         else:
             out["valid_outcomes"] = []
+            out["routes"] = {}
     if out["workflow_resolved"]:
         phase = flow.phase_for(step)
         if phase:
