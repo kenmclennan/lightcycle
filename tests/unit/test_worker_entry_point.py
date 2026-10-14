@@ -36,3 +36,25 @@ class TestWorkerEntryPoint(unittest.TestCase):
         tree = ast.parse((LIGHTCYCLE / "adapters" / "worker_session.py").read_text())
         names = [n.name for n in tree.body if isinstance(n, ast.FunctionDef)]
         self.assertNotIn("main", names)
+
+
+class TestWorkerMainAgentEnv(unittest.TestCase):
+    def test_run_receives_agent_env(self):
+        from contextlib import nullcontext
+        from unittest.mock import MagicMock, patch
+
+        from lightcycle import worker_main
+
+        container = MagicMock()
+        config = container.config
+        config.worker_role.return_value = "agent"
+        config.spawn_id.return_value = "sid"
+        config.agent_env.return_value = {"AGENT": "env"}
+        plan = MagicMock()
+        with patch.object(worker_main, "Container", return_value=container), \
+                patch.object(worker_main, "plan_session", return_value=plan), \
+                patch.object(worker_main, "record_guidance"), \
+                patch.object(worker_main, "session_cwd", return_value=nullcontext("/w")), \
+                patch.object(worker_main, "run", return_value=0) as run:
+            self.assertEqual(worker_main.main(), 0)
+        self.assertEqual(run.call_args.kwargs["env"], {"AGENT": "env"})
