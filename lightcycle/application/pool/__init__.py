@@ -15,6 +15,10 @@ from lightcycle.application.pool.hook_completions import (
 )
 from lightcycle.application.pool.list_workers import ListWorkersUseCase
 from lightcycle.application.pool.live_usage import LiveUsageAccrualUseCase
+from lightcycle.application.pool.material_audit_cadence import (
+    MaterialAuditCadenceResponse,
+    MaterialAuditCadenceUseCase,
+)
 from lightcycle.application.pool.memory_gate import MemoryGateResponse, MemoryGateUseCase
 from lightcycle.application.pool.monitor_prs import MonitorPrsUseCase
 from lightcycle.application.pool.pool_control import (
@@ -77,6 +81,8 @@ __all__ = [
     "ReleaseRunLockUseCase",
     "ResolveLogInput",
     "ResolveLogUseCase",
+    "MaterialAuditCadenceResponse",
+    "MaterialAuditCadenceUseCase",
     "RetroCadenceResponse",
     "RetroCadenceUseCase",
     "LiveWorkerCountUseCase",

@@ -39,6 +39,7 @@ _ENV_OVERRIDE_VARS = {
     "guidance-budget-bytes": "LC_GUIDANCE_BUDGET_BYTES",
     "guidance-unused-after-deliveries": "LC_GUIDANCE_UNUSED_AFTER_DELIVERIES",
     "guidance-dormant-days": "LC_GUIDANCE_DORMANT_DAYS",
+    "material-audit-days": "LC_MATERIAL_AUDIT_DAYS",
 }
 
 _TRUE = ("true", "yes", "1", "on")
@@ -109,6 +110,7 @@ _SEED_KEYS = [
     ("guidance-budget-bytes", "6144"),
     ("guidance-unused-after-deliveries", "60"),
     ("guidance-dormant-days", "60"),
+    ("material-audit-days", "7"),
 ]
 
 _NUMERIC_RANGES = {
@@ -117,6 +119,7 @@ _NUMERIC_RANGES = {
     "guidance-budget-bytes": (0, None),
     "guidance-unused-after-deliveries": (1, None),
     "guidance-dormant-days": (1, None),
+    "material-audit-days": (1, None),
     "workflow-retention": (1, None),
     "max-boot-seconds": (0, None),
     "max-session-seconds": (0, None),
@@ -525,6 +528,11 @@ class Config:
         env = self._env_int("LC_GUIDANCE_DORMANT_DAYS", None)
         value = env if env is not None else self._required_int("guidance-dormant-days")
         return self._check_range("guidance-dormant-days", value)
+
+    def material_audit_days(self):
+        env = self._env_int("LC_MATERIAL_AUDIT_DAYS", None)
+        value = env if env is not None else self._required_int("material-audit-days")
+        return self._check_range("material-audit-days", value)
 
     def audit_shortcode(self):
         env = self._env("LC_AUDIT_SHORTCODE")

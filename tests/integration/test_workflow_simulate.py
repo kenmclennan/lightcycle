@@ -123,6 +123,8 @@ def _seed_config(home):
         "worker-history: 20",
         "editor: vi",
         "retro-interval-reflections: 20",
+        "material-audit-days: 7",
+        "audit-shortcode: AUD",
         "backups-dir: %s" % os.path.join(home, "backups"),
         "backup-interval-minutes: 15",
         "guidance-fetch-minutes: 5",
