@@ -3,25 +3,31 @@ import unittest
 from lightcycle.domain.feedback import ADMIT, HOLD, can_transition, standing
 
 
+_BOT = "copilot-pull-request-reviewer[bot]"
+
+
 class TestStanding(unittest.TestCase):
     def test_a_trusted_human_is_admitted(self):
-        self.assertEqual(standing("alice", {"alice"}, []), ADMIT)
+        self.assertEqual(standing("alice", {"alice"}), ADMIT)
 
-    def test_an_allowlisted_bot_is_admitted(self):
-        self.assertEqual(standing("copilot[bot]", set(), ["copilot[bot]"]), ADMIT)
+    def test_a_bot_in_trusted_is_admitted(self):
+        self.assertEqual(standing(_BOT, {_BOT}), ADMIT)
 
-    def test_a_bot_off_the_allowlist_is_held(self):
-        self.assertEqual(standing("copilot[bot]", {"alice"}, []), HOLD)
+    def test_a_bot_not_in_trusted_is_held(self):
+        self.assertEqual(standing(_BOT, {"alice"}), HOLD)
+        self.assertEqual(standing(_BOT, set()), HOLD)
 
     def test_an_untrusted_human_is_held(self):
-        self.assertEqual(standing("mallory", {"alice"}, ["copilot[bot]"]), HOLD)
+        self.assertEqual(standing("mallory", {"alice", _BOT}), HOLD)
 
     def test_casing_does_not_matter(self):
-        self.assertEqual(standing("Alice", {"alice"}, []), ADMIT)
-        self.assertEqual(standing("alice", {"Alice"}, []), ADMIT)
+        self.assertEqual(standing("Alice", {"alice"}), ADMIT)
+        self.assertEqual(standing("alice", {"Alice"}), ADMIT)
+        self.assertEqual(standing(_BOT.title(), {_BOT}), ADMIT)
+        self.assertEqual(standing(_BOT, {_BOT.title()}), ADMIT)
 
     def test_empty_sets_hold_everyone(self):
-        self.assertEqual(standing("alice", set(), []), HOLD)
+        self.assertEqual(standing("alice", set()), HOLD)
 
 
 class TestTransitions(unittest.TestCase):

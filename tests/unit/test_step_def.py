@@ -71,7 +71,7 @@ class TestStepDefFromGraph(unittest.TestCase):
         self.assertEqual(sd.pr_conflict_cap, 3)
         self.assertEqual(sd.pr_conflict_escalate, "gave-up")
         self.assertEqual(sd.mention_token, "@lc")
-        self.assertEqual(sd.review_bot_allowlist, frozenset({"bot-a", "bot-b"}))
+        self.assertFalse(hasattr(sd, "review_bot_allowlist"))
         self.assertEqual(sd.ci_cap, CiCap("ci-failed", 3, "review-ci"))
         self.assertEqual(
             sd.review_rounds_cap, ReviewRoundsCap("rejected", "review-rounds-exceeded")
@@ -105,7 +105,6 @@ class TestStepDefFromGraph(unittest.TestCase):
         self.assertIsNone(sd.pr_conflict_cap)
         self.assertIsNone(sd.pr_conflict_escalate)
         self.assertIsNone(sd.mention_token)
-        self.assertEqual(sd.review_bot_allowlist, frozenset())
         self.assertIsNone(sd.ci_cap)
         self.assertIsNone(sd.review_rounds_cap)
         self.assertIsNone(sd.workspace)
@@ -180,3 +179,12 @@ class TestConflictTransition(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestStaleBotAllowlistHook(unittest.TestCase):
+    def test_a_declared_review_bot_allowlist_is_tolerated_and_unread(self):
+        graph = parse_graph(_EVERY_HOOK_TEXT)
+        sd = StepDef.from_graph(graph, "review")
+        self.assertEqual(sd.mention_token, "@lc")
+        self.assertEqual(sd.pr_merge, "merged")
+        self.assertFalse(hasattr(sd, "review_bot_allowlist"))

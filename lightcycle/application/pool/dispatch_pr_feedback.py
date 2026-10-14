@@ -106,11 +106,10 @@ class DispatchPrFeedbackUseCase:
             return _Feedback()
 
         step_def = flow.step_def(step.stage)
-        allowlist = step_def.review_bot_allowlist
         mention_token = step_def.mention_token
 
         def admits(item):
-            return standing(item.author, trusted, allowlist) == ADMIT
+            return standing(item.author, trusted) == ADMIT
 
         unmarked = [c for c in inline if LC_MARKER not in c.body]
         mentions = [

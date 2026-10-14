@@ -91,16 +91,9 @@ class TestFlowFromGraph(unittest.TestCase):
     def test_pr_feedback_step_absent_by_default(self):
         self.assertIsNone(self.flow.step_def("build").pr_feedback)
 
-    def test_mention_token_and_review_bot_allowlist(self):
+    def test_mention_token_is_carried_and_absent_by_default(self):
         self.assertEqual(self.flow.step_def("ready-merge").mention_token, "@lc")
-        self.assertEqual(
-            self.flow.step_def("ready-merge").review_bot_allowlist,
-            {"copilot-pull-request-reviewer[bot]", "another-bot[bot]"},
-        )
-
-    def test_mention_token_and_review_bot_allowlist_absent_by_default(self):
         self.assertIsNone(self.flow.step_def("build").mention_token)
-        self.assertEqual(self.flow.step_def("build").review_bot_allowlist, frozenset())
 
     def test_bare_terminal_has_no_owner_and_routes_to_human(self):
         self.assertIsNone(self.flow.step_def("conflict-review").owner)

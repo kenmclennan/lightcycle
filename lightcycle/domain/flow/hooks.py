@@ -9,7 +9,6 @@ CI_SUCCESS = "ci_success"
 CI_FAILURE = "ci_failure"
 REVIEW_ROUNDS_CAP = "review_rounds_cap"
 MENTION_TOKEN = "mention_token"
-REVIEW_BOT_ALLOWLIST = "review_bot_allowlist"
 
 HOOK_MIN_ARITY = {
     PR_MERGE: 2,

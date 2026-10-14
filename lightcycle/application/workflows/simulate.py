@@ -336,8 +336,7 @@ class WorkflowSimulateUseCase:
         token = self._mention_token(graph, planned.stage)
         if token is None:
             return [
-                "walk %d: stage '%s' declares pr_feedback but no mention_token to trigger it "
-                "with (review_bot_allowlist-only feedback is not covered)" % (walk_index, planned.stage)
+                "walk %d: stage '%s' declares pr_feedback but no mention_token to trigger it" % (walk_index, planned.stage)
             ]
         before = {c.id for c in self._store.children(item_id)}
         github.script_feedback(pr, "%s please take a look" % token)

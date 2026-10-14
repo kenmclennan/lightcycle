@@ -21,9 +21,9 @@ KIND_REVIEW = "review"
 KIND_MENTION = "mention"
 
 
-def standing(author, trusted, bot_allowlist):
+def standing(author, trusted):
     who = author.casefold()
-    if who in {t.casefold() for t in trusted} or who in {b.casefold() for b in bot_allowlist}:
+    if who in {t.casefold() for t in trusted}:
         return ADMIT
     return HOLD
 
