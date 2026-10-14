@@ -27,7 +27,7 @@ def main():
         container.store, container.flow_service(), container.worktrees(),
         container.workers, config,
     )
-    select = SelectGuidanceUseCase(container.store, container.fs, config)
+    select = SelectGuidanceUseCase(container.store, container.fs, container.git, config)
     try:
         plan = plan_session(
             lambda r: claim.execute(ClaimInput(role=r)),

@@ -454,3 +454,92 @@ class TestCommitAllIdentity(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _clone_of_origin(tmp):
+    origin = os.path.join(tmp, "origin.git")
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", origin], check=True)
+    clone = os.path.join(tmp, "clone")
+    subprocess.run(["git", "clone", "-q", origin, clone], check=True, capture_output=True)
+    for repo in (clone,):
+        _git(repo, "config", "user.email", "t@t")
+        _git(repo, "config", "user.name", "t")
+    return origin, clone
+
+
+def _commit(repo, path, text, message="c"):
+    full = Path(repo) / path
+    full.parent.mkdir(parents=True, exist_ok=True)
+    full.write_text(text)
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", message)
+
+
+class TestGitAdapterGuidanceRef(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.origin, self.clone = _clone_of_origin(self.tmp)
+        _commit(self.clone, "a.md", "origin-a")
+        _commit(self.clone, ".hid/b.md", "hidden")
+        _git(self.clone, "push", "-q", "origin", "main")
+        self.adapter = GitAdapter()
+
+    def test_default_ref_is_origin_main_when_origin_head_is_unset(self):
+        self.assertEqual(self.adapter.default_ref(self.clone), "origin/main")
+
+    def test_default_ref_follows_origin_head_when_set(self):
+        _git(self.clone, "branch", "-q", "trunk")
+        _git(self.clone, "push", "-q", "origin", "trunk")
+        _git(self.clone, "fetch", "-q", "origin")
+        _git(self.clone, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/trunk")
+        self.assertEqual(self.adapter.default_ref(self.clone), "origin/trunk")
+
+    def test_default_ref_is_local_main_without_a_remote(self):
+        self.assertEqual(self.adapter.default_ref(_make_repo()), "main")
+
+    def test_default_ref_is_none_for_a_remote_never_fetched(self):
+        repo = _make_repo()
+        _git(repo, "remote", "add", "origin", self.origin)
+        self.assertIsNone(self.adapter.default_ref(repo))
+
+    def test_default_ref_is_none_for_a_path_that_is_not_a_repo(self):
+        self.assertIsNone(self.adapter.default_ref(tempfile.mkdtemp()))
+
+    def test_reads_the_ref_not_the_checked_out_branch(self):
+        _git(self.clone, "checkout", "-q", "-b", "feature")
+        _commit(self.clone, "a.md", "branch-a")
+        _commit(self.clone, "only-on-branch.md", "x")
+        self.assertEqual(self.adapter.read_file_at(self.clone, "origin/main", "a.md"), b"origin-a")
+        self.assertNotIn(
+            "only-on-branch.md", self.adapter.list_files_at(self.clone, "origin/main"))
+
+    def test_list_files_omits_dot_directories_and_is_sorted(self):
+        _commit(self.clone, "z/c.md", "c")
+        _git(self.clone, "push", "-q", "origin", "main")
+        self.assertEqual(self.adapter.list_files_at(self.clone, "origin/main"), ["a.md", "z/c.md"])
+
+    def test_read_file_at_returns_none_for_a_missing_path_or_ref(self):
+        self.assertIsNone(self.adapter.read_file_at(self.clone, "origin/main", "nope.md"))
+        self.assertIsNone(self.adapter.read_file_at(self.clone, "origin/nope", "a.md"))
+        self.assertEqual(self.adapter.list_files_at(self.clone, "origin/nope"), [])
+
+    def test_fetch_origin_makes_a_new_origin_commit_readable_without_a_checkout(self):
+        other = os.path.join(self.tmp, "other")
+        subprocess.run(["git", "clone", "-q", self.origin, other], check=True, capture_output=True)
+        _git(other, "config", "user.email", "t@t")
+        _git(other, "config", "user.name", "t")
+        _commit(other, "new.md", "fresh")
+        _git(other, "push", "-q", "origin", "main")
+        self.assertIsNone(self.adapter.read_file_at(self.clone, "origin/main", "new.md"))
+        outcome = self.adapter.fetch_origin(self.clone)
+        self.assertTrue(outcome.ok)
+        self.assertEqual(self.adapter.read_file_at(self.clone, "origin/main", "new.md"), b"fresh")
+        self.assertFalse((Path(self.clone) / "new.md").exists())
+
+    def test_a_failed_fetch_keeps_the_last_fetched_ref_readable(self):
+        _git(self.clone, "remote", "set-url", "origin", os.path.join(self.tmp, "nonexistent.git"))
+        outcome = self.adapter.fetch_origin(self.clone)
+        self.assertFalse(outcome.ok)
+        self.assertTrue(outcome.detail)
+        self.assertEqual(self.adapter.read_file_at(self.clone, "origin/main", "a.md"), b"origin-a")

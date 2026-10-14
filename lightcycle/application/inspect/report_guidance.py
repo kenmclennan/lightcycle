@@ -28,9 +28,10 @@ def _ids(value):
 
 
 class ReportGuidanceUseCase:
-    def __init__(self, store, fs, github, config):
+    def __init__(self, store, fs, git, github, config):
         self._store = store
         self._fs = fs
+        self._git = git
         self._github = github
         self._config = config
 
@@ -97,7 +98,7 @@ class ReportGuidanceUseCase:
             raise UseCaseError("no guidance repo is registered")
         if not self._fs.exists(project.local_path):
             raise UseCaseError("guidance repo is missing at %s" % project.local_path)
-        entries, problems = GuidanceLibrary(self._fs).load(project.local_path)
+        entries, problems = GuidanceLibrary(self._git).load(project.local_path)
         notes = ["%s: %s" % (name, reason) for name, reason in problems]
         usage = self._usage({e.id for e in entries})
         covers, covers_notes = self._covers(entries)

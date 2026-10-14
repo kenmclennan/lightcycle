@@ -2,20 +2,24 @@ import unittest
 
 from lightcycle.application.inspect import DoctorInput, DoctorUseCase
 from tests.support.fake_fs import FakeFs
+from tests.support.fake_git import FakeGit
 from tests.support.fake_machine import FakeMachine
 from tests.support.fake_store import FakeStore
+from tests.support.tui_harness import FakeGuidanceSyncStatus
 from tests.unit.test_doctor import (
     _ALL_KEYS, FakeWorkflowBundle, FakeWorkflowSource, _Worktrees, _cfg,
 )
 from tests.unit.test_select_guidance import _entry
 
 
-def _problems(files, projects=(), budget=None):
+def _problems(files, projects=(), budget=None, git=None, status=None):
     store = FakeStore()
     store.add_project("guidance", local_path="/kb")
     for identity, facets in projects:
         store.add_project(identity, facets=facets)
-    fs = FakeFs(files={"/kb/%s" % k: v for k, v in files.items()}, dirs={"/kb": []})
+    fs = FakeFs(dirs={"/kb": []})
+    if git is None:
+        git = FakeGit(ref="origin/main", ref_files={"origin/main": dict(files)})
     keys = dict(_ALL_KEYS)
     if budget is not None:
         keys["guidance_budget_bytes"] = budget
@@ -23,11 +27,30 @@ def _problems(files, projects=(), budget=None):
     source.add_bundle("acme", "sha1", 1, current=True)
     report = DoctorUseCase(
         store, source, _cfg(**keys), FakeWorkflowBundle(), fs, FakeMachine(), _Worktrees(),
+        git, status if status is not None else FakeGuidanceSyncStatus(),
     ).execute(DoctorInput())
     return [p.message for p in report.problems["guidance"]]
 
 
 class TestDoctorGuidance(unittest.TestCase):
+    def test_a_failed_fetch_is_reported_with_its_detail(self):
+        status = FakeGuidanceSyncStatus(
+            {"ok": False, "at": 1000.0, "detail": "could not resolve host", "ref": "origin/main"})
+        msgs = _problems({"a.md": _entry()}, status=status)
+        self.assertEqual(len(msgs), 1)
+        self.assertIn("fetch failed", msgs[0])
+        self.assertIn("could not resolve host", msgs[0])
+        self.assertIn("origin/main", msgs[0])
+
+    def test_no_status_record_is_not_a_problem(self):
+        self.assertEqual(_problems({"a.md": _entry()}), [])
+
+    def test_an_origin_never_fetched_is_one_problem(self):
+        git = FakeGit(origin="git@x:kb.git", ref=None)
+        msgs = _problems({}, git=git)
+        self.assertEqual(len(msgs), 1)
+        self.assertIn("never been fetched", msgs[0])
+
     def test_clean_repo_has_no_problems(self):
         files = {"a.md": _entry(facets=["kotlin"]), "kotlin.md": b"# kotlin\n"}
         self.assertEqual(_problems(files, [("acme/x", ("kotlin",))]), [])
@@ -38,13 +61,13 @@ class TestDoctorGuidance(unittest.TestCase):
         source.add_bundle("acme", "sha1", 1, current=True)
         report = DoctorUseCase(
             store, source, _cfg(**_ALL_KEYS), FakeWorkflowBundle(), FakeFs(), FakeMachine(),
-            _Worktrees(),
+            _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(),
         ).execute(DoctorInput())
         self.assertEqual(report.problems["guidance"], [])
         store.add_project("guidance", local_path="/gone")
         report = DoctorUseCase(
             store, source, _cfg(**_ALL_KEYS), FakeWorkflowBundle(), FakeFs(), FakeMachine(),
-            _Worktrees(),
+            _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(),
         ).execute(DoctorInput())
         self.assertEqual(report.problems["guidance"], [])
 

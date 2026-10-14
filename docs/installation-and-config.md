@@ -65,6 +65,7 @@ This table documents every `_SEED_KEYS` entry - `tests/unit/test_docs_reference_
 | `retro-interval-reflections` | reflections pending across un-retroed items and un-retroed closed passes of items still open, between engine retro audits |
 | `daily-summary-debounce-seconds` | how long a day must sit with uncaptured closed-item activity before the engine spawns a fresh daily-summary agent |
 | `backups-dir` / `backup-interval-minutes` / `backup-retention` | store snapshot location, cadence, and retention |
+| `guidance-fetch-minutes` | how often the pool tick fetches the guidance repo's origin; delivery reads the default branch's fetched commit, never the working tree |
 | `max-title-length` | cap on an item's title; `lc new`/`lc set` refuse a longer one outright rather than truncating, so detail belongs in `--description`. A step has no title of its own - it is composed at render time from its stage and its item's title - so this cap does not apply to one |
 | `worktree-retries` / `worktree-retry-sleep` / `worker-history` / `editor` | pool + tooling knobs |
 | `shutdown-grace-seconds` | how long `lc start`'s shutdown waits for killed workers to be reaped before sweeping; must be `>= 0` |

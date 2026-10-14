@@ -673,7 +673,7 @@ def cmd_guidance(argv):
     a = build_parser(COMMANDS["guidance"]).parse_args(argv)
     c = _container
     try:
-        report = ReportGuidanceUseCase(c.store, c.fs, c.github, c.config).execute(time.time())
+        report = ReportGuidanceUseCase(c.store, c.fs, c.git, c.github, c.config).execute(time.time())
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
         return 1
@@ -1088,6 +1088,7 @@ def cmd_doctor(argv):
     report = DoctorUseCase(
         _container.store, _container.workflow_source, _container.config, _container.workflow_bundle,
         _container.fs, _container.machine, _container.worktrees(),
+        _container.git, _container.guidance_sync_status,
     ).execute(DoctorInput())
     if a.json:
         print(json.dumps(

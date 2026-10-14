@@ -8,8 +8,10 @@ from lightcycle.config import _SEED_KEYS, Config
 from lightcycle.ports.workflow_bundle import StepPrompt
 from lightcycle.ports.workflow_source import OriginRegistration
 from tests.support.fake_fs import FakeFs
+from tests.support.fake_git import FakeGit
 from tests.support.fake_machine import FakeMachine
 from tests.support.fake_store import FakeStore
+from tests.support.tui_harness import FakeGuidanceSyncStatus
 
 
 def _cfg(**filevals):
@@ -98,6 +100,7 @@ class _Worktrees:
 def _uc(store, source, config, bundle):
     return DoctorUseCase(
         store, source, config, bundle, FakeFs(), FakeMachine(), _Worktrees(),
+        FakeGit(), FakeGuidanceSyncStatus(),
     )
 
 
@@ -429,6 +432,7 @@ class TestDoctorOrphans(unittest.TestCase):
         config = _cfg(**_ALL_KEYS)
         return DoctorUseCase(
             store, source, config, FakeWorkflowBundle(), fs, machine, worktrees,
+            FakeGit(), FakeGuidanceSyncStatus(),
         ).execute(DoctorInput())
 
     def test_worktree_matching_a_claimed_items_path_reports_no_problem(self):
@@ -522,11 +526,12 @@ class TestDoctorOrphans(unittest.TestCase):
 
 
 class TestDoctorFacets(unittest.TestCase):
-    def _problems(self, store, fs):
+    def _problems(self, store, fs, git=None):
         source = FakeWorkflowSource()
         source.add_bundle("acme", "sha1", 1, current=True)
         report = DoctorUseCase(
             store, source, _cfg(**_ALL_KEYS), FakeWorkflowBundle(), fs, FakeMachine(), _Worktrees(),
+            git if git is not None else FakeGit(), FakeGuidanceSyncStatus(),
         ).execute(DoctorInput())
         return report.problems["facets"]
 
@@ -534,31 +539,32 @@ class TestDoctorFacets(unittest.TestCase):
         fs = FakeFs(
             files={"/kb/%s" % p: b"" for p in pages}, dirs={"/kb": ["languages"]},
         )
+        git = FakeGit(ref="origin/main", ref_files={"origin/main": {p: b"" for p in pages}})
         store = FakeStore()
         store.add_project("guidance", local_path="/kb")
-        return store, fs
+        return store, fs, git
 
     def test_both_identities_registered_is_one_problem_with_or_without_facets(self):
         for facets in (None, ("kotlin",)):
-            store, fs = self._kb("kotlin.md")
+            store, fs, git = self._kb("kotlin.md")
             store.add_project("knowledge", local_path="/old")
             if facets:
                 store.add_project("acme/x", facets=facets)
-            problems = self._problems(store, fs)
+            problems = self._problems(store, fs, git)
             self.assertEqual(len(problems), 1)
             self.assertIn("knowledge", problems[0].message)
             self.assertIn("guidance", problems[0].message)
 
     def test_only_guidance_registered_reports_no_duplicate(self):
-        store, fs = self._kb()
-        self.assertEqual(self._problems(store, fs), [])
+        store, fs, git = self._kb()
+        self.assertEqual(self._problems(store, fs, git), [])
 
     def test_no_facets_anywhere_is_clean_with_or_without_a_guidance_repo(self):
         store = FakeStore()
         store.add_project("acme/x")
         self.assertEqual(self._problems(store, FakeFs()), [])
-        kb_store, fs = self._kb()
-        self.assertEqual(self._problems(kb_store, fs), [])
+        kb_store, fs, git = self._kb()
+        self.assertEqual(self._problems(kb_store, fs, git), [])
 
     def test_facets_without_a_registered_guidance_repo_is_one_problem(self):
         store = FakeStore()
@@ -585,14 +591,14 @@ class TestDoctorFacets(unittest.TestCase):
         ])
 
     def test_every_facet_with_a_page_is_clean(self):
-        store, fs = self._kb("languages/kotlin.md", "frameworks/spring.md")
+        store, fs, git = self._kb("languages/kotlin.md", "frameworks/spring.md")
         store.add_project("acme/x", facets=("kotlin", "spring"))
-        self.assertEqual(self._problems(store, fs), [])
+        self.assertEqual(self._problems(store, fs, git), [])
 
     def test_a_missing_page_names_the_project_and_the_facet_only_for_that_facet(self):
-        store, fs = self._kb("languages/kotlin.md")
+        store, fs, git = self._kb("languages/kotlin.md")
         store.add_project("acme/x", facets=("kotlin", "spring"))
-        problems = self._problems(store, fs)
+        problems = self._problems(store, fs, git)
         self.assertEqual([p.message for p in problems], [
             "project acme/x declares facet spring but the guidance repo has no concept page "
             "for it - add spring.md under the guidance repo, or remove the facet with "
@@ -601,19 +607,19 @@ class TestDoctorFacets(unittest.TestCase):
         self.assertIsNone(problems[0].node_id)
 
     def test_index_md_is_not_a_concept_page(self):
-        store, fs = self._kb("index.md", "languages/index.md")
+        store, fs, git = self._kb("index.md", "languages/index.md")
         store.add_project("acme/x", facets=("index",))
-        self.assertEqual(len(self._problems(store, fs)), 1)
+        self.assertEqual(len(self._problems(store, fs, git)), 1)
 
     def test_page_match_is_case_sensitive(self):
-        store, fs = self._kb("CONVENTIONS.md")
+        store, fs, git = self._kb("CONVENTIONS.md")
         store.add_project("acme/x", facets=("conventions",))
-        self.assertEqual(len(self._problems(store, fs)), 1)
+        self.assertEqual(len(self._problems(store, fs, git)), 1)
 
     def test_a_page_under_a_dot_directory_is_not_found(self):
-        store, fs = self._kb(".git/kotlin.md")
+        store, fs, git = self._kb(".git/kotlin.md")
         store.add_project("acme/x", facets=("kotlin",))
-        self.assertEqual(len(self._problems(store, fs)), 1)
+        self.assertEqual(len(self._problems(store, fs, git)), 1)
 
 
 

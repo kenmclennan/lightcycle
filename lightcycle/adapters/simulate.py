@@ -137,6 +137,22 @@ class RecordingGit(GitPort, TeardownLedgerPort):
         self._record("remote_head_sha", root, branch)
         return "sim-sha"
 
+    def fetch_origin(self, root):
+        self._record("fetch_origin", root)
+        return GitOutcome(ok=True)
+
+    def default_ref(self, root):
+        self._record("default_ref", root)
+        return None
+
+    def list_files_at(self, root, ref):
+        self._record("list_files_at", root, ref)
+        return []
+
+    def read_file_at(self, root, ref, path):
+        self._record("read_file_at", root, ref, path)
+        return None
+
 
 class ScriptedGitHub(GitHubEventsPort):
     def __init__(self):

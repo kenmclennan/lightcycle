@@ -19,6 +19,17 @@ def git(root, *args):
         )
 
 
+def git_bytes(root, *args):
+    cmd = ["git", "-C", root, *args]
+    try:
+        return subprocess.run(cmd, capture_output=True, timeout=_GIT_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(
+            args=cmd, returncode=124, stdout=b"",
+            stderr=b"git timed out after %d seconds" % _GIT_TIMEOUT_SECONDS,
+        )
+
+
 def git_ok(root, *args):
     return git(root, *args).returncode == 0
 
@@ -221,6 +232,42 @@ def init_repo(root, branch="main"):
     return GitOutcome(ok=proc.returncode == 0, detail=proc.stderr.strip())
 
 
+def fetch_origin(root):
+    proc = git(root, "fetch", "origin")
+    return GitOutcome(ok=proc.returncode == 0, detail=proc.stderr.strip())
+
+
+def default_ref(root):
+    if not is_git_repo(root):
+        return None
+    proc = git(root, "symbolic-ref", "--short", "refs/remotes/origin/HEAD")
+    if proc.returncode == 0 and proc.stdout.strip():
+        return proc.stdout.strip()
+    if git_ok(root, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/main"):
+        return "origin/main"
+    if remote_url(root) is None and git_ok(
+        root, "rev-parse", "--verify", "--quiet", "refs/heads/main"
+    ):
+        return "main"
+    return None
+
+
+def list_files_at(root, ref):
+    proc = git_bytes(root, "ls-tree", "-r", "-z", "--name-only", ref)
+    if proc.returncode != 0:
+        return []
+    paths = proc.stdout.decode("utf-8", errors="replace").split("\0")
+    return sorted(
+        p for p in paths
+        if p and not any(part.startswith(".") for part in p.split("/"))
+    )
+
+
+def read_file_at(root, ref, path):
+    proc = git_bytes(root, "show", "%s:%s" % (ref, path))
+    return proc.stdout if proc.returncode == 0 else None
+
+
 class GitAdapter(GitPort):
     def add_worktree(self, root, path, branch, base, retries, backoff):
         return add_worktree(root, path, branch, base, retries, backoff)
@@ -293,3 +340,15 @@ class GitAdapter(GitPort):
 
     def remote_head_sha(self, root, branch):
         return remote_head_sha(root, branch)
+
+    def fetch_origin(self, root):
+        return fetch_origin(root)
+
+    def default_ref(self, root):
+        return default_ref(root)
+
+    def list_files_at(self, root, ref):
+        return list_files_at(root, ref)
+
+    def read_file_at(self, root, ref, path):
+        return read_file_at(root, ref, path)

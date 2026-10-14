@@ -77,6 +77,7 @@ _SEED_KEYS = [
     ("daily-summary-debounce-seconds", "600"),
     ("backups-dir", "~/.lightcycle-backups"),
     ("backup-interval-minutes", "15"),
+    ("guidance-fetch-minutes", "5"),
     ("backup-retention", "96"),
     ("workflow-retention", "5"),
     ("max-title-length", "72"),
@@ -560,6 +561,9 @@ class Config:
 
     def backup_interval_minutes(self):
         return self._required_int("backup-interval-minutes")
+
+    def guidance_fetch_minutes(self):
+        return self._required_int("guidance-fetch-minutes")
 
     def backup_retention(self):
         return self._required_int("backup-retention")

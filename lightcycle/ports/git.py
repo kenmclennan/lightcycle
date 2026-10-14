@@ -108,3 +108,19 @@ class GitPort(ABC):
     @abstractmethod
     def remote_head_sha(self, root, branch):
         pass
+
+    @abstractmethod
+    def fetch_origin(self, root):
+        pass
+
+    @abstractmethod
+    def default_ref(self, root):
+        pass
+
+    @abstractmethod
+    def list_files_at(self, root, ref):
+        pass
+
+    @abstractmethod
+    def read_file_at(self, root, ref, path):
+        pass

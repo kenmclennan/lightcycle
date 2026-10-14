@@ -9,9 +9,10 @@ from lightcycle.ports.store import ProjectNotRegisteredError, ProjectResolutionE
 
 
 class SelectGuidanceUseCase:
-    def __init__(self, store, fs, config):
+    def __init__(self, store, fs, git, config):
         self._store = store
         self._fs = fs
+        self._git = git
         self._config = config
 
     def _project_facets(self, item_id):
@@ -30,7 +31,7 @@ class SelectGuidanceUseCase:
         if not self._fs.exists(project.local_path):
             return GuidanceSelection(
                 notes=("guidance repo is missing at %s" % project.local_path,))
-        entries, problems = GuidanceLibrary(self._fs).load(project.local_path)
+        entries, problems = GuidanceLibrary(self._git).load(project.local_path)
         notes = tuple("%s: %s" % (name, reason) for name, reason in problems)
         facets = self._project_facets(item_id)
         parsed = parse_pin(pin)
