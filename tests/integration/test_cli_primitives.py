@@ -50,7 +50,7 @@ class TestCliPrimitives(unittest.TestCase):
             self.h.store.get_node(item).workflow.startswith("lightcycle/spec-driven@"))
 
     def test_attach_records_an_artifact(self):
-        _, item, _ = self._run("new", "item", "--project", "app", "x", "--description", "a description")
+        _, item, _ = self._run("new", "item", "--project", "app", "--repo", "specs", "x", "--description", "a description")
         self._run("attach", item, "spec", "specs/x.md")
         arts = self.h.store.item_artifacts(item)
         self.assertTrue(any(a.type == "spec" and a.value == "specs/x.md" for a in arts))

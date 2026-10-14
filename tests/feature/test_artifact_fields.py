@@ -61,7 +61,7 @@ def _attach_internal(ctx, atype, value):
 
 
 def _attached_artifact(ctx, value="some-value"):
-    arts = [a for a in ctx["h"].store.item_artifacts(ctx["item"]) if a.value == value]
+    arts = [a for a in ctx["h"].store.item_artifacts(ctx["item"]) if a.value.endswith(value)]
     return arts[-1]
 
 

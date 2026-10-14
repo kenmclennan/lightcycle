@@ -14,7 +14,7 @@ class TestResolveShortcode(unittest.TestCase):
     def test_single_match_with_a_shortcode_returns_it(self):
         store = FakeStore()
         store.add_project("acme/horde", shortcode="HORDE")
-        self.assertEqual(resolve_shortcode(store, "horde"), ResolvedShortcode("HORDE"))
+        self.assertEqual(resolve_shortcode(store, "horde"), ResolvedShortcode("HORDE", "horde", "acme/horde"))
 
     def test_zero_matches_raises_naming_the_ref(self):
         self.assertIn("ghost", self._refusal(FakeStore(), "ghost"))
@@ -36,7 +36,7 @@ class TestResolveShortcode(unittest.TestCase):
         store = FakeStore()
         store.add_project("kenmclennan/lightcycle", shortcode="LC")
         resolved = resolve_shortcode(store, None, repo="kenmclennan/lightcycle")
-        self.assertEqual(resolved, ResolvedShortcode("LC", "lightcycle"))
+        self.assertEqual(resolved, ResolvedShortcode("LC", "lightcycle", "kenmclennan/lightcycle"))
 
     def test_no_project_and_repo_registered_with_no_shortcode_refuses_like_project_does(self):
         store = FakeStore()
@@ -67,7 +67,7 @@ class TestResolveShortcode(unittest.TestCase):
         store = FakeStore()
         store.add_project("acme/app", shortcode="ACME")
         resolved = resolve_shortcode(store, "acme/app", repo="ghost/repo")
-        self.assertEqual(resolved, ResolvedShortcode("ACME"))
+        self.assertEqual(resolved, ResolvedShortcode("ACME", "app", "acme/app"))
 
 
 if __name__ == "__main__":

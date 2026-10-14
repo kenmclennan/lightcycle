@@ -326,6 +326,7 @@ def _file_compat(argv):
     if not opts.get("project"):
         _cli_mod._container.store.add_project("acme/app", shortcode="APP")
         nargs += ["--project", "app"]
+    nargs += ["--repo", "specs"]
     rc, item, err = call(_cli_mod.cmd_new, *nargs)
     item = item.strip()
     if rc:
@@ -360,7 +361,7 @@ def _fake_setUp(test, *, steps=False, contract_steps=False):
         write_contract_steps(test.root)
     test.store = FakeStore()
     test.store.add_project(SPECS_WORKSPACE, local_path=test.root)
-    test.store.add_project("acme/app", shortcode="APP")
+    test.store.add_project("acme/app", shortcode="APP", local_path=test.root)
     inject_container(test, store=test.store, home=test.root, config_path=cfg)
 
 
@@ -1199,7 +1200,7 @@ class TestAdd(unittest.TestCase):
         _fake_setUp(self)
 
     def test_new_item_is_an_untethered_todo(self):
-        self.store.add_project("acme/app", shortcode="APP")
+        self.store.add_project("acme/app", shortcode="APP", local_path=self.root)
         rc, out, err = call(_cli_mod.cmd_new, "item", "look at X later", "--project", "app", "--description", "a description")
         self.assertEqual(rc, 0, err)
         new = out.strip()
@@ -1224,7 +1225,7 @@ class TestAdd(unittest.TestCase):
         self.assertEqual(self.store.all_nodes(), [])
 
     def test_new_item_with_ambiguous_project_refuses_and_creates_nothing(self):
-        self.store.add_project("acme/app", shortcode="ACME")
+        self.store.add_project("acme/app", shortcode="ACME", local_path=self.root)
         self.store.add_project("other/app", shortcode="OTHER")
         rc, out, err = call(_cli_mod.cmd_new, "item", "look at X later", "--project", "app", "--description", "a description")
         self.assertEqual(rc, 1)
@@ -1239,7 +1240,7 @@ class TestAdd(unittest.TestCase):
         self.assertEqual(self.store.all_nodes(), [])
 
     def test_new_item_refuses_a_parent_and_creates_nothing(self):
-        self.store.add_project("acme/app", shortcode="APP")
+        self.store.add_project("acme/app", shortcode="APP", local_path=self.root)
         owner = call(_cli_mod.cmd_new, "item", "an owning item", "--project", "app", "--description", "a description")[1].strip()
         before = self.store.all_nodes()
         rc, out, err = call(_cli_mod.cmd_new, "item", "a nested item", "--parent", owner, "--description", "a description")
@@ -1294,7 +1295,7 @@ class TestAdd(unittest.TestCase):
         self.assertEqual(self.store.all_nodes(), [])
 
     def test_new_item_with_ambiguous_repo_refuses_with_the_registry_ambiguity(self):
-        self.store.add_project("acme/app", shortcode="ACME")
+        self.store.add_project("acme/app", shortcode="ACME", local_path=self.root)
         self.store.add_project("other/app", shortcode="OTHER")
         rc, out, err = call(
             _cli_mod.cmd_new, "item", "look at X later", "--repo", "app",
@@ -1996,9 +1997,7 @@ class TestReviewGateWithRealLibrary(unittest.TestCase):
         self.assertEqual(self.store.get_node(out.strip()).stage, "spec-open-pr")
 
     def test_arming_without_repo_fails_fast_with_no_step_created(self):
-        rc, item, err = call(
-            _cli_mod.cmd_new, "item", "--project", "widget", "widget", "--description", "the settled design")
-        item = item.strip()
+        item = self.store.create_item("widget", "the settled design", project="widget")
         rc2, out, err2 = call(_cli_mod.cmd_set, item, "--state", "active", "--workflow", "lightcycle/spec-driven")
         self.assertEqual(rc2, 1)
         self.assertIn("repo", err2)

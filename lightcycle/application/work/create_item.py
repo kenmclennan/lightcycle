@@ -26,14 +26,15 @@ class CreateItemUseCase:
 
     def execute(self, input: CreateItemInput) -> CreateItemResponse:
         resolved = resolve_shortcode(self._store, input.project, input.repo)
-        project = input.project or resolved.project
+        project = resolved.project
+        repo = input.repo or resolved.identity
         with self._store.transaction():
             tid = self._store.create_item(
                 input.title, input.description, project=project,
                 workflow=input.workflow, shortcode=resolved.value,
             )
-            if input.repo:
-                self._store.add_artifact(tid, "repo", input.repo)
+            if repo:
+                self._store.add_artifact(tid, "repo", repo)
             if input.backlog:
                 link_resolves(self._store, tid, input.backlog)
         return CreateItemResponse(id=tid)

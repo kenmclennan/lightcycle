@@ -11,6 +11,7 @@ from lightcycle.ports.store import ProjectNotRegisteredError, ProjectResolutionE
 class ResolvedShortcode:
     value: str
     project: Optional[str] = None
+    identity: Optional[str] = None
 
 
 def _registered_with_shortcode(store, name):
@@ -28,7 +29,10 @@ def _registered_with_shortcode(store, name):
 
 def resolve_shortcode(store, project, repo=None):
     if project:
-        return ResolvedShortcode(_registered_with_shortcode(store, project).shortcode)
+        matched = _registered_with_shortcode(store, project)
+        return ResolvedShortcode(
+            matched.shortcode, ProjectIdentity.short_name(matched.identity), matched.identity
+        )
     if repo:
         try:
             ProjectRegistry(store).find(repo)
@@ -41,7 +45,9 @@ def resolve_shortcode(store, project, repo=None):
         except ProjectResolutionError as e:
             raise UseCaseError(str(e))
         matched = _registered_with_shortcode(store, repo)
-        return ResolvedShortcode(matched.shortcode, ProjectIdentity.short_name(matched.identity))
+        return ResolvedShortcode(
+            matched.shortcode, ProjectIdentity.short_name(matched.identity), matched.identity
+        )
     raise UseCaseError(
         "no project to mint under - pass --project <registered project>, or register the repo "
         "with `lc project add <repo> --shortcode <PREFIX>` and pass --repo <repo>"
