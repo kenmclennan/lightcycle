@@ -22,7 +22,8 @@ from lightcycle.application.flow import (
     UnblockStepUseCase,
 )
 from lightcycle.application.flow.engine_steps import (
-    AUDIT_STEP, DAILY_SUMMARY_STEP, ENGINE_STEP_OUTCOMES, FINDINGS_STEP, MATERIAL_AUDIT_STEP,
+    AUDIT_STEP, DAILY_SUMMARY_STEP, ENGINE_STEP_OUTCOMES, FINDINGS_STEP, HELD_COMMENT_STEP,
+    MATERIAL_AUDIT_STEP,
 )
 from lightcycle.application.flow.next_step import NextStepResolver
 from lightcycle.application.services.flow import FlowService
@@ -601,6 +602,7 @@ class TestEngineStepOutcomes(unittest.TestCase):
                 MATERIAL_AUDIT_STEP: ("findings", "clean"),
                 FINDINGS_STEP: ("done", "filed", "reviewed"),
                 DAILY_SUMMARY_STEP: ("done", "abandoned"),
+                HELD_COMMENT_STEP: ("approve", "reject"),
             },
         )
 

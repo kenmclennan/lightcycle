@@ -41,6 +41,10 @@ Two things are kept **orthogonal** to the state (baking them in would multiply t
 
 Three additive tables, none of them a node: `goals` (`id` as `G-<n>` minted from the `counters` table under the `goal` namespace, `title`, `description`, `project` (the registry short name, empty on a goal that predates it), `status` defaulting to `not started`, timestamps), `goal_log` (append-only, `goal_id`, `title`, `body`; a `title` of `''` is a legal read state for an entry written before the column existed), `goal_items` (primary key `(goal_id, item_id)`, so no uniqueness on the item side and one item may serve several goals). No foreign keys are declared, as with every table; `delete` of an item removes its `goal_items` rows explicitly and leaves the goal and its log. Nothing in claim, lanes, `all_nodes()` or roll-up reads them.
 
+## Held comments
+
+One further additive table, `held_comments`, created by `CREATE TABLE IF NOT EXISTS` (so no migration of existing tables). Primary key `(run_id, key)` where `key` is `<kind>:<comment id>` with kind `inline`, `review` or `mention`; columns `author`, `body`, `path`, `line`, `created_at` (the comment's own epoch), `state`, `item_id` and `step_id` (the hold item and its `review-held-comment` step), and `decided_at`. Two indexes: `idx_held_comments_step_id` for completion and `idx_held_comments_run_id_state` for "approved holds for this run". No foreign keys, and rows are never deleted: a terminal row is what stops a rejected comment being re-offered. It is a ledger beside the nodes, not a node, and nothing in claim, lanes or roll-up reads it.
+
 ## Attachments
 
 - **artifacts** - typed values attached to an **item**: `repo`, `spec`, `brief`, `blueprint`, `spec-amendment`. Steps declare `accepts` / `produces` in their frontmatter, and the engine checks the item's artifacts against that contract before a step may close. `branch`, `pr` and `comments-handled` are NOT artifacts: `lc attach` routes them onto the item's current phase run, which is where every reader looks for them.

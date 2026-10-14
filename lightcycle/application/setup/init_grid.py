@@ -4,7 +4,9 @@ import os
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.git_identity import require_git_identity
+from lightcycle.config import ConfigError
 from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE, SPECS_WORKSPACE
+from lightcycle.ports.github import ReadFailure
 from lightcycle.domain.guidance.skeleton import (
     COMMIT_MESSAGE,
     CONVENTIONS_PATH,
@@ -25,20 +27,24 @@ class InitGridResponse:
     guidance_outcome: str = ""
     guidance_path: str = ""
     guidance_refusal: str = ""
+    trusted_authors_seeded: str = ""
+    trusted_authors_unset_reason: str = ""
 
 
 class InitGridUseCase:
-    def __init__(self, store, fs, config, git):
+    def __init__(self, store, fs, config, git, github):
         self._store = store
         self._fs = fs
         self._config = config
         self._git = git
+        self._github = github
 
     def execute(self, guidance_path=None) -> InitGridResponse:
         existed = self._fs.store_ready()
         self._store.ensure_store()
         self._fs.ensure_logs_dir()
         created = self._config.ensure_config()
+        seeded, unset_reason = self._seed_trusted_authors()
         self._ensure_specs_project()
         refusal = self._identity_refusal_if_creating(guidance_path)
         if refusal:
@@ -53,7 +59,23 @@ class InitGridUseCase:
             guidance_outcome=outcome,
             guidance_path=path,
             guidance_refusal=refusal,
+            trusted_authors_seeded=seeded,
+            trusted_authors_unset_reason=unset_reason,
         )
+
+    def _seed_trusted_authors(self):
+        try:
+            self._config.trusted_authors()
+            return "", ""
+        except ConfigError:
+            pass
+        login = self._github.authenticated_login()
+        if isinstance(login, ReadFailure):
+            return "", login.stderr.strip() or "gh exited %d" % login.returncode
+        if not login:
+            return "", "gh returned no login"
+        self._config.seed_trusted_authors(login)
+        return login, ""
 
     def _identity_refusal_if_creating(self, requested):
         wanted = self._config.expand_path(requested or _DEFAULT_GUIDANCE_PATH)

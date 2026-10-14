@@ -45,6 +45,15 @@ class TestRecordingGit(unittest.TestCase):
 
 
 class TestScriptedGitHub(unittest.TestCase):
+    def test_it_reports_a_settable_login_and_keys_scripted_feedback(self):
+        gh = ScriptedGitHub(login="ken")
+        self.assertEqual(gh.authenticated_login(), "ken")
+        gh.script_feedback("pr1", "@lc one")
+        gh.script_feedback("pr1", "@lc two", author="mallory")
+        ids = [c.id for c in gh.comments_since("pr1", 0.0)]
+        self.assertEqual(len(set(ids)), 2)
+        self.assertNotIn(None, ids)
+
     def test_script_merge_fires_once(self):
         gh = ScriptedGitHub()
         gh.script_merge("pr-1")

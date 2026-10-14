@@ -96,6 +96,8 @@ class Container:
             self.config,
             monitor=MonitorPrsUseCase(
                 self.store, self.github, worktrees, flow, complete, git=self.git,
+                trusted_authors=self.config.trusted_authors,
+                held_shortcode=self.config.held_comment_shortcode,
             ),
             cadence_gate=RetroCadenceUseCase(self.store, self.config),
             summary_gate=DailySummaryCadenceUseCase(self.store, self.config),

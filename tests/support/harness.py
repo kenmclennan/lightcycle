@@ -58,6 +58,7 @@ def _write_config(root):
     seeded["specs"] = root
     seeded["default-origin"] = "lightcycle"
     seeded["max-agents"] = "0"
+    seeded["trusted-authors"] = "reviewer"
     seeded["backups-dir"] = tempfile.mkdtemp()
     Path(p).write_text("".join("%s: %s\n" % (k, v) for k, v in seeded.items()))
     return p

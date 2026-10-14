@@ -34,6 +34,44 @@ class TestSqliteStoreContract(StoreContractBase, unittest.TestCase):
         return make_sqlite_store(extra_config={"context-artifact-types": " ".join(types)})
 
 
+class TestHeldCommentsSchema(unittest.TestCase):
+    def test_the_two_named_indexes_exist_and_there_is_no_foreign_key(self):
+        s = make_sqlite_store()
+        names = {
+            r[0] for r in s._conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'held_comments'"
+            ).fetchall()
+        }
+        self.assertTrue({
+            "idx_held_comments_step_id", "idx_held_comments_run_id_state"} <= names)
+        self.assertEqual(
+            s._conn.execute("PRAGMA foreign_key_list(held_comments)").fetchall(), [])
+
+    def test_the_ledger_columns_match_the_design(self):
+        s = make_sqlite_store()
+        columns = [r[1] for r in s._conn.execute("PRAGMA table_info(held_comments)").fetchall()]
+        self.assertEqual(columns, [
+            "run_id", "key", "author", "body", "path", "line", "created_at", "state",
+            "item_id", "step_id", "decided_at",
+        ])
+
+    def test_approved_holds_are_read_through_the_run_state_index(self):
+        s = make_sqlite_store()
+        plan = " ".join(r[-1] for r in s._conn.execute(
+            "EXPLAIN QUERY PLAN SELECT * FROM held_comments WHERE run_id = ? AND state = ?",
+            ("R-1", "approved"),
+        ).fetchall())
+        self.assertIn("idx_held_comments_run_id_state", plan)
+
+    def test_an_existing_store_without_the_table_gains_it_on_reopen(self):
+        s = make_sqlite_store()
+        s._conn.execute("DROP TABLE held_comments")
+        s._conn.commit()
+        s.release()
+        reopened = SqliteStore(s._config)
+        self.assertTrue(reopened.file_hold("R-1", "inline:1", "m", "b", None, None, 1.0))
+
+
 class TestSqliteStoreRoundtrips(unittest.TestCase):
     def _store(self):
         return make_sqlite_store()

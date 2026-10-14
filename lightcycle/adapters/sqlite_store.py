@@ -6,7 +6,15 @@ from contextlib import contextmanager
 from dataclasses import asdict
 
 from lightcycle.adapters.fsio import DB_FILENAME
-from lightcycle.domain.feedback import RETRO_ORIGIN_LABEL, RETROED_LABEL
+from lightcycle.domain.feedback import (
+    APPROVED,
+    DISPATCHED,
+    HELD,
+    RETRO_ORIGIN_LABEL,
+    RETROED_LABEL,
+    HeldComment,
+    can_transition,
+)
 from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE, LEGACY_KNOWLEDGE_WORKSPACE
 from lightcycle.domain.goals import GOAL_DEFAULT_STATUS, Goal, GoalLogEntry
 from lightcycle.domain.money import Cost
@@ -238,6 +246,23 @@ CREATE TABLE IF NOT EXISTS goal_items (
     PRIMARY KEY (goal_id, item_id)
 );
 CREATE INDEX IF NOT EXISTS idx_goal_items_item_id ON goal_items(item_id);
+
+CREATE TABLE IF NOT EXISTS held_comments (
+    run_id     TEXT NOT NULL,
+    key        TEXT NOT NULL,
+    author     TEXT NOT NULL,
+    body       TEXT NOT NULL,
+    path       TEXT,
+    line       INTEGER,
+    created_at REAL NOT NULL,
+    state      TEXT NOT NULL DEFAULT 'held',
+    item_id    TEXT,
+    step_id    TEXT,
+    decided_at TEXT,
+    PRIMARY KEY (run_id, key)
+);
+CREATE INDEX IF NOT EXISTS idx_held_comments_step_id ON held_comments(step_id);
+CREATE INDEX IF NOT EXISTS idx_held_comments_run_id_state ON held_comments(run_id, state);
 """
 
 _ITEM_COLUMNS = (
@@ -1446,6 +1471,73 @@ class SqliteStore(StorePort):
             "UPDATE phase_runs SET comments_dispatched_through = ? WHERE id = ?", (value, rid)
         )
         self._commit()
+
+    _HOLD_COLUMNS = (
+        "run_id, key, author, body, path, line, created_at, state, item_id, step_id, decided_at"
+    )
+
+    def file_hold(self, run_id, key, author, body, path, line, created_at):
+        cur = self._conn.execute(
+            "INSERT OR IGNORE INTO held_comments "
+            "(run_id, key, author, body, path, line, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (run_id, key, author, body, path, line, created_at),
+        )
+        self._commit()
+        return cur.rowcount == 1
+
+    def attach_hold(self, run_id, key, item_id, step_id):
+        self._conn.execute(
+            "UPDATE held_comments SET item_id = ?, step_id = ? WHERE run_id = ? AND key = ?",
+            (item_id, step_id, run_id, key),
+        )
+        self._commit()
+
+    def hold(self, run_id, key):
+        row = self._conn.execute(
+            "SELECT %s FROM held_comments WHERE run_id = ? AND key = ?" % self._HOLD_COLUMNS,
+            (run_id, key),
+        ).fetchone()
+        return HeldComment(*row) if row else None
+
+    def hold_for_step(self, step_id):
+        row = self._conn.execute(
+            "SELECT %s FROM held_comments WHERE step_id = ?" % self._HOLD_COLUMNS, (step_id,)
+        ).fetchone()
+        return HeldComment(*row) if row else None
+
+    def _holds_in_state(self, run_id, state):
+        rows = self._conn.execute(
+            "SELECT %s FROM held_comments WHERE run_id = ? AND state = ? "
+            "ORDER BY created_at, key" % self._HOLD_COLUMNS,
+            (run_id, state),
+        ).fetchall()
+        return [HeldComment(*r) for r in rows]
+
+    def approved_holds(self, run_id):
+        return self._holds_in_state(run_id, APPROVED)
+
+    def open_holds(self, run_id):
+        return self._holds_in_state(run_id, HELD)
+
+    def _transition_hold(self, where, params, target):
+        row = self._conn.execute(
+            "SELECT state FROM held_comments WHERE %s" % where, params
+        ).fetchone()
+        if row is None:
+            raise StoreError("no held comment for %s" % (params,))
+        if not can_transition(row[0], target):
+            raise StoreError("held comment is %s; cannot become %s" % (row[0], target))
+        self._conn.execute(
+            "UPDATE held_comments SET state = ?, decided_at = ? WHERE %s" % where,
+            (target, self._now()) + tuple(params),
+        )
+        self._commit()
+
+    def decide_hold(self, step_id, state):
+        self._transition_hold("step_id = ?", (step_id,), state)
+
+    def mark_hold_dispatched(self, run_id, key):
+        self._transition_hold("run_id = ? AND key = ?", (run_id, key), DISPATCHED)
 
     def set_comments_handled_through(self, rid, value):
         self._conn.execute(

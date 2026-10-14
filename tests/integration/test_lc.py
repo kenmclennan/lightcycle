@@ -3459,6 +3459,23 @@ class TestNodeDTOReadSurface(unittest.TestCase):
         self.assertIsInstance(json.loads(out)["routes"], dict)
 
 
+class TestAdmittedCommentsSurfaceOnClaim(unittest.TestCase):
+    def setUp(self):
+        _fake_setUp(self)
+
+    def test_the_admitted_comments_artifact_appears_in_claim_output(self):
+        item = self.store.create_item("an item", "a description")
+        tid = self.store.create_step(step="handle-feedback", role="agent", parent=item)
+        self.store.add_artifact(
+            tid, "admitted-comments", "inline:11\nmention:12", internal=True)
+        rc, out, err = call(_cli_mod.cmd_claim, "agent")
+        self.assertEqual(rc, 0, err)
+        d = json.loads(out)
+        self.assertEqual(d["id"], tid)
+        found = [a for a in d["artifacts"] if a["type"] == "admitted-comments"]
+        self.assertEqual([a["value"] for a in found], ["inline:11\nmention:12"])
+
+
 class TestResumeFieldsSurfaceOnShow(unittest.TestCase):
     def setUp(self):
         _fake_setUp(self)

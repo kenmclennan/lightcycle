@@ -262,7 +262,8 @@ class TestConflictFallThrough(unittest.TestCase):
         step = store.create_step(step="watch-step", role="agent", parent=item)
         flow = _FlowAdapter(_FLOW)
         monitor = MonitorPrsUseCase(
-            store, github, FakeWorktrees(), flow, CompleteStepUseCase(store, flow)
+            store, github, FakeWorktrees(), flow, CompleteStepUseCase(store, flow),
+            trusted_authors=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
         )
 
         first = monitor.execute()
@@ -284,7 +285,8 @@ class TestOneReadPerPrPerTick(unittest.TestCase):
         store.create_step(step="watch-step", role="agent", parent=item)
         flow = _FlowAdapter(_FLOW)
         return MonitorPrsUseCase(
-            store, github, FakeWorktrees(), flow, CompleteStepUseCase(store, flow)
+            store, github, FakeWorktrees(), flow, CompleteStepUseCase(store, flow),
+            trusted_authors=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
         )
 
     def test_behind_pr_is_read_once_per_tick(self):

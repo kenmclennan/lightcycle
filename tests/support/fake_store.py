@@ -9,9 +9,17 @@ from lightcycle.ports.store import (
     ItemText,
     NodeNotFoundError,
     ProjectEntry,
+    StoreError,
     StorePort,
 )
-from lightcycle.domain.feedback import RETRO_ORIGIN_LABEL, RETROED_LABEL
+from lightcycle.domain.feedback import (
+    DISPATCHED,
+    HELD,
+    RETRO_ORIGIN_LABEL,
+    RETROED_LABEL,
+    HeldComment,
+    can_transition,
+)
 from lightcycle.domain.goals import GOAL_DEFAULT_STATUS, Goal, GoalLogEntry
 from lightcycle.domain.money import Cost
 from lightcycle.domain.pool import ToolUsage
@@ -126,7 +134,7 @@ def record_to_item(record, blocked_by=None, child_states=()):
 _TX_ATTRS = (
     "_records", "_labels", "_passes", "_runs", "_deps",
     "_history", "_projects", "_tool_usage", "_backfill_log", "_usage_accrual_state",
-    "_counters", "_daily_summaries", "_goals", "_goal_log", "_goal_items",
+    "_counters", "_daily_summaries", "_goals", "_goal_log", "_goal_items", "_holds",
 )
 
 
@@ -147,6 +155,7 @@ class FakeStore(StorePort):
         self._goals = {}
         self._goal_log = []
         self._goal_items = []
+        self._holds = {}
         self._now = now or (lambda: datetime.datetime.now().astimezone().isoformat())
         self._config = config
         self._tx_depth = 0
@@ -847,6 +856,51 @@ class FakeStore(StorePort):
             replace(r, comments_dispatched_through=value) if r.id == rid else r
             for r in self._runs
         ]
+
+    def file_hold(self, run_id, key, author, body, path, line, created_at):
+        if (run_id, key) in self._holds:
+            return False
+        self._holds[(run_id, key)] = HeldComment(
+            run_id=run_id, key=key, author=author, body=body, path=path, line=line,
+            created_at=created_at,
+        )
+        return True
+
+    def attach_hold(self, run_id, key, item_id, step_id):
+        self._holds[(run_id, key)] = replace(
+            self._holds[(run_id, key)], item_id=item_id, step_id=step_id)
+
+    def hold(self, run_id, key):
+        return self._holds.get((run_id, key))
+
+    def hold_for_step(self, step_id):
+        return next((h for h in self._holds.values() if h.step_id == step_id), None)
+
+    def _holds_in_state(self, run_id, state):
+        return sorted(
+            (h for h in self._holds.values() if h.run_id == run_id and h.state == state),
+            key=lambda h: (h.created_at, h.key),
+        )
+
+    def approved_holds(self, run_id):
+        return self._holds_in_state(run_id, "approved")
+
+    def open_holds(self, run_id):
+        return self._holds_in_state(run_id, HELD)
+
+    def _transition_hold(self, hold, target):
+        if hold is None:
+            raise StoreError("no such held comment")
+        if not can_transition(hold.state, target):
+            raise StoreError("held comment is %s; cannot become %s" % (hold.state, target))
+        self._holds[(hold.run_id, hold.key)] = replace(
+            hold, state=target, decided_at=self._now())
+
+    def decide_hold(self, step_id, state):
+        self._transition_hold(self.hold_for_step(step_id), state)
+
+    def mark_hold_dispatched(self, run_id, key):
+        self._transition_hold(self._holds.get((run_id, key)), DISPATCHED)
 
     def set_comments_handled_through(self, rid, value):
         self._runs = [

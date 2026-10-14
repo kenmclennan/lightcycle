@@ -159,7 +159,8 @@ class RecordingGit(GitPort, TeardownLedgerPort):
 
 
 class ScriptedGitHub(GitHubEventsPort):
-    def __init__(self):
+    def __init__(self, login="reviewer"):
+        self._login = login
         self._merged = set()
         self._conflicted = set()
         self._feedback = {}
@@ -176,8 +177,12 @@ class ScriptedGitHub(GitHubEventsPort):
 
     def script_feedback(self, pr, body, author="reviewer"):
         self._feedback.setdefault(pr, []).append(
-            Comment(author=author, body=body, is_top_level=True, created_at=1.0)
+            Comment(author=author, body=body, is_top_level=True, created_at=1.0,
+                    id="sim-%d" % len(self._feedback.get(pr, [])))
         )
+
+    def authenticated_login(self):
+        return self._login
 
     def is_merged(self, pr):
         hit = pr in self._merged

@@ -54,8 +54,22 @@ class ResolveMergedPrsUseCase:
             )
         return None
 
+    def _expire_holds(self, run):
+        if self._complete is None:
+            return
+        for held in self._store.open_holds(run.id):
+            if held.step_id is None:
+                continue
+            self._complete.execute(
+                CompleteInput(
+                    step=held.step_id, outcome="reject",
+                    note="the PR closed before a decision was made",
+                )
+            )
+
     def _close_run_and_complete(self, run, state, step, outcome):
         with self._store.transaction():
+            self._expire_holds(run)
             self._store.close_run(run.id, state)
             self._complete.execute(CompleteInput(step=step.id, outcome=outcome))
         if self._worktrees is not None:
@@ -95,6 +109,7 @@ class ResolveMergedPrsUseCase:
                         disposition = self._disposition_for_close(item, flow, merge_outcome, stage)
                         if disposition is None:
                             continue
+                        self._expire_holds(run)
                         close.execute(
                             CloseItemInput(
                                 item=item.id, reason=merge_outcome, disposition=disposition
@@ -114,6 +129,7 @@ class ResolveMergedPrsUseCase:
                         disposition = self._disposition_for_close(item, flow, close_outcome, stage)
                         if disposition is None:
                             continue
+                        self._expire_holds(run)
                         close.execute(
                             CloseItemInput(
                                 item=item.id, reason=close_outcome, disposition=disposition

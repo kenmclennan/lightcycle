@@ -225,6 +225,11 @@ class TestRetroLabelsHaveOneDefinition(unittest.TestCase):
             self.assertEqual(len(sites), 1, "%s respelled: %s" % (label, sites))
             self.assertEqual(sites[0].split(":")[0], "domain/feedback/retro.py")
 
+    def test_held_comment_label_literal_appears_once_in_domain(self):
+        sites = self._sites("held-comment-origin")
+        self.assertEqual(len(sites), 1, "held-comment-origin respelled: %s" % sites)
+        self.assertEqual(sites[0].split(":")[0], "domain/feedback/trust.py")
+
 
 class TestNoSpecLiteralInEngineCore(unittest.TestCase):
     def test_no_spec_artifact_type_literal_in_domain_or_application(self):

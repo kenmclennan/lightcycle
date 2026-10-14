@@ -287,7 +287,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
 
         jq = (
             '.[] | select(((.submitted_at // "1970-01-01T00:00:00Z")|fromdateiso8601) > %s) | '
-            '{author: .user.login, body, state, '
+            '{id, author: .user.login, body, state, '
             'created_at: ((.submitted_at // "1970-01-01T00:00:00Z")|fromdateiso8601)}'
             % since
         )
@@ -320,10 +320,22 @@ class GitHubEventsAdapter(GitHubEventsPort):
                     body=rv.get("body") or "",
                     created_at=rv.get("created_at", 0.0),
                     state=rv.get("state") or "",
+                    id=str(rv["id"]) if rv.get("id") is not None else None,
                 )
             )
 
         return result
+
+    def authenticated_login(self) -> Union[str, ReadFailure]:
+        try:
+            r = subprocess.run(
+                ["gh", "api", "user", "--jq", ".login"],
+                capture_output=True, text=True, timeout=_GH_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            return _timeout_read_failure()
+        if r.returncode != 0:
+            return ReadFailure(r.returncode, r.stderr)
+        return r.stdout.strip()
 
     def pr_sync_state(self, pr: str) -> Union[PrSync, ReadFailure]:
         parts = _repo_parts(pr)

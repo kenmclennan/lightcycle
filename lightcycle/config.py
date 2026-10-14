@@ -35,6 +35,7 @@ _ENV_OVERRIDE_VARS = {
     "review-rounds-cap": "LC_REVIEW_ROUNDS_CAP",
     "audit-shortcode": "LC_AUDIT_SHORTCODE",
     "summary-shortcode": "LC_SUMMARY_SHORTCODE",
+    "held-comment-shortcode": "LC_HELD_COMMENT_SHORTCODE",
     "memory-reserve-fraction": "LC_MEMORY_RESERVE_FRACTION",
     "guidance-budget-bytes": "LC_GUIDANCE_BUDGET_BYTES",
     "guidance-unused-after-deliveries": "LC_GUIDANCE_UNUSED_AFTER_DELIVERIES",
@@ -106,6 +107,8 @@ _SEED_KEYS = [
     ("context-artifact-types", "spec"),
     ("audit-shortcode", "AUD"),
     ("summary-shortcode", "SUM"),
+    ("held-comment-shortcode", "HLD"),
+    ("trusted-authors", ""),
     ("memory-reserve-fraction", "0.65"),
     ("guidance-budget-bytes", "6144"),
     ("guidance-unused-after-deliveries", "60"),
@@ -545,6 +548,34 @@ class Config:
         if env:
             return env
         return self._required_str("summary-shortcode")
+
+    def held_comment_shortcode(self):
+        env = self._env("LC_HELD_COMMENT_SHORTCODE")
+        if env:
+            return env
+        return self._required_str("held-comment-shortcode")
+
+    def trusted_authors(self):
+        return frozenset(a.casefold() for a in self._required_str("trusted-authors").split())
+
+    def seed_trusted_authors(self, login):
+        if self.load_config().get("trusted-authors"):
+            return False
+        p = self.config_path()
+        lines = []
+        if os.path.exists(p):
+            with open(p) as f:
+                lines = f.readlines()
+        for i, line in enumerate(lines):
+            if line.split(":", 1)[0].strip() == "trusted-authors":
+                lines[i] = "trusted-authors: %s\n" % login
+                break
+        else:
+            lines.append("trusted-authors: %s\n" % login)
+        with open(p, "w") as f:
+            f.writelines(lines)
+        self.reload()
+        return True
 
     def editor(self):
         raw = self._env("EDITOR")
