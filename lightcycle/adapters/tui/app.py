@@ -207,6 +207,12 @@ class TabStrip(Horizontal):
             widget.set_class(key != view, "tab-dim")
 
 
+def _update_cell_if_changed(table, row_key, column_key, value) -> None:
+    if table.get_cell(row_key, column_key) == value:
+        return
+    table.update_cell(row_key, column_key, value)
+
+
 class PagingTable(DataTable):
     _BASE_BINDINGS = [b for b in DataTable.BINDINGS if b.key != "right"]
 
@@ -249,7 +255,7 @@ class PriorityTable(PagingTable):
             return
         value = Text(CURSOR_GLYPH.glyph, style=COLOURS[CURSOR_GLYPH.colour]) if show else ""
         try:
-            self.update_cell(row_key, "cursor", value)
+            _update_cell_if_changed(self, row_key, "cursor", value)
         except CellDoesNotExist:
             pass
 
@@ -280,7 +286,7 @@ class BacklogTable(PagingTable):
             return
         value = Text(CURSOR_GLYPH.glyph, style=COLOURS[CURSOR_GLYPH.colour]) if show else ""
         try:
-            self.update_cell(row_key, "cursor", value)
+            _update_cell_if_changed(self, row_key, "cursor", value)
         except CellDoesNotExist:
             pass
 
@@ -301,7 +307,7 @@ class CursorGlyphTable(PagingTable):
             return
         value = Text(CURSOR_GLYPH.glyph, style=COLOURS[CURSOR_GLYPH.colour]) if show else ""
         try:
-            self.update_cell(row_key, "cursor", value)
+            _update_cell_if_changed(self, row_key, "cursor", value)
         except CellDoesNotExist:
             pass
 
@@ -339,7 +345,7 @@ def _repaint_stacked_cursor(table, row_key, show) -> None:
         row, table._stacked_layout, table._stacked_row_budget, show, icon_override
     )
     try:
-        table.update_cell(row_key, STACKED_COLUMN_KEY, cells[0])
+        _update_cell_if_changed(table, row_key, STACKED_COLUMN_KEY, cells[0])
     except CellDoesNotExist:
         pass
 
@@ -571,12 +577,12 @@ class BacklogView(Vertical):
         for row in rows:
             cells = _backlog_row_cells(row, layout, row_budget, cursor=(row.id == selected_id))
             if layout.stacked:
-                table.update_cell(row.id, STACKED_COLUMN_KEY, cells[0])
+                _update_cell_if_changed(table, row.id, STACKED_COLUMN_KEY, cells[0])
                 continue
             for key, value in zip(BACKLOG_COLUMNS, cells):
                 if key == "cursor":
                     continue
-                table.update_cell(row.id, key, value)
+                _update_cell_if_changed(table, row.id, key, value)
 
     def _toggle_state(self, total, filtered_count, project_filter, text_filter) -> None:
         overall_empty = total == 0
@@ -774,12 +780,12 @@ class DoneView(Vertical):
         for row in rows:
             cells = _done_row_cells(row, layout, row_budget, cursor=(row.id == selected_id))
             if layout.stacked:
-                table.update_cell(row.id, STACKED_COLUMN_KEY, cells[0])
+                _update_cell_if_changed(table, row.id, STACKED_COLUMN_KEY, cells[0])
                 continue
             for key, value in zip(DONE_COLUMNS, cells):
                 if key == "cursor":
                     continue
-                table.update_cell(row.id, key, value)
+                _update_cell_if_changed(table, row.id, key, value)
 
     def _toggle_state(self, total, filtered_count, project_filter, text_filter, day_filter) -> None:
         overall_empty = total == 0
@@ -1108,12 +1114,12 @@ class AutomationView(Vertical):
         for row in rows:
             cells = _done_row_cells(row, layout, row_budget, cursor=(row.id == selected_id))
             if layout.stacked:
-                table.update_cell(row.id, STACKED_COLUMN_KEY, cells[0])
+                _update_cell_if_changed(table, row.id, STACKED_COLUMN_KEY, cells[0])
                 continue
             for key, value in zip(DONE_COLUMNS, cells):
                 if key == "cursor":
                     continue
-                table.update_cell(row.id, key, value)
+                _update_cell_if_changed(table, row.id, key, value)
 
     def _toggle_state(self) -> None:
         empty = not self._rows
@@ -2369,12 +2375,12 @@ class LightcycleApp(App):
                 row, layout, row_budget, cursor=(row.id == selected_id), icon_override=icon_override
             )
             if layout.stacked:
-                table.update_cell(row.id, STACKED_COLUMN_KEY, cells[0])
+                _update_cell_if_changed(table, row.id, STACKED_COLUMN_KEY, cells[0])
                 continue
             for key, value in zip(DATA_COLUMNS, cells):
                 if key == "cursor":
                     continue
-                table.update_cell(row.id, key, value)
+                _update_cell_if_changed(table, row.id, key, value)
 
     def _active_glyph_char(self) -> str:
         return ACTIVE_GLYPH_FRAMES[self._active_glyph_frame]
@@ -2420,9 +2426,9 @@ class LightcycleApp(App):
             )
             try:
                 if layout.stacked:
-                    table.update_cell(row_id, STACKED_COLUMN_KEY, cells[0])
+                    _update_cell_if_changed(table, row_id, STACKED_COLUMN_KEY, cells[0])
                 else:
-                    table.update_cell(row_id, "icon", cells[1])
+                    _update_cell_if_changed(table, row_id, "icon", cells[1])
             except CellDoesNotExist:
                 pass
 
