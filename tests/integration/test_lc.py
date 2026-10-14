@@ -3414,6 +3414,15 @@ class TestNodeDTOReadSurface(unittest.TestCase):
         for field in self.AGENT_CONSUMED_FIELDS:
             self.assertIn(field, d, "lc claim dropped field: %s" % field)
 
+    def test_show_and_claim_surface_routes_as_an_object(self):
+        tid = self._make_task()
+        rc, out, err = call(_cli_mod.cmd_show, tid)
+        self.assertEqual(rc, 0, err)
+        self.assertIsInstance(json.loads(out)["routes"], dict)
+        rc, out, err = call(_cli_mod.cmd_claim, "agent")
+        self.assertEqual(rc, 0, err)
+        self.assertIsInstance(json.loads(out)["routes"], dict)
+
 
 class TestResumeFieldsSurfaceOnShow(unittest.TestCase):
     def setUp(self):

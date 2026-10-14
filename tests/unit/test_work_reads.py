@@ -93,6 +93,52 @@ class TestShowNodeValidOutcomes(unittest.TestCase):
         self.assertEqual(self._valid(s, _flow_with_step(s, "build"), sid), [])
 
 
+class TestShowNodeRoutes(unittest.TestCase):
+    def _surface(self, s, flow, sid):
+        resp = ShowNodeUseCase(s, flow).execute(ShowNodeInput(step=sid))
+        return node_read_surface(s, flow, resp.view)
+
+    def test_workflow_step_shows_each_outcome_with_its_target_stage(self):
+        s = FakeStore()
+        metas = {"reviewer": {"step": "review", "routes": {"done": "open-pr", "rejected": "build"}}}
+        flow = FlowService(FakeFs(metas), s)
+        item = s.create_item("st", "a description", workflow="spec-driven", shortcode="GRID")
+        sid = s.create_step(step="review", role="reviewer", parent=item)
+        self.assertEqual(
+            self._surface(s, flow, sid)["routes"], {"done": "open-pr", "rejected": "build"})
+
+    def test_engine_step_shows_no_routes(self):
+        s = FakeStore()
+        item = s.create_item("batch", "a description")
+        s.label_add(item, "retro-origin")
+        sid = s.create_step(step="audit", role="agent", parent=item)
+        self.assertEqual(self._surface(s, _empty_flow(s), sid)["routes"], {})
+
+    def test_step_with_no_workflow_shows_no_routes(self):
+        s = FakeStore()
+        sid = create_owned_step(s, "build: x", step="build", role="agent")
+        self.assertEqual(self._surface(s, _flow_with_step(s, "build"), sid)["routes"], {})
+
+    def test_step_whose_workflow_failed_to_resolve_shows_no_routes(self):
+        s = FakeStore()
+        item = s.create_item("st", "a description", workflow="spec-driven", shortcode="GRID")
+        sid = s.create_step(step="review", role="reviewer", parent=item)
+
+        class _Broken(FlowService):
+            def resolve_selection(self, selector):
+                raise ValueError("cannot resolve")
+
+        out = self._surface(s, _Broken(FakeFs({}), s), sid)
+        self.assertEqual(out["routes"], {})
+        self.assertEqual(out["workflow_error"], "cannot resolve")
+
+    def test_non_step_node_carries_no_routes(self):
+        s = FakeStore()
+        item = s.create_item("st", "a description")
+        resp = ShowNodeUseCase(s, _empty_flow(s)).execute(ShowNodeInput(step=item))
+        self.assertNotIn("routes", node_read_surface(s, _empty_flow(s), resp.view))
+
+
 class TestTrace(unittest.TestCase):
     def test_assembles_story_artifacts_tasks_and_logs(self):
         s = FakeStore()
@@ -462,3 +508,23 @@ class TestShortProjectLabel(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestRealSpecDrivenChangesRoutes(unittest.TestCase):
+    def _spec_driven(self):
+        from pathlib import Path
+
+        here = Path(__file__).resolve()
+        for base in here.parents:
+            candidate = base / "lightcycle-workflows" / "workflows" / "spec-driven.md"
+            if candidate.is_file():
+                return candidate.read_text()
+        self.skipTest("no sibling lightcycle-workflows checkout to read spec-driven.md from")
+
+    def test_gates_route_changes_to_their_reworker(self):
+        from lightcycle.domain.flow.graph import parse_graph
+        from lightcycle.domain.flow.step_def import StepDef
+
+        graph = parse_graph(self._spec_driven())
+        self.assertEqual(StepDef.from_graph(graph, "code-await-merge").routes["changes"], "write-code")
+        self.assertEqual(StepDef.from_graph(graph, "spec-await-merge").routes["changes"], "spec-writer")
