@@ -124,3 +124,7 @@ class GitPort(ABC):
     @abstractmethod
     def read_file_at(self, root, ref, path):
         pass
+
+    @abstractmethod
+    def added_at(self, root, ref, path):
+        pass

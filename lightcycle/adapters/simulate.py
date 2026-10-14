@@ -153,6 +153,10 @@ class RecordingGit(GitPort, TeardownLedgerPort):
         self._record("read_file_at", root, ref, path)
         return None
 
+    def added_at(self, root, ref, path):
+        self._record("added_at", root, ref, path)
+        return None
+
 
 class ScriptedGitHub(GitHubEventsPort):
     def __init__(self):

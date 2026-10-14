@@ -11,7 +11,7 @@ class FakeGit(GitPort, TeardownLedgerPort):
                  sync_default_result=True, worktree_add_fails=False,
                  torn_down_branches=(), head_shas=None, init_ok=True, commit_ok=True,
                  missing_identity=(), ref=None, ref_files=None, fetch_ok=True,
-                 fetch_detail="boom"):
+                 fetch_detail="boom", added=None):
         self._repos = set(repos) if repos is not None else None
         self._is_repo = is_repo
         self._origin = origin
@@ -35,6 +35,7 @@ class FakeGit(GitPort, TeardownLedgerPort):
         self._ref_files = {
             r: dict(files) for r, files in (ref_files or {}).items()
         }
+        self._added = dict(added or {})
         self._fetch_ok = fetch_ok
         self._fetch_detail = fetch_detail
         self.calls = []
@@ -178,6 +179,10 @@ class FakeGit(GitPort, TeardownLedgerPort):
     def read_file_at(self, root, ref, path):
         self.calls.append(("read_file_at", root, ref, path))
         return self._ref_files.get(ref, {}).get(path)
+
+    def added_at(self, root, ref, path):
+        self.calls.append(("added_at", root, ref, path))
+        return self._added.get(path)
 
     def created_worktrees(self):
         return [
