@@ -193,7 +193,9 @@ COMMANDS = {
     "queue": CommandSpec(prog="lc queue", args=(
         Arg("n", nargs="?", type=int, default=10),
     )),
-    "tui": CommandSpec(prog="lc tui"),
+    "tui": CommandSpec(prog="lc tui", args=(
+        Arg("--start", action="store_true"),
+    )),
     "new": CommandSpec(prog="lc new", args=(
         Arg("type"), Arg("title"),
         Arg("--parent", help="owning item, for 'lc new step'"),
