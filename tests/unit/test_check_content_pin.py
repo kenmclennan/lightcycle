@@ -32,9 +32,6 @@ class _FlowAdapter:
     def workflow_for(self, step):
         return "wf"
 
-    def project_for(self, step):
-        return None
-
     def load_flow(self, name=None, project=None):
         return self._flow
 

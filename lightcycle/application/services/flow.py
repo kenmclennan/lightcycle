@@ -143,10 +143,6 @@ class FlowService:
             return item.workflow, item.id
         return None, None
 
-    def project_for(self, step):
-        item = self._owning_item(step)
-        return item.project if item is not None else None
-
     def load_graph(self, name=None):
         return self._graph_and_root(name)[0]
 
