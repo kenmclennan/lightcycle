@@ -95,7 +95,7 @@ from lightcycle.application.work import (
 )
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.inspect import DoctorInput, DoctorUseCase
-from lightcycle.application.inspect.report_guidance import ReportGuidanceUseCase
+from lightcycle.application.inspect.report_guidance import ReportGuidanceUseCase, parse_since
 from lightcycle.application.workflows.add import AddWorkflowSourceUseCase
 from lightcycle.application.workflows.set_writable import SetOriginWritableUseCase
 from lightcycle.application.workflows.check_dir import (
@@ -673,22 +673,25 @@ def cmd_guidance(argv):
     a = build_parser(COMMANDS["guidance"]).parse_args(argv)
     c = _container
     try:
-        report = ReportGuidanceUseCase(c.store, c.fs, c.git, c.github, c.config).execute(time.time())
+        since = parse_since(a.since)
+        report = ReportGuidanceUseCase(
+            c.store, c.fs, c.git, c.github, c.config).execute(time.time(), since)
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
         return 1
     if a.json:
         print(json.dumps(report.as_dict(), indent=2))
         return 0
-    lines = [("ID", "STATUS", "DELIVERED", "CITED", "LAST DELIVERED", "FLAGS")]
+    print("window: since %s" % report.since if report.since else "window: all steps in the store")
+    lines = [("ID", "STATUS", "DELIVERED", "CITED", "OPPORTUNITY", "LAST DELIVERED", "FLAGS")]
     for r in report.rows:
         lines.append((
-            r.id, r.status or "-", str(r.deliveries), str(r.citations),
+            r.id, r.status or "-", str(r.deliveries), str(r.citations), str(r.opportunity),
             r.last_delivered[:10] if r.last_delivered else "never", _guidance_flags_text(r),
         ))
-    widths = [max(len(line[i]) for line in lines) for i in range(5)]
+    widths = [max(len(line[i]) for line in lines) for i in range(6)]
     for line in lines:
-        print("  ".join(line[i].ljust(widths[i]) for i in range(5)) + "  " + line[5])
+        print("  ".join(line[i].ljust(widths[i]) for i in range(6)) + "  " + line[6])
     notes = list(report.notes)
     for r in report.rows:
         notes.extend("%s: %s" % (r.id, n) for n in r.notes)
@@ -696,7 +699,21 @@ def cmd_guidance(argv):
         print("notes:")
         for n in notes:
             print(n)
+    _print_guidance_work(report)
     return 0
+
+
+def _print_guidance_work(report):
+    if not report.projects:
+        print("work: no spawns in the window")
+        return
+    print("work (facets as registered now): %d spawns" % report.spawns)
+    for p in report.projects:
+        steps = ", ".join(
+            "%s %d" % ("%s/%s" % (s["origin"], s["stage"]) if s["origin"] else s["stage"],
+                       s["count"]) for s in p["steps"])
+        print("%s  facets: %s  %d spawns: %s" % (
+            p["project"] or "(no repo)", ",".join(p["facets"]) or "-", p["spawns"], steps))
 
 
 def cmd_guidance_dir(argv):
