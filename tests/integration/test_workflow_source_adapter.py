@@ -129,7 +129,40 @@ class TestFetch(unittest.TestCase):
         self.assertEqual(bundle.workflows, {"build": "entry: code\n"})
 
 
+    def test_fetch_reads_fragments_into_the_bundle(self):
+        repo, head = _make_source_repo()
+        os.makedirs(os.path.join(repo, "fragments"))
+        with open(os.path.join(repo, "fragments", "x.md"), "w") as f:
+            f.write("frag\n")
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-q", "-m", "frag")
+        bundle = _adapter().fetch(repo, "main")
+        self.assertEqual(bundle.fragments, {"x": "frag\n"})
+
+    def test_fetch_without_fragments_dir_yields_no_fragments(self):
+        repo, head = _make_source_repo()
+        self.assertEqual(_adapter().fetch(repo, "main").fragments, {})
+
+
 class TestPin(unittest.TestCase):
+    def test_pin_writes_fragments_when_present(self):
+        repo, head = _make_source_repo()
+        os.makedirs(os.path.join(repo, "fragments"))
+        with open(os.path.join(repo, "fragments", "x.md"), "w") as f:
+            f.write("frag\n")
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-q", "-m", "frag")
+        adapter = _adapter()
+        pinned = adapter.pin("acme", adapter.fetch(repo, "main"))
+        with open(os.path.join(pinned, "fragments", "x.md")) as f:
+            self.assertEqual(f.read(), "frag\n")
+
+    def test_pin_without_fragments_writes_no_fragments_dir(self):
+        repo, head = _make_source_repo()
+        adapter = _adapter()
+        pinned = adapter.pin("acme", adapter.fetch(repo, "main"))
+        self.assertNotIn("fragments", os.listdir(pinned))
+
     def test_pin_writes_the_bundle_and_is_idempotent(self):
         repo, head = _make_source_repo()
         adapter = _adapter()

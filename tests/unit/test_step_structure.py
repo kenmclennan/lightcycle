@@ -66,14 +66,14 @@ def test_resolving_include_passes():
 def test_unresolvable_include_names_the_available_fragments():
     assert _check("a\n@include missing\n") == [
         "line 2: @include missing does not resolve in a pinned bundle "
-        "(engine fragments: plain-language)"
+        "(available fragments: plain-language)"
     ]
 
 
 def test_unresolvable_include_in_a_fence_is_still_reported():
     assert _check("```\n@include missing\n```\n") == [
         "line 2: @include missing does not resolve in a pinned bundle "
-        "(engine fragments: plain-language)"
+        "(available fragments: plain-language)"
     ]
 
 
@@ -87,7 +87,7 @@ def test_mixed_file_reports_exactly_the_broken_ones_in_line_order():
     )
     assert _check(text) == [
         "line 4: @include missing does not resolve in a pinned bundle "
-        "(engine fragments: plain-language)",
+        "(available fragments: plain-language)",
         "line 5: top-level list item 2 follows 2 (expected 3)",
     ]
 
@@ -120,3 +120,9 @@ def test_engine_step_files_are_sound():
 
 def test_library_step_files_are_sound():
     _all_clean(ROOT / "tests" / "support" / "library" / "steps")
+
+
+def test_union_of_engine_and_origin_fragment_names_resolves_both():
+    assert check_step_structure(
+        {"s": "@include plain-language\n@include x\n"}, {"plain-language", "x"}
+    ) == {}

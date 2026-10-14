@@ -116,14 +116,32 @@ class TestWorkflowCheckDir(unittest.TestCase):
         rc, _out, err = run_check("--dir", self.tmp, "spec-driven")
         self.assertEqual(rc, 0, err)
 
-    def test_bundle_local_fragment_is_not_consulted(self):
-        self._set_step("Do it.\n@include local-only\n")
-        os.makedirs(os.path.join(self.tmp, "fragments"))
-        with open(os.path.join(self.tmp, "fragments", "local-only.md"), "w") as f:
+    def _add_fragment(self, name):
+        os.makedirs(os.path.join(self.tmp, "fragments"), exist_ok=True)
+        with open(os.path.join(self.tmp, "fragments", "%s.md" % name), "w") as f:
             f.write("local\n")
+
+    def test_origin_fragment_resolves(self):
+        self._set_step("Do it.\n@include x\n")
+        self._add_fragment("x")
+        rc, _out, err = run_check("--dir", self.tmp, "spec-driven")
+        self.assertEqual(rc, 0, err)
+
+    def test_include_in_neither_place_names_both_sources(self):
+        self._set_step("Do it.\n@include y\n")
+        self._add_fragment("x")
         rc, _out, err = run_check("--dir", self.tmp, "spec-driven")
         self.assertEqual(rc, 1)
-        self.assertIn("@include local-only does not resolve in a pinned bundle", err)
+        self.assertIn("@include y does not resolve in a pinned bundle", err)
+        self.assertIn("available fragments: plain-language, x", err)
+
+    def test_mixed_includes_report_only_the_missing_one(self):
+        self._set_step("Do it.\n@include x\n@include y\n")
+        self._add_fragment("x")
+        rc, _out, err = run_check("--dir", self.tmp, "spec-driven")
+        self.assertEqual(rc, 1)
+        self.assertIn("@include y does not resolve", err)
+        self.assertNotIn("@include x does not resolve", err)
 
     def test_missing_source_toml_refuses_naming_it(self):
         _bundle(self.tmp)

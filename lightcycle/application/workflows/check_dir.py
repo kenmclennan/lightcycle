@@ -60,8 +60,15 @@ class CheckWorkflowDirUseCase:
         workflows = {
             n: self._bundle.workflow_text(n, directory) for n in available
         }
+        fragments_dir = os.path.join(directory, "fragments")
+        fragments = {
+            rel[: -len(".md")]: self._read(os.path.join(fragments_dir, rel))
+            for rel in self._fs.list_files(fragments_dir)
+            if rel.endswith(".md") and "/" not in rel
+        }
         return FetchedBundle(
-            manifest=manifest, sha=DIR_SHA, steps=steps, workflows=workflows)
+            manifest=manifest, sha=DIR_SHA, steps=steps, workflows=workflows,
+            fragments=fragments)
 
     def execute(self, directory, name) -> DirCheckResponse:
         if name is not None and ("/" in name or "@" in name):

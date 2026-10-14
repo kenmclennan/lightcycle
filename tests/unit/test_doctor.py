@@ -85,8 +85,9 @@ class FakeWorkflowBundle:
         self.parsed_roots.append(root)
         if role in self.errors:
             raise ValueError(self.errors[role])
-        primary = root[0] if isinstance(root, list) else root
-        body = self.bodies.get(primary, {}).get(role)
+        roots = root if isinstance(root, list) else [root]
+        body = next(
+            (self.bodies[r][role] for r in roots if role in self.bodies.get(r, {})), None)
         return None if body is None else StepPrompt(meta={}, body=body)
 
 
@@ -214,7 +215,7 @@ class TestDoctorUseCase(unittest.TestCase):
         _uc(store, source, config, bundle).execute(DoctorInput())
         self.assertTrue(bundle.parsed_roots)
         for roots in bundle.parsed_roots:
-            self.assertEqual(roots[1], config.prompts_root())
+            self.assertEqual(roots[0], config.prompts_root())
 
     def test_unparseable_step_reports_pins_problem_instead_of_raising(self):
         store = FakeStore()

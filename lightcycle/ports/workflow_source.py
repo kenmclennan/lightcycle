@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 class WorkflowSourceError(Exception):
@@ -12,6 +12,7 @@ class FetchedBundle:
     sha: str
     steps: dict
     workflows: dict
+    fragments: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
