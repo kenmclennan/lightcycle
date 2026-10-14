@@ -1,3 +1,5 @@
+import contextlib
+import io
 import json
 import os
 import tempfile
@@ -18,6 +20,7 @@ from lightcycle.application.pool import (
     TickInput,
     TickUseCase,
 )
+from lightcycle.application.pool.guidance_sync import GuidanceSyncResponse
 from lightcycle.application.pool.no_op_gates import (
     NoOpBackupGate,
     NoOpBreakerGate,
@@ -26,6 +29,7 @@ from lightcycle.application.pool.no_op_gates import (
     NoOpFs,
     NoOpGit,
     NoOpHookCompletions,
+    NoOpGuidanceGate,
     NoOpMemoryGate,
     NoOpMonitor,
     NoOpSpinPort,
@@ -153,6 +157,18 @@ class FakeMemoryGate:
         return self._response
 
 
+class FakeGuidanceGate:
+    def __init__(self, raises=None):
+        self._raises = raises
+        self.calls = []
+
+    def execute(self, now):
+        self.calls.append(now)
+        if self._raises is not None:
+            raise self._raises
+        return GuidanceSyncResponse()
+
+
 class FakeCadenceGate:
     def __init__(self, fired):
         self._fired = fired
@@ -263,6 +279,7 @@ def make_tick(store, workers, spawner, config, **overrides):
         backup_gate=NoOpBackupGate(), fs=NoOpFs(), flow_service=NoOpFlowService(),
         spin_port=NoOpSpinPort(), usage_gate=NoOpUsageGate(), stream=NoOpStream(),
         memory_gate=NoOpMemoryGate(), summary_gate=NoOpSummaryGate(),
+        guidance_gate=NoOpGuidanceGate(),
     )
     kwargs.update(overrides)
     return TickUseCase(store, workers, spawner, config, **kwargs)
@@ -1138,6 +1155,26 @@ class TestTick(unittest.TestCase):
         self.assertEqual(
             result.memory, MemoryGateResponse(cap=None, pool_share=0.5)
         )
+
+    def test_guidance_gate_runs_once_per_tick_with_now(self):
+        gate = FakeGuidanceGate()
+        tick = make_tick(
+            FakeStore(), FakeWorkers(), FakeSpawner(), FakeConfig(max_agents=4),
+            guidance_gate=gate)
+        tick.execute(TickInput(now=1000.0))
+        self.assertEqual(gate.calls, [1000.0])
+
+    def test_a_failing_guidance_gate_does_not_stop_the_rest_of_the_tick(self):
+        s = FakeStore()
+        create_owned_step(s, "b1", step="build", role="agent")
+        spawner = FakeSpawner()
+        gate = FakeGuidanceGate(raises=GitReadError("boom"))
+        with contextlib.redirect_stderr(io.StringIO()):
+            result = make_tick(
+                s, FakeWorkers(), spawner, FakeConfig(max_agents=4), guidance_gate=gate
+            ).execute(TickInput(now=1000.0))
+        self.assertIsNone(result.guidance)
+        self.assertEqual(len(spawner.spawned), 1)
 
     def test_breaker_half_open_spawns_exactly_one_probe(self):
         s = FakeStore()

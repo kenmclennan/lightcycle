@@ -1,9 +1,10 @@
+import datetime
 import os
 from dataclasses import dataclass
 from typing import Dict, List
 
 from lightcycle.application.errors import UseCaseError
-from lightcycle.application.services.guidance_library import GuidanceLibrary
+from lightcycle.application.services.guidance_library import NO_REF_ENTRY, GuidanceLibrary
 from lightcycle.application.services.engine_fragments import with_engine_fragments
 from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE, LEGACY_KNOWLEDGE_WORKSPACE
 from lightcycle.config import ConfigError
@@ -29,7 +30,10 @@ class DoctorReport:
 
 
 class DoctorUseCase:
-    def __init__(self, store, workflow_source, config, workflow_bundle, fs, machine, worktrees):
+    def __init__(
+        self, store, workflow_source, config, workflow_bundle, fs, machine, worktrees,
+        git, guidance_sync_status,
+    ):
         self._store = store
         self._workflow_source = workflow_source
         self._config = config
@@ -37,6 +41,8 @@ class DoctorUseCase:
         self._fs = fs
         self._machine = machine
         self._worktrees = worktrees
+        self._git = git
+        self._guidance_sync_status = guidance_sync_status
 
     def execute(self, input: DoctorInput) -> DoctorReport:
         nodes = self._store.all_nodes_including_done()
@@ -177,7 +183,7 @@ class DoctorUseCase:
     def _concept_pages(self, root):
         return {
             name[: -len(".md")]
-            for name in (f.rsplit("/", 1)[-1] for f in self._fs.list_files(root))
+            for name in (f.rsplit("/", 1)[-1] for f in GuidanceLibrary(self._git).files(root))
             if name.endswith(".md") and name != "index.md"
         }
 
@@ -185,14 +191,17 @@ class DoctorUseCase:
         repo = self._store.get_project(GUIDANCE_WORKSPACE)
         if repo is None or not repo.local_path or not self._fs.exists(repo.local_path):
             return []
-        entries, unreadable = GuidanceLibrary(self._fs).load(repo.local_path)
-        problems = [
+        library = GuidanceLibrary(self._git)
+        entries, unreadable = library.load(repo.local_path)
+        problems = self._fetch_problems(library, repo.local_path)
+        problems += [
             Problem(
                 "guidance",
                 "entry %s cannot be delivered: %s - fix its front matter in the guidance repo"
                 % (name, reason),
             )
             for name, reason in unreadable
+            if name != NO_REF_ENTRY
         ]
         pages = self._concept_pages(repo.local_path)
         for entry in entries:
@@ -211,6 +220,29 @@ class DoctorUseCase:
                     "set its status to draft" % entry.id,
                 ))
         problems += self._budget_problems([e for e in entries if e.is_candidate()])
+        return problems
+
+    def _fetch_problems(self, library, root):
+        problems = []
+        status = self._guidance_sync_status.load()
+        if status and not status.get("ok", True):
+            ref = status.get("ref")
+            reading = (
+                "delivery is reading the last fetched ref %s" % ref if ref
+                else "delivery has no fetched ref to read"
+            )
+            at = datetime.datetime.fromtimestamp(status.get("at", 0)).astimezone()
+            problems.append(Problem(
+                "guidance",
+                "guidance repo fetch failed at %s: %s - %s"
+                % (at.strftime("%Y-%m-%d %H:%M:%S"), status.get("detail", ""), reading),
+            ))
+        if library.ref(root) is None and library.has_origin(root):
+            problems.append(Problem(
+                "guidance",
+                "guidance repo has never been fetched - delivery has nothing to read until "
+                "the pool ticks",
+            ))
         return problems
 
     def _budget_problems(self, candidates):

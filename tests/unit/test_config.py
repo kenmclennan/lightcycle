@@ -572,6 +572,21 @@ class TestBackupConfig(unittest.TestCase):
         self.assertEqual(c.backup_interval_minutes(), 30)
         self.assertEqual(c.backup_retention(), 10)
 
+    def test_guidance_fetch_minutes_is_seeded_at_five(self):
+        d = tempfile.mkdtemp()
+        c = Config(environ={"LC_HOME": d, "LC_CONFIG": os.path.join(d, "config")})
+        c.ensure_config()
+        self.assertEqual(c.guidance_fetch_minutes(), 5)
+
+    def test_guidance_fetch_minutes_missing_names_the_key(self):
+        with self.assertRaises(ConfigError) as ctx:
+            _cfg().guidance_fetch_minutes()
+        self.assertIn("guidance-fetch-minutes", str(ctx.exception))
+
+    def test_guidance_fetch_minutes_non_integer_raises(self):
+        with self.assertRaises(ConfigError):
+            _cfg(guidance_fetch_minutes="soon").guidance_fetch_minutes()
+
     def test_malformed_int_fails_fast(self):
         with self.assertRaises(ConfigError):
             _cfg(backup_interval_minutes="soon").backup_interval_minutes()

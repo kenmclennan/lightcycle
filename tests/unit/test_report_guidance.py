@@ -13,6 +13,7 @@ from lightcycle.application.inspect.report_guidance import ReportGuidanceUseCase
 from lightcycle.config import Config
 from lightcycle.container import Container
 from tests.support.fake_fs import FakeFs
+from tests.support.fake_git import FakeGit
 from tests.support.fake_github import FakeGitHub
 from tests.support.fake_store import FakeStore
 
@@ -41,9 +42,10 @@ def _entry(status="stable", covers=None, stale_after=None):
 def _setup(files, github=None):
     store = FakeStore()
     store.add_project("guidance", local_path=ROOT)
-    fs = FakeFs(files={"%s/%s" % (ROOT, k): v for k, v in files.items()}, dirs={ROOT: []})
+    fs = FakeFs(dirs={ROOT: []})
+    git = FakeGit(ref="origin/main", ref_files={"origin/main": dict(files)})
     github = github or FakeGitHub()
-    return store, fs, github, ReportGuidanceUseCase(store, fs, github, _cfg())
+    return store, fs, github, ReportGuidanceUseCase(store, fs, git, github, _cfg())
 
 
 def _step(store, item, delivered, cited=None, created_at=None):
@@ -61,6 +63,16 @@ def _rows(report):
 
 
 class TestCounts(unittest.TestCase):
+    def test_no_readable_ref_adds_a_note_and_no_rows(self):
+        store = FakeStore()
+        store.add_project("guidance", local_path=ROOT)
+        git = FakeGit(origin="git@x:kb.git", ref=None)
+        report = ReportGuidanceUseCase(
+            store, FakeFs(dirs={ROOT: []}), git, FakeGitHub(), _cfg()).execute(0.0)
+        self.assertEqual(report.rows, ())
+        self.assertEqual(len(report.notes), 1)
+        self.assertIn("not been fetched", report.notes[0])
+
     def test_counts_and_last_delivered_match_the_records(self):
         store, fs, gh, use = _setup({"a.md": _entry(), "b.md": _entry()})
         i1, i2 = store.create_item("t", "d"), store.create_item("u", "d")
@@ -88,11 +100,11 @@ class TestCounts(unittest.TestCase):
 
     def test_unregistered_or_missing_repo_raises(self):
         with self.assertRaises(UseCaseError):
-            ReportGuidanceUseCase(FakeStore(), FakeFs(), FakeGitHub(), _cfg()).execute(0.0)
+            ReportGuidanceUseCase(FakeStore(), FakeFs(), FakeGit(), FakeGitHub(), _cfg()).execute(0.0)
         store = FakeStore()
         store.add_project("guidance", local_path="/gone")
         with self.assertRaises(UseCaseError):
-            ReportGuidanceUseCase(store, FakeFs(), FakeGitHub(), _cfg()).execute(0.0)
+            ReportGuidanceUseCase(store, FakeFs(), FakeGit(), FakeGitHub(), _cfg()).execute(0.0)
 
 
 class TestCovers(unittest.TestCase):
@@ -137,9 +149,9 @@ class TestCmdGuidance(unittest.TestCase):
         self._orig = cli_mod._container
         self.addCleanup(lambda: cli_mod.set_container(self._orig))
 
-    def _run(self, store, fs, argv):
+    def _run(self, store, fs, argv, git):
         cli_mod.set_container(Container(
-            config=_cfg(), git=object(), store=store, spawner=object(), workers=object(),
+            config=_cfg(), git=git, store=store, spawner=object(), workers=object(),
             fs=fs, github=FakeGitHub(), lock=object(), breaker=object(),
         ))
         out, err = io.StringIO(), io.StringIO()
@@ -151,7 +163,7 @@ class TestCmdGuidance(unittest.TestCase):
         store, fs, gh, use = _setup({"a.md": _entry()})
         item = store.create_item("t", "d")
         _step(store, item, "a", created_at="2026-10-01T09:30:00+01:00")
-        rc, out, err = self._run(store, fs, ["--json"])
+        rc, out, err = self._run(store, fs, ["--json"], use._git)
         self.assertEqual(rc, 0, err)
         data = json.loads(out)
         self.assertEqual(set(data), {"entries", "notes"})
@@ -165,14 +177,14 @@ class TestCmdGuidance(unittest.TestCase):
 
     def test_text_prints_a_table(self):
         store, fs, gh, use = _setup({"a.md": _entry()})
-        rc, out, err = self._run(store, fs, [])
+        rc, out, err = self._run(store, fs, [], use._git)
         self.assertEqual(rc, 0, err)
         self.assertIn("LAST DELIVERED", out)
         self.assertIn("never", out)
         self.assertIn("never-delivered", out)
 
     def test_refuses_cleanly_without_a_guidance_repo(self):
-        rc, out, err = self._run(FakeStore(), FakeFs(), ["--json"])
+        rc, out, err = self._run(FakeStore(), FakeFs(), ["--json"], FakeGit())
         self.assertEqual(rc, 1)
         self.assertIn("no guidance repo is registered", err)
 

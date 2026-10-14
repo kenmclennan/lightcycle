@@ -1,5 +1,6 @@
 import unittest
 
+from lightcycle.adapters.guidance_sync_status import GuidanceSyncStatusAdapter
 from lightcycle.adapters.machine import MachineAdapter
 from lightcycle.adapters.memory_gate_status import MemoryGateStatusAdapter
 from lightcycle.container import Container, worktrees_for
@@ -57,6 +58,17 @@ class TestContainerMemoryGateStatusDefault(unittest.TestCase):
         sentinel = object()
         c = Container(store=object(), memory_gate_status=sentinel)
         self.assertIs(c.memory_gate_status, sentinel)
+
+
+class TestContainerGuidanceSyncStatusDefault(unittest.TestCase):
+    def test_defaults_to_a_guidance_sync_status_adapter(self):
+        c = Container(store=object())
+        self.assertIsInstance(c.guidance_sync_status, GuidanceSyncStatusAdapter)
+
+    def test_guidance_sync_status_override_is_honoured(self):
+        sentinel = object()
+        c = Container(store=object(), guidance_sync_status=sentinel)
+        self.assertIs(c.guidance_sync_status, sentinel)
 
 
 if __name__ == "__main__":

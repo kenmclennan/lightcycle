@@ -7,8 +7,10 @@ from lightcycle import cli
 from lightcycle.config import ResolvedSetting
 from lightcycle.ports.workflow_source import OriginRegistration
 from tests.support.fake_fs import FakeFs
+from tests.support.fake_git import FakeGit
 from tests.support.fake_machine import FakeMachine
 from tests.support.fake_store import FakeStore
+from tests.support.tui_harness import FakeGuidanceSyncStatus
 
 
 def call(fn, *args):
@@ -89,6 +91,8 @@ class FakeContainer:
         self.workflow_bundle = workflow_bundle or FakeWorkflowBundle()
         self.fs = FakeFs()
         self.machine = FakeMachine()
+        self.git = FakeGit()
+        self.guidance_sync_status = FakeGuidanceSyncStatus()
 
     def worktrees(self):
         return FakeWorktrees()

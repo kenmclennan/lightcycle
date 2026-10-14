@@ -6,6 +6,7 @@ from pathlib import Path
 from lightcycle.application.flow.select_guidance import SelectGuidanceUseCase
 from lightcycle.config import Config
 from tests.support.fake_fs import FakeFs
+from tests.support.fake_git import FakeGit
 from tests.support.fake_store import FakeStore
 
 ROOT = "/kb"
@@ -39,11 +40,37 @@ def _setup(files, project_facets=("kotlin",), budget="6144", repo="acme/x"):
     item = store.create_item("t", "d")
     if repo:
         store.add_artifact(item, "repo", repo)
-    fs = FakeFs(files={"%s/%s" % (ROOT, k): v for k, v in files.items()}, dirs={ROOT: []})
-    return SelectGuidanceUseCase(store, fs, _cfg(budget)), item
+    fs = FakeFs(dirs={ROOT: []})
+    git = FakeGit(ref="origin/main", ref_files={"origin/main": dict(files)})
+    return SelectGuidanceUseCase(store, fs, git, _cfg(budget)), item
 
 
 class TestSelectGuidance(unittest.TestCase):
+    def test_an_entry_only_on_the_checked_out_branch_is_not_delivered(self):
+        use, item = _setup({"on-origin.md": _entry(body="a")})
+        use._git._ref_files["feature-branch"] = {"branch-only.md": _entry(body="b")}
+        sel = use.execute(item, "write-code", None, "S.1")
+        self.assertEqual(sel.delivered, ("on-origin",))
+
+    def test_an_unfetched_origin_delivers_nothing_and_says_why(self):
+        store = FakeStore()
+        store.add_project("guidance", local_path=ROOT)
+        item = store.create_item("t", "d")
+        git = FakeGit(origin="git@x:kb.git", ref=None)
+        use = SelectGuidanceUseCase(store, FakeFs(dirs={ROOT: []}), git, _cfg())
+        sel = use.execute(item, "s", None, "S.1")
+        self.assertEqual((sel.section, sel.delivered), ("", ()))
+        self.assertEqual(len(sel.notes), 1)
+        self.assertIn("not been fetched", sel.notes[0])
+
+    def test_a_repo_without_a_remote_delivers_its_local_default_branch(self):
+        store = FakeStore()
+        store.add_project("guidance", local_path=ROOT)
+        item = store.create_item("t", "d")
+        git = FakeGit(origin=None, ref="main", ref_files={"main": {"a.md": _entry()}})
+        use = SelectGuidanceUseCase(store, FakeFs(dirs={ROOT: []}), git, _cfg())
+        self.assertEqual(use.execute(item, "s", None, "S.1").delivered, ("a",))
+
     def test_acceptance_fixture_delivers_exactly_the_matching_entries_in_order(self):
         files = {
             "all/zeta.md": _entry(body="zeta"),
@@ -99,14 +126,14 @@ class TestSelectGuidance(unittest.TestCase):
     def test_unregistered_guidance_repo_yields_one_note(self):
         store = FakeStore()
         item = store.create_item("t", "d")
-        sel = SelectGuidanceUseCase(store, FakeFs(), _cfg()).execute(item, "s", None, "S.1")
+        sel = SelectGuidanceUseCase(store, FakeFs(), FakeGit(), _cfg()).execute(item, "s", None, "S.1")
         self.assertEqual((sel.section, len(sel.notes)), ("", 1))
 
     def test_missing_guidance_path_yields_one_note(self):
         store = FakeStore()
         store.add_project("guidance", local_path="/gone")
         item = store.create_item("t", "d")
-        sel = SelectGuidanceUseCase(store, FakeFs(), _cfg()).execute(item, "s", None, "S.1")
+        sel = SelectGuidanceUseCase(store, FakeFs(), FakeGit(), _cfg()).execute(item, "s", None, "S.1")
         self.assertEqual((sel.section, len(sel.notes)), ("", 1))
         self.assertIn("/gone", sel.notes[0])
 

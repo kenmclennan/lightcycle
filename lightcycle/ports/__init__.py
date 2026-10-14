@@ -4,6 +4,7 @@ from lightcycle.ports.drain import PoolDrainPort
 from lightcycle.ports.fs import FsPort
 from lightcycle.ports.git import GitPort
 from lightcycle.ports.github import GitHubEventsPort
+from lightcycle.ports.guidance_sync_status import GuidanceSyncStatusPort
 from lightcycle.ports.launcher import LauncherPort
 from lightcycle.ports.lock import RunLockPort
 from lightcycle.ports.machine import MachinePort
@@ -25,6 +26,7 @@ __all__ = [
     "FsPort",
     "GitHubEventsPort",
     "GitPort",
+    "GuidanceSyncStatusPort",
     "LauncherPort",
     "MachinePort",
     "MemoryGateStatusPort",

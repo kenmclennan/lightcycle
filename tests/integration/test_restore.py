@@ -29,6 +29,7 @@ def _config(home, backups_dir):
     Path(cfg_path).write_text(
         "backups-dir: %s\n"
         "backup-interval-minutes: 15\n"
+        "guidance-fetch-minutes: 5\n"
         "backup-retention: 96\n" % backups_dir
     )
     return Config(environ={"LC_HOME": home, "LC_CONFIG": cfg_path})

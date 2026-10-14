@@ -10,7 +10,8 @@ class FakeGit(GitPort, TeardownLedgerPort):
                  remote_unreadable=(), sync_result=True, clone_result=True,
                  sync_default_result=True, worktree_add_fails=False,
                  torn_down_branches=(), head_shas=None, init_ok=True, commit_ok=True,
-                 missing_identity=()):
+                 missing_identity=(), ref=None, ref_files=None, fetch_ok=True,
+                 fetch_detail="boom"):
         self._repos = set(repos) if repos is not None else None
         self._is_repo = is_repo
         self._origin = origin
@@ -30,6 +31,12 @@ class FakeGit(GitPort, TeardownLedgerPort):
         self._init_ok = init_ok
         self._commit_ok = commit_ok
         self._missing_identity = list(missing_identity)
+        self._ref = ref
+        self._ref_files = {
+            r: dict(files) for r, files in (ref_files or {}).items()
+        }
+        self._fetch_ok = fetch_ok
+        self._fetch_detail = fetch_detail
         self.calls = []
         self.commits = []
         self.remote_deletes = []
@@ -150,6 +157,27 @@ class FakeGit(GitPort, TeardownLedgerPort):
     def remote_head_sha(self, root, branch):
         self.calls.append(("remote_head_sha", root, branch))
         return self._head_shas.get((root, branch))
+
+    def fetch_origin(self, root):
+        self.calls.append(("fetch_origin", root))
+        if self._fetch_ok:
+            return GitOutcome(ok=True)
+        return GitOutcome(ok=False, detail=self._fetch_detail)
+
+    def default_ref(self, root):
+        self.calls.append(("default_ref", root))
+        return self._ref
+
+    def list_files_at(self, root, ref):
+        self.calls.append(("list_files_at", root, ref))
+        return sorted(
+            path for path in self._ref_files.get(ref, {})
+            if not any(part.startswith(".") for part in path.split("/"))
+        )
+
+    def read_file_at(self, root, ref, path):
+        self.calls.append(("read_file_at", root, ref, path))
+        return self._ref_files.get(ref, {}).get(path)
 
     def created_worktrees(self):
         return [

@@ -131,6 +131,7 @@ def write_config(projects=None, specs=None):
         "retro-interval-reflections: 20",
         "backups-dir: %s" % tempfile.mkdtemp(),
         "backup-interval-minutes: 15",
+        "guidance-fetch-minutes: 5",
         "backup-retention: 96",
         "max-title-length: 72",
         "price-sonnet-input-per-mtok: 2.00",

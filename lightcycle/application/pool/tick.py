@@ -1,14 +1,17 @@
+import sys
 from dataclasses import dataclass
 from typing import List, Optional
 
 from lightcycle.application.pool.backup import BackupResponse
 from lightcycle.application.pool.daily_summary_cadence import DailySummaryCadenceResponse
+from lightcycle.application.pool.guidance_sync import GuidanceSyncResponse
 from lightcycle.application.pool.hook_completions import HookCompletionsResponse
 from lightcycle.application.pool.memory_gate import MemoryGateResponse
 from lightcycle.application.pool.monitor_prs import MonitorPrsResponse
 from lightcycle.application.pool.retro_cadence import RetroCadenceResponse
 from lightcycle.application.pool.sweep import SweepResponse, SweepUseCase
 from lightcycle.domain.pool import PoolPlan, ReadyQueue, WorkerPool
+from lightcycle.ports.git import GitReadError
 from lightcycle.ports.workers import RegistryUnreadable
 
 _ACTIVE_ACCRUAL_CAP_TICKS = 3
@@ -54,13 +57,14 @@ class TickResponse:
     pool: PoolState
     breaker: BreakerState
     memory: Optional[MemoryGateResponse] = None
+    guidance: Optional[GuidanceSyncResponse] = None
 
 
 class TickUseCase:
     def __init__(
         self, store, workers, spawner, config, monitor, cadence_gate, breaker_gate,
         hook_completions, worktrees, git, backup_gate, fs, flow_service, spin_port, usage_gate,
-        stream, memory_gate, summary_gate,
+        stream, memory_gate, summary_gate, guidance_gate,
     ):
         self._store = store
         self._workers = workers
@@ -79,6 +83,14 @@ class TickUseCase:
         self._flow_service = flow_service
         self._usage_gate = usage_gate
         self._memory_gate = memory_gate
+        self._guidance_gate = guidance_gate
+
+    def _guidance_sync(self, now):
+        try:
+            return self._guidance_gate.execute(now)
+        except (OSError, GitReadError) as e:
+            sys.stderr.write("warning: guidance sync failed: %s\n" % e)
+            return None
 
     def execute(self, input: TickInput) -> TickResponse:
         self._flow_service.clear_cache()
@@ -89,6 +101,7 @@ class TickUseCase:
         breaker_result = self._breaker_gate.execute(input.now)
         breaker = breaker_result.breaker
         backup_result = self._backup_gate.execute(input.now)
+        guidance_result = self._guidance_sync(input.now)
         self._usage_gate.execute(input.now)
         swept = self._sweep.execute(
             input.now, self._config.max_boot_seconds(), self._config.stall_seconds()
@@ -158,4 +171,5 @@ class TickUseCase:
                 spin_opened=breaker_result.spin_opened,
             ),
             memory=memory_result,
+            guidance=guidance_result,
         )

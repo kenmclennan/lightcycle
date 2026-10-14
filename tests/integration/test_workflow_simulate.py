@@ -125,6 +125,7 @@ def _seed_config(home):
         "retro-interval-reflections: 20",
         "backups-dir: %s" % os.path.join(home, "backups"),
         "backup-interval-minutes: 15",
+        "guidance-fetch-minutes: 5",
         "backup-retention: 96",
         "max-title-length: 72",
         "review-rounds-cap: 5",
