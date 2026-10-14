@@ -4,6 +4,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from types import SimpleNamespace
 
 from lightcycle import cli
+from lightcycle.cli_commands import COMMANDS, build_parser
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.goals import (
     AppendGoalLogUseCase,
@@ -19,14 +20,31 @@ from lightcycle.application.goals import (
 )
 from lightcycle.domain.goals import GoalLogEntry, goal_log_stamp
 from lightcycle.domain.work.worker_permissions import worker_permitted
+from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
+
+TEMPLATE_DIR = "/prompts"
+TEMPLATE_PATH = TEMPLATE_DIR + "/templates/goal.md"
+
+
+class _Config:
+    def prompts_root(self):
+        return TEMPLATE_DIR
+
+
+def _fs(text=b"TEMPLATE"):
+    return FakeFs(files={TEMPLATE_PATH: text})
+
+
+def _create(store, fs=None):
+    return CreateGoalUseCase(store, fs or _fs(), _Config())
 
 
 class TestGoalUseCases(unittest.TestCase):
     def setUp(self):
         self.store = FakeStore()
         self.item = self.store.create_item("an item", "d")
-        self.goal = CreateGoalUseCase(self.store).execute(CreateGoalInput(title="g", project="acme"))
+        self.goal = _create(self.store).execute(CreateGoalInput(title="g", project="acme"))
 
     def _snapshot(self):
         s = self.store
@@ -95,14 +113,35 @@ class TestGoalUseCases(unittest.TestCase):
             EditGoalUseCase(self.store).execute, EditGoalInput(id=self.goal, status="blocked")
         )
 
+    def test_omitted_description_stores_the_template_text(self):
+        goal = _create(self.store).execute(CreateGoalInput(title="x", project="p"))
+        self.assertEqual(self.store.get_goal(goal).description, "TEMPLATE")
+
+    def test_explicit_description_is_stored_unchanged_and_the_template_is_not_read(self):
+        goal = _create(self.store, FakeFs()).execute(
+            CreateGoalInput(title="x", project="p", description="mine")
+        )
+        self.assertEqual(self.store.get_goal(goal).description, "mine")
+
+    def test_explicit_empty_description_opts_out_of_the_template(self):
+        goal = _create(self.store).execute(CreateGoalInput(title="x", project="p", description=""))
+        self.assertEqual(self.store.get_goal(goal).description, "")
+
+    def test_missing_template_refuses_naming_the_path_and_creates_no_goal(self):
+        before = self.store.list_goals()
+        with self.assertRaises(UseCaseError) as ctx:
+            _create(self.store, FakeFs()).execute(CreateGoalInput(title="x", project="p"))
+        self.assertIn(TEMPLATE_PATH, str(ctx.exception))
+        self.assertEqual(self.store.list_goals(), before)
+
     def test_refuses_empty_text(self):
         s = self.store
-        self._refuses(CreateGoalUseCase(s).execute, CreateGoalInput(title="  ", project="acme"))
+        self._refuses(_create(s).execute, CreateGoalInput(title="  ", project="acme"))
         self._refuses(AppendGoalLogUseCase(s).execute, self.goal, "t", " ")
         self._refuses(AppendGoalLogUseCase(s).execute, self.goal, " ", "b")
         self._refuses(AppendGoalLogUseCase(s).execute, self.goal, "two\nlines", "b")
-        self._refuses(CreateGoalUseCase(s).execute, CreateGoalInput(title="t", project=" "))
-        self._refuses(CreateGoalUseCase(s).execute, CreateGoalInput(title="t"))
+        self._refuses(_create(s).execute, CreateGoalInput(title="t", project=" "))
+        self._refuses(_create(s).execute, CreateGoalInput(title="t"))
         self._refuses(
             EditGoalUseCase(s).execute, EditGoalInput(id=self.goal, project=" ")
         )
@@ -130,7 +169,7 @@ class TestGoalUseCases(unittest.TestCase):
 
     def test_list_omits_archived_by_default_and_includes_with_the_flag(self):
         s = self.store
-        archived = CreateGoalUseCase(s).execute(CreateGoalInput(title="old", project="acme"))
+        archived = _create(s).execute(CreateGoalInput(title="old", project="acme"))
         EditGoalUseCase(s).execute(EditGoalInput(id=archived, status="archived"))
 
         self.assertEqual([g.id for g in ListGoalsUseCase(s).execute()], [self.goal])
@@ -148,7 +187,8 @@ class TestGoalCli(unittest.TestCase):
         self.store.add_project("acme/lightcycle")
         self.store.add_project("acme/saga")
         self.item = self.store.create_item("an item", "d")
-        cli.set_container(SimpleNamespace(store=self.store))
+        self.fs = _fs()
+        cli.set_container(SimpleNamespace(store=self.store, fs=self.fs, config=_Config()))
 
     def _run(self, *argv):
         out, err = io.StringIO(), io.StringIO()
@@ -176,6 +216,18 @@ class TestGoalCli(unittest.TestCase):
             self.assertIn(text, out)
         self.assertNotIn("open questions", out)
         self.assertEqual(self._run("unlink", "G-1", self.item)[0], 0)
+
+    def test_new_without_description_stores_the_template(self):
+        rc, out, _ = self._run("new", "x", "--project", "lightcycle")
+        self.assertEqual((rc, out.strip()), (0, "G-1"))
+        self.assertEqual(self.store.get_goal("G-1").description, "TEMPLATE")
+
+    def test_new_help_says_the_template_is_used_when_description_is_omitted(self):
+        action = next(
+            a for a in build_parser(COMMANDS["goal"])._subparsers._group_actions[0].choices["new"]._actions
+            if "--description" in a.option_strings
+        )
+        self.assertIn("template", action.help)
 
     def test_set_accepts_an_empty_description(self):
         self._run("new", "g", "--project", "lightcycle", "--description", "x")
@@ -304,3 +356,21 @@ class TestGoalLogStamp(unittest.TestCase):
     def test_shortens_to_minutes_and_tolerates_missing(self):
         self.assertEqual(goal_log_stamp("2026-09-19T09:30:12.123456+01:00"), "2026-09-19 09:30")
         self.assertEqual(goal_log_stamp(None), "")
+
+
+class TestCommittedGoalTemplate(unittest.TestCase):
+    def setUp(self):
+        from pathlib import Path
+        path = Path(__file__).resolve().parents[2] / "lightcycle" / "prompts" / "templates" / "goal.md"
+        self.text = path.read_text(encoding="utf-8")
+
+    def test_headings_are_the_five_sections_in_order(self):
+        headings = [l[3:] for l in self.text.splitlines() if l.startswith("## ")]
+        self.assertEqual(
+            headings,
+            ["Objective", "The work, in areas", "Open now", "Recently completed", "What to pick up next"],
+        )
+
+    def test_template_carries_no_item_or_goal_ids(self):
+        import re
+        self.assertIsNone(re.search(r"\b[A-Z]+-\d+\b", self.text))
