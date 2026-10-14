@@ -10,7 +10,7 @@ DAILY_SUMMARY_STEP = "daily-summary"
 
 ENGINE_STEP_DISPLAY = {
     AUDIT_STEP: "Auditing recent work",
-    MATERIAL_AUDIT_STEP: "Auditing the guidance",
+    MATERIAL_AUDIT_STEP: "Auditing guidance and workflows",
     FINDINGS_STEP: "Review the findings",
     DAILY_SUMMARY_STEP: "Writing the daily summary",
 }

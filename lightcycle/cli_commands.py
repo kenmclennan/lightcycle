@@ -137,6 +137,9 @@ COMMANDS = {
     "guidance-dir": CommandSpec(prog="lc guidance-dir", args=(
         Arg("--check", action="store_true"),
     )),
+    "audit-criteria": CommandSpec(prog="lc audit-criteria", args=(
+        Arg("material"),
+    )),
     "done": CommandSpec(prog="lc done", args=(
         Arg("id"), Arg("outcome"),
         Arg(

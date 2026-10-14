@@ -106,8 +106,8 @@ class TestMaterialAuditCadenceFiredItem(unittest.TestCase):
         self.assertEqual(step.role, "agent")
         self.assertIn(RETRO_ORIGIN_LABEL, s.labels_of(item.id))
         self.assertTrue(item.id.startswith("AUD"))
-        self.assertEqual(item.title, "Audit of guidance entries")
-        self.assertEqual(item.description, "materials: guidance\nsince: none\nprevious: none")
+        self.assertEqual(item.title, "Audit of guidance and workflow bundles")
+        self.assertEqual(item.description, "materials: guidance, workflows\nsince: none\nprevious: none")
 
     def test_later_audit_names_the_previous_one(self):
         s = FakeStore()
@@ -117,7 +117,7 @@ class TestMaterialAuditCadenceFiredItem(unittest.TestCase):
         since = parse_timestamp(s.get_node(prior).created_at).date().isoformat()
         self.assertEqual(
             s.get_node(s.get_node(sid).item).description,
-            "materials: guidance\nsince: %s\nprevious: %s" % (since, prior),
+            "materials: guidance, workflows\nsince: %s\nprevious: %s" % (since, prior),
         )
 
     def test_item_and_step_are_created_atomically(self):

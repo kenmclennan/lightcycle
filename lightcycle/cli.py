@@ -95,6 +95,8 @@ from lightcycle.application.work import (
 )
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.inspect import DoctorInput, DoctorUseCase
+from lightcycle.application.inspect.show_audit_criteria import ShowAuditCriteriaUseCase
+from lightcycle.domain.work.audit_criteria import UnknownMaterial
 from lightcycle.application.inspect.report_guidance import ReportGuidanceUseCase, parse_since
 from lightcycle.application.workflows.add import AddWorkflowSourceUseCase
 from lightcycle.application.workflows.set_writable import SetOriginWritableUseCase
@@ -294,6 +296,8 @@ COMMAND_GROUPS = [
          "flag retirement candidates (read-only; counts cover steps still in the store)"),
         ("guidance-dir", "[--check]", "print the resolved guidance repo directory (absolute "
          "path); --check validates it against the registered guidance remote"),
+        ("audit-criteria", "<material>", "print the periodic audit's criteria for one material "
+         "(guidance, workflows) from the engine's audit prompt"),
     ]),
 ]
 
@@ -719,6 +723,18 @@ def _print_guidance_work(report):
 def cmd_guidance_dir(argv):
     a = build_parser(COMMANDS["guidance-dir"]).parse_args(argv)
     return _project_dir(GUIDANCE_WORKSPACE, "guidance remote", a.check, "guidance")
+
+
+def cmd_audit_criteria(argv):
+    a = build_parser(COMMANDS["audit-criteria"]).parse_args(argv)
+    c = _container
+    try:
+        text = ShowAuditCriteriaUseCase(c.fs, c.config).execute(a.material)
+    except UnknownMaterial as e:
+        sys.stderr.write("lc audit-criteria: %s\n" % e)
+        return 1
+    print(text)
+    return 0
 
 
 def _workflow_check_dir(directory, name, as_json):
