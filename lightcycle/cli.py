@@ -238,7 +238,7 @@ COMMAND_GROUPS = [
          "claiming them"),
         ("trace", "<item> [--json]", "an item end to end: artifacts + child steps + logs"),
         ("worklog", "[start] [end]", "items shipped in a period (today, yesterday, YYYY-MM-DD)"),
-        ("tui", "", "launch the interactive dashboard (priority list + pool/breaker status)"),
+        ("tui", "[--start]", "launch the interactive dashboard (priority list + pool/breaker status); --start first starts the pool in the background if it is not already running"),
     ]),
     ("Work primitives", [
         ("new", "<type> \"title\" [item: --description/--workflow/--repo | step: --parent/--step/--note]",
@@ -1231,7 +1231,15 @@ def cmd_queue(argv):
 
 
 def cmd_tui(argv):
-    build_parser(COMMANDS["tui"]).parse_args(argv)
+    a = build_parser(COMMANDS["tui"]).parse_args(argv)
+    if a.start:
+        if not require_store():
+            return 1
+        resp = StartPoolUseCase(_container.lock, _container.spawner).execute()
+        if resp.started:
+            print("lc start detached, pid %d - `lc stop` ends it" % resp.pid)
+        else:
+            print("pool already running, pid %d" % resp.pid)
     from lightcycle.adapters.tui.app import run
     run(_container)
     return 0

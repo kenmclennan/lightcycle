@@ -148,6 +148,7 @@ The mutating CLI is a small set of generic primitives over nodes; the read views
 | `lc project <add\|set\|list\|rm\|scan>` | manage the project registry: `add <owner/name> [--shortcode X] [--path P] [--facets a,b,c]`, `set <identity> --facets a,b,c`, `list`, `rm <owner/name>`, `scan [dir] [--json]` discovers git repos under `dir` (default cwd) as registration candidates - read-only |
 | `lc config [--edit]` | show (or `--edit`) the lightcycle config: projects + specs roots |
 | `lc start [--once]` | the agent pool: sweep, then fill up to `LC_MAX_AGENTS` workers from the ready queue |
+| `lc tui [--start]` | the interactive dashboard; `--start` first starts the pool in the background if it is not already running |
 | `lc status` | all buckets: inbox / active / queue / blocked |
 | `lc inbox [N]` / `lc backlog [N]` | what needs you now (gates + blocked) / todo items to develop later |
 | `lc active` / `lc queue [N]` / `lc ps` | steps running now / next N agent steps / running workers |
