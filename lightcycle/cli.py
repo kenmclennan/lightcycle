@@ -2024,9 +2024,9 @@ def cmd_goal(argv):
     store = _container.store
     try:
         if a.sub == "new":
-            print(CreateGoalUseCase(store).execute(CreateGoalInput(
+            print(CreateGoalUseCase(store, _container.fs, _container.config).execute(CreateGoalInput(
                 title=a.title,
-                description=a.description or "",
+                description=a.description,
                 project=resolve_project_ref(store, a.project),
             )))
             return 0

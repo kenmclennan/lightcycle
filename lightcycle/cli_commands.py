@@ -258,7 +258,8 @@ COMMANDS = {
     }),
     "goal": CommandSpec(prog="lc goal", subparsers={
         "new": CommandSpec(prog="lc goal new", args=(
-            Arg("title"), Arg("--project"), Arg("--description"),
+            Arg("title"), Arg("--project"),
+            Arg("--description", help="the goal's description; when omitted the engine's goal template is used"),
         )),
         "list": CommandSpec(prog="lc goal list", args=(
             Arg("--all", action="store_true"),
