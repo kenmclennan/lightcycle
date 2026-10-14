@@ -11,6 +11,8 @@ os.environ[REAL_HOME_ENV] = REAL_HOME
 
 _REPO_ROOT = os.path.realpath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
+_SIBLING_CHECKOUTS = ("lightcycle-workflows",)
+
 _GIT_IDENTITY_VARS = (
     "GIT_AUTHOR_NAME",
     "GIT_AUTHOR_EMAIL",
@@ -53,6 +55,19 @@ class _State:
     fake_home = None
 
 
+def _sibling_checkouts():
+    found = []
+    base = _REPO_ROOT
+    while True:
+        base = os.path.dirname(base)
+        for name in _SIBLING_CHECKOUTS:
+            candidate = os.path.join(base, name)
+            if os.path.isdir(candidate):
+                found.append(candidate)
+        if base == os.path.dirname(base):
+            return found
+
+
 def _allowed_roots():
     roots = [
         _REPO_ROOT,
@@ -63,6 +78,7 @@ def _allowed_roots():
         tempfile.gettempdir(),
     ]
     roots.extend(entry for entry in sys.path if entry)
+    roots.extend(_sibling_checkouts())
     return [os.path.realpath(root) for root in roots]
 
 

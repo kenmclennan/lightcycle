@@ -97,3 +97,23 @@ def test_guard_reports_only_the_non_allowed_child_of_the_real_home(monkeypatch):
             os.listdir(other)
 
     assert [path for _, path in absorbed] == [os.path.realpath(other)]
+
+
+def test_guard_allows_a_sibling_workflows_checkout_but_not_another_sibling(monkeypatch, tmp_path):
+    repo = tmp_path / "lightcycle" / ".worktrees" / "x"
+    repo.mkdir(parents=True)
+    (tmp_path / "lightcycle-workflows").mkdir()
+    (tmp_path / "other-repo").mkdir()
+    monkeypatch.setattr(hermetic_env, "_REPO_ROOT", str(repo))
+
+    roots = hermetic_env._sibling_checkouts()
+
+    assert roots == [str(tmp_path / "lightcycle-workflows")]
+
+
+def test_sibling_checkouts_is_empty_when_no_workflows_checkout_exists(monkeypatch, tmp_path):
+    repo = tmp_path / "lightcycle"
+    repo.mkdir()
+    monkeypatch.setattr(hermetic_env, "_REPO_ROOT", str(repo))
+
+    assert hermetic_env._sibling_checkouts() == []
