@@ -14,6 +14,7 @@ LEADING_PHRASES = (
     "Copy drift",
     "A step that does not stand alone",
     "An outcome with no edge",
+    "A rule a check could enforce",
 )
 
 VERB_WORDS = ("strip", "move", "shorten", "rewrite", "list", "add", "valid_outcomes")
@@ -27,7 +28,7 @@ class TestMaterialAuditPrompt(unittest.TestCase):
     def test_prompt_has_a_workflows_heading(self):
         self.assertIn("## Material: workflows", self.text)
 
-    def test_section_carries_each_of_the_seven_criteria(self):
+    def test_section_carries_each_of_the_eight_criteria(self):
         for phrase in LEADING_PHRASES:
             self.assertIn(phrase, self.section)
 
@@ -42,6 +43,15 @@ class TestMaterialAuditPrompt(unittest.TestCase):
     def test_guidance_section_no_longer_ends_the_audit_clean(self):
         guidance = material_criteria(self.text, "guidance")
         self.assertNotIn("finish `clean`", guidance)
+
+    def test_guidance_section_names_the_promotion_destination_and_drops_the_item_id(self):
+        guidance = material_criteria(self.text, "guidance")
+        self.assertIn("Promotion candidate", guidance)
+        self.assertIn("guidance-entry", guidance)
+        self.assertNotIn("LC-669", guidance)
+
+    def test_workflows_section_says_all_eight(self):
+        self.assertIn("all eight", self.section)
 
     def test_both_materials_resolve_to_non_empty_text(self):
         self.assertEqual(
