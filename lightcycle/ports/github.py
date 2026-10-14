@@ -36,6 +36,14 @@ class CheckRun:
     conclusion: Optional[str]
 
 
+@dataclass(frozen=True)
+class PrSync:
+    behind: bool
+    conflicted: bool
+    head_sha: str
+    base_key: str
+
+
 class GitHubEventsPort(ABC):
     @abstractmethod
     def is_merged(self, pr: str) -> Union[bool, ReadFailure]:
@@ -48,11 +56,6 @@ class GitHubEventsPort(ABC):
     @abstractmethod
     def last_push_time(self, pr: str) -> Union[float, ReadFailure]:
         pass
-
-    @abstractmethod
-    def is_conflicted(self, pr: str) -> Union[bool, ReadFailure]:
-        """Return True only for definitive conflict (CONFLICTING/DIRTY), False for a
-        definitive non-conflicting state, and ReadFailure when the state could not be read."""
 
     @abstractmethod
     def comments_since(self, pr: str, since: float) -> Union[List[Comment], ReadFailure]:
@@ -80,4 +83,16 @@ class GitHubEventsPort(ABC):
 
     @abstractmethod
     def issue_state(self, url: str) -> Union[str, ReadFailure]:
+        pass
+
+    @abstractmethod
+    def pr_sync_state(self, pr: str) -> Union[PrSync, ReadFailure]:
+        pass
+
+    @abstractmethod
+    def requires_up_to_date(self, base_key: str) -> Union[bool, ReadFailure]:
+        pass
+
+    @abstractmethod
+    def update_branch(self, pr: str, expected_head_sha: str) -> Union[None, ReadFailure]:
         pass

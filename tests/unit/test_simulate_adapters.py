@@ -54,8 +54,8 @@ class TestScriptedGitHub(unittest.TestCase):
     def test_script_conflict_fires_once(self):
         gh = ScriptedGitHub()
         gh.script_conflict("pr-1")
-        self.assertTrue(gh.is_conflicted("pr-1"))
-        self.assertFalse(gh.is_conflicted("pr-1"))
+        self.assertTrue(gh.pr_sync_state("pr-1").conflicted)
+        self.assertFalse(gh.pr_sync_state("pr-1").conflicted)
 
     def test_two_instances_never_share_state(self):
         a, b = ScriptedGitHub(), ScriptedGitHub()

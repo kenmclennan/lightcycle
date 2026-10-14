@@ -2,7 +2,8 @@ from dataclasses import dataclass, field
 from typing import List
 
 from lightcycle.application.flow.complete_step import CompleteInput
-from lightcycle.application.pool.pr_lookups import false_on_failure, flow_for, run_of
+from lightcycle.application.pool.pr_lookups import flow_for, run_of
+from lightcycle.application.pool.pr_sync_reads import PrSyncReads
 from lightcycle.domain.feedback import (
     LC_MARKER,
     eligible,
@@ -26,6 +27,10 @@ def _epoch(value):
         return float(value)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _is_conflicted(sync):
+    return not isinstance(sync, ReadFailure) and sync.conflicted
 
 
 class DispatchPrFeedbackUseCase:
@@ -81,7 +86,8 @@ class DispatchPrFeedbackUseCase:
 
         return items
 
-    def execute(self) -> DispatchPrFeedbackResponse:
+    def execute(self, reads=None) -> DispatchPrFeedbackResponse:
+        reads = reads or PrSyncReads(self._github)
         reworked, conflicted = [], []
         for step in self._store.all_nodes():
             if step.type != "step" or step.state == State.DONE:
@@ -116,9 +122,7 @@ class DispatchPrFeedbackUseCase:
                         if run is not None:
                             self._store.set_comments_dispatched_through(run.id, str(newest))
                         reworked.append(step.item)
-            if not advanced and conflict_outcome and false_on_failure(
-                self._github.is_conflicted(pr_value)
-            ):
+            if not advanced and conflict_outcome and _is_conflicted(reads.read(pr_value)):
                 history = [t for t in self._store.steps_at_step(step.stage)
                            if t.item == step.item and t.state == State.DONE]
                 prior = total_outcome_count(history, conflict_outcome)

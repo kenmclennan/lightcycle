@@ -668,7 +668,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
     def test_is_conflicted_failure_does_not_route_to_rework(self):
         url = "https://github.com/x/y/pull/54"
         store, item, step, _, uc = self._setup(
-            url, FakeGitHub(conflicted_prs={url}, failing_calls={"is_conflicted"})
+            url, FakeGitHub(conflicted_prs={url}, failing_calls={"pr_sync_state"})
         )
 
         result = uc.execute()
