@@ -34,6 +34,7 @@ from lightcycle.application.pool.no_op_gates import (
     NoOpMonitor,
     NoOpSpinPort,
     NoOpStream,
+    NoOpMaterialAuditGate,
     NoOpSummaryGate,
     NoOpUsageGate,
     NoOpWorktrees,
@@ -279,6 +280,7 @@ def make_tick(store, workers, spawner, config, **overrides):
         backup_gate=NoOpBackupGate(), fs=NoOpFs(), flow_service=NoOpFlowService(),
         spin_port=NoOpSpinPort(), usage_gate=NoOpUsageGate(), stream=NoOpStream(),
         memory_gate=NoOpMemoryGate(), summary_gate=NoOpSummaryGate(),
+        material_audit_gate=NoOpMaterialAuditGate(),
         guidance_gate=NoOpGuidanceGate(),
     )
     kwargs.update(overrides)

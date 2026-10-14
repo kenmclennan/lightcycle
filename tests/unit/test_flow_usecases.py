@@ -22,7 +22,7 @@ from lightcycle.application.flow import (
     UnblockStepUseCase,
 )
 from lightcycle.application.flow.engine_steps import (
-    AUDIT_STEP, DAILY_SUMMARY_STEP, ENGINE_STEP_OUTCOMES, FINDINGS_STEP,
+    AUDIT_STEP, DAILY_SUMMARY_STEP, ENGINE_STEP_OUTCOMES, FINDINGS_STEP, MATERIAL_AUDIT_STEP,
 )
 from lightcycle.application.flow.next_step import NextStepResolver
 from lightcycle.application.services.flow import FlowService
@@ -598,6 +598,7 @@ class TestEngineStepOutcomes(unittest.TestCase):
             ENGINE_STEP_OUTCOMES,
             {
                 AUDIT_STEP: ("findings", "clean"),
+                MATERIAL_AUDIT_STEP: ("findings", "clean"),
                 FINDINGS_STEP: ("done", "filed", "reviewed"),
                 DAILY_SUMMARY_STEP: ("done", "abandoned"),
             },
@@ -606,6 +607,7 @@ class TestEngineStepOutcomes(unittest.TestCase):
     def test_undeclared_outcome_is_refused_naming_the_valid_ones_and_closes_nothing(self):
         for stage, label in (
             (AUDIT_STEP, "retro-origin"),
+            (MATERIAL_AUDIT_STEP, "retro-origin"),
             (FINDINGS_STEP, "retro-origin"),
             (DAILY_SUMMARY_STEP, "summary-origin"),
         ):
@@ -622,6 +624,7 @@ class TestEngineStepOutcomes(unittest.TestCase):
     def test_each_declared_outcome_still_closes_its_step(self):
         for stage, label in (
             (AUDIT_STEP, "retro-origin"),
+            (MATERIAL_AUDIT_STEP, "retro-origin"),
             (FINDINGS_STEP, "retro-origin"),
             (DAILY_SUMMARY_STEP, "summary-origin"),
         ):

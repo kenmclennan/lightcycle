@@ -78,7 +78,7 @@ class TestWorkerPermittedAttach(unittest.TestCase):
 class TestWorkerRefusalMessage(unittest.TestCase):
     def test_message_lists_all_eight_verbs(self):
         self.assertIn(
-            "claim, done, show, attach, retro, backlog, search, peek, set --state waiting",
+            "claim, done, show, attach, retro, backlog, search, peek, guidance, guidance-dir, set --state waiting",
             worker_refusal_message("rm"),
         )
 
@@ -112,6 +112,6 @@ if __name__ == "__main__":
     unittest.main()
 
 
-class TestGuidanceVerbRefusedToWorkers(unittest.TestCase):
-    def test_guidance_is_not_a_worker_verb(self):
-        self.assertFalse(worker_permitted("guidance", {}))
+class TestGuidanceVerbsPermittedToWorkers(unittest.TestCase):
+    def test_guidance_is_a_worker_verb(self):
+        self.assertTrue(worker_permitted("guidance", {}))

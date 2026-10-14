@@ -80,7 +80,9 @@ class Container:
         from lightcycle.application.pool.hook_completions import HookCompletionsUseCase
         from lightcycle.application.pool.memory_gate import MemoryGateUseCase
         from lightcycle.application.pool.monitor_prs import MonitorPrsUseCase
-        from lightcycle.application.pool import DailySummaryCadenceUseCase, RetroCadenceUseCase
+        from lightcycle.application.pool import (
+            DailySummaryCadenceUseCase, MaterialAuditCadenceUseCase, RetroCadenceUseCase,
+        )
         from lightcycle.application.pool.tick import TickUseCase
         from lightcycle.application.pool.live_usage import LiveUsageAccrualUseCase
 
@@ -97,6 +99,7 @@ class Container:
             ),
             cadence_gate=RetroCadenceUseCase(self.store, self.config),
             summary_gate=DailySummaryCadenceUseCase(self.store, self.config),
+            material_audit_gate=MaterialAuditCadenceUseCase(self.store, self.config),
             breaker_gate=BreakerGateUseCase(
                 self.workers, self.worker_log, self.breaker, self.config, self.claude_stream,
                 spin_port=self.spin, store=self.store,

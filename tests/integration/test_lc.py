@@ -129,6 +129,8 @@ def write_config(projects=None, specs=None):
         "worker-history: 20",
         "editor: vi",
         "retro-interval-reflections: 20",
+        "material-audit-days: 7",
+        "audit-shortcode: AUD",
         "backups-dir: %s" % tempfile.mkdtemp(),
         "backup-interval-minutes: 15",
         "guidance-fetch-minutes: 5",
@@ -820,6 +822,8 @@ class TestRun(unittest.TestCase):
 
     def test_run_skips_role_with_inflight_worker(self):
         create_owned_step(self.store, "build: t", step="build", role="agent")
+        prior = create_owned_step(self.store, "audit: prior", step="material-audit", role="agent")
+        self.store.complete_node(prior, "done")
         self._preset_worker(
             spawnid="boot",
             role="agent",

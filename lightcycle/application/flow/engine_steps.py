@@ -3,18 +3,21 @@ from enum import Enum
 from lightcycle.domain.feedback import RETRO_ORIGIN_LABEL as RETRO_ORIGIN_LABEL
 
 AUDIT_STEP = "audit"
+MATERIAL_AUDIT_STEP = "material-audit"
 FINDINGS_STEP = "review-findings"
 SUMMARY_ORIGIN_LABEL = "summary-origin"
 DAILY_SUMMARY_STEP = "daily-summary"
 
 ENGINE_STEP_DISPLAY = {
     AUDIT_STEP: "Auditing recent work",
+    MATERIAL_AUDIT_STEP: "Auditing the guidance",
     FINDINGS_STEP: "Review the findings",
     DAILY_SUMMARY_STEP: "Writing the daily summary",
 }
 
 ENGINE_STEP_OUTCOMES = {
     AUDIT_STEP: ("findings", "clean"),
+    MATERIAL_AUDIT_STEP: ("findings", "clean"),
     FINDINGS_STEP: ("done", "filed", "reviewed"),
     DAILY_SUMMARY_STEP: ("done", "abandoned"),
 }
@@ -30,7 +33,7 @@ def engine_outcomes_of(step):
 
 def engine_outcomes_for_node(store, node):
     labels = store.labels_of(node.item)
-    if node.stage in (AUDIT_STEP, FINDINGS_STEP) and RETRO_ORIGIN_LABEL in labels:
+    if node.stage in (AUDIT_STEP, MATERIAL_AUDIT_STEP, FINDINGS_STEP) and RETRO_ORIGIN_LABEL in labels:
         return engine_outcomes_of(node.stage)
     if node.stage == DAILY_SUMMARY_STEP and SUMMARY_ORIGIN_LABEL in labels:
         return engine_outcomes_of(node.stage)

@@ -301,6 +301,7 @@ class TestEnsureConfig(unittest.TestCase):
         self.assertIn("worktree-retry-sleep: 0.25", text)
         self.assertIn("~/workspace/projects", text)
         self.assertIn("retro-interval-reflections: 20", text)
+        self.assertIn("material-audit-days: 7", text)
         self.assertIn("workflows-remote: \n", text)
         self.assertIn("backups-dir: ~/.lightcycle-backups", text)
         self.assertIn("backup-interval-minutes: 15", text)

@@ -3,7 +3,7 @@ from typing import Optional
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.engine_steps import (
-    AUDIT_STEP, DAILY_SUMMARY_STEP, FINDINGS_STEP, RETRO_ORIGIN_LABEL,
+    AUDIT_STEP, DAILY_SUMMARY_STEP, FINDINGS_STEP, MATERIAL_AUDIT_STEP, RETRO_ORIGIN_LABEL,
     SUMMARY_ORIGIN_LABEL, engine_outcomes_for_node,
 )
 from lightcycle.domain.feedback import RETROED_LABEL
@@ -57,7 +57,9 @@ class CompleteStepUseCase:
             )
         if self._is_retro_origin(t):
             if t.stage == AUDIT_STEP:
-                return self._complete_engine_audit(t, input)
+                return self._complete_engine_audit(t, input, mark_retroed=True)
+            if t.stage == MATERIAL_AUDIT_STEP:
+                return self._complete_engine_audit(t, input, mark_retroed=False)
             if t.stage == FINDINGS_STEP:
                 return self._complete_findings(t, input)
         if self._is_summary_origin(t) and t.stage == DAILY_SUMMARY_STEP:
@@ -125,7 +127,9 @@ class CompleteStepUseCase:
         self._cascade_close(t.item)
         return CompleteResponse(next_step=new)
 
-    def _complete_engine_audit(self, t, input: CompleteInput) -> CompleteResponse:
+    def _complete_engine_audit(
+        self, t, input: CompleteInput, mark_retroed: bool,
+    ) -> CompleteResponse:
         spec = None
         if input.outcome == "findings" and input.note:
             spec = NodeSpec(step=FINDINGS_STEP, role="human", parent=t.item)
@@ -134,7 +138,8 @@ class CompleteStepUseCase:
         if not won:
             return CompleteResponse(next_step=None)
         self._store.note(input.step, "outcome: %s" % input.outcome)
-        self._mark_retroed()
+        if mark_retroed:
+            self._mark_retroed()
         if fid is not None:
             self._store.note(fid, "findings: lc show %s" % input.step)
             self._store.note(fid, input.note)

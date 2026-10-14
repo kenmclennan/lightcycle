@@ -1640,6 +1640,9 @@ def _tick_event_lines(result, ts):
         lines.append("%s  %-7s  %s" % (ts, "kill", spawnid))
     for sid in result.cadence.fired:
         lines.append("%s  %-7s  %s" % (ts, "audit", sid))
+    if result.material_audit is not None:
+        for sid in result.material_audit.fired:
+            lines.append("%s  %-7s  %s" % (ts, "material-audit", sid))
     for step, tid, detail in result.hooks.completed:
         msg = "%s: %s" % (tid, detail) if detail else tid
         lines.append("%s  %-7s  %s" % (ts, step, msg))
