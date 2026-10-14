@@ -39,6 +39,28 @@ class TestCreateItemUseCase(unittest.TestCase):
         )
         self.assertEqual(store.get_item(resp.id).repo, "lightcycle")
 
+    def test_either_project_spelling_stores_the_short_name_and_the_identity_as_repo(self):
+        for spelling in ("app", "acme/app"):
+            store = _store_with_app()
+            resp = CreateItemUseCase(store).execute(
+                CreateItemInput(title="an item", description="a description", project=spelling)
+            )
+            item = store.get_item(resp.id)
+            self.assertEqual(item.project, "app")
+            self.assertEqual(item.repo, "acme/app")
+
+    def test_explicit_repo_wins_over_the_project_identity(self):
+        store = _store_with_app()
+        store.add_project("acme/other", shortcode="OTH")
+        resp = CreateItemUseCase(store).execute(
+            CreateItemInput(
+                title="an item", description="a description", project="app", repo="acme/other"
+            )
+        )
+        item = store.get_item(resp.id)
+        self.assertEqual(item.project, "app")
+        self.assertEqual(item.repo, "acme/other")
+
     def test_multiple_backlog_ids_link_in_order(self):
         store = _store_with_app()
         b1 = create_owned_step(store, "backlog one", role="human")
@@ -115,7 +137,7 @@ class TestCreateItemUseCase(unittest.TestCase):
                 project="acme/app", repo="kenmclennan/lightcycle",
             )
         )
-        self.assertEqual(store.get_item(resp.id).project, "acme/app")
+        self.assertEqual(store.get_item(resp.id).project, "app")
 
 
 if __name__ == "__main__":
