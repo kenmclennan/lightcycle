@@ -29,11 +29,11 @@ class MaterialAuditCadenceUseCase:
             return MaterialAuditCadenceResponse()
 
         since = parse_timestamp(last.created_at).date().isoformat() if last else "none"
-        description = "materials: guidance\nsince: %s\nprevious: %s" % (
+        description = "materials: guidance, workflows\nsince: %s\nprevious: %s" % (
             since, last.id if last else "none")
         with self._store.transaction():
             item_id = self._store.create_item(
-                "Audit of guidance entries", description,
+                "Audit of guidance and workflow bundles", description,
                 shortcode=self._config.audit_shortcode())
             self._store.label_add(item_id, RETRO_ORIGIN_LABEL)
             tid = self._store.create_step(
