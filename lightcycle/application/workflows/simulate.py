@@ -108,6 +108,8 @@ class WorkflowSimulateUseCase:
             github = self._github_factory()
             monitor = MonitorPrsUseCase(
                 self._store, github, self._worktrees, self._flow, self._complete, git=self._git,
+                trusted_authors=lambda: frozenset({"reviewer"}),
+                held_shortcode=lambda: "HLD",
             )
             violations += self._drive(item_id, pin, graph, walk, github, monitor, trace, index)
         violations += self._check_teardown_invariant()

@@ -4,6 +4,7 @@ from typing import List, Optional
 
 from lightcycle.application.flow.engine_steps import (
     DAILY_SUMMARY_STEP,
+    HELD_COMMENT_ORIGIN_LABEL,
     RETRO_ORIGIN_LABEL,
     SUMMARY_ORIGIN_LABEL,
 )
@@ -12,14 +13,17 @@ from lightcycle.application.work.item_partition import is_closed_item
 from lightcycle.application.work.project_of import project_of, repo_of
 from lightcycle.domain.work import ItemCost, item_cost, node_id_key, parse_timestamp
 
-AUTOMATION_LABELS = frozenset({SUMMARY_ORIGIN_LABEL, RETRO_ORIGIN_LABEL})
+AUTOMATION_LABELS = frozenset(
+    {SUMMARY_ORIGIN_LABEL, RETRO_ORIGIN_LABEL, HELD_COMMENT_ORIGIN_LABEL})
 
 KIND_AUDIT = "audit"
 KIND_DAILY_SUMMARY = "daily-summary"
+KIND_HELD_COMMENT = "held-comment"
 
 KIND_DISPLAY = (
     (KIND_AUDIT, "Audits"),
     (KIND_DAILY_SUMMARY, "Daily summaries"),
+    (KIND_HELD_COMMENT, "Held comments"),
 )
 
 _MIN_TIMESTAMP = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
@@ -33,6 +37,8 @@ def automation_kind(store, item):
     labels = store.labels_of(item.id)
     if RETRO_ORIGIN_LABEL in labels:
         return KIND_AUDIT
+    if HELD_COMMENT_ORIGIN_LABEL in labels:
+        return KIND_HELD_COMMENT
     if SUMMARY_ORIGIN_LABEL in labels:
         if any(c.stage == DAILY_SUMMARY_STEP for c in store.children(item.id)):
             return KIND_DAILY_SUMMARY

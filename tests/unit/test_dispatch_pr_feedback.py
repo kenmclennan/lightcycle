@@ -12,6 +12,7 @@ from tests.support.fake_github import FakeGitHub
 from tests.support.fake_store import FakeStore
 
 _BOT_LOGIN = "copilot-pull-request-reviewer[bot]"
+_TRUST = dict(trusted_authors=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD")
 
 
 def plant_pr(store, item, url, phase=None, branch=None, n=1, state="open"):
@@ -193,7 +194,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
         step = store.create_step(step="ready-merge", role="human", parent=item
         )
         worktrees = FakeWorktrees()
-        uc = DispatchPrFeedbackUseCase(store, github, _FlowAdapter(f), None)
+        uc = DispatchPrFeedbackUseCase(store, github, _FlowAdapter(f), None, **_TRUST)
         return store, item, step, worktrees, uc
 
     def _spawned_feedback_steps(self, store, watched_step):
@@ -226,7 +227,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
         )
 
     def _bot_review(self, ts, author=_BOT_LOGIN, body="looks like a bug on line 12", state="COMMENTED"):
-        return (ts, Review(author=author, body=body, created_at=ts, state=state))
+        return (ts, Review(author=author, body=body, created_at=ts, state=state, id="r%s" % ts))
 
     def test_mention_comment_after_push_spawns_handle_feedback(self):
         url = "https://github.com/x/y/pull/30"
@@ -362,6 +363,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
                 body="already replied %s" % LC_MARKER,
                 created_at=1200.0,
                 state="COMMENTED",
+                id="r1200.0",
             ),
         )
         gh = FakeGitHub(push_time=1000.0, timed_reviews=[marked])
@@ -605,7 +607,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
         resolve = ResolveMergedPrsUseCase(
             store, gh, FakeWorktrees(), _FlowAdapter(_FLOW), None, check_content_pin
         )
-        dispatch = DispatchPrFeedbackUseCase(store, gh, _FlowAdapter(_FLOW), None)
+        dispatch = DispatchPrFeedbackUseCase(store, gh, _FlowAdapter(_FLOW), None, **_TRUST)
 
         resolved = resolve.execute()
         dispatched = dispatch.execute()
@@ -632,7 +634,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
                                  role="agent", parent=item)
         worktrees = FakeWorktrees()
         complete = CompleteStepUseCase(store, _FlowAdapter(f))
-        uc = DispatchPrFeedbackUseCase(store, github, _FlowAdapter(f), complete)
+        uc = DispatchPrFeedbackUseCase(store, github, _FlowAdapter(f), complete, **_TRUST)
         return store, item, step, worktrees, uc
 
     def test_conflicting_pr_advances_task_via_conflict_outcome(self):
@@ -698,7 +700,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
         resolve = ResolveMergedPrsUseCase(
             store, gh, FakeWorktrees(), _FlowAdapter(flow), complete, check_content_pin
         )
-        dispatch = DispatchPrFeedbackUseCase(store, gh, _FlowAdapter(flow), complete)
+        dispatch = DispatchPrFeedbackUseCase(store, gh, _FlowAdapter(flow), complete, **_TRUST)
 
         resolved = resolve.execute()
         dispatched = dispatch.execute()
@@ -722,7 +724,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
         step = store.create_step(step="await-green",
                                  role="agent", parent=item)
         complete = CompleteStepUseCase(store, _FlowAdapter(arbitrary_flow))
-        uc = DispatchPrFeedbackUseCase(store, FakeGitHub(conflicted_prs={url}), _FlowAdapter(arbitrary_flow), complete)
+        uc = DispatchPrFeedbackUseCase(store, FakeGitHub(conflicted_prs={url}), _FlowAdapter(arbitrary_flow), complete, **_TRUST)
 
         result = uc.execute()
 
@@ -770,7 +772,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
         step = store.create_step(step="watch-pr", role="agent",
                                  parent=item)
         complete = CompleteStepUseCase(store, _FlowAdapter(_READY_MERGE_QUAD_FLOW))
-        uc = DispatchPrFeedbackUseCase(store, FakeGitHub(conflicted_prs={url}), _FlowAdapter(_READY_MERGE_QUAD_FLOW), complete)
+        uc = DispatchPrFeedbackUseCase(store, FakeGitHub(conflicted_prs={url}), _FlowAdapter(_READY_MERGE_QUAD_FLOW), complete, **_TRUST)
 
         result = uc.execute()
 
@@ -792,7 +794,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
         )
         gh = FakeGitHub(conflicted_prs={url}, push_time=1000.0, timed_comments=[feedback_comment])
         complete = CompleteStepUseCase(store, _FlowAdapter(_READY_MERGE_QUAD_FLOW))
-        uc = DispatchPrFeedbackUseCase(store, gh, _FlowAdapter(_READY_MERGE_QUAD_FLOW), complete)
+        uc = DispatchPrFeedbackUseCase(store, gh, _FlowAdapter(_READY_MERGE_QUAD_FLOW), complete, **_TRUST)
 
         result = uc.execute()
 
@@ -831,7 +833,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
         step = store.create_step(step="watch-step",
                                  role="agent", parent=item)
         complete = CompleteStepUseCase(store, _FlowAdapter(no_cap_flow))
-        uc = DispatchPrFeedbackUseCase(store, FakeGitHub(conflicted_prs={url}), _FlowAdapter(no_cap_flow), complete)
+        uc = DispatchPrFeedbackUseCase(store, FakeGitHub(conflicted_prs={url}), _FlowAdapter(no_cap_flow), complete, **_TRUST)
 
         result = uc.execute()
 

@@ -66,6 +66,17 @@ The `lc status` / `lc inbox` / `lc queue` / `lc active` boards are not stored - 
 
 Lanes run over **steps only** - items never appear in a lane (they live in `lc backlog` and the item roll-up). A `blocked` step shows in the `queue` lane alongside runnable steps, not in a lane of its own - nothing is asked of anyone while it waits on its dependency, so it is not treated as an attention signal. It stays distinguishable by its `blocked_by` field, which every reader of the queue (`lc status`, `lc queue`, the priority list) can use to show what it is waiting on.
 
+## A held comment's own lifecycle
+
+A held comment (the `held_comments` row, see the ontology) has a four-state machine of its own, separate from the node `state`: `held` goes to `approved` or `rejected` when a human completes the hold step (`lc done <step> approve|reject`), and `approved` goes to `dispatched` when the pool opens a `handle-feedback` step carrying it. Any other transition is refused by the store. `rejected` and `dispatched` are terminal. `comments_dispatched_through` advances only past trusted-admitted comments; the ledger, not that watermark, governs a held comment, so an approved comment older than the watermark or the last push still dispatches.
+
+```mermaid
+graph LR
+  held -->|approve| approved
+  held -->|reject| rejected
+  approved -->|dispatch| dispatched
+```
+
 ## Disposition: how a closed item ended
 
 An item's `disposition` (`completed` or `abandoned`) is set once, at close, alongside `outcome`. It answers a different question than `outcome` does: `outcome` is the workflow's own routing label (`merged`, `abandoned`, `wontfix`, ...); `disposition` is the engine's classification of whether that label was a delivery or an abandonment. A workflow bundle declares the mapping per outcome name in its `disposition:` section; `lc done <item> <outcome>` resolves it from the bundle, or refuses and asks for `--disposition` explicitly when the outcome isn't bundle-declared, rather than writing a guessed or `NULL` value.

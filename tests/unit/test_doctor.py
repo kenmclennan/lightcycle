@@ -26,6 +26,7 @@ _ALL_KEYS.update(
     default_origin="acme",
     workflows_remote="git@y",
     backups_dir="/b",
+    trusted_authors="operator",
 )
 
 

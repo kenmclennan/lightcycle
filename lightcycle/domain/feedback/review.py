@@ -5,14 +5,6 @@ LC_MARKER = "<!-- lc -->"
 _DECISION_RE = re.compile(r"<!-- lc:decision=(\w+) -->")
 
 
-def is_bot(author):
-    return "[bot]" in author
-
-
-def eligible(author, allowlist):
-    return not is_bot(author) or author in allowlist
-
-
 def thread_key(comment):
     return comment.in_reply_to_id or comment.id
 

@@ -326,6 +326,38 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def file_hold(self, run_id, key, author, body, path, line, created_at):
+        pass
+
+    @abstractmethod
+    def attach_hold(self, run_id, key, item_id, step_id):
+        pass
+
+    @abstractmethod
+    def hold(self, run_id, key):
+        pass
+
+    @abstractmethod
+    def hold_for_step(self, step_id):
+        pass
+
+    @abstractmethod
+    def approved_holds(self, run_id):
+        pass
+
+    @abstractmethod
+    def open_holds(self, run_id):
+        pass
+
+    @abstractmethod
+    def decide_hold(self, step_id, state):
+        pass
+
+    @abstractmethod
+    def mark_hold_dispatched(self, run_id, key):
+        pass
+
+    @abstractmethod
     def close_run(self, rid, state="merged"):
         pass
 

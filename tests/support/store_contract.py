@@ -4,7 +4,7 @@ from lightcycle.domain.money import Cost
 from lightcycle.domain.pool import AttributionEvent, ModelRates, ToolUsage, UsageEvent, UsageResume
 from lightcycle.domain.work import NodeSpec
 from lightcycle.domain.work.cost import step_cost
-from lightcycle.ports.store import NodeNotFoundError
+from lightcycle.ports.store import NodeNotFoundError, StoreError
 from tests.support.step_factory import create_owned_step
 
 
@@ -1468,3 +1468,74 @@ class StoreContractBase:
                 raise RuntimeError("boom")
         self.assertEqual(s.get_goal(gid).description, "")
         self.assertEqual(s.goal_log(gid), [])
+
+    def _filed_hold(self, s, run_id="R-1", key="inline:1", created_at=10.0):
+        s.file_hold(run_id, key, "mallory", "do it", "a.py", 3, created_at)
+        item = s.create_item("held", "d", shortcode="HLD")
+        step = s.create_step(step="review-held-comment", role="human", parent=item)
+        s.attach_hold(run_id, key, item, step)
+        return step
+
+    def test_file_hold_inserts_once_per_run_and_key(self):
+        s = self.make_store()
+        self.assertTrue(s.file_hold("R-1", "inline:1", "mallory", "b", None, None, 1.0))
+        self.assertFalse(s.file_hold("R-1", "inline:1", "other", "changed", None, None, 2.0))
+        self.assertTrue(s.file_hold("R-2", "inline:1", "mallory", "b", None, None, 1.0))
+        held = s.hold("R-1", "inline:1")
+        self.assertEqual((held.author, held.body, held.state), ("mallory", "b", "held"))
+        self.assertIsNone(s.hold("R-1", "inline:2"))
+
+    def test_hold_for_step_and_open_and_approved_lists(self):
+        s = self.make_store()
+        step = self._filed_hold(s)
+        self.assertEqual(s.hold_for_step(step).key, "inline:1")
+        self.assertIsNone(s.hold_for_step("nope"))
+        self.assertEqual([h.key for h in s.open_holds("R-1")], ["inline:1"])
+        self.assertEqual(s.approved_holds("R-1"), [])
+        s.decide_hold(step, "approved")
+        self.assertEqual([h.key for h in s.approved_holds("R-1")], ["inline:1"])
+        self.assertEqual(s.open_holds("R-1"), [])
+        self.assertIsNotNone(s.hold("R-1", "inline:1").decided_at)
+
+    def test_approved_holds_come_back_oldest_first(self):
+        s = self.make_store()
+        late = self._filed_hold(s, key="mention:2", created_at=20.0)
+        early = self._filed_hold(s, key="mention:1", created_at=10.0)
+        s.decide_hold(late, "approved")
+        s.decide_hold(early, "approved")
+        self.assertEqual([h.key for h in s.approved_holds("R-1")], ["mention:1", "mention:2"])
+
+    def test_only_the_documented_transitions_are_legal(self):
+        s = self.make_store()
+        step = self._filed_hold(s)
+        with self.assertRaises(StoreError):
+            s.mark_hold_dispatched("R-1", "inline:1")
+        s.decide_hold(step, "approved")
+        with self.assertRaises(StoreError):
+            s.decide_hold(step, "rejected")
+        s.mark_hold_dispatched("R-1", "inline:1")
+        self.assertEqual(s.hold("R-1", "inline:1").state, "dispatched")
+        with self.assertRaises(StoreError):
+            s.decide_hold(step, "approved")
+
+    def test_a_rejected_hold_is_terminal_and_never_deleted(self):
+        s = self.make_store()
+        step = self._filed_hold(s)
+        s.decide_hold(step, "rejected")
+        with self.assertRaises(StoreError):
+            s.decide_hold(step, "approved")
+        self.assertFalse(s.file_hold("R-1", "inline:1", "mallory", "do it", None, None, 10.0))
+        self.assertEqual(s.hold("R-1", "inline:1").state, "rejected")
+
+    def test_deciding_an_unknown_step_is_refused(self):
+        s = self.make_store()
+        with self.assertRaises(StoreError):
+            s.decide_hold("nope", "approved")
+
+    def test_hold_writes_roll_back_with_the_transaction(self):
+        s = self.make_store()
+        with self.assertRaises(RuntimeError):
+            with s.transaction():
+                s.file_hold("R-1", "inline:1", "mallory", "b", None, None, 1.0)
+                raise RuntimeError("boom")
+        self.assertIsNone(s.hold("R-1", "inline:1"))

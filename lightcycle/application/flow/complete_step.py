@@ -3,8 +3,8 @@ from typing import Optional
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.engine_steps import (
-    AUDIT_STEP, DAILY_SUMMARY_STEP, FINDINGS_STEP, MATERIAL_AUDIT_STEP, RETRO_ORIGIN_LABEL,
-    SUMMARY_ORIGIN_LABEL, engine_outcomes_for_node,
+    AUDIT_STEP, DAILY_SUMMARY_STEP, FINDINGS_STEP, HELD_COMMENT_ORIGIN_LABEL, HELD_COMMENT_STEP,
+    MATERIAL_AUDIT_STEP, RETRO_ORIGIN_LABEL, SUMMARY_ORIGIN_LABEL, engine_outcomes_for_node,
 )
 from lightcycle.domain.feedback import RETROED_LABEL
 from lightcycle.application.flow.next_step import NextStepResolver
@@ -64,7 +64,26 @@ class CompleteStepUseCase:
                 return self._complete_findings(t, input)
         if self._is_summary_origin(t) and t.stage == DAILY_SUMMARY_STEP:
             return self._complete_daily_summary(t, input)
+        if self._is_held_comment_origin(t) and t.stage == HELD_COMMENT_STEP:
+            return self._complete_held_comment(t, input)
         return self._complete_workflow(t, input)
+
+    def _is_held_comment_origin(self, t):
+        return HELD_COMMENT_ORIGIN_LABEL in self._store.labels_of(t.item)
+
+    def _complete_held_comment(self, t, input: CompleteInput) -> CompleteResponse:
+        decided = "approved" if input.outcome == "approve" else "rejected"
+        with self._store.transaction():
+            won, _ = self._store.complete_step_atomic(
+                input.step, input.outcome, self._expected_assignee(), None)
+            if not won:
+                return CompleteResponse(next_step=None)
+            self._store.decide_hold(t.id, decided)
+        self._store.note(input.step, "outcome: %s" % input.outcome)
+        if input.note:
+            self._store.note(input.step, input.note)
+        self._cascade_close(t.item)
+        return CompleteResponse(next_step=None)
 
     def _is_retro_origin(self, t):
         return RETRO_ORIGIN_LABEL in self._store.labels_of(t.item)

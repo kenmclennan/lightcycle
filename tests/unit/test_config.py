@@ -458,6 +458,43 @@ class TestRenamedShortcodeKey(unittest.TestCase):
         self.assertEqual(seeds["summary-shortcode"], "SUM")
 
 
+class TestTrustedAuthors(unittest.TestCase):
+    def test_the_value_is_split_on_whitespace_and_casefolded(self):
+        c = _cfg(trusted_authors="Alice  bob\tCarol")
+        self.assertEqual(c.trusted_authors(), frozenset({"alice", "bob", "carol"}))
+
+    def test_a_blank_or_missing_key_raises_and_reports_unset(self):
+        for c in (_cfg(trusted_authors=""), _cfg()):
+            with self.assertRaises(ConfigError):
+                c.trusted_authors()
+            entry = next(s for s in c.resolved_settings() if s.key == "trusted-authors")
+            self.assertEqual(entry.state, "unset")
+
+    def test_seeding_writes_a_blank_key_and_never_overwrites_a_value(self):
+        c = _cfg(trusted_authors="")
+        self.assertTrue(c.seed_trusted_authors("ken"))
+        self.assertEqual(c.trusted_authors(), frozenset({"ken"}))
+        self.assertFalse(c.seed_trusted_authors("someone-else"))
+        self.assertEqual(c.trusted_authors(), frozenset({"ken"}))
+
+    def test_seeding_a_config_without_the_key_appends_it(self):
+        c = _cfg(projects="/p")
+        self.assertTrue(c.seed_trusted_authors("ken"))
+        self.assertEqual(c.trusted_authors(), frozenset({"ken"}))
+
+    def test_reconcile_appends_the_key_blank_to_an_existing_config(self):
+        c = _cfg(projects="/p")
+        self.assertIn("trusted-authors", c.reconcile_config())
+        with self.assertRaises(ConfigError):
+            c.trusted_authors()
+
+    def test_the_held_comment_shortcode_is_seeded_hld_with_an_env_override(self):
+        self.assertEqual(dict(_SEED_KEYS)["held-comment-shortcode"], "HLD")
+        self.assertEqual(_cfg(held_comment_shortcode="HLD").held_comment_shortcode(), "HLD")
+        env = _cfg(environ={"LC_HELD_COMMENT_SHORTCODE": "ZZZ"})
+        self.assertEqual(env.held_comment_shortcode(), "ZZZ")
+
+
 class TestMaxTitleLength(unittest.TestCase):
     def test_missing_key_raises(self):
         with self.assertRaises(ConfigError):

@@ -1935,13 +1935,21 @@ def cmd_init(argv):
     a = build_parser(COMMANDS["init"]).parse_args(argv)
     c = _container
     try:
-        r = InitGridUseCase(c.store, c.fs, c.config, c.git).execute(a.guidance_path)
+        r = InitGridUseCase(c.store, c.fs, c.config, c.git, c.github).execute(a.guidance_path)
     except UseCaseError as e:
         sys.stderr.write("lc init: %s\n" % e)
         return 1
     print("lightcycle store already initialised" if r.existed else "lightcycle store initialised")
     print("config %s at %s" % ("created" if r.created else "already exists", r.config_path))
     print("guidance repo %s at %s" % (r.guidance_outcome, r.guidance_path))
+    if r.trusted_authors_seeded:
+        print("trusted-authors set to %s (the gh identity); edit the config to add others"
+              % r.trusted_authors_seeded)
+    elif r.trusted_authors_unset_reason:
+        print(
+            "trusted-authors is unset (%s): the pool will not act on PR comments until it is set"
+            % r.trusted_authors_unset_reason
+        )
     _init_pull_default_origin()
     if r.guidance_refusal:
         sys.stderr.write("lc init: guidance repo not created: %s\n" % r.guidance_refusal)

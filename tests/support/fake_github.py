@@ -5,7 +5,8 @@ class FakeGitHub(GitHubEventsPort):
     def __init__(self, merged_prs=(), closed_prs=(), conflicted_prs=(), push_time=0.0,
                  timed_comments=None, timed_reviews=None, head_shas=None, files_by_sha=None,
                  check_runs_by_sha=None, failing_calls=(), issue_states=None,
-                 behind_prs=(), strict_bases=(), base_keys=None):
+                 behind_prs=(), strict_bases=(), base_keys=None, login="operator"):
+        self._login = login
         self._merged = set(merged_prs)
         self._closed = set(closed_prs)
         self._conflicted = set(conflicted_prs)
@@ -24,6 +25,11 @@ class FakeGitHub(GitHubEventsPort):
         self.update_calls = []
         self.requires_calls = []
         self.sync_calls = []
+
+    def authenticated_login(self):
+        if "authenticated_login" in self._failing_calls:
+            return ReadFailure(1, "boom")
+        return self._login
 
     def issue_state(self, url):
         self.issue_state_calls.append(url)

@@ -200,7 +200,8 @@ class TestTickWithMonitor(unittest.TestCase):
         store.create_step(step="ready-merge", role="human", parent=item)
         worktrees = FakeWorktrees()
         monitor = MonitorPrsUseCase(
-            store, FakeGitHub(merged_prs={url}), worktrees, _FlowAdapter(_FLOW)
+            store, FakeGitHub(merged_prs={url}), worktrees, _FlowAdapter(_FLOW),
+            trusted_authors=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
         )
 
         result = make_tick(
@@ -219,7 +220,8 @@ class TestTickWithMonitor(unittest.TestCase):
         )
         worktrees = FakeWorktrees()
         monitor = MonitorPrsUseCase(
-            store, FakeGitHub(closed_prs={url}), worktrees, _FlowAdapter(_FLOW)
+            store, FakeGitHub(closed_prs={url}), worktrees, _FlowAdapter(_FLOW),
+            trusted_authors=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
         )
 
         result = make_tick(
@@ -312,6 +314,7 @@ class TestMonitorPrsUseCaseComposesAllThreeJobs(unittest.TestCase):
 
         uc = MonitorPrsUseCase(
             store, gh, worktrees, _FlowAdapter(flow), complete, git=git,
+            trusted_authors=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
         )
 
         result = uc.execute()

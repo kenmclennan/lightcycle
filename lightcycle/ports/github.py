@@ -21,6 +21,7 @@ class Review:
     body: str
     created_at: float = 0.0
     state: str = ""
+    id: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -45,6 +46,10 @@ class PrSync:
 
 
 class GitHubEventsPort(ABC):
+    @abstractmethod
+    def authenticated_login(self) -> Union[str, ReadFailure]:
+        pass
+
     @abstractmethod
     def is_merged(self, pr: str) -> Union[bool, ReadFailure]:
         pass

@@ -2,8 +2,6 @@ import unittest
 
 from lightcycle.domain.feedback import (
     LC_MARKER,
-    eligible,
-    is_bot,
     outstanding_reviews,
     outstanding_threads,
     review_has_signal,
@@ -48,25 +46,6 @@ class TestOutstandingThreads(unittest.TestCase):
         )
 
         self.assertEqual(outstanding_threads([root, marked_reply]), [root])
-
-
-class TestIsBot(unittest.TestCase):
-    def test_bot_suffixed_login_is_a_bot(self):
-        self.assertTrue(is_bot("copilot-pull-request-reviewer[bot]"))
-
-    def test_human_login_is_not_a_bot(self):
-        self.assertFalse(is_bot("alice"))
-
-
-class TestEligible(unittest.TestCase):
-    def test_a_bot_not_on_the_allowlist_is_not_eligible(self):
-        self.assertFalse(eligible("copilot[bot]", allowlist=[]))
-
-    def test_a_bot_on_the_allowlist_is_eligible(self):
-        self.assertTrue(eligible("copilot[bot]", allowlist=["copilot[bot]"]))
-
-    def test_a_human_is_always_eligible(self):
-        self.assertTrue(eligible("alice", allowlist=[]))
 
 
 class TestThreadKey(unittest.TestCase):

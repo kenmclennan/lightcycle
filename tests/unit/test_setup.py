@@ -3,15 +3,26 @@ import unittest
 from lightcycle.application.setup import InitGridUseCase
 from lightcycle.application.errors import UseCaseError
 from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE, SPECS_WORKSPACE
+from lightcycle.config import ConfigError
 from tests.support.fake_git import FakeGit
+from tests.support.fake_github import FakeGitHub
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 
 
 class FakeConfig:
-    def __init__(self, created=True, legacy=None):
+    def __init__(self, created=True, legacy=None, trusted=None):
         self._created = created
         self._legacy = legacy or {}
+        self.trusted = trusted
+
+    def trusted_authors(self):
+        if not self.trusted:
+            raise ConfigError("trusted-authors is not set")
+        return frozenset(self.trusted.split())
+
+    def seed_trusted_authors(self, login):
+        self.trusted = login
 
     def ensure_config(self):
         return self._created
@@ -26,20 +37,24 @@ class FakeConfig:
         return v
 
 
+def _init_grid(store, fs, config, git, github=None):
+    return InitGridUseCase(store, fs, config, git, github if github is not None else FakeGitHub())
+
+
 class TestInitGrid(unittest.TestCase):
     def test_reports_existed_created_and_path(self):
-        r = InitGridUseCase(FakeStore(), FakeFs(), FakeConfig(created=True), FakeGit()).execute()
+        r = _init_grid(FakeStore(), FakeFs(), FakeConfig(created=True), FakeGit()).execute()
         self.assertTrue(r.existed)
         self.assertTrue(r.created)
         self.assertEqual(r.config_path, "/cfg/lightcycle/config")
 
     def test_created_false_when_config_present(self):
-        r = InitGridUseCase(FakeStore(), FakeFs(), FakeConfig(created=False), FakeGit()).execute()
+        r = _init_grid(FakeStore(), FakeFs(), FakeConfig(created=False), FakeGit()).execute()
         self.assertFalse(r.created)
 
     def test_registers_a_default_specs_project_when_none_is_registered(self):
         store = FakeStore()
-        InitGridUseCase(store, FakeFs(), FakeConfig(), FakeGit()).execute()
+        _init_grid(store, FakeFs(), FakeConfig(), FakeGit()).execute()
         project = store.get_project(SPECS_WORKSPACE)
         self.assertEqual(project.local_path, "~/workspace/specs")
         self.assertIsNone(project.remote)
@@ -47,7 +62,7 @@ class TestInitGrid(unittest.TestCase):
     def test_migrates_a_legacy_specs_config_into_the_project_registry(self):
         store = FakeStore()
         config = FakeConfig(legacy={"specs": "/old/specs", "specs-remote": "git@x:specs.git"})
-        InitGridUseCase(store, FakeFs(), config, FakeGit()).execute()
+        _init_grid(store, FakeFs(), config, FakeGit()).execute()
         project = store.get_project(SPECS_WORKSPACE)
         self.assertEqual(project.local_path, "/old/specs")
         self.assertEqual(project.remote, "git@x:specs.git")
@@ -55,10 +70,33 @@ class TestInitGrid(unittest.TestCase):
     def test_leaves_an_already_registered_specs_project_untouched(self):
         store = FakeStore()
         store.add_project(SPECS_WORKSPACE, local_path="/existing", remote="git@x:existing.git")
-        InitGridUseCase(store, FakeFs(), FakeConfig(), FakeGit()).execute()
+        _init_grid(store, FakeFs(), FakeConfig(), FakeGit()).execute()
         project = store.get_project(SPECS_WORKSPACE)
         self.assertEqual(project.local_path, "/existing")
         self.assertEqual(project.remote, "git@x:existing.git")
+
+
+class TestInitSeedsTrustedAuthors(unittest.TestCase):
+    def test_a_blank_key_is_seeded_from_the_gh_login(self):
+        config = FakeConfig()
+        r = _init_grid(FakeStore(), FakeFs(), config, FakeGit(), FakeGitHub(login="ken")).execute()
+        self.assertEqual(config.trusted, "ken")
+        self.assertEqual(r.trusted_authors_seeded, "ken")
+        self.assertEqual(r.trusted_authors_unset_reason, "")
+
+    def test_a_non_blank_key_is_never_overwritten(self):
+        config = FakeConfig(trusted="alice bob")
+        r = _init_grid(FakeStore(), FakeFs(), config, FakeGit(), FakeGitHub(login="ken")).execute()
+        self.assertEqual(config.trusted, "alice bob")
+        self.assertEqual(r.trusted_authors_seeded, "")
+
+    def test_a_failed_gh_read_leaves_the_key_blank_and_reports_why(self):
+        config = FakeConfig()
+        github = FakeGitHub(failing_calls={"authenticated_login"})
+        r = _init_grid(FakeStore(), FakeFs(), config, FakeGit(), github).execute()
+        self.assertIsNone(config.trusted)
+        self.assertEqual(r.trusted_authors_seeded, "")
+        self.assertEqual(r.trusted_authors_unset_reason, "boom")
 
 
 class TestInitGuidanceRepo(unittest.TestCase):
@@ -66,7 +104,7 @@ class TestInitGuidanceRepo(unittest.TestCase):
         store = store or FakeStore()
         fs = fs or FakeFs()
         git = git or FakeGit()
-        r = InitGridUseCase(store, fs, FakeConfig(), git).execute(path)
+        r = _init_grid(store, fs, FakeConfig(), git).execute(path)
         return r, store, fs, git
 
     def test_skeleton_says_guidance_repo_and_commits_with_that_subject(self):
@@ -118,8 +156,8 @@ class TestInitGuidanceRepo(unittest.TestCase):
     def test_rerun_after_configuring_identity_creates_the_guidance_repo(self):
         store = FakeStore()
         fs = FakeFs()
-        InitGridUseCase(store, fs, FakeConfig(), FakeGit(missing_identity=["user.name"])).execute()
-        r = InitGridUseCase(store, fs, FakeConfig(), FakeGit()).execute()
+        _init_grid(store, fs, FakeConfig(), FakeGit(missing_identity=["user.name"])).execute()
+        r = _init_grid(store, fs, FakeConfig(), FakeGit()).execute()
         self.assertEqual(r.guidance_outcome, "created")
         self.assertEqual(r.guidance_refusal, "")
         self.assertIsNotNone(store.get_project(GUIDANCE_WORKSPACE))
@@ -153,7 +191,7 @@ class TestInitGuidanceRepo(unittest.TestCase):
         git = FakeGit(repos=set())
         store = FakeStore()
         with self.assertRaises(UseCaseError) as caught:
-            InitGridUseCase(store, fs, FakeConfig(), git).execute("/kb")
+            _init_grid(store, fs, FakeConfig(), git).execute("/kb")
         self.assertIn("/kb", str(caught.exception))
         self.assertIsNone(store.get_project(GUIDANCE_WORKSPACE))
         self.assertEqual(fs.writes, [])
@@ -163,14 +201,14 @@ class TestInitGuidanceRepo(unittest.TestCase):
         git = FakeGit(repos={"/outer"}, is_repo=True)
         store = FakeStore()
         with self.assertRaises(UseCaseError):
-            InitGridUseCase(store, fs, FakeConfig(), git).execute("/outer/kb")
+            _init_grid(store, fs, FakeConfig(), git).execute("/outer/kb")
         self.assertIsNone(store.get_project(GUIDANCE_WORKSPACE))
 
     def test_already_registered_makes_no_git_or_fs_call(self):
         store = FakeStore()
         store.add_project(GUIDANCE_WORKSPACE, local_path="/kb", remote=None)
         fs, git = FakeFs(), FakeGit()
-        r = InitGridUseCase(store, fs, FakeConfig(), git).execute()
+        r = _init_grid(store, fs, FakeConfig(), git).execute()
         self.assertEqual(git.calls, [])
         self.assertEqual(fs.writes, [])
         self.assertEqual(r.guidance_outcome, "unchanged")
@@ -187,7 +225,7 @@ class TestInitGuidanceRepo(unittest.TestCase):
         store = FakeStore()
         store.add_project(GUIDANCE_WORKSPACE, local_path="/kb", remote=None)
         with self.assertRaises(UseCaseError) as caught:
-            InitGridUseCase(store, FakeFs(), FakeConfig(), FakeGit()).execute("/other")
+            _init_grid(store, FakeFs(), FakeConfig(), FakeGit()).execute("/other")
         self.assertIn("/kb", str(caught.exception))
         self.assertIn("/other", str(caught.exception))
         self.assertEqual(store.get_project(GUIDANCE_WORKSPACE).local_path, "/kb")
@@ -195,14 +233,14 @@ class TestInitGuidanceRepo(unittest.TestCase):
     def test_failed_git_init_refuses_and_registers_nothing(self):
         store = FakeStore()
         with self.assertRaises(UseCaseError) as caught:
-            InitGridUseCase(store, FakeFs(), FakeConfig(), FakeGit(init_ok=False)).execute()
+            _init_grid(store, FakeFs(), FakeConfig(), FakeGit(init_ok=False)).execute()
         self.assertIn("~/workspace/agent-guidance", str(caught.exception))
         self.assertIsNone(store.get_project(GUIDANCE_WORKSPACE))
 
     def test_failed_commit_refuses_and_registers_nothing(self):
         store = FakeStore()
         with self.assertRaises(UseCaseError) as caught:
-            InitGridUseCase(store, FakeFs(), FakeConfig(), FakeGit(commit_ok=False)).execute()
+            _init_grid(store, FakeFs(), FakeConfig(), FakeGit(commit_ok=False)).execute()
         self.assertIn("remove it", str(caught.exception))
         self.assertIsNone(store.get_project(GUIDANCE_WORKSPACE))
 

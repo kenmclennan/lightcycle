@@ -2,6 +2,7 @@ import datetime
 import unittest
 
 from lightcycle.application.flow.engine_steps import (
+    HELD_COMMENT_ORIGIN_LABEL,
     RETRO_ORIGIN_LABEL,
     SUMMARY_ORIGIN_LABEL,
 )
@@ -34,8 +35,11 @@ def _closed(store, id, label=None, step="build", closed_at="2026-01-01T10:00:00+
 
 
 class TestMembershipIsByLabel(unittest.TestCase):
-    def test_the_label_set_is_the_two_origin_labels(self):
-        self.assertEqual(AUTOMATION_LABELS, frozenset({SUMMARY_ORIGIN_LABEL, RETRO_ORIGIN_LABEL}))
+    def test_the_label_set_is_the_three_origin_labels(self):
+        self.assertEqual(
+            AUTOMATION_LABELS,
+            frozenset({SUMMARY_ORIGIN_LABEL, RETRO_ORIGIN_LABEL, HELD_COMMENT_ORIGIN_LABEL}),
+        )
 
     def test_an_unlabelled_aud_item_is_project_work(self):
         s = FakeStore()
@@ -85,15 +89,15 @@ class TestDoneExcludesAutomation(unittest.TestCase):
 
 
 class TestAutomationUseCase(unittest.TestCase):
-    def test_tallies_are_always_two_in_order_with_absent_kind_at_zero(self):
+    def test_tallies_are_always_one_per_kind_in_order_with_absent_kind_at_zero(self):
         s = FakeStore()
         _closed(s, "AUD-1", label=RETRO_ORIGIN_LABEL, step="audit", cost=1.0)
         _closed(s, "SUM-1", label=SUMMARY_ORIGIN_LABEL, step="daily-summary", cost=0.5)
 
         resp = AutomationUseCase(s).execute(AutomationInput())
 
-        self.assertEqual([t.kind for t in resp.tallies], ["audit", "daily-summary"])
-        self.assertEqual([t.count for t in resp.tallies], [1, 1])
+        self.assertEqual([t.kind for t in resp.tallies], ["audit", "daily-summary", "held-comment"])
+        self.assertEqual([t.count for t in resp.tallies], [1, 1, 0])
         self.assertEqual(resp.total.count, 2)
         self.assertEqual(resp.total.spend.cost_usd.micros, 1_500_000)
 
@@ -105,7 +109,7 @@ class TestAutomationUseCase(unittest.TestCase):
         resp = AutomationUseCase(s).execute(AutomationInput())
 
         self.assertEqual([r.step.id for r in resp.rows], ["SUM-1"])
-        self.assertEqual([t.count for t in resp.tallies], [0, 1])
+        self.assertEqual([t.count for t in resp.tallies], [0, 1, 0])
         self.assertEqual(resp.total.count, 1)
 
     def test_day_filters_by_closed_date(self):
@@ -139,3 +143,16 @@ class TestAutomationUseCase(unittest.TestCase):
         _closed(s, "AUD-1", label=RETRO_ORIGIN_LABEL, step="audit", disposition="abandoned")
 
         self.assertEqual(AutomationUseCase(s).execute(AutomationInput()).total.count, 1)
+
+
+class TestHeldCommentItemsAreAutomation(unittest.TestCase):
+    def test_a_closed_hold_item_is_listed_under_its_own_kind(self):
+        s = FakeStore()
+        _closed(s, "HLD-1", label=HELD_COMMENT_ORIGIN_LABEL, step="review-held-comment")
+
+        resp = AutomationUseCase(s).execute(AutomationInput())
+
+        self.assertEqual([r.step.id for r in resp.rows], ["HLD-1"])
+        self.assertEqual([t.count for t in resp.tallies], [0, 0, 1])
+        self.assertEqual(resp.tallies[2].label, "Held comments")
+        self.assertTrue(is_automation_item(s, s.get_item("HLD-1")))
