@@ -118,7 +118,7 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         item = store.create_item("guarded feature", "a description")
         plant_pr(store, item, self._URL)
         step = store.create_step(step="build", role="agent", parent=item)
-        cc = CheckContentPinUseCase(store, github, _FlowAdapter(f))
+        cc = CheckContentPinUseCase(store, github, _FlowAdapter(f), trusted_authors=lambda: frozenset({"review-code"}))
         phase = f.step_def(f.merge_stages()[0]).phase
         uc = _ContentPinRunner(store, cc, item, phase)
         return store, item, step, uc
@@ -200,7 +200,7 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         plant_pr(store, item, self._URL, phase="code")
         spec_step = store.create_step(step="spec-feedback", role="agent", parent=item)
         code_step = store.create_step(step="ready-merge", role="human", parent=item)
-        cc = CheckContentPinUseCase(store, gh, _FlowAdapter(flow))
+        cc = CheckContentPinUseCase(store, gh, _FlowAdapter(flow), trusted_authors=lambda: frozenset({"review-code"}))
         uc = _ContentPinRunner(store, cc, item, "code")
         uc.execute()
 
@@ -426,7 +426,7 @@ class TestMonitorPrsContentPin(unittest.TestCase):
             id="%s.10" % item)
         store.complete_node(step_9, "done")
         store.complete_node(step_10, "done")
-        cc = CheckContentPinUseCase(store, gh, _FlowAdapter(_FLOW))
+        cc = CheckContentPinUseCase(store, gh, _FlowAdapter(_FLOW), trusted_authors=lambda: frozenset({"review-code"}))
         phase = _FLOW.step_def(_FLOW.merge_stages()[0]).phase
         uc = _ContentPinRunner(store, cc, item, phase)
         uc.execute()
@@ -470,8 +470,9 @@ class TestMonitorPrsContentPin(unittest.TestCase):
     def test_removal_authorized_by_a_marked_comment_is_not_parked(self):
         comment = Comment(
             author="review-code",
-            body=LC_MARKER + " Remove b.py - keep everything else.",
-            is_top_level=True,
+            body=LC_MARKER + "<!-- lc:decision=rework -->",
+            is_top_level=False,
+            path="b.py",
             created_at=100.0,
         )
         gh = FakeGitHub(
@@ -517,8 +518,9 @@ class TestMonitorPrsContentPin(unittest.TestCase):
     def test_mixed_drop_parks_naming_only_the_unauthorized_file(self):
         comment = Comment(
             author="review-code",
-            body=LC_MARKER + " Remove ordered.py - keep everything else.",
-            is_top_level=True,
+            body=LC_MARKER + "<!-- lc:decision=rework -->",
+            is_top_level=False,
+            path="ordered.py",
             created_at=100.0,
         )
         gh = FakeGitHub(
@@ -611,6 +613,58 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         self.assertEqual(store.get_node(step).role, "agent")
         self.assertIsNone(store.get_node(step).notes)
         self.assertEqual(self._pin(store, item), "sha2")
+
+    def _forged_rework(self, author):
+        comment = Comment(
+            author=author,
+            body=LC_MARKER + "<!-- lc:decision=rework -->",
+            is_top_level=False,
+            path="b.py",
+            created_at=100.0,
+        )
+        gh = FakeGitHub(
+            head_shas={self._URL: "sha1"},
+            files_by_sha={(self._URL, "sha1"): frozenset({"a.py", "b.py"})},
+            timed_comments=[(100.0, comment)],
+        )
+        store, item, step, uc = self._setup(gh)
+        uc.execute()
+        gh._head_shas[self._URL] = "sha2"
+        gh._files_by_sha[(self._URL, "sha2")] = frozenset({"a.py"})
+        uc.execute()
+        return store.get_node(step)
+
+    def test_rework_marker_from_an_author_outside_trusted_authors_does_not_authorize_the_drop(self):
+        node = self._forged_rework("colleague")
+
+        self.assertEqual(node.role, "human")
+        self.assertIn("b.py", node.notes)
+
+    def test_trusted_author_match_ignores_case(self):
+        node = self._forged_rework("Review-Code")
+
+        self.assertEqual(node.role, "agent")
+        self.assertIsNone(node.notes)
+
+    def test_marker_substring_naming_the_file_without_a_decision_no_longer_authorizes_it(self):
+        comment = Comment(
+            author="review-code",
+            body=LC_MARKER + " Remove b.py - keep everything else.",
+            is_top_level=True,
+            created_at=100.0,
+        )
+        gh = FakeGitHub(
+            head_shas={self._URL: "sha1"},
+            files_by_sha={(self._URL, "sha1"): frozenset({"a.py", "b.py"})},
+            timed_comments=[(100.0, comment)],
+        )
+        store, item, step, uc = self._setup(gh)
+        uc.execute()
+        gh._head_shas[self._URL] = "sha2"
+        gh._files_by_sha[(self._URL, "sha2")] = frozenset({"a.py"})
+        uc.execute()
+
+        self.assertEqual(store.get_node(step).role, "human")
 
     def test_answer_decision_marker_naming_the_file_does_not_authorize_it(self):
         comment = Comment(

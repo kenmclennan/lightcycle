@@ -26,7 +26,9 @@ class MonitorPrsUseCase:
         self, store, github, worktrees, flow_service, complete=None, *, git=None,
         trusted_authors, held_shortcode,
     ):
-        check_content_pin = CheckContentPinUseCase(store, github, flow_service)
+        check_content_pin = CheckContentPinUseCase(
+            store, github, flow_service, trusted_authors=trusted_authors
+        )
         self._resolve = ResolveMergedPrsUseCase(
             store, github, worktrees, flow_service, complete, check_content_pin
         )
