@@ -84,6 +84,47 @@ class TestWorkflowCheckDir(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertIn("fragment 'nonexistent-frag' included by steps/cleanup.md not found", err)
 
+    def _set_step(self, body, role="cleanup"):
+        _bundle(self.tmp)
+        path = os.path.join(self.tmp, "steps", "%s.md" % role)
+        with open(path) as f:
+            text = f.read()
+        head = text.split("---")[1]
+        with open(path, "w") as f:
+            f.write("---%s---\n%s" % (head, body))
+
+    def test_restarted_list_fails_naming_file_and_line(self):
+        self._set_step("1. a\n2. b\n\n1. c\n")
+        rc, _out, err = run_check("--dir", self.tmp, "spec-driven")
+        self.assertEqual(rc, 1)
+        self.assertIn("steps/cleanup.md line 5: top-level list item 1 follows 2", err)
+
+    def test_indented_include_fails_naming_file_and_line(self):
+        self._set_step("Do it.\n  @include plain-language\n")
+        rc, _out, err = run_check("--dir", self.tmp, "spec-driven")
+        self.assertEqual(rc, 1)
+        self.assertIn("steps/cleanup.md line 3: @include plain-language is indented", err)
+
+    def test_unresolvable_include_fails_naming_file_and_line(self):
+        self._set_step("Do it.\n@include nonexistent-frag\n")
+        rc, _out, err = run_check("--dir", self.tmp, "spec-driven")
+        self.assertEqual(rc, 1)
+        self.assertIn("steps/cleanup.md line 3: @include nonexistent-frag does not resolve", err)
+
+    def test_sound_include_and_nested_list_pass(self):
+        self._set_step("1. a\n  1. nested\n2. b\n\n@include plain-language\n")
+        rc, _out, err = run_check("--dir", self.tmp, "spec-driven")
+        self.assertEqual(rc, 0, err)
+
+    def test_bundle_local_fragment_is_not_consulted(self):
+        self._set_step("Do it.\n@include local-only\n")
+        os.makedirs(os.path.join(self.tmp, "fragments"))
+        with open(os.path.join(self.tmp, "fragments", "local-only.md"), "w") as f:
+            f.write("local\n")
+        rc, _out, err = run_check("--dir", self.tmp, "spec-driven")
+        self.assertEqual(rc, 1)
+        self.assertIn("@include local-only does not resolve in a pinned bundle", err)
+
     def test_missing_source_toml_refuses_naming_it(self):
         _bundle(self.tmp)
         os.remove(os.path.join(self.tmp, "source.toml"))

@@ -5,9 +5,12 @@ from lightcycle.application.workflows.add import prune_origin_best_effort
 from lightcycle.application.workflows.bundle_check import (
     check_bundle_references,
     check_prompts,
+    check_step_structure_for,
+    merge_problems,
 )
 from lightcycle.application.workflows.prompt_check import (
     PromptSurfaceUnavailable,
+    engine_fragment_names,
     engine_sources,
     prompt_drift_detail,
 )
@@ -69,11 +72,15 @@ class UpgradeWorkflowSourceUseCase:
                 "bundle has composition problem(s) - %s" % detail)
         try:
             sources = engine_sources(self._fs)
+            fragments = engine_fragment_names(self._fs)
         except PromptSurfaceUnavailable as e:
             raise WorkflowSourceError(
                 "could not determine the engine's prompt-check surface: %s" % e)
         detail = prompt_drift_detail(
-            check_prompts(bundle, *sources)
+            merge_problems(
+                check_prompts(bundle, *sources),
+                check_step_structure_for(bundle, fragments),
+            )
         )
         if detail:
             raise WorkflowSourceError("bundle prompts do not match this engine - %s" % detail)
