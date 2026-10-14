@@ -20,21 +20,29 @@ class PrioritySelection:
 
 def select_priority_rows(store, lanes, flow_service):
     claimed = set()
+    flows_by_item = {}
+
+    def flow_for(node):
+        owning_id = node.item or node.id
+        if owning_id not in flows_by_item:
+            flows_by_item[owning_id] = flow_service.flow_for(node)
+        return flows_by_item[owning_id]
+
     attention, active, queued = [], [], []
     unblocked = [n for n in lanes["queue"] if not n.blocked_by]
     runnable = [n for n in unblocked if not is_engine_step(n)]
     engine_active = [n for n in unblocked if is_engine_step(n)]
     held = [n for n in lanes["queue"] if n.blocked_by]
     inbox = sorted(
-        ((n, flow_service.flow_for(n)) for n in lanes["inbox"]),
+        ((n, flow_for(n)) for n in lanes["inbox"]),
         key=lambda pair: row_bucket(pair[0], pair[1]) != "escalation",
     )
     for group_rows, nodes_and_flow in (
         (attention, inbox),
-        (active, [(n, flow_service.flow_for(n)) for n in lanes["active"]]
-         + [(n, flow_service.flow_for(n)) for n in engine_active]),
-        (queued, [(n, flow_service.flow_for(n)) for n in runnable]
-         + [(n, flow_service.flow_for(n)) for n in held]),
+        (active, [(n, flow_for(n)) for n in lanes["active"]]
+         + [(n, flow_for(n)) for n in engine_active]),
+        (queued, [(n, flow_for(n)) for n in runnable]
+         + [(n, flow_for(n)) for n in held]),
     ):
         for node, flow in nodes_and_flow:
             owning_id = node.item or node.id

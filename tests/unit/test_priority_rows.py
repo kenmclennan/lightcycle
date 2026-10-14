@@ -92,3 +92,41 @@ class TestSelectPriorityRowsDedupe(unittest.TestCase):
             sorted(s.owning_node.id for s in selection.active), sorted([item_a, item_b])
         )
         self.assertEqual(len(selection.active), 2)
+
+
+class _CountingStore:
+    def __init__(self, store):
+        self._store = store
+        self.get_item_calls = []
+
+    def get_item(self, item_id):
+        self.get_item_calls.append(item_id)
+        return self._store.get_item(item_id)
+
+    def __getattr__(self, name):
+        return getattr(self._store, name)
+
+
+class TestSelectPriorityRowsItemReads(unittest.TestCase):
+    def test_each_distinct_item_is_read_at_most_once_per_call(self):
+        from lightcycle.application.services.flow import FlowService
+        from tests.support.fake_fs import FakeFs
+
+        store = FakeStore()
+        item = store.create_item("story", "a description")
+        gate = store.create_step(step="ready-merge", role="human", parent=item)
+        first = store.create_step(step="build", role="agent", parent=item)
+        second = store.create_step(step="build", role="agent", parent=item)
+        other = create_owned_step(store, "other", step="build", role="agent")
+        counting = _CountingStore(store)
+        lanes = {
+            "inbox": [store.get_node(gate)],
+            "active": [store.get_node(first), store.get_node(second)],
+            "queue": [store.get_node(other)],
+        }
+        flow_service = FlowService(FakeFs({}), counting)
+
+        selection = select_priority_rows(counting, lanes, flow_service)
+
+        self.assertEqual(len(selection.attention) + len(selection.active) + len(selection.queued), 2)
+        self.assertEqual(len(counting.get_item_calls), len(set(counting.get_item_calls)))
