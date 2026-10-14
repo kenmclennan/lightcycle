@@ -145,6 +145,13 @@ class TestEnginePromptsResolve(unittest.TestCase):
         ):
             self.assertIn(needle, raw)
 
+    def test_audit_asks_the_promotion_question_and_keeps_the_matched_prefixes(self):
+        with open(os.path.join(ENGINE_PROMPTS, "steps", "audit.md")) as f:
+            lines = f.read().splitlines()
+        self.assertTrue(any("Promotion candidate" in l for l in lines))
+        self.assertTrue(any(l.startswith("4. Plain language") for l in lines))
+        self.assertTrue(any(l.startswith("6. ") for l in lines))
+
     def test_config_prompts_root_is_the_engine_dir(self):
         self.assertTrue(os.path.isfile(os.path.join(Config.prompts_root(None), "fragments", "plain-language.md")))
 
