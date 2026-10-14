@@ -46,6 +46,8 @@ Item/step invariant: a step's `item` is required and fixed at creation; an item 
 
 **A re-run is not free.** `tests/run.sh` is `pytest -n auto`, so every run spawns one worker per core - on an 8-core machine that is over twenty processes. Several concurrent runs saturate the host, which makes each run slower, which produces more timeouts. Subset while iterating (`bash tests/run.sh tests/unit`, `-k <name>`) and run the whole suite once at the end.
 
+**The pytest session is hermetic by default.** `tests/support/hermetic_env.py` gives every test a fresh empty `HOME`, a `GIT_CONFIG_GLOBAL` holding only `useConfigOnly = true`, `GIT_CONFIG_NOSYSTEM=1`, and none of `GIT_AUTHOR_*`/`GIT_COMMITTER_*`/`EMAIL`/`GIT_CONFIG_*`, so a local run fails the way the runner does. A test that needs a git identity sets it through repo-local git config or `GIT_CONFIG_GLOBAL`, never `GIT_AUTHOR_*` (which `git config --get` does not read). An audit-hook guard fails any test that opens, lists, creates, removes or renames a path under the real home; its allow-list lives in `tests/support/hermetic_env.py`, and the real home is `hermetic_env.REAL_HOME`.
+
 - `tests/support/` - test doubles (`FakeStore`, `FakeFs`) and the store-contract base. Helpers, not collected as tests.
 - `tests/unit/` - fast, isolated tests of `domain/` logic and the application use cases (no subprocess).
 - `tests/integration/` - the store contract against a real `SqliteStore` and the tests that drive the wired `lc` CLI or exercise genuine git/worktree IO, via subprocess.

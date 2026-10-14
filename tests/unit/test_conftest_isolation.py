@@ -15,5 +15,14 @@ class TestIsolationStripsWorkerEnv(unittest.TestCase):
         self.assertIsNone(os.environ.get("LC_ROLE"))
 
 
+class TestIsolationFreshensUserHome(unittest.TestCase):
+    def test_fresh_test_home_replaces_home_each_call(self):
+        _fresh_test_home()
+        first = os.environ["HOME"]
+        _fresh_test_home()
+        self.assertNotEqual(first, os.environ["HOME"])
+        self.assertNotEqual(os.environ["HOME"], os.environ["LC_TEST_REAL_HOME"])
+
+
 if __name__ == "__main__":
     unittest.main()
