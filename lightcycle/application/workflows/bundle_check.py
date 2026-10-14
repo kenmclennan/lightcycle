@@ -3,9 +3,10 @@ from lightcycle.application.workflows.prompt_check import check_prompt_commands
 from lightcycle.domain.contracts import FlowContracts
 from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
+from lightcycle.domain.workflows.step_structure import check_step_structure
 
 
-def check_prompts(bundle, cli_surface, json_keys):
+def _step_texts(bundle):
     texts = {}
     for role, text in bundle.steps.items():
         _, body = frontmatter.split_frontmatter(text)
@@ -14,7 +15,23 @@ def check_prompts(bundle, cli_surface, json_keys):
         if body != text:
             body = "\n" * (len(text.splitlines()) - len(body.split("\n"))) + body
         texts["steps/%s.md" % role] = body
-    return check_prompt_commands(texts, cli_surface, json_keys)
+    return texts
+
+
+def check_prompts(bundle, cli_surface, json_keys):
+    return check_prompt_commands(_step_texts(bundle), cli_surface, json_keys)
+
+
+def check_step_structure_for(bundle, fragment_names):
+    return check_step_structure(_step_texts(bundle), fragment_names)
+
+
+def merge_problems(*problem_maps):
+    merged = {}
+    for problems in problem_maps:
+        for step, messages in problems.items():
+            merged.setdefault(step, []).extend(messages)
+    return merged
 
 
 def check_bundle_references(bundle):

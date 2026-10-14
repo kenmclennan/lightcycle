@@ -219,6 +219,18 @@ class TestAdd(unittest.TestCase):
         self.assertIn("`lc frobnicate` is not a command", str(caught.exception))
         self.assertEqual(source.list_origins(), [])
 
+    def test_restarted_list_raises_and_registers_nothing(self):
+        source = FakeSource()
+        source.add_remote(
+            "u", 'name = "acme"\ncontract = 1\n', "sha1",
+            steps={"code": _step_text(
+                {"model": "x", "step": "code"}, "1. a\n2. b\n\n1. c")},
+            workflows={"build": "entry: code\n"})
+        with self.assertRaises(WorkflowSourceError) as caught:
+            _add(source).execute(url="u", ref="main", name=None)
+        self.assertIn("steps/code.md line 8: top-level list item 1 follows 2", str(caught.exception))
+        self.assertEqual(source.list_origins(), [])
+
     def test_prompt_drift_names_the_step_and_the_remedy(self):
         source = FakeSource()
         source.add_remote(
@@ -315,6 +327,20 @@ class TestUpgrade(unittest.TestCase):
             UpgradeWorkflowSourceUseCase(source, FakeStore(), cfg, FsAdapter(cfg)).execute("acme")
         self.assertEqual(source.read_registry("acme").current, "sha1")
         self.assertFalse(source.has_version("acme", "sha2"))
+
+    def test_upgrade_refuses_restarted_list_and_leaves_the_current_sha(self):
+        source = FakeSource()
+        source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
+        _add(source).execute(url="u", ref="main", name=None)
+        source.add_remote(
+            "u", 'name = "acme"\ncontract = 1\n', "sha2",
+            steps={"code": _step_text(
+                {"model": "x", "step": "code"}, "1. a\n2. b\n\n1. c")},
+            workflows={"build": "entry: code\n"})
+        cfg = FakeConfig()
+        with self.assertRaises(WorkflowSourceError):
+            UpgradeWorkflowSourceUseCase(source, FakeStore(), cfg, FsAdapter(cfg)).execute("acme")
+        self.assertEqual(source.read_registry("acme").current, "sha1")
 
     def test_upgrade_unregistered_origin_raises(self):
         cfg = FakeConfig()

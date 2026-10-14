@@ -89,6 +89,18 @@ def extra_json_keys(fs):
     return keys
 
 
+def engine_fragment_names(fs):
+    root = Path(__file__).resolve().parents[2] / "prompts" / "fragments"
+    names = {
+        rel[: -len(".md")]
+        for rel in fs.list_files(str(root))
+        if rel.endswith(".md") and "/" not in rel
+    }
+    if not names:
+        raise PromptSurfaceUnavailable("could not list the engine fragments in %s" % root)
+    return names
+
+
 def engine_sources(fs):
     return flags_by_verb(), json_surface() | extra_json_keys(fs)
 

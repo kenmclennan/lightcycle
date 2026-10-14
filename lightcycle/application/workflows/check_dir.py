@@ -5,9 +5,12 @@ from typing import List
 from lightcycle.application.workflows.bundle_check import (
     check_bundle_references,
     check_prompts,
+    check_step_structure_for,
+    merge_problems,
 )
 from lightcycle.application.workflows.prompt_check import (
     PromptSurfaceUnavailable,
+    engine_fragment_names,
     engine_sources,
     prompt_drift_detail,
 )
@@ -82,7 +85,12 @@ class CheckWorkflowDirUseCase:
             n: msgs for n, msgs in check_bundle_references(bundle).items() if n in names
         }
         try:
-            detail = prompt_drift_detail(check_prompts(bundle, *engine_sources(self._fs)))
+            detail = prompt_drift_detail(
+                merge_problems(
+                    check_prompts(bundle, *engine_sources(self._fs)),
+                    check_step_structure_for(bundle, engine_fragment_names(self._fs)),
+                )
+            )
         except PromptSurfaceUnavailable as e:
             detail = "could not determine the engine's prompt-check surface: %s" % e
         if detail:
