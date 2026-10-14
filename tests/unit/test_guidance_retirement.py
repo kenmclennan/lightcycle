@@ -58,6 +58,32 @@ class TestNeverDelivered(unittest.TestCase):
         row = evaluate(_entry(), Usage(1, 1, _ago(days=59)), T, NOW)
         self.assertEqual(_names(row), [])
 
+    def test_never_delivered_added_before_the_dormant_age_flags(self):
+        row = evaluate(_entry(), Usage(), T, NOW, added=_ago(days=60, seconds=1))
+        self.assertEqual(_names(row), ["never-delivered"])
+        self.assertEqual(row.notes, ())
+
+    def test_never_delivered_added_exactly_the_dormant_age_ago_does_not_flag(self):
+        row = evaluate(_entry(), Usage(), T, NOW, added=_ago(days=60))
+        self.assertEqual(_names(row), [])
+        self.assertEqual(row.notes, ("new - 60 of 60 days old",))
+
+    def test_never_delivered_added_recently_carries_the_note_and_no_flag(self):
+        row = evaluate(_entry(), Usage(), T, NOW, added=_ago(days=3))
+        self.assertEqual(_names(row), [])
+        self.assertEqual(row.notes, ("new - 3 of 60 days old",))
+
+    def test_never_delivered_with_unreadable_add_date_flags_and_says_so(self):
+        row = evaluate(_entry(), Usage(), T, NOW)
+        self.assertEqual(_names(row), ["never-delivered"])
+        self.assertEqual(len(row.notes), 1)
+        self.assertIn("add date unreadable", row.notes[0])
+
+    def test_delivered_entry_ignores_the_add_date(self):
+        row = evaluate(_entry(), Usage(1, 1, _ago(days=1)), T, NOW, added=_ago(days=3))
+        self.assertEqual(_names(row), [])
+        self.assertEqual(row.notes, ())
+
     def test_stable_never_delivered_flags(self):
         row = evaluate(_entry(), Usage(), T, NOW)
         self.assertEqual(_names(row), ["never-delivered"])

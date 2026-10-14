@@ -39,11 +39,13 @@ def _entry(status="stable", covers=None, stale_after=None):
     return "\n".join(lines).encode()
 
 
-def _setup(files, github=None):
+def _setup(files, github=None, added=None):
+    if added is None:
+        added = {name: "2020-01-01T00:00:00+00:00" for name in files}
     store = FakeStore()
     store.add_project("guidance", local_path=ROOT)
     fs = FakeFs(dirs={ROOT: []})
-    git = FakeGit(ref="origin/main", ref_files={"origin/main": dict(files)})
+    git = FakeGit(ref="origin/main", ref_files={"origin/main": dict(files)}, added=added)
     github = github or FakeGitHub()
     return store, fs, github, ReportGuidanceUseCase(store, fs, git, github, _cfg())
 
@@ -105,6 +107,22 @@ class TestCounts(unittest.TestCase):
         store.add_project("guidance", local_path="/gone")
         with self.assertRaises(UseCaseError):
             ReportGuidanceUseCase(store, FakeFs(), FakeGit(), FakeGitHub(), _cfg()).execute(0.0)
+
+
+class TestNewEntries(unittest.TestCase):
+    def test_recent_add_date_gives_a_note_and_an_old_one_flags(self):
+        now = time.time()
+        recent = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(now - 3 * 86400))
+        old = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(now - 90 * 86400))
+        store, fs, gh, use = _setup(
+            {"new.md": _entry(), "old.md": _entry(), "unknown.md": _entry()},
+            added={"new.md": recent, "old.md": old})
+        rows = _rows(use.execute(now))
+        self.assertEqual(rows["new"].flags, ())
+        self.assertEqual(rows["new"].notes, ("new - 3 of 60 days old",))
+        self.assertEqual([f.name for f in rows["old"].flags], ["never-delivered"])
+        self.assertEqual([f.name for f in rows["unknown"].flags], ["never-delivered"])
+        self.assertIn("add date unreadable", rows["unknown"].notes[0])
 
 
 class TestCovers(unittest.TestCase):

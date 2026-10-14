@@ -268,6 +268,14 @@ def read_file_at(root, ref, path):
     return proc.stdout if proc.returncode == 0 else None
 
 
+def added_at(root, ref, path):
+    proc = git(root, "log", "--diff-filter=A", "--format=%cI", ref, "--", path)
+    if proc.returncode != 0:
+        return None
+    lines = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+    return lines[-1] if lines else None
+
+
 class GitAdapter(GitPort):
     def add_worktree(self, root, path, branch, base, retries, backoff):
         return add_worktree(root, path, branch, base, retries, backoff)
@@ -352,3 +360,6 @@ class GitAdapter(GitPort):
 
     def read_file_at(self, root, ref, path):
         return read_file_at(root, ref, path)
+
+    def added_at(self, root, ref, path):
+        return added_at(root, ref, path)

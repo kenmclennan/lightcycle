@@ -514,6 +514,12 @@ class TestGitAdapterGuidanceRef(unittest.TestCase):
         self.assertNotIn(
             "only-on-branch.md", self.adapter.list_files_at(self.clone, "origin/main"))
 
+    def test_added_at_reads_the_earliest_adding_commit_of_a_path(self):
+        added = self.adapter.added_at(self.clone, "origin/main", "a.md")
+        self.assertRegex(added, r"^\d{4}-\d{2}-\d{2}T")
+        self.assertIsNone(self.adapter.added_at(self.clone, "origin/main", "nope.md"))
+        self.assertIsNone(self.adapter.added_at(self.clone, "origin/nope", "a.md"))
+
     def test_list_files_omits_dot_directories_and_is_sorted(self):
         _commit(self.clone, "z/c.md", "c")
         _git(self.clone, "push", "-q", "origin", "main")

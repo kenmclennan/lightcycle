@@ -92,6 +92,16 @@ class ReportGuidanceUseCase:
                 unreached, failure.stderr.strip() or "gh exited %d" % failure.returncode))
         return results, notes
 
+    def _added(self, root, entries, usage):
+        ref = GuidanceLibrary(self._git).ref(root)
+        if ref is None:
+            return {}
+        return {
+            e.id: self._git.added_at(root, ref, e.id + ".md")
+            for e in entries
+            if e.status == "stable" and usage[e.id].last_delivered is None
+        }
+
     def execute(self, now):
         project = self._store.get_project(GUIDANCE_WORKSPACE)
         if project is None or not project.local_path:
@@ -105,5 +115,6 @@ class ReportGuidanceUseCase:
         thresholds = Thresholds(
             self._config.guidance_unused_after_deliveries(), self._config.guidance_dormant_days())
         moment = datetime.datetime.fromtimestamp(now).astimezone()
-        rows = build_rows(entries, usage, thresholds, moment, covers)
+        added = self._added(project.local_path, entries, usage)
+        rows = build_rows(entries, usage, thresholds, moment, covers, added)
         return GuidanceReport(tuple(rows), tuple(notes + covers_notes))

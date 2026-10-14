@@ -79,21 +79,31 @@ def _unused(usage, thresholds):
     return None, "too few deliveries to judge (%d of %d needed)" % (usage.deliveries, needed)
 
 
-def _never_delivered(entry, usage, thresholds, now):
+def _never_delivered(entry, usage, thresholds, now, added):
     if entry.status != "stable":
-        return None
+        return None, None
+    dormant = datetime.timedelta(days=thresholds.dormant_days)
     if usage.last_delivered is None:
-        return Flag(NEVER_DELIVERED, "never delivered")
+        introduced = _parse_timestamp(added)
+        if introduced is None:
+            return (
+                Flag(NEVER_DELIVERED, "never delivered"),
+                "add date unreadable, so age is not taken into account",
+            )
+        age = now - introduced
+        if age > dormant:
+            return Flag(NEVER_DELIVERED, "never delivered in %d days" % age.days), None
+        return None, "new - %d of %d days old" % (age.days, thresholds.dormant_days)
     delivered = _parse_timestamp(usage.last_delivered)
     if delivered is None:
-        return None
+        return None, None
     age = now - delivered
-    if age > datetime.timedelta(days=thresholds.dormant_days):
+    if age > dormant:
         return Flag(
             NEVER_DELIVERED,
             "last delivered %d days ago, more than %d" % (age.days, thresholds.dormant_days),
-        )
-    return None
+        ), None
+    return None, None
 
 
 def _covers_closed(entry, covers):
@@ -123,7 +133,7 @@ def _stale(entry, now):
     return None, None
 
 
-def evaluate(entry, usage, thresholds, now, covers=None):
+def evaluate(entry, usage, thresholds, now, covers=None, added=None):
     if entry.status == "deprecated":
         return GuidanceRow(
             entry.id, entry.status, usage.deliveries, usage.citations, usage.last_delivered)
@@ -133,9 +143,11 @@ def evaluate(entry, usage, thresholds, now, covers=None):
         flags.append(flag)
     if note:
         notes.append(note)
-    flag = _never_delivered(entry, usage, thresholds, now)
+    flag, note = _never_delivered(entry, usage, thresholds, now, added)
     if flag:
         flags.append(flag)
+    if note:
+        notes.append(note)
     flag, note = _covers_closed(entry, covers)
     if flag:
         flags.append(flag)
@@ -152,10 +164,13 @@ def evaluate(entry, usage, thresholds, now, covers=None):
     )
 
 
-def build_rows(entries, usage_by_id: Dict[str, Usage], thresholds, now, covers_by_id=None):
+def build_rows(entries, usage_by_id: Dict[str, Usage], thresholds, now, covers_by_id=None,
+               added_by_id=None):
     covers_by_id = covers_by_id or {}
+    added_by_id = added_by_id or {}
     rows = [
-        evaluate(e, usage_by_id.get(e.id, Usage()), thresholds, now, covers_by_id.get(e.id))
+        evaluate(e, usage_by_id.get(e.id, Usage()), thresholds, now, covers_by_id.get(e.id),
+                 added_by_id.get(e.id))
         for e in entries
     ]
     return sorted(rows, key=lambda r: (0 if r.flags else 1, r.id))
