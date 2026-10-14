@@ -2579,8 +2579,7 @@ class TestInitPullsWorkflows(unittest.TestCase):
         self.home = tempfile.mkdtemp()
         home_patch = patch.dict(os.environ, {
             "HOME": self.home,
-            "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
-            "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
+            "GIT_CONFIG_GLOBAL": os.path.join(self.home, ".gitconfig"),
         })
         home_patch.start()
         Path(self.home, ".gitconfig").write_text("[user]\n\tname = t\n\temail = t@t\n")
@@ -2690,7 +2689,10 @@ class TestConfig(unittest.TestCase):
         os.environ["LC_HOME"] = self.root
         os.environ["LC_CONFIG"] = self.cfg
         self.home = tempfile.mkdtemp()
-        home_patch = patch.dict(os.environ, {"HOME": self.home})
+        home_patch = patch.dict(os.environ, {
+            "HOME": self.home,
+            "GIT_CONFIG_GLOBAL": os.path.join(self.home, ".gitconfig"),
+        })
         home_patch.start()
         Path(self.home, ".gitconfig").write_text("[user]\n\tname = t\n\temail = t@t\n")
         self.addCleanup(home_patch.stop)

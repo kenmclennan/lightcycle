@@ -9,7 +9,7 @@ from lightcycle.container import Container
 from lightcycle.ports.backup import BackupPort
 from lightcycle.ports.git import GitPort
 from lightcycle.ports.spawner import SpawnerPort
-from tests.support import tui_harness
+from tests.support import hermetic_env, tui_harness
 from tests.support.fake_drain import FakeDrain
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_github import FakeGitHub
@@ -92,7 +92,7 @@ def test_hermetic_tui_config_answers_seed_keys_beyond_default_origin():
     assert config.max_agents() == 5
     assert config.backups_dir()
     assert os.path.realpath(config.data_root()) != os.path.realpath(
-        os.path.join(os.path.expanduser("~"), ".lightcycle")
+        os.path.join(hermetic_env.REAL_HOME, ".lightcycle")
     )
 
 

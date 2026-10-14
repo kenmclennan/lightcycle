@@ -6,7 +6,10 @@ from pathlib import Path
 from lightcycle.config import _SEED_KEYS, Config, ConfigError, ConfigValueError
 from lightcycle.domain.pool import ModelRates
 
-HOME = os.path.expanduser("~")
+
+
+def _home():
+    return os.path.expanduser("~")
 
 
 def _cfg(environ=None, **filevals):
@@ -36,10 +39,10 @@ class TestRequiredRoots(unittest.TestCase):
         self.assertEqual(c.projects_root(), "/p")
 
     def test_tilde_expanded_against_home(self):
-        self.assertEqual(_cfg(projects="~/p").projects_root(), os.path.join(HOME, "p"))
+        self.assertEqual(_cfg(projects="~/p").projects_root(), os.path.join(_home(), "p"))
 
     def test_relative_joined_to_home(self):
-        self.assertEqual(_cfg(projects="rel/p").projects_root(), os.path.join(HOME, "rel/p"))
+        self.assertEqual(_cfg(projects="rel/p").projects_root(), os.path.join(_home(), "rel/p"))
 
 
 class TestBranchPrefix(unittest.TestCase):
@@ -597,7 +600,7 @@ class TestBackupConfig(unittest.TestCase):
         p = os.path.join(d, "config")
         c = Config(environ={"LC_HOME": d, "LC_CONFIG": p})
         c.ensure_config()
-        self.assertEqual(c.backups_dir(), os.path.join(HOME, ".lightcycle-backups"))
+        self.assertEqual(c.backups_dir(), os.path.join(_home(), ".lightcycle-backups"))
         self.assertEqual(c.backup_interval_minutes(), 15)
         self.assertEqual(c.backup_retention(), 96)
         self.assertFalse(c.backups_dir().startswith(c.data_root() + os.sep))
@@ -612,7 +615,7 @@ class TestGridRootAndEnv(unittest.TestCase):
 
     def test_default_data_root_ignores_lc_home(self):
         c = _cfg({"LC_HOME": "/tmp/other"})
-        self.assertEqual(c.default_data_root(), os.path.join(HOME, ".lightcycle"))
+        self.assertEqual(c.default_data_root(), os.path.join(_home(), ".lightcycle"))
 
     def test_data_root_matches_default_when_unset(self):
         self.assertEqual(_cfg().data_root(), _cfg().default_data_root())
