@@ -96,6 +96,7 @@ Read by `write-code` and `review-code` when they run against this repo.
 
 - **Test identity is the pytest nodeid; a pytest-bdd step definition's is its step-text string** - including a `parsers.parse(...)`/`parsers.re(...)`-wrapped one - never the enclosing function name, which is arbitrary and often duplicated.
 - **`tests/run.sh` sizes its own test fan; do not size it by hand.** It reads `LC_MAX_AGENTS` from the environment, which the spawner exports to every worker, and runs `pytest -n <cores / cap>` (floored, minimum 1). Unset, empty, `0` or non-numeric all mean `-n auto`, so a hand run and CI - neither of which exports it - behave exactly as before. Nothing is left for a step prompt or an agent to compute: run the gate through `bash tests/run.sh` and it is already sized to this pool. A trailing `-n <N>` still overrides, since `"$@"` is passed through.
+- **Never use `sed -i` on macOS.** BSD sed reads the next argument as a backup suffix, so in-place edits slip and stray backup files land in the tree. Use `perl -pi -e` or the editor tool instead.
 
 ## Preferred skills (invoke before the work)
 
