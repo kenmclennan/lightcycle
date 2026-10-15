@@ -7,6 +7,7 @@ from lightcycle.application.git_identity import require_git_identity
 from lightcycle.config import ConfigError
 from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE, SPECS_WORKSPACE
 from lightcycle.ports.github import ReadFailure
+from lightcycle.ports.git import GitReadError
 from lightcycle.domain.guidance.conventions import CONVENTIONS_TEXT
 from lightcycle.domain.guidance.skeleton import (
     COMMIT_MESSAGE,
@@ -29,6 +30,7 @@ class InitGridResponse:
     guidance_refusal: str = ""
     trusted_authors_seeded: str = ""
     trusted_authors_unset_reason: str = ""
+    remote_updates: tuple = ()
 
 
 class InitGridUseCase:
@@ -46,6 +48,7 @@ class InitGridUseCase:
         created = self._config.ensure_config()
         seeded, unset_reason = self._seed_trusted_authors()
         self._ensure_specs_project()
+        remote_updates = self._refresh_remotes()
         refusal = self._identity_refusal_if_creating(guidance_path)
         if refusal:
             outcome = "not created"
@@ -61,7 +64,32 @@ class InitGridUseCase:
             guidance_refusal=refusal,
             trusted_authors_seeded=seeded,
             trusted_authors_unset_reason=unset_reason,
+            remote_updates=remote_updates,
         )
+
+    def _refresh_remotes(self):
+        updates = []
+        for identity in (GUIDANCE_WORKSPACE, SPECS_WORKSPACE):
+            url = self._refreshed_remote(identity)
+            if url:
+                updates.append("%s: remote updated to %s" % (identity, url))
+        return tuple(updates)
+
+    def _refreshed_remote(self, identity):
+        registered = self._store.get_project(identity)
+        if registered is None or not registered.local_path:
+            return ""
+        path = self._config.expand_path(registered.local_path)
+        if not self._git.is_repo_root(path):
+            return ""
+        try:
+            origin = self._git.remote_url(path)
+        except GitReadError:
+            return ""
+        if not origin or origin == registered.remote:
+            return ""
+        self._store.add_project(identity, remote=origin)
+        return origin
 
     def _seed_trusted_authors(self):
         try:
