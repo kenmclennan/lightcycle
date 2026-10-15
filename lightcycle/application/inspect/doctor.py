@@ -263,8 +263,8 @@ class DoctorUseCase:
             "guidance repo conventions are version %d, engine ships version %d"
             % (recorded, CONVENTIONS_VERSION),
             kind="guidance-conventions-outdated",
-            fix="update %s to version %d by PR on the guidance repo; file a `guidance-entry` "
-            "item to carry it" % (CONVENTIONS_FILE, CONVENTIONS_VERSION),
+            fix="update %s to version %d by PR on the guidance repo (`lc guidance-conventions` prints "
+            "the text); file a `guidance-entry` item to carry it" % (CONVENTIONS_FILE, CONVENTIONS_VERSION),
         )]
 
     def _nonconforming_problems(self, library, root, entries, unreadable, pages):

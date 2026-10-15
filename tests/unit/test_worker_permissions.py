@@ -78,7 +78,7 @@ class TestWorkerPermittedAttach(unittest.TestCase):
 class TestWorkerRefusalMessage(unittest.TestCase):
     def test_message_lists_all_eight_verbs(self):
         self.assertIn(
-            "claim, done, show, attach, retro, backlog, search, peek, guidance, guidance-dir, guidance-check, set --state waiting",
+            "claim, done, show, attach, retro, backlog, search, peek, guidance, guidance-dir, guidance-check, guidance-conventions, set --state waiting",
             worker_refusal_message("rm"),
         )
 
