@@ -1702,6 +1702,8 @@ def _tick_event_lines(result, ts):
         lines.append("%s  %-7s  %s" % (ts, "rework", sid))
     for sid in result.monitor.conflicted:
         lines.append("%s  %-7s  %s" % (ts, "conflict", sid))
+    for sid in result.monitor.head_moved:
+        lines.append("%s  %-7s  %s" % (ts, "head-moved", sid))
     for sid in result.monitor.ci_resolved:
         lines.append("%s  %-7s  %s" % (ts, "ci-resolved", sid))
     for bid in result.sweep.swept:
