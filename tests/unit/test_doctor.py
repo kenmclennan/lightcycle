@@ -11,7 +11,7 @@ from tests.support.fake_fs import FakeFs
 from tests.support.fake_git import FakeGit
 from tests.support.fake_machine import FakeMachine
 from tests.support.fake_store import FakeStore
-from tests.support.tui_harness import FakeGuidanceSyncStatus
+from tests.support.tui_harness import FakeConfigReloadStatus, FakeGuidanceSyncStatus, FakeLock
 
 
 def _cfg(**filevals):
@@ -106,8 +106,7 @@ class _Worktrees:
 def _uc(store, source, config, bundle):
     return DoctorUseCase(
         store, source, config, bundle, FakeFs(), FakeMachine(), _Worktrees(),
-        FakeGit(), FakeGuidanceSyncStatus(),
-    )
+        FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False))
 
 
 class TestAllKeysCoversEverySeedKey(unittest.TestCase):
@@ -492,8 +491,7 @@ class TestDoctorOrphans(unittest.TestCase):
         config = _cfg(**_ALL_KEYS)
         return DoctorUseCase(
             store, source, config, FakeWorkflowBundle(), fs, machine, worktrees,
-            FakeGit(), FakeGuidanceSyncStatus(),
-        ).execute(DoctorInput())
+            FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False)).execute(DoctorInput())
 
     def test_worktree_matching_a_claimed_items_path_reports_no_problem(self):
         store = FakeStore()
@@ -591,8 +589,7 @@ class TestDoctorFacets(unittest.TestCase):
         source.add_bundle("acme", "sha1", 1, current=True)
         report = DoctorUseCase(
             store, source, _cfg(**_ALL_KEYS), FakeWorkflowBundle(), fs, FakeMachine(), _Worktrees(),
-            git if git is not None else FakeGit(), FakeGuidanceSyncStatus(),
-        ).execute(DoctorInput())
+            git if git is not None else FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False)).execute(DoctorInput())
         return report.problems["facets"]
 
     def _kb(self, *pages):
@@ -735,7 +732,7 @@ def _schedule_doctor(blocks, known=None, projects=("acme/app",)):
     config = _ScheduleConfig(_cfg(**_ALL_KEYS), blocks)
     uc = DoctorUseCase(
         store, _ScheduleSource(known), config, _ScheduleBundle(known), FakeFs(),
-        FakeMachine(), _Worktrees(), FakeGit(), FakeGuidanceSyncStatus())
+        FakeMachine(), _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False))
     return uc.execute(DoctorInput())
 
 
@@ -795,3 +792,43 @@ class TestDoctorSchedules(unittest.TestCase):
             text + "schedule-weekly:\n  enabled: false\n  workflow: acme/audit\n")
         config.reload()
         self.assertEqual(config.obsolete_config_keys(), ())
+
+
+class TestReloadProblems(unittest.TestCase):
+    def _report(self, state, pid=4242, mtime_matches=True):
+        config = _cfg(**_ALL_KEYS)
+        if "rejected_mtime" in state and mtime_matches:
+            state = dict(state, rejected_mtime=config.config_mtime())
+        source = FakeWorkflowSource()
+        source.add_bundle("acme", "sha1", 1, current=True)
+        return DoctorUseCase(
+            FakeStore(), source, config, FakeWorkflowBundle(), FakeFs(), FakeMachine(),
+            _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(),
+            FakeConfigReloadStatus(dict(state, pid=pid)),
+            FakeLock(running=True, pid=4242),
+        ).execute(DoctorInput()).problems["config"]
+
+    def _rejected(self, **kw):
+        return self._report(
+            {"outcome": "rejected", "reason": "bad value", "rejected_mtime": 1,
+             "restart_required": []}, **kw)
+
+    def test_a_rejection_by_the_running_pool_is_reported(self):
+        problems = self._rejected()
+        self.assertEqual(len(problems), 1)
+        self.assertIn("config edit rejected by the running pool (bad value)", problems[0].message)
+        self.assertIn("last good config", problems[0].message)
+
+    def test_a_rejection_is_dropped_once_the_file_changed_again(self):
+        self.assertEqual(self._rejected(mtime_matches=False), [])
+
+    def test_a_status_from_another_pid_is_ignored(self):
+        self.assertEqual(self._rejected(pid=99), [])
+
+    def test_restart_required_keys_are_reported(self):
+        problems = self._report(
+            {"outcome": "reloaded", "rejected_mtime": None,
+             "restart_required": ["poll-seconds", "spin-cap"]})
+        self.assertEqual(
+            [p.message for p in problems],
+            ["running pool needs a restart for: poll-seconds, spin-cap"])

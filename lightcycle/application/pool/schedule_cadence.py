@@ -45,6 +45,10 @@ class ScheduleCadenceUseCase:
         self._evaluated = {}
         self._warned = {}
 
+    def reset(self):
+        self._evaluated.clear()
+        self._warned.clear()
+
     def _paused(self):
         try:
             return self._config.schedules_paused()

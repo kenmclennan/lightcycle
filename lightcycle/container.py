@@ -11,6 +11,8 @@ from lightcycle.adapters.launcher import LauncherAdapter
 from lightcycle.adapters.lock import RunLockAdapter
 from lightcycle.adapters.machine import MachineAdapter
 from lightcycle.adapters.guidance_sync_status import GuidanceSyncStatusAdapter
+from lightcycle.adapters.config_reload_status import ConfigReloadStatusAdapter
+from lightcycle.application.pool.reload_config import ReloadConfigUseCase
 from lightcycle.adapters.memory_gate_status import MemoryGateStatusAdapter
 from lightcycle.adapters.scaffold import ScaffoldAdapter
 from lightcycle.adapters.spawner import SpawnerAdapter
@@ -33,7 +35,7 @@ class Container:
         github=None, lock=None, breaker=None, backup=None, workflow_source=None, launcher=None,
         spin=None, now=None, workflow_bundle=None, worker_log=None, scaffold=None, upgrade=None,
         claude_stream=None, machine=None, memory_gate_status=None,
-        drain=None, guidance_sync_status=None,
+        drain=None, guidance_sync_status=None, config_reload_status=None,
     ):
         self.config = config if config is not None else Config()
         self.store = store if store is not None else SqliteStore(self.config, now=now)
@@ -63,6 +65,10 @@ class Container:
         self.memory_gate_status = (
             memory_gate_status if memory_gate_status is not None
             else MemoryGateStatusAdapter(self.config)
+        )
+        self.config_reload_status = (
+            config_reload_status if config_reload_status is not None
+            else ConfigReloadStatusAdapter(self.config)
         )
         self.guidance_sync_status = (
             guidance_sync_status if guidance_sync_status is not None
@@ -128,6 +134,8 @@ class Container:
             guidance_gate=GuidanceSyncUseCase(
                 self.store, self.git, self.fs, self.guidance_sync_status, self.config,
             ),
+            config_reload=ReloadConfigUseCase(
+                self.config, self.config_reload_status, os.getpid()),
         )
 
     def sweep(self, flow=None):

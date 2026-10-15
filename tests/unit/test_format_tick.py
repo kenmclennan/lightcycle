@@ -1,9 +1,11 @@
+import dataclasses
 import unittest
 
 from lightcycle.application.pool.backup import BackupResponse
 from lightcycle.application.pool.daily_summary_cadence import DailySummaryCadenceResponse
 from lightcycle.application.pool.hook_completions import HookCompletionsResponse
 from lightcycle.application.pool.monitor_prs import MonitorPrsResponse
+from lightcycle.application.pool.reload_config import ReloadConfigResponse
 from lightcycle.application.pool.retro_cadence import RetroCadenceResponse
 from lightcycle.application.pool.sweep import SweepResponse
 from lightcycle.application.pool.tick import BreakerState, PoolState, TickResponse
@@ -47,6 +49,26 @@ def _result(**kw):
             spin_opened=defaults["spin_opened"],
         ),
     )
+
+
+class TestFormatTickConfigReload(unittest.TestCase):
+    def _lines(self, response):
+        result = dataclasses.replace(_result(), config=response)
+        lines, _ = _format_tick(result, (0, 4, 0, 0), _NOW)
+        return lines
+
+    def test_reloaded_prints_one_line(self):
+        lines = self._lines(ReloadConfigResponse("reloaded"))
+        self.assertEqual(len(lines), 1)
+        self.assertTrue(lines[0].endswith("  config reloaded"))
+
+    def test_reloaded_names_the_keys_needing_a_restart(self):
+        lines = self._lines(ReloadConfigResponse("reloaded", restart_required=("poll-seconds", "spin-cap")))
+        self.assertTrue(lines[0].endswith("config reloaded - restart needed for: poll-seconds, spin-cap"))
+
+    def test_unchanged_and_rejected_print_nothing(self):
+        self.assertEqual(self._lines(ReloadConfigResponse("unchanged")), [])
+        self.assertEqual(self._lines(ReloadConfigResponse("rejected", reason="x")), [])
 
 
 class TestFormatTick(unittest.TestCase):

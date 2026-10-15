@@ -5,6 +5,7 @@ from lightcycle.application.pool.guidance_sync import GuidanceSyncResponse
 from lightcycle.application.pool.material_audit_cadence import MaterialAuditCadenceResponse
 from lightcycle.application.pool.memory_gate import MemoryGateResponse
 from lightcycle.application.pool.monitor_prs import MonitorPrsResponse
+from lightcycle.application.pool.reload_config import ReloadConfigResponse
 from lightcycle.application.pool.daily_summary_cadence import DailySummaryCadenceResponse
 from lightcycle.application.pool.retro_cadence import RetroCadenceResponse
 from lightcycle.application.pool.schedule_cadence import ScheduleCadenceResponse
@@ -36,6 +37,9 @@ class NoOpMaterialAuditGate:
 class NoOpScheduleGate:
     def execute(self, now):
         return ScheduleCadenceResponse()
+
+    def reset(self):
+        pass
 
 
 class NoOpBreakerGate:
@@ -114,3 +118,8 @@ class NoOpStream:
 
     def saw_session_activity(self, lines):
         return False
+
+
+class NoOpConfigReload:
+    def execute(self):
+        return ReloadConfigResponse("unchanged")

@@ -1,5 +1,6 @@
 from lightcycle.ports.backup import BackupPort
 from lightcycle.ports.breaker import BreakerPort
+from lightcycle.ports.config_reload_status import ConfigReloadStatusPort
 from lightcycle.ports.drain import PoolDrainPort
 from lightcycle.ports.fs import FsPort
 from lightcycle.ports.git import GitPort
@@ -23,6 +24,7 @@ from lightcycle.ports.workflow_source import WorkflowSourcePort
 __all__ = [
     "BackupPort",
     "BreakerPort",
+    "ConfigReloadStatusPort",
     "FsPort",
     "GitHubEventsPort",
     "GitPort",
