@@ -1994,6 +1994,8 @@ def cmd_init(argv):
     print("lightcycle store already initialised" if r.existed else "lightcycle store initialised")
     print("config %s at %s" % ("created" if r.created else "already exists", r.config_path))
     print("guidance repo %s at %s" % (r.guidance_outcome, r.guidance_path))
+    for line in r.remote_updates:
+        print(line)
     if r.trusted_authors_seeded:
         print("trusted-authors set to %s (the gh identity); edit the config to add others"
               % r.trusted_authors_seeded)

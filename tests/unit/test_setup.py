@@ -76,6 +76,50 @@ class TestInitGrid(unittest.TestCase):
         self.assertEqual(project.remote, "git@x:existing.git")
 
 
+class TestInitRefreshesBuiltInRemotes(unittest.TestCase):
+    def _run(self, identity, remote, git):
+        store = FakeStore()
+        store.add_project(SPECS_WORKSPACE, local_path="/specs", remote=None)
+        store.add_project(GUIDANCE_WORKSPACE, local_path="/kb", remote=None)
+        store.add_project(identity, local_path="/" + ("kb" if identity == GUIDANCE_WORKSPACE else "specs"), remote=remote)
+        r = _init_grid(store, FakeFs(), FakeConfig(), git).execute()
+        return r, store
+
+    def test_guidance_with_no_remote_picks_up_a_new_origin(self):
+        r, store = self._run(GUIDANCE_WORKSPACE, None, FakeGit(origin={"/kb": "git@x:kb.git"}))
+        self.assertEqual(store.get_project(GUIDANCE_WORKSPACE).remote, "git@x:kb.git")
+        self.assertEqual(store.get_project(GUIDANCE_WORKSPACE).local_path, "/kb")
+        self.assertEqual(r.remote_updates, ("guidance: remote updated to git@x:kb.git",))
+
+    def test_specs_with_no_remote_picks_up_a_new_origin(self):
+        r, store = self._run(SPECS_WORKSPACE, None, FakeGit(origin={"/specs": "git@x:specs.git"}))
+        self.assertEqual(store.get_project(SPECS_WORKSPACE).remote, "git@x:specs.git")
+        self.assertEqual(r.remote_updates, ("specs: remote updated to git@x:specs.git",))
+
+    def test_a_changed_origin_replaces_the_stored_remote(self):
+        r, store = self._run(GUIDANCE_WORKSPACE, "git@x:old.git", FakeGit(origin={"/kb": "git@x:new.git"}))
+        self.assertEqual(store.get_project(GUIDANCE_WORKSPACE).remote, "git@x:new.git")
+
+    def test_a_matching_remote_reports_nothing(self):
+        r, store = self._run(GUIDANCE_WORKSPACE, "git@x:kb.git", FakeGit(origin={"/kb": "git@x:kb.git"}))
+        self.assertEqual(r.remote_updates, ())
+        self.assertEqual(store.get_project(GUIDANCE_WORKSPACE).remote, "git@x:kb.git")
+
+    def test_a_missing_origin_leaves_the_stored_remote_alone(self):
+        r, store = self._run(GUIDANCE_WORKSPACE, "git@x:kb.git", FakeGit(origin=None))
+        self.assertEqual(r.remote_updates, ())
+        self.assertEqual(store.get_project(GUIDANCE_WORKSPACE).remote, "git@x:kb.git")
+
+    def test_a_path_that_is_not_a_repo_is_left_alone(self):
+        r, store = self._run(GUIDANCE_WORKSPACE, "git@x:kb.git", FakeGit(repos=set(), origin="git@x:other.git"))
+        self.assertEqual(r.remote_updates, ())
+        self.assertEqual(store.get_project(GUIDANCE_WORKSPACE).remote, "git@x:kb.git")
+
+    def test_an_unreadable_origin_leaves_the_stored_remote_alone(self):
+        r, store = self._run(GUIDANCE_WORKSPACE, "git@x:kb.git", FakeGit(remote_unreadable=["/kb"]))
+        self.assertEqual(store.get_project(GUIDANCE_WORKSPACE).remote, "git@x:kb.git")
+
+
 class TestInitSeedsTrustedAuthors(unittest.TestCase):
     def test_a_blank_key_is_seeded_from_the_gh_login(self):
         config = FakeConfig()
@@ -204,12 +248,12 @@ class TestInitGuidanceRepo(unittest.TestCase):
             _init_grid(store, fs, FakeConfig(), git).execute("/outer/kb")
         self.assertIsNone(store.get_project(GUIDANCE_WORKSPACE))
 
-    def test_already_registered_makes_no_git_or_fs_call(self):
+    def test_already_registered_only_reads_git_and_writes_nothing(self):
         store = FakeStore()
         store.add_project(GUIDANCE_WORKSPACE, local_path="/kb", remote=None)
         fs, git = FakeFs(), FakeGit()
         r = _init_grid(store, fs, FakeConfig(), git).execute()
-        self.assertEqual(git.calls, [])
+        self.assertEqual(set(self._call_names(git)) - {"is_repo_root", "remote_url"}, set())
         self.assertEqual(fs.writes, [])
         self.assertEqual(r.guidance_outcome, "unchanged")
         self.assertEqual(r.guidance_path, "/kb")
@@ -219,7 +263,7 @@ class TestInitGuidanceRepo(unittest.TestCase):
         store.add_project(GUIDANCE_WORKSPACE, local_path="/gone", remote=None)
         fs, git = FakeFs(), FakeGit()
         self.assertEqual(self._run(store, fs, git, path="/gone")[0].guidance_outcome, "unchanged")
-        self.assertEqual(git.calls, [])
+        self.assertEqual(set(self._call_names(git)) - {"is_repo_root", "remote_url"}, set())
 
     def test_registered_with_a_different_flag_refuses_naming_both_paths(self):
         store = FakeStore()
