@@ -30,6 +30,20 @@ LC_HOME=$(mktemp -d) ./bin/lc flow     # against a throwaway home, not your real
 Because lightcycle develops itself, a story filed with no `--repo` targets the engine's
 own checkout under `projects/` - this is the self-hosting dev loop, not a product feature.
 
+### Verify a change against the workflows origin
+
+CI's `workflow-simulate` job runs every workflow in `lightcycle-workflows` (`main`) through the engine under change. To run the same thing locally, from outside a `.worktrees/` checkout or with a scratch home (the default home is refused there):
+
+```bash
+export LC_HOME=$(mktemp -d)
+./bin/lc init
+git clone https://github.com/kenmclennan/lightcycle-workflows "$LC_HOME/origin"
+./bin/lc workflow add "$LC_HOME/origin" --name ci-bundle --ref HEAD
+for f in "$LC_HOME"/origin/workflows/*.md; do ./bin/lc workflow simulate "ci-bundle/$(basename "$f" .md)"; done
+```
+
+`lc workflow add` reads git-committed content only. When you are editing the origin, commit before `add` and check the sha it prints against `git rev-parse HEAD`; an uncommitted edit is silently left out and the check passes on the previous commit.
+
 ## Ship a change (promote)
 
 1. Land it the normal way: branch, PR, review, merge to `main`.
