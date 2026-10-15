@@ -25,6 +25,10 @@ from lightcycle.config import Config
 from lightcycle.container import Container
 from lightcycle.ports.store import StoreError
 
+_INSTALL = "pipx install --force git+https://github.com/kenmclennan/lightcycle@v%s"
+PRE_FLOOR_INSTALL = _INSTALL % "0.2.27"
+NODES_INSTALL = _INSTALL % "0.6.263"
+
 
 class TestSqliteStoreContract(StoreContractBase, unittest.TestCase):
     def make_store(self, now=None):
@@ -696,7 +700,7 @@ class TestSqliteStoreSchemaVersionFloor(unittest.TestCase):
 
         with self.assertRaises(SchemaVersionRefused) as cm:
             SqliteStore(self._config(root))
-        self.assertIn("0.2.27", str(cm.exception))
+        self.assertIn(PRE_FLOOR_INSTALL, str(cm.exception))
 
         conn = sqlite3.connect(os.path.join(root, "store.db"))
         self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], 0)
@@ -755,7 +759,7 @@ class TestSqliteStoreSchemaVersionFloor(unittest.TestCase):
             SqliteStore(self._config(root))
 
         message = str(cm.exception)
-        self.assertIn(_LAST_VERSION_ABLE_TO_MIGRATE_NODES_STORES, message)
+        self.assertIn(NODES_INSTALL, message)
         self.assertIn("pre-split nodes table", message)
         self.assertNotIn("0.2.27", message)
         self._assert_nodes_store_untouched(db_path, 0)
@@ -768,7 +772,7 @@ class TestSqliteStoreSchemaVersionFloor(unittest.TestCase):
             SqliteStore(self._config(root))
 
         message = str(cm.exception)
-        self.assertIn(_LAST_VERSION_ABLE_TO_MIGRATE_NODES_STORES, message)
+        self.assertIn(NODES_INSTALL, message)
         self.assertIn("pre-split nodes table", message)
         self._assert_nodes_store_untouched(db_path, _SCHEMA_VERSION)
 
@@ -779,7 +783,7 @@ class TestSqliteStoreSchemaVersionFloor(unittest.TestCase):
         with self.assertRaises(SchemaVersionRefused) as cm:
             SqliteStore(self._config(root))
 
-        self.assertIn("0.2.27", str(cm.exception))
+        self.assertIn(PRE_FLOOR_INSTALL, str(cm.exception))
         self.assertNotIn("pre-split nodes table", str(cm.exception))
 
     def test_nodes_release_is_a_semver_after_the_floor_and_not_ahead_of_the_engine(self):
@@ -800,8 +804,10 @@ class TestSqliteStoreSchemaVersionFloor(unittest.TestCase):
         store._conn.close()
 
         with patch("lightcycle.adapters.sqlite_store._SCHEMA_VERSION", 2):
-            with self.assertRaises(SchemaVersionRefused):
+            with self.assertRaises(SchemaVersionRefused) as cm:
                 SqliteStore(self._config(root))
+
+        self.assertIn(PRE_FLOOR_INSTALL, str(cm.exception))
 
 
 _PRE_USAGE_STEPS_SCHEMA = """

@@ -55,6 +55,10 @@ _SCHEMA_VERSION = 1
 _LAST_VERSION_ABLE_TO_MIGRATE_PRE_FLOOR_STORES = "0.2.27"
 _LAST_VERSION_ABLE_TO_MIGRATE_NODES_STORES = "0.6.263"
 
+
+def _install_command(version):
+    return "pipx install --force git+https://github.com/kenmclennan/lightcycle@v%s" % version
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS items (
     id TEXT PRIMARY KEY,
@@ -380,14 +384,14 @@ class SqliteStore(StorePort):
         if version == 0 and self._is_legacy_store():
             raise SchemaVersionRefused(
                 "store predates the schema-version floor and cannot be opened by "
-                "this engine; migrate it with lightcycle %s first, then reopen."
-                % _LAST_VERSION_ABLE_TO_MIGRATE_PRE_FLOOR_STORES
+                "this engine; migrate it with `%s` first, then reopen."
+                % _install_command(_LAST_VERSION_ABLE_TO_MIGRATE_PRE_FLOOR_STORES)
             )
         if self._has_table("nodes"):
             raise SchemaVersionRefused(
                 "store still carries the pre-split nodes table and cannot be opened by "
-                "this engine; migrate it with lightcycle %s first, then reopen."
-                % _LAST_VERSION_ABLE_TO_MIGRATE_NODES_STORES
+                "this engine; migrate it with `%s` first, then reopen."
+                % _install_command(_LAST_VERSION_ABLE_TO_MIGRATE_NODES_STORES)
             )
         if version >= _SCHEMA_VERSION:
             return
@@ -396,8 +400,8 @@ class SqliteStore(StorePort):
             return
         raise SchemaVersionRefused(
             "store is stamped at schema version %d, below this engine's floor of "
-            "%d; migrate it with lightcycle %s first, then reopen."
-            % (version, _SCHEMA_VERSION, _LAST_VERSION_ABLE_TO_MIGRATE_PRE_FLOOR_STORES)
+            "%d; migrate it with `%s` first, then reopen."
+            % (version, _SCHEMA_VERSION, _install_command(_LAST_VERSION_ABLE_TO_MIGRATE_PRE_FLOOR_STORES))
         )
 
     def _is_legacy_store(self):
