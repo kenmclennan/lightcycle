@@ -192,6 +192,19 @@ class Config:
     def base_env(self):
         return dict(self._environ)
 
+    def agent_env(self):
+        env = self.base_env()
+        pin = os.path.realpath(self.engine_root())
+        kept = [
+            e for e in env.get("PYTHONPATH", "").split(os.pathsep)
+            if e and os.path.realpath(e) != pin
+        ]
+        if kept:
+            env["PYTHONPATH"] = os.pathsep.join(kept)
+        else:
+            env.pop("PYTHONPATH", None)
+        return env
+
     def _engine_root(self):
         return str(Path(__file__).resolve().parents[1])
 

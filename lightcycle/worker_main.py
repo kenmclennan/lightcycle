@@ -47,6 +47,7 @@ def main():
         return run(
             config.data_root(), cwd, plan.stage, spawnid, plan.model, plan.sysprompt,
             config.max_session_seconds(),
+            env=config.agent_env(),
             record_session_id=lambda sid: container.store.replace_artifact(
                 plan.step_id, "session-id", sid, internal=True
             ),

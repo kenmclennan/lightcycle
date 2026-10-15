@@ -1173,3 +1173,59 @@ class TestGuidanceRetirementConfig(unittest.TestCase):
                 self.assertIn(key, str(ctx.exception))
                 with self.assertRaises(ConfigError):
                     getattr(_cfg({env: bad}), getter)()
+
+
+class TestAgentEnv(unittest.TestCase):
+    def _pin(self):
+        return Config(environ={}).engine_root()
+
+    def _env(self, pythonpath, **extra):
+        env = dict(extra)
+        if pythonpath is not None:
+            env["PYTHONPATH"] = pythonpath
+        return Config(environ=env)
+
+    def test_pin_only_removes_key(self):
+        c = self._env(self._pin(), KEEP="1")
+        out = c.agent_env()
+        self.assertNotIn("PYTHONPATH", out)
+        self.assertEqual(out["KEEP"], "1")
+
+    def test_pin_plus_user_entry_keeps_user_entry(self):
+        c = self._env(self._pin() + os.pathsep + "/u")
+        self.assertEqual(c.agent_env()["PYTHONPATH"], "/u")
+
+    def test_pin_twice_plus_user_entry(self):
+        pin = self._pin()
+        c = self._env(os.pathsep.join([pin, pin, "/u"]))
+        self.assertEqual(c.agent_env()["PYTHONPATH"], "/u")
+
+    def test_user_only_unchanged(self):
+        self.assertEqual(self._env("/u").agent_env()["PYTHONPATH"], "/u")
+
+    def test_no_pythonpath_unchanged(self):
+        c = self._env(None, KEEP="1")
+        self.assertEqual(c.agent_env(), {"KEEP": "1"})
+
+    def test_symlinked_pin_removed(self):
+        link = os.path.join(tempfile.mkdtemp(), "engine")
+        os.symlink(self._pin(), link)
+        c = self._env(link + os.pathsep + "/u")
+        self.assertEqual(c.agent_env()["PYTHONPATH"], "/u")
+
+    def test_empty_segments_around_pin_removed(self):
+        c = self._env(os.pathsep + self._pin() + os.pathsep)
+        self.assertNotIn("PYTHONPATH", c.agent_env())
+
+    def test_result_is_a_copy(self):
+        c = self._env("/u")
+        c.agent_env()["PYTHONPATH"] = "/x"
+        self.assertEqual(c.agent_env()["PYTHONPATH"], "/u")
+
+    def test_matches_the_pin_the_spawner_builds(self):
+        import lightcycle.adapters.spawner as spawner
+        built = os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.abspath(spawner.__file__))))
+        self.assertEqual(os.path.realpath(built), os.path.realpath(self._pin()))
+        c = self._env(built + os.pathsep + "/u")
+        self.assertEqual(c.agent_env()["PYTHONPATH"], "/u")

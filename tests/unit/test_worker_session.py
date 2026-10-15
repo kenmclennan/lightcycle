@@ -367,6 +367,19 @@ class TestRun(unittest.TestCase):
             return proc
         return popen
 
+    def test_env_is_passed_to_popen(self):
+        seen = {}
+
+        def popen(cmd, cwd, **kwargs):
+            seen.update(kwargs)
+            return self._fake_popen({})(cmd, cwd, **kwargs)
+
+        with patch("lightcycle.adapters.worker_session.subprocess.Popen", popen):
+            run("/d", "/w", "coder", "spid", "opus", "sys", 5, env={"A": "1"})
+            self.assertEqual(seen["env"], {"A": "1"})
+            run("/d", "/w", "coder", "spid", "opus", "sys", 5)
+            self.assertIsNone(seen["env"])
+
     def test_launches_with_given_cwd_and_add_dir(self):
         captured = {}
         with patch("lightcycle.adapters.worker_session.subprocess.Popen",

@@ -168,10 +168,10 @@ def poll_decision(add_dir, spawnid, policy, events):
 
 
 def run(add_dir, cwd, stage, spawnid, model, sysprompt, max_session_seconds, clock=time.monotonic,
-        record_session_id=lambda session_id: None):
+        record_session_id=lambda session_id: None, env=None):
     proc = subprocess.Popen(build_command(model, sysprompt, add_dir), cwd=cwd,
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                            text=True, bufsize=1)
+                            text=True, bufsize=1, env=env)
     policy = SessionPolicy()
     events = queue.Queue()
     session_recorded = False
