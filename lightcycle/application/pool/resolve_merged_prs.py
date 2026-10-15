@@ -54,6 +54,14 @@ class ResolveMergedPrsUseCase:
             )
         return None
 
+    def _at_another_gate(self, item, flow, stage):
+        active = active_step_any(self._store, item.id)
+        return (
+            active is not None
+            and active.stage != stage
+            and active.stage in flow.merge_stages()
+        )
+
     def _expire_holds(self, run):
         if self._complete is None:
             return
@@ -106,6 +114,8 @@ class ResolveMergedPrsUseCase:
                         self._close_run_and_complete(run, RunState.MERGED, step, merge_outcome)
                         merged.append(item.id)
                     else:
+                        if self._at_another_gate(item, flow, stage):
+                            continue
                         disposition = self._disposition_for_close(item, flow, merge_outcome, stage)
                         if disposition is None:
                             continue
@@ -126,6 +136,8 @@ class ResolveMergedPrsUseCase:
                         self._close_run_and_complete(run, RunState.ABANDONED, step, close_outcome)
                         abandoned.append(item.id)
                     else:
+                        if self._at_another_gate(item, flow, stage):
+                            continue
                         disposition = self._disposition_for_close(item, flow, close_outcome, stage)
                         if disposition is None:
                             continue
