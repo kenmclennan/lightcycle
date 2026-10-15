@@ -62,3 +62,32 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - run: uv sync
       - run: bash tests/run.sh tests/packaging
+
+  workflow-simulate:
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: kenmclennan/lightcycle-workflows
+          ref: main
+          path: lightcycle-workflows
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - run: pip install .
+      - name: Dry-run every workflow in the official origin through the engine under change
+        run: |
+          set -euo pipefail
+          export LC_HOME="$(mktemp -d)"
+          lc init >/dev/null 2>&1 || true
+          lc workflow add "$GITHUB_WORKSPACE/lightcycle-workflows" --name ci-bundle --ref HEAD
+          fail=0
+          for f in lightcycle-workflows/workflows/*.md; do
+            name="$(basename "$f" .md)"
+            echo "== lc workflow simulate ci-bundle/$name =="
+            lc workflow simulate "ci-bundle/$name" || fail=1
+          done
+          exit "$fail"
