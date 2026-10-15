@@ -2,6 +2,7 @@ import unittest
 
 from lightcycle.adapters.guidance_sync_status import GuidanceSyncStatusAdapter
 from lightcycle.adapters.machine import MachineAdapter
+from lightcycle.adapters.config_reload_status import ConfigReloadStatusAdapter
 from lightcycle.adapters.memory_gate_status import MemoryGateStatusAdapter
 from lightcycle.container import Container, worktrees_for
 
@@ -73,3 +74,14 @@ class TestContainerGuidanceSyncStatusDefault(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestContainerConfigReloadStatusDefault(unittest.TestCase):
+    def test_defaults_to_a_config_reload_status_adapter(self):
+        c = Container(store=object())
+        self.assertIsInstance(c.config_reload_status, ConfigReloadStatusAdapter)
+
+    def test_config_reload_status_override_is_honoured(self):
+        sentinel = object()
+        c = Container(store=object(), config_reload_status=sentinel)
+        self.assertIs(c.config_reload_status, sentinel)

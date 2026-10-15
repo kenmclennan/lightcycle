@@ -6,7 +6,7 @@ from tests.support.fake_fs import FakeFs
 from tests.support.fake_git import FakeGit
 from tests.support.fake_machine import FakeMachine
 from tests.support.fake_store import FakeStore
-from tests.support.tui_harness import FakeGuidanceSyncStatus
+from tests.support.tui_harness import FakeConfigReloadStatus, FakeGuidanceSyncStatus, FakeLock
 from tests.unit.test_doctor import (
     _ALL_KEYS, FakeWorkflowBundle, FakeWorkflowSource, _Worktrees, _cfg,
 )
@@ -29,8 +29,7 @@ def _problems(files, projects=(), budget=None, git=None, status=None):
     source.add_bundle("acme", "sha1", 1, current=True)
     report = DoctorUseCase(
         store, source, _cfg(**keys), FakeWorkflowBundle(), fs, FakeMachine(), _Worktrees(),
-        git, status if status is not None else FakeGuidanceSyncStatus(),
-    ).execute(DoctorInput())
+        git, status if status is not None else FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False)).execute(DoctorInput())
     return [
         p.message for p in report.problems["guidance"]
         if p.kind != "guidance-entries-nonconforming"
@@ -45,8 +44,7 @@ def _problem_objects(files):
     git = FakeGit(ref="origin/main", ref_files={"origin/main": dict(files)})
     report = DoctorUseCase(
         store, source, _cfg(**_ALL_KEYS), FakeWorkflowBundle(), FakeFs(dirs={"/kb": []}),
-        FakeMachine(), _Worktrees(), git, FakeGuidanceSyncStatus(),
-    ).execute(DoctorInput())
+        FakeMachine(), _Worktrees(), git, FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False)).execute(DoctorInput())
     return report.problems["guidance"]
 
 
@@ -167,14 +165,12 @@ class TestDoctorGuidance(unittest.TestCase):
         source.add_bundle("acme", "sha1", 1, current=True)
         report = DoctorUseCase(
             store, source, _cfg(**_ALL_KEYS), FakeWorkflowBundle(), FakeFs(), FakeMachine(),
-            _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(),
-        ).execute(DoctorInput())
+            _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False)).execute(DoctorInput())
         self.assertEqual(report.problems["guidance"], [])
         store.add_project("guidance", local_path="/gone")
         report = DoctorUseCase(
             store, source, _cfg(**_ALL_KEYS), FakeWorkflowBundle(), FakeFs(), FakeMachine(),
-            _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(),
-        ).execute(DoctorInput())
+            _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False)).execute(DoctorInput())
         self.assertEqual(report.problems["guidance"], [])
 
     def test_malformed_entries_are_reported_by_id(self):

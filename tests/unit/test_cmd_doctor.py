@@ -10,7 +10,7 @@ from tests.support.fake_fs import FakeFs
 from tests.support.fake_git import FakeGit
 from tests.support.fake_machine import FakeMachine
 from tests.support.fake_store import FakeStore
-from tests.support.tui_harness import FakeGuidanceSyncStatus
+from tests.support.tui_harness import FakeConfigReloadStatus, FakeGuidanceSyncStatus, FakeLock
 
 
 def call(fn, *args):
@@ -99,6 +99,8 @@ class FakeContainer:
         self.machine = FakeMachine()
         self.git = FakeGit()
         self.guidance_sync_status = FakeGuidanceSyncStatus()
+        self.config_reload_status = FakeConfigReloadStatus()
+        self.lock = FakeLock(running=False)
 
     def worktrees(self):
         return FakeWorktrees()

@@ -6,7 +6,7 @@ from contextlib import redirect_stdout, redirect_stderr
 from pathlib import Path
 
 from lightcycle import cli
-from lightcycle.config import _SEED_KEYS, Config
+from lightcycle.config import _SEED_KEYS, RESTART_REQUIRED_KEYS, Config
 
 
 def call(fn, *args):
@@ -158,6 +158,9 @@ class TestCmdConfig(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         self.assertIn("lc start", out)
         self.assertIn("lc tui", out)
+        self.assertIn("within a tick", out)
+        for key in RESTART_REQUIRED_KEYS:
+            self.assertIn(key, out)
         self.assertIn("until restarted", out)
 
     def test_edit_that_left_the_file_alone_says_nothing_about_restarting(self):

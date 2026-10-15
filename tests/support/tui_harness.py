@@ -16,6 +16,7 @@ from lightcycle.adapters.drain import PoolDrainAdapter
 from lightcycle.adapters.lock import RunLockAdapter
 from lightcycle.adapters.machine import MachineAdapter
 from lightcycle.adapters.guidance_sync_status import GuidanceSyncStatusAdapter
+from lightcycle.adapters.config_reload_status import ConfigReloadStatusAdapter
 from lightcycle.adapters.memory_gate_status import MemoryGateStatusAdapter
 from lightcycle.adapters.scaffold import ScaffoldAdapter
 from lightcycle.adapters.spawner import SpawnerAdapter
@@ -33,6 +34,7 @@ from lightcycle.ports.git import GitPort
 from lightcycle.ports.launcher import LauncherPort
 from lightcycle.ports.lock import LockAcquisition, RunLockPort
 from lightcycle.ports.guidance_sync_status import GuidanceSyncStatusPort
+from lightcycle.ports.config_reload_status import ConfigReloadStatusPort
 from lightcycle.ports.memory_gate_status import MemoryGateStatusPort
 from lightcycle.ports.scaffold import ScaffoldPort
 from lightcycle.ports.spawner import SpawnerPort
@@ -85,6 +87,17 @@ class FakeBreakerPort(BreakerPort):
 
 
 class FakeMemoryGateStatus(MemoryGateStatusPort):
+    def __init__(self, state=None):
+        self._state = state if state is not None else {}
+
+    def load(self):
+        return dict(self._state)
+
+    def save(self, state):
+        self._state = dict(state)
+
+
+class FakeConfigReloadStatus(ConfigReloadStatusPort):
     def __init__(self, state=None):
         self._state = state if state is not None else {}
 
@@ -270,6 +283,7 @@ _LIVE_ADAPTER_TYPES = {
     "scaffold": ScaffoldAdapter,
     "machine": MachineAdapter,
     "memory_gate_status": MemoryGateStatusAdapter,
+    "config_reload_status": ConfigReloadStatusAdapter,
     "guidance_sync_status": GuidanceSyncStatusAdapter,
 }
 
@@ -288,7 +302,7 @@ def make_test_container(store=None, lock=None, breaker=None, fs=None, workers=No
                          workflow_bundle=None, worker_log=None, autostart_pool=False,
                          machine=None, memory_gate_status=None, guidance_sync_status=None,
                          tui_metrics=False,
-                         upgrade_check_seconds=3600, drain=None):
+                         upgrade_check_seconds=3600, drain=None, config_reload_status=None):
     fs_double = fs or FakeFs()
     config = HermeticTuiConfig(
         autostart_pool=autostart_pool, tui_metrics=tui_metrics,
@@ -323,6 +337,10 @@ def make_test_container(store=None, lock=None, breaker=None, fs=None, workers=No
         guidance_sync_status=(
             guidance_sync_status if guidance_sync_status is not None
             else FakeGuidanceSyncStatus()
+        ),
+        config_reload_status=(
+            config_reload_status if config_reload_status is not None
+            else FakeConfigReloadStatus()
         ),
     )
     assert_hermetic(container)

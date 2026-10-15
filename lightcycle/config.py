@@ -50,6 +50,20 @@ _FALSE = ("false", "no", "0", "off")
 
 _BLANK = (None, "", {})
 
+RESTART_REQUIRED_KEYS = ("poll-seconds", "pool-upgrade-check-seconds", "tick-failure-cap", "spin-cap")
+
+RELOAD_UNCHANGED = "unchanged"
+RELOAD_RELOADED = "reloaded"
+RELOAD_REJECTED = "rejected"
+
+
+@dataclass(frozen=True)
+class ConfigReloadResult:
+    outcome: str
+    reason: Optional[str] = None
+    mtime: Optional[int] = None
+    restart_required: tuple = ()
+
 
 @dataclass(frozen=True)
 class ResolvedSetting:
@@ -163,6 +177,8 @@ class Config:
         self._environ = environ if environ is not None else os.environ
         self._cached = None
         self._cached_path = None
+        self._loaded_mtime = None
+        self._rejected = None
 
     def _env(self, key):
         v = self._environ.get(key)
@@ -250,6 +266,8 @@ class Config:
         if self._cached is not None and self._cached_path == p:
             return self._cached
         self._cached_path = p
+        self._loaded_mtime = self.config_mtime()
+        self._rejected = None
         self._cached = self._read_config(p)
         return self._cached
 
@@ -268,6 +286,58 @@ class Config:
     def reload(self):
         self._cached = None
         self._cached_path = None
+        self._loaded_mtime = None
+        self._rejected = None
+
+    def raw_values(self, keys):
+        loaded = self.load_config()
+        return {k: loaded.get(k) for k in keys}
+
+    def try_reload(self, start_values=None):
+        mtime = self.config_mtime()
+        if self._cached is not None and mtime == self._loaded_mtime:
+            return ConfigReloadResult(RELOAD_UNCHANGED, mtime=mtime)
+        if self._rejected is not None and self._rejected == (mtime,):
+            return ConfigReloadResult(RELOAD_UNCHANGED, mtime=mtime)
+        if self._cached is None:
+            self.load_config()
+            return ConfigReloadResult(RELOAD_UNCHANGED, mtime=self._loaded_mtime)
+        if mtime is None:
+            return self._reject(mtime, "config file is missing")
+        try:
+            candidate = self._read_config(self.config_path())
+        except (OSError, UnicodeDecodeError) as e:
+            return self._reject(mtime, "config file could not be read: %s" % e)
+        previous = (self._cached, self._cached_path, self._loaded_mtime)
+        unset_before = {s.key for s in self.resolved_settings() if s.state == "unset"}
+        self._cached, self._cached_path, self._loaded_mtime = (
+            candidate, self.config_path(), mtime)
+        bad = [
+            s for s in self.resolved_settings()
+            if s.state == "invalid" or (s.state == "unset" and s.key not in unset_before)
+        ]
+        if bad:
+            self._cached, self._cached_path, self._loaded_mtime = previous
+            reason = bad[0].error
+            if len(bad) > 1:
+                reason = "%s (and %d more)" % (reason, len(bad) - 1)
+            return self._reject(mtime, reason)
+        self._rejected = None
+        return ConfigReloadResult(
+            RELOAD_RELOADED, mtime=mtime,
+            restart_required=self._restart_required(candidate, start_values or {}))
+
+    def _reject(self, mtime, reason):
+        self._rejected = (mtime,)
+        return ConfigReloadResult(RELOAD_REJECTED, reason=reason, mtime=mtime)
+
+    def _restart_required(self, candidate, start_values):
+        return tuple(
+            k for k in RESTART_REQUIRED_KEYS
+            if k in start_values
+            and self._env(_ENV_OVERRIDE_VARS[k]) is None
+            and candidate.get(k) != start_values[k]
+        )
 
     def _default_config_text(self):
         return "".join("%s: %s\n" % (k, v) for k, v in _SEED_KEYS)

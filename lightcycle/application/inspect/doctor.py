@@ -43,7 +43,7 @@ class DoctorReport:
 class DoctorUseCase:
     def __init__(
         self, store, workflow_source, config, workflow_bundle, fs, machine, worktrees,
-        git, guidance_sync_status,
+        git, guidance_sync_status, config_reload_status, lock,
     ):
         self._store = store
         self._workflow_source = workflow_source
@@ -54,6 +54,8 @@ class DoctorUseCase:
         self._worktrees = worktrees
         self._git = git
         self._guidance_sync_status = guidance_sync_status
+        self._config_reload_status = config_reload_status
+        self._lock = lock
         self._schedule_resolver = ScheduleResolver(
             store, config, FlowService(workflow_bundle, store, config, workflow_source),
             workflow_source)
@@ -67,7 +69,8 @@ class DoctorUseCase:
             "pins": pins,
             "contract": contracts,
             "origin": self._origin_problems(),
-            "config": self._config_problems() + self._schedule_problems(),
+            "config": (
+                self._config_problems() + self._schedule_problems() + self._reload_problems()),
             "orphans": self._orphan_problems(),
             "facets": self._guidance_registration_problems() + self._facet_problems(),
             "guidance": self._guidance_problems(),
@@ -188,6 +191,26 @@ class DoctorUseCase:
             Problem("config", "config key %r is set but not read by this version" % k)
             for k in self._config.obsolete_config_keys()
         ]
+        return problems
+
+    def _reload_problems(self):
+        if self._config_reload_status is None or self._lock is None:
+            return []
+        state = self._config_reload_status.load()
+        holder = self._lock.holder_pid()
+        if holder is None or state.get("pid") != holder:
+            return []
+        problems = []
+        if (state.get("outcome") == "rejected"
+                and state.get("rejected_mtime") == self._config.config_mtime()):
+            problems.append(Problem(
+                "config",
+                "config edit rejected by the running pool (%s); it is running on the last good "
+                "config" % state.get("reason")))
+        restart = state.get("restart_required") or []
+        if restart:
+            problems.append(Problem(
+                "config", "running pool needs a restart for: %s" % ", ".join(restart)))
         return problems
 
     def _schedule_problems(self):

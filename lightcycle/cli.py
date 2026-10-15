@@ -173,7 +173,7 @@ from lightcycle.application.setup import (
 from lightcycle.application.setup.upgrade import scan_venv_holders
 from lightcycle.application.workflows.engine_requirement_check import installed_bundle_conflicts
 from lightcycle.adapters.sqlite_store import LiveStoreRefused, SchemaVersionRefused
-from lightcycle.config import Config, ConfigError
+from lightcycle.config import RESTART_REQUIRED_KEYS, Config, ConfigError
 from lightcycle.container import (
     Container,
     SimulationContainer,
@@ -1186,6 +1186,7 @@ def cmd_doctor(argv):
         _container.store, _container.workflow_source, _container.config, _container.workflow_bundle,
         _container.fs, _container.machine, _container.worktrees(),
         _container.git, _container.guidance_sync_status,
+        _container.config_reload_status, _container.lock,
     ).execute(DoctorInput())
     if a.json:
         print(json.dumps(
@@ -1730,6 +1731,11 @@ def _tick_event_lines(result, ts):
         lines.append("%s  %-7s  %s" % (ts, "park", bid))
     for spawnid in result.sweep.killed:
         lines.append("%s  %-7s  %s" % (ts, "kill", spawnid))
+    if result.config is not None and result.config.outcome == "reloaded":
+        text = "config reloaded"
+        if result.config.restart_required:
+            text += " - restart needed for: %s" % ", ".join(result.config.restart_required)
+        lines.append("%s  %s" % (ts, text))
     for sid in result.cadence.fired:
         lines.append("%s  %-7s  %s" % (ts, "audit", sid))
     if result.material_audit is not None:
@@ -2205,8 +2211,9 @@ def _init_pull_default_origin():
 
 
 CONFIG_EDIT_RESTART_NOTICE = (
-    "config saved - a running pool (`lc start`) and any open TUI (`lc tui`) keep "
-    "the old values until restarted"
+    "config saved - a running pool (`lc start`) applies it within a tick, except "
+    + ", ".join(RESTART_REQUIRED_KEYS)
+    + " which need a pool restart; any open TUI (`lc tui`) keeps the old values until restarted"
 )
 
 
