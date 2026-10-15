@@ -157,6 +157,10 @@ class RecordingGit(GitPort, TeardownLedgerPort):
         self._record("added_at", root, ref, path)
         return None
 
+    def changed_paths(self, root, base):
+        self._record("changed_paths", root, base)
+        return []
+
 
 class ScriptedGitHub(GitHubEventsPort):
     def __init__(self, login="reviewer"):

@@ -128,3 +128,7 @@ class GitPort(ABC):
     @abstractmethod
     def added_at(self, root, ref, path):
         pass
+
+    @abstractmethod
+    def changed_paths(self, root, base):
+        pass

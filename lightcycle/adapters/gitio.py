@@ -276,6 +276,20 @@ def added_at(root, ref, path):
     return lines[-1] if lines else None
 
 
+def changed_paths(root, base):
+    proc = git(root, "diff", "--name-status", "--no-renames", "%s...HEAD" % base)
+    if proc.returncode != 0:
+        raise GitReadError(
+            "git diff %s...HEAD failed in %s: %s" % (base, root, proc.stderr.strip())
+        )
+    rows = []
+    for line in proc.stdout.splitlines():
+        status, _, path = line.partition("\t")
+        if path:
+            rows.append((status, path))
+    return rows
+
+
 class GitAdapter(GitPort):
     def add_worktree(self, root, path, branch, base, retries, backoff):
         return add_worktree(root, path, branch, base, retries, backoff)
@@ -363,3 +377,6 @@ class GitAdapter(GitPort):
 
     def added_at(self, root, ref, path):
         return added_at(root, ref, path)
+
+    def changed_paths(self, root, base):
+        return changed_paths(root, base)
