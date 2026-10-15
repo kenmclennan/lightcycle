@@ -6,6 +6,7 @@ from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.application.setup.project_registry import ProjectRegistry
 from lightcycle.application.work.node_read_surface import node_read_surface
+from lightcycle.config import ConfigError
 from lightcycle.domain.contracts import StepContract
 from lightcycle.domain.work import NodeView, State
 from lightcycle.ports.store import ProjectResolutionError
@@ -129,6 +130,21 @@ class ClaimStepUseCase:
             return self._flow.meta_for_step(stage, pin)
         return self._flow.meta_for_unpinned_step(stage)
 
+    def _attach_trusted_authors(self, t):
+        phase = self._flow.phase_for(t)
+        if phase is None:
+            return
+        run = self._store.current_run(t.item or t.id, phase)
+        if run is None or not run.pr:
+            return
+        try:
+            trusted = self._config.trusted_authors()
+        except ConfigError:
+            return
+        if trusted:
+            self._store.replace_artifact(
+                t.id, "trusted-authors", "\n".join(sorted(trusted)), internal=True)
+
     def _workspace_agrees(self, t, ws, branch):
         phase = self._flow.phase_for(t)
         if ws is None or phase is None:
@@ -156,6 +172,7 @@ class ClaimStepUseCase:
             pin = self._flow.workflow_for(t)
         if meta is None:
             meta = self._meta_for(t.stage, pin)
+        self._attach_trusted_authors(t)
         view = self._store.node_view(t.id)
         surface = node_read_surface(self._store, self._flow, view)
         item = t.item or t.id

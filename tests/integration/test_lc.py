@@ -3476,6 +3476,45 @@ class TestAdmittedCommentsSurfaceOnClaim(unittest.TestCase):
         self.assertEqual([a["value"] for a in found], ["inline:11\nmention:12"])
 
 
+class TestTrustedAuthorsSurfaceOnClaim(unittest.TestCase):
+    _METAS = {"code-await-merge": {"step": "code-await-merge", "phase": "code"}}
+
+    def setUp(self):
+        _fake_setUp(self)
+        write_workflow(self.root, self._METAS)
+        self.item = self.store.create_item(
+            "item", "a description", workflow="%s@%s" % (_DEFAULT_WORKFLOW, _SHA)
+        )
+        self.pid = self.store.open_pass(self.item)
+
+    def _claim_step_with_pr(self, pr):
+        rid = self.store.open_run(self.item, self.pid, "code")
+        if pr:
+            self.store.set_pr(rid, pr)
+        self.store.create_step(step="code-await-merge", role="agent", parent=self.item)
+        rc, out, err = call(_cli_mod.cmd_claim, "agent")
+        self.assertEqual(rc, 0, err)
+        return [a["value"] for a in json.loads(out)["artifacts"] if a["type"] == "trusted-authors"]
+
+    def _configure(self, line):
+        cfg = write_config(projects=self.root, specs=self.root)
+        with open(cfg, "a") as f:
+            f.write(line + "\n")
+        inject_container(self, store=self.store, home=self.root, config_path=cfg)
+
+    def test_claim_carries_the_casefolded_trusted_authors_one_per_line(self):
+        self._configure("trusted-authors: Ken Reviewer-Bot")
+        found = self._claim_step_with_pr("https://example.com/pr/code")
+        self.assertEqual(found, ["ken\nreviewer-bot"])
+
+    def test_claim_carries_none_when_trusted_authors_is_unset(self):
+        self.assertEqual(self._claim_step_with_pr("https://example.com/pr/code"), [])
+
+    def test_claim_carries_none_when_the_phase_run_has_no_pr(self):
+        self._configure("trusted-authors: ken")
+        self.assertEqual(self._claim_step_with_pr(None), [])
+
+
 class TestResumeFieldsSurfaceOnShow(unittest.TestCase):
     def setUp(self):
         _fake_setUp(self)
