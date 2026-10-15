@@ -549,3 +549,34 @@ class TestGitAdapterGuidanceRef(unittest.TestCase):
         self.assertFalse(outcome.ok)
         self.assertTrue(outcome.detail)
         self.assertEqual(self.adapter.read_file_at(self.clone, "origin/main", "a.md"), b"origin-a")
+
+
+class TestGitAdapterChangedPaths(unittest.TestCase):
+    def test_reports_added_modified_and_deleted_rows_without_renames(self):
+        repo = _make_repo()
+        (Path(repo) / "gone.md").write_text("a")
+        (Path(repo) / "kept.md").write_text("a")
+        (Path(repo) / "moved.md").write_text("same content\nmore\n")
+        _git(repo, "add", ".")
+        _git(repo, "commit", "-q", "-m", "base")
+        _git(repo, "checkout", "-q", "-b", "feature")
+        (Path(repo) / "new.md").write_text("n")
+        (Path(repo) / "kept.md").write_text("b")
+        _git(repo, "rm", "-q", "gone.md")
+        _git(repo, "mv", "moved.md", "renamed.md")
+        _git(repo, "add", ".")
+        _git(repo, "commit", "-q", "-m", "change")
+
+        rows = GitAdapter().changed_paths(repo, "main")
+
+        self.assertEqual(
+            rows,
+            [("D", "gone.md"), ("M", "kept.md"), ("D", "moved.md"),
+             ("A", "new.md"), ("A", "renamed.md")],
+        )
+
+    def test_raises_for_an_unknown_base(self):
+        repo = _make_repo()
+
+        with self.assertRaises(GitReadError):
+            GitAdapter().changed_paths(repo, "no-such-ref")

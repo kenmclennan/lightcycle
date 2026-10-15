@@ -7,10 +7,10 @@ from lightcycle.application.git_identity import require_git_identity
 from lightcycle.config import ConfigError
 from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE, SPECS_WORKSPACE
 from lightcycle.ports.github import ReadFailure
+from lightcycle.domain.guidance.conventions import CONVENTIONS_TEXT
 from lightcycle.domain.guidance.skeleton import (
     COMMIT_MESSAGE,
     CONVENTIONS_PATH,
-    CONVENTIONS_TEXT,
     INDEX_PATH,
     INDEX_TEXT,
 )

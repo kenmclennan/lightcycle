@@ -108,12 +108,12 @@ class TestInitGuidanceRepo(unittest.TestCase):
         return r, store, fs, git
 
     def test_skeleton_says_guidance_repo_and_commits_with_that_subject(self):
-        from lightcycle.domain.guidance import skeleton
+        from lightcycle.domain.guidance import conventions, skeleton
 
         self.assertEqual(skeleton.COMMIT_MESSAGE, "chore: add the guidance repo skeleton")
         self.assertIn("guidance repo", skeleton.INDEX_TEXT.lower())
         self.assertNotIn("knowledge base", skeleton.INDEX_TEXT.lower())
-        self.assertNotIn("knowledge base", skeleton.CONVENTIONS_TEXT.lower())
+        self.assertNotIn("knowledge base", conventions.CONVENTIONS_TEXT.lower())
 
     def test_the_old_verb_and_flag_are_gone(self):
         from lightcycle.cli_commands import COMMANDS

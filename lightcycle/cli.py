@@ -95,6 +95,7 @@ from lightcycle.application.work import (
 )
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.inspect import DoctorInput, DoctorUseCase
+from lightcycle.application.inspect.check_guidance import CheckGuidanceUseCase
 from lightcycle.application.inspect.show_audit_criteria import ShowAuditCriteriaUseCase
 from lightcycle.domain.work.audit_criteria import UnknownMaterial
 from lightcycle.application.inspect.report_guidance import ReportGuidanceUseCase, parse_since
@@ -296,6 +297,9 @@ COMMAND_GROUPS = [
          "flag retirement candidates (read-only; counts cover steps still in the store)"),
         ("guidance-dir", "[--check]", "print the resolved guidance repo directory (absolute "
          "path); --check validates it against the registered guidance remote"),
+        ("guidance-check", "[--dir PATH] [--mode draft|final] [--base REF]", "check changed "
+         "guidance entries against the engine's guidance conventions (read-only; exits 1 on "
+         "any failure or an unreadable base)"),
         ("audit-criteria", "<material>", "print the periodic audit's criteria for one material "
          "(guidance, workflows) from the engine's audit prompt"),
     ]),
@@ -723,6 +727,21 @@ def _print_guidance_work(report):
 def cmd_guidance_dir(argv):
     a = build_parser(COMMANDS["guidance-dir"]).parse_args(argv)
     return _project_dir(GUIDANCE_WORKSPACE, "guidance remote", a.check, "guidance")
+
+
+def cmd_guidance_check(argv):
+    a = build_parser(COMMANDS["guidance-check"]).parse_args(argv)
+    c = _container
+    try:
+        failures, checked = CheckGuidanceUseCase(c.git, c.fs).execute(a.dir, a.mode, a.base)
+    except UseCaseError as e:
+        sys.stderr.write("lc guidance-check: %s\n" % e)
+        return 1
+    if failures:
+        print("\n".join(failures))
+        return 1
+    print("%d changed file(s) clean (%s mode)" % (checked, a.mode))
+    return 0
 
 
 def cmd_audit_criteria(argv):

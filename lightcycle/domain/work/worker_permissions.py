@@ -1,5 +1,5 @@
 WORKER_VERBS = ("claim", "done", "show", "attach", "retro", "backlog", "search", "peek",
-                "guidance", "guidance-dir")
+                "guidance", "guidance-dir", "guidance-check")
 
 _SET_FORBIDDEN_FIELDS = (
     "title", "description", "project", "workflow", "backlog", "label", "step", "unset",

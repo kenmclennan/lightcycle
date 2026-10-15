@@ -137,6 +137,11 @@ COMMANDS = {
     "guidance-dir": CommandSpec(prog="lc guidance-dir", args=(
         Arg("--check", action="store_true"),
     )),
+    "guidance-check": CommandSpec(prog="lc guidance-check", args=(
+        Arg("--dir", default=".", metavar="PATH"),
+        Arg("--mode", choices=("draft", "final"), default="final"),
+        Arg("--base", default="origin/main", metavar="REF"),
+    )),
     "audit-criteria": CommandSpec(prog="lc audit-criteria", args=(
         Arg("material"),
     )),
