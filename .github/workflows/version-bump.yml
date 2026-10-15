@@ -3,14 +3,13 @@ name: Version bump
 on:
   push:
     branches: [main]
-  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
   bump:
-    if: github.event_name == 'push' && github.event.head_commit.author.name != 'github-actions[bot]'
+    if: github.event.head_commit.author.name != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -81,34 +80,3 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag "$tag" "$sha"
           git push origin "refs/tags/$tag"
-
-  backfill-tags:
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Tag every commit where __version__ first became a value
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          git ls-remote --tags origin | sed -nE 's#.*refs/tags/(v[^^]+)$#\1#p' | sort -u > existing.txt
-          : > seen.txt
-          pushed=0
-
-          for sha in $(git log --reverse --format=%H -- lightcycle/__init__.py); do
-            version=$(git show "$sha:lightcycle/__init__.py" | sed -nE 's/^__version__ = "([0-9]+\.[0-9]+\.[0-9]+)"$/\1/p')
-            [ -z "$version" ] && continue
-            tag="v$version"
-            grep -qxF "$tag" seen.txt && continue
-            echo "$tag" >> seen.txt
-            grep -qxF "$tag" existing.txt && continue
-            git tag "$tag" "$sha"
-            git push origin "refs/tags/$tag"
-            pushed=$((pushed + 1))
-          done
-
-          echo "pushed $pushed tags"
