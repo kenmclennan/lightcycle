@@ -14,6 +14,7 @@ from lightcycle.application.workflows.prompt_check import (
     engine_sources,
     prompt_drift_detail,
 )
+from lightcycle.application.workflows.engine_requirement_check import unmet_requirement_message
 from lightcycle.domain.workflows.contract import ENGINE_CONTRACT, contract_compatible
 from lightcycle.domain.workflows.source import parse_source_manifest
 from lightcycle.ports.workflow_source import FetchedBundle, WorkflowSourceError
@@ -38,8 +39,9 @@ class DirCheckResponse:
 
 
 class CheckWorkflowDirUseCase:
-    def __init__(self, bundle_port, fs):
+    def __init__(self, bundle_port, fs, engine_version):
         self._bundle = bundle_port
+        self._engine_version = engine_version
         self._fs = fs
 
     def _read(self, path):
@@ -88,6 +90,10 @@ class CheckWorkflowDirUseCase:
             problems.append(
                 "source targets contract %d, engine provides %d"
                 % (manifest.contract, ENGINE_CONTRACT))
+        if (manifest.requires_engine is not None
+                and not manifest.requires_engine.satisfied_by(self._engine_version)):
+            problems.append(
+                unmet_requirement_message(manifest.requires_engine, self._engine_version))
         references = {
             n: msgs for n, msgs in check_bundle_references(bundle).items() if n in names
         }

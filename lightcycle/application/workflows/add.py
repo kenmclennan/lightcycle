@@ -14,6 +14,7 @@ from lightcycle.application.workflows.prompt_check import (
     prompt_drift_detail,
 )
 from lightcycle.application.workflows.pinned import pinned_shas
+from lightcycle.application.workflows.engine_requirement_check import unmet_requirement_message
 from lightcycle.domain.workflows.contract import ENGINE_CONTRACT, contract_compatible
 from lightcycle.domain.workflows.retention import versions_to_prune
 from lightcycle.domain.workflows.source import parse_source_manifest
@@ -67,6 +68,10 @@ class AddWorkflowSourceUseCase:
                 "source targets contract %d, engine provides %d; `lc upgrade` the engine "
                 "or use a source ref that targets %d"
                 % (manifest.contract, ENGINE_CONTRACT, ENGINE_CONTRACT))
+        if (manifest.requires_engine is not None
+                and not manifest.requires_engine.satisfied_by(self._config.version())):
+            raise WorkflowSourceError(
+                unmet_requirement_message(manifest.requires_engine, self._config.version()))
         if self._source.read_registry(origin) is not None:
             raise WorkflowSourceError(
                 "origin %r is already registered; use `lc workflow upgrade %s`"

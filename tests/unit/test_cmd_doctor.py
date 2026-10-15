@@ -57,6 +57,9 @@ class FakeWorkflowSource:
 
 
 class FakeConfig:
+    def version(self):
+        return "0.6.319"
+
     def missing_config_keys(self):
         return ()
 

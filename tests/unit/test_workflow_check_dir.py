@@ -26,6 +26,9 @@ class _Config:
     def workflow_retention(self):
         return 5
 
+    def version(self):
+        return "0.6.319"
+
     def data_root(self):
         return "/nonexistent-data-root"
 
@@ -75,6 +78,22 @@ class TestWorkflowCheckDir(unittest.TestCase):
 
     def test_valid_bundle_passes(self):
         rc, _out, err = run_check("--dir", _bundle(self.tmp), "spec-driven")
+        self.assertEqual(rc, 0, err)
+
+    def _require(self, requirement):
+        root = _bundle(self.tmp)
+        with open(os.path.join(root, "source.toml"), "a") as f:
+            f.write('requires-engine = "%s"\n' % requirement)
+        return root
+
+    def test_unmet_engine_requirement_is_listed_among_the_problems(self):
+        rc, _out, err = run_check("--dir", self._require(">=0.7.0"), "spec-driven")
+        self.assertNotEqual(rc, 0)
+        self.assertIn(">=0.7.0", err)
+        self.assertIn("0.6.319", err)
+
+    def test_met_engine_requirement_passes(self):
+        rc, _out, err = run_check("--dir", self._require(">=0.6.318,<0.7.0"), "spec-driven")
         self.assertEqual(rc, 0, err)
 
     def test_missing_fragment_fails_with_the_not_found_message(self):

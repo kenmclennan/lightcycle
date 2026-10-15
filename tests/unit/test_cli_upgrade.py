@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from lightcycle import cli
 from lightcycle.application.setup import (
+    BundleRangeError,
     ProcessListUnreadableError,
     RemoteVersionUnavailableError,
     VenvBusyError,
@@ -30,6 +31,7 @@ class FakeUpgradePort(UpgradePort):
 class FakeContainer:
     def __init__(self):
         self.upgrade = FakeUpgradePort()
+        self.workflow_source = object()
 
 
 class TestCmdUpgrade(unittest.TestCase):
@@ -94,6 +96,46 @@ class TestCmdUpgrade(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertIn("could not check", err.getvalue())
         self.assertNotIn("in use by other processes", err.getvalue())
+
+    def test_refuses_naming_each_conflict_and_the_force_escape(self):
+        with patch("lightcycle.cli.upgrade") as fake_upgrade:
+            fake_upgrade.side_effect = BundleRangeError(["origin acme excludes 0.7.0"])
+            err = io.StringIO()
+            with redirect_stderr(err):
+                rc = cmd_upgrade([]) or 0
+        self.assertEqual(rc, 1)
+        self.assertIn("origin acme excludes 0.7.0", err.getvalue())
+        self.assertIn("lc upgrade --force", err.getvalue())
+
+    def test_force_flag_reaches_upgrade_and_conflicts_print_as_a_warning(self):
+        with patch("lightcycle.cli.upgrade") as fake_upgrade:
+            fake_upgrade.return_value.available = True
+            fake_upgrade.return_value.applied = True
+            fake_upgrade.return_value.current = "0.2.0"
+            fake_upgrade.return_value.remote = "0.3.0"
+            fake_upgrade.return_value.conflicts = ("origin acme excludes 0.3.0",)
+            out, err = io.StringIO(), io.StringIO()
+            with redirect_stdout(out), redirect_stderr(err):
+                rc = cmd_upgrade(["--force"]) or 0
+            self.assertTrue(fake_upgrade.call_args.kwargs["force"])
+        self.assertEqual(rc, 0)
+        self.assertIn("upgraded: 0.2.0 -> 0.3.0", out.getvalue())
+        self.assertIn("origin acme excludes 0.3.0", err.getvalue())
+
+    def test_check_prints_blocked_lines_and_exits_zero(self):
+        with patch("lightcycle.cli.upgrade") as fake_upgrade:
+            fake_upgrade.return_value.available = True
+            fake_upgrade.return_value.applied = False
+            fake_upgrade.return_value.current = "0.2.0"
+            fake_upgrade.return_value.remote = "0.3.0"
+            fake_upgrade.return_value.conflicts = ("origin acme excludes 0.3.0",)
+            out = io.StringIO()
+            with redirect_stdout(out):
+                rc = cmd_upgrade(["--check"]) or 0
+        self.assertEqual(rc, 0)
+        self.assertEqual(
+            out.getvalue(),
+            "upgrade available: 0.2.0 -> 0.3.0\nblocked: origin acme excludes 0.3.0\n")
 
     def test_reports_and_refuses_when_the_remote_version_cannot_be_fetched(self):
         with patch("lightcycle.cli.upgrade") as fake_upgrade:

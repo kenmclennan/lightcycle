@@ -38,14 +38,15 @@ class FakeWorkflowSource:
         self.registries = {}
         self.failures = {}
 
-    def add_bundle(self, origin, sha, contract, current=False):
+    def add_bundle(self, origin, sha, contract, current=False, requires=None):
         self.materialized.setdefault(origin, []).append(sha)
-        self.manifests[(origin, sha)] = 'name = "%s"\ncontract = %d\n' % (origin, contract)
+        extra = "" if requires is None else 'requires-engine = "%s"\n' % requires
+        self.manifests[(origin, sha)] = 'name = "%s"\ncontract = %d\n%s' % (origin, contract, extra)
         if current:
             self.currents[origin] = sha
 
-    def register_origin(self, name, url=None, ref=""):
-        self.registries[name] = OriginRegistration(url=url or name, ref=ref, current=None)
+    def register_origin(self, name, url=None, ref="", current=None):
+        self.registries[name] = OriginRegistration(url=url or name, ref=ref, current=current)
 
     def fail_resolve(self, name, reason):
         self.failures[self.registries[name].url] = reason
@@ -109,6 +110,34 @@ def _uc(store, source, config, bundle):
 class TestAllKeysCoversEverySeedKey(unittest.TestCase):
     def test_all_keys_covers_every_seed_key(self):
         self.assertEqual(set(_ALL_KEYS), {k.replace("-", "_") for k, _ in _SEED_KEYS})
+
+
+class TestDoctorEngineRequirement(unittest.TestCase):
+    def _report(self, requires, version="0.6.319"):
+        source = FakeWorkflowSource()
+        source.add_bundle("acme", "sha1", 1, current=True, requires=requires)
+        source.register_origin("acme", current="sha1")
+        config = _cfg(**_ALL_KEYS)
+        config.version = lambda: version
+        return _uc(FakeStore(), source, config, FakeWorkflowBundle()).execute(DoctorInput())
+
+    def test_unmet_requirement_lands_in_contract(self):
+        report = self._report(">=0.7.0")
+        messages = [p.message for p in report.problems["contract"]]
+        self.assertEqual(len(messages), 1)
+        self.assertIn("acme", messages[0])
+        self.assertIn("sha1", messages[0])
+        self.assertIn(">=0.7.0", messages[0])
+        self.assertIn("0.6.319", messages[0])
+
+    def test_malformed_requirement_lands_in_contract(self):
+        report = self._report(">=0.7")
+        self.assertEqual(len(report.problems["contract"]), 1)
+        self.assertIn("requires-engine", report.problems["contract"][0].message)
+
+    def test_met_and_absent_requirements_report_nothing(self):
+        for requires in (">=0.6.0", None):
+            self.assertEqual(self._report(requires).problems["contract"], [])
 
 
 class TestDoctorUseCase(unittest.TestCase):

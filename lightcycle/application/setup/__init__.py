@@ -14,6 +14,7 @@ from lightcycle.application.setup.upgrade import (
     ProcessListUnreadableError,
     RemoteVersionUnavailableError,
     UpgradeResponse,
+    BundleRangeError,
     VenvBusyError,
     upgrade,
 )
@@ -24,6 +25,6 @@ __all__ = [
     "ListProjectsUseCase", "ProjectRegistry", "RemoveProjectUseCase", "ScanCandidate",
     "ScanProjectsUseCase",
     "RestoreInput", "RestoreStoreUseCase",
-    "upgrade", "UpgradeResponse", "VenvBusyError", "ProcessListUnreadableError",
+    "upgrade", "UpgradeResponse", "VenvBusyError", "BundleRangeError", "ProcessListUnreadableError",
     "RemoteVersionUnavailableError", "UpgradeNoticeResponse", "UpgradeNoticeUseCase",
 ]

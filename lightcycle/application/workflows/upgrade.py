@@ -14,6 +14,7 @@ from lightcycle.application.workflows.prompt_check import (
     engine_sources,
     prompt_drift_detail,
 )
+from lightcycle.application.workflows.engine_requirement_check import unmet_requirement_message
 from lightcycle.domain.workflows.contract import ENGINE_CONTRACT, contract_compatible
 from lightcycle.domain.workflows.source import parse_source_manifest
 from lightcycle.ports.workflow_source import WorkflowSourceError
@@ -62,6 +63,10 @@ class UpgradeWorkflowSourceUseCase:
                 "source targets contract %d, engine provides %d; `lc upgrade` the engine "
                 "or use a source ref that targets %d"
                 % (manifest.contract, ENGINE_CONTRACT, ENGINE_CONTRACT))
+        if (manifest.requires_engine is not None
+                and not manifest.requires_engine.satisfied_by(self._config.version())):
+            raise WorkflowSourceError(
+                unmet_requirement_message(manifest.requires_engine, self._config.version()))
         problems = check_bundle_references(bundle)
         if problems:
             detail = "; ".join(
