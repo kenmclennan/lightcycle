@@ -17,6 +17,8 @@ from lightcycle.adapters.simulate import (
 )
 from lightcycle.cli_commands import COMMANDS, build_parser
 from lightcycle.adapters.upgrade import UpgradeAdapter
+from lightcycle.adapters.workflow_bundle import WorkflowBundleAdapter
+from lightcycle.adapters.workflow_source import WorkflowSourceAdapter
 from lightcycle.adapters.log_parser import LogLineParser
 from lightcycle.render import (
     display_stage, format_elapsed, render_backlog, render_inbox, render_queue, render_search,
@@ -159,10 +161,12 @@ from lightcycle.application.setup import (
     RestoreStoreUseCase,
     ScanProjectsUseCase,
     UpgradeNoticeUseCase,
+    BundleRangeError,
     VenvBusyError,
     upgrade,
 )
 from lightcycle.application.setup.upgrade import scan_venv_holders
+from lightcycle.application.workflows.engine_requirement_check import installed_bundle_conflicts
 from lightcycle.adapters.sqlite_store import LiveStoreRefused, SchemaVersionRefused
 from lightcycle.config import Config, ConfigError
 from lightcycle.container import (
@@ -335,13 +339,27 @@ def cmd_version(argv):
 
 def cmd_upgrade(argv):
     a = build_parser(COMMANDS["upgrade"]).parse_args(argv)
-    port = _container.upgrade if _container is not None else UpgradeAdapter(Config())
+    if _container is not None:
+        port = _container.upgrade
+        source = _container.workflow_source
+    else:
+        config = Config()
+        port = UpgradeAdapter(config)
+        source = WorkflowSourceAdapter(config, WorkflowBundleAdapter())
     try:
         resp = upgrade(
             __version__, check_only=a.check, fetch=port.fetch_remote_version,
             install=port.install_upgrade, installed=port.installed_version,
             holders=lambda: scan_venv_holders(port.list_processes),
+            bundle_conflicts=lambda target: installed_bundle_conflicts(source, target),
+            force=a.force,
         )
+    except BundleRangeError as e:
+        for message in e.conflicts:
+            sys.stderr.write("%s\n" % message)
+        sys.stderr.write(
+            "run `lc workflow upgrade` first, or `lc upgrade --force` to install anyway\n")
+        return 1
     except VenvBusyError as e:
         sys.stderr.write("%s\n" % e)
         return 1
@@ -357,8 +375,12 @@ def cmd_upgrade(argv):
         print("already at latest (%s)" % resp.current)
     elif a.check:
         print("upgrade available: %s -> %s" % (resp.current, resp.remote))
+        for message in resp.conflicts:
+            print("blocked: %s" % message)
     else:
         print("upgraded: %s -> %s" % (resp.current, resp.remote))
+        for message in resp.conflicts:
+            sys.stderr.write("warning: %s\n" % message)
     return 0
 
 
@@ -768,7 +790,7 @@ def cmd_audit_criteria(argv):
 def _workflow_check_dir(directory, name, as_json):
     c = _container
     try:
-        resp = CheckWorkflowDirUseCase(c.workflow_bundle, c.fs).execute(directory, name)
+        resp = CheckWorkflowDirUseCase(c.workflow_bundle, c.fs, c.config.version()).execute(directory, name)
     except WorkflowSourceError as e:
         sys.stderr.write("lc workflow check: %s\n" % e)
         return 1

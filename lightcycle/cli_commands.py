@@ -72,7 +72,7 @@ def _flags_of(args):
 COMMANDS = {
     "version": CommandSpec(prog="lc version"),
     "upgrade": CommandSpec(prog="lc upgrade", args=(
-        Arg("--check", action="store_true"),
+        Arg("--check", action="store_true"), Arg("--force", action="store_true"),
     )),
     "workflow": CommandSpec(prog="lc workflow", subparsers={
         "add": CommandSpec(prog="lc workflow add", args=(

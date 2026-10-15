@@ -77,13 +77,17 @@ class FakeSource:
 
 
 class FakeConfig:
-    def __init__(self, retention=3, projects_root="/projects"):
+    def __init__(self, retention=3, projects_root="/projects", version="0.6.319"):
+        self._version = version
         self._retention = retention
         self._projects_root = projects_root
         self.personal_origin_set = None
 
     def workflow_retention(self):
         return self._retention
+
+    def version(self):
+        return self._version
 
     def projects_root(self):
         return self._projects_root
@@ -494,6 +498,57 @@ class TestUpgradeAll(unittest.TestCase):
         self.assertEqual(len(resp.failures), 1)
         self.assertEqual(resp.failures[0].origin, "broken")
         self.assertEqual(resp.failures[0].error, "ref 'branch-x' not found in u2")
+
+
+class TestEngineRequirement(unittest.TestCase):
+    def _manifest(self, name, requirement):
+        extra = 'requires-engine = "%s"\n' % requirement if requirement else ""
+        return 'name = "%s"\ncontract = 1\n%s' % (name, extra)
+
+    def test_add_refuses_unmet_requirement_naming_both_versions_and_pins_nothing(self):
+        source = FakeSource()
+        source.add_remote("u", self._manifest("acme", ">=0.7.0"), "sha1")
+        with self.assertRaises(WorkflowSourceError) as ctx:
+            _add(source, config=FakeConfig(version="0.6.319")).execute(
+                url="u", ref="main", name=None)
+        self.assertIn(">=0.7.0", str(ctx.exception))
+        self.assertIn("0.6.319", str(ctx.exception))
+        self.assertEqual(source.materialized, {})
+        self.assertEqual(source.registries, {})
+
+    def test_add_accepts_met_and_absent_requirements(self):
+        for name, requirement in (("met", ">=0.6.318,<0.7.0"), ("absent", None)):
+            source = FakeSource()
+            source.add_remote("u", self._manifest(name, requirement), "sha1")
+            resp = _add(source, config=FakeConfig(version="0.6.319")).execute(
+                url="u", ref="main", name=None)
+            self.assertEqual(resp.origin, name)
+
+    def test_upgrade_refuses_unmet_requirement_and_keeps_the_registry(self):
+        source = FakeSource()
+        source.add_remote("u", self._manifest("acme", None), "sha1")
+        _add(source).execute(url="u", ref="main", name=None)
+        source.add_remote("u", self._manifest("acme", ">=0.7.0"), "sha2")
+        cfg = FakeConfig(version="0.6.319")
+        with self.assertRaises(WorkflowSourceError) as ctx:
+            UpgradeWorkflowSourceUseCase(source, FakeStore(), cfg, FsAdapter(cfg)).execute("acme")
+        self.assertIn(">=0.7.0", str(ctx.exception))
+        self.assertEqual(source.registries["acme"].current, "sha1")
+        self.assertFalse(source.has_version("acme", "sha2"))
+
+    def test_upgrade_all_reports_the_unmet_origin_and_upgrades_the_others(self):
+        source = FakeSource()
+        for name in ("one", "two", "three"):
+            source.add_remote("u-" + name, self._manifest(name, None), "sha1")
+            _add(source).execute(url="u-" + name, ref="main", name=None)
+        source.add_remote("u-one", self._manifest("one", None), "sha2")
+        source.add_remote("u-two", self._manifest("two", ">=9.0.0"), "sha2")
+        source.add_remote("u-three", self._manifest("three", ">=0.6.0"), "sha2")
+        cfg = FakeConfig(version="0.6.319")
+        resp = UpgradeWorkflowSourcesUseCase(source, FakeStore(), cfg, FsAdapter(cfg)).execute()
+        self.assertEqual(sorted(r.origin for r in resp.results), ["one", "three"])
+        self.assertEqual([f.origin for f in resp.failures], ["two"])
+        self.assertIn(">=9.0.0", resp.failures[0].error)
 
 
 class TestRemove(unittest.TestCase):

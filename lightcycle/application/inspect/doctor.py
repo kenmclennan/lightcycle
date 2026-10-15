@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Dict, List
 
 from lightcycle.application.errors import UseCaseError
+from lightcycle.application.workflows.engine_requirement_check import bundle_conflict_messages
 from lightcycle.application.services.guidance_library import NO_REF_ENTRY, GuidanceLibrary
 from lightcycle.application.services.engine_fragments import with_engine_fragments
 from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE, LEGACY_KNOWLEDGE_WORKSPACE
@@ -55,6 +56,7 @@ class DoctorUseCase:
     def execute(self, input: DoctorInput) -> DoctorReport:
         nodes = self._store.all_nodes_including_done()
         pins, contracts = self._bundle_problems(nodes)
+        contracts = contracts + self._requirement_problems()
         return DoctorReport(problems={
             "store": fsck(nodes),
             "pins": pins,
@@ -109,6 +111,23 @@ class DoctorUseCase:
                         n.id,
                     ))
         return pins, contracts
+
+    def _requirement_problems(self):
+        problems = []
+        engine_version = self._config.version()
+        for origin, sha, manifest_text in bundle_conflict_messages(self._workflow_source):
+            try:
+                requirement = parse_source_manifest(manifest_text).requires_engine
+            except ValueError as e:
+                problems.append(Problem(
+                    "contract", "origin %s bundle %s has a malformed manifest: %s" % (origin, sha, e)))
+                continue
+            if requirement is not None and not requirement.satisfied_by(engine_version):
+                problems.append(Problem(
+                    "contract",
+                    "origin %s bundle %s requires engine %s, engine is %s"
+                    % (origin, sha, requirement.describe(), engine_version)))
+        return problems
 
     def _changed_step_roles(self, origin, old_sha, new_sha):
         old_root = self._workflow_source.pinned_bundle(origin, old_sha)

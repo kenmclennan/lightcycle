@@ -1,6 +1,7 @@
 import unittest
 
 from lightcycle.application.setup.upgrade import (
+    BundleRangeError,
     ProcessListUnreadableError,
     VenvBusyError,
     filter_holders,
@@ -71,6 +72,57 @@ class TestFormatHoldersMessage(unittest.TestCase):
         self.assertIn("/venv/bin/python -m lightcycle.pool", message)
         self.assertIn("pool", message)
         self.assertIn("lc logs -f", message)
+
+
+class TestUpgradeBundleConflicts(unittest.TestCase):
+    def _run(self, conflicts, **kwargs):
+        calls = {"holders": 0, "install": 0}
+
+        def holders():
+            calls["holders"] += 1
+            return []
+
+        def install():
+            calls["install"] += 1
+
+        resp = upgrade(
+            "0.1.0", fetch=lambda: "0.2.0", install=install, installed=lambda: "0.2.0",
+            holders=holders, bundle_conflicts=lambda target: conflicts, **kwargs)
+        return resp, calls
+
+    def test_conflicts_refuse_before_holders_and_install(self):
+        calls = {"holders": 0, "install": 0}
+        with self.assertRaises(BundleRangeError) as ctx:
+            upgrade(
+                "0.1.0", fetch=lambda: "0.2.0",
+                install=lambda: calls.update(install=1),
+                holders=lambda: calls.update(holders=1) or [],
+                bundle_conflicts=lambda target: ["acme excludes %s" % target])
+        self.assertEqual(ctx.exception.conflicts, ("acme excludes 0.2.0",))
+        self.assertEqual(calls, {"holders": 0, "install": 0})
+
+    def test_force_installs_and_carries_the_conflicts(self):
+        resp, calls = self._run(["acme excludes 0.2.0"], force=True)
+        self.assertTrue(resp.applied)
+        self.assertEqual(calls["install"], 1)
+        self.assertEqual(resp.conflicts, ("acme excludes 0.2.0",))
+
+    def test_check_only_reports_conflicts_without_refusing(self):
+        resp, calls = self._run(["acme excludes 0.2.0"], check_only=True)
+        self.assertFalse(resp.applied)
+        self.assertEqual(calls["install"], 0)
+        self.assertEqual(resp.conflicts, ("acme excludes 0.2.0",))
+
+    def test_no_conflicts_leaves_the_response_unchanged(self):
+        resp, _ = self._run([])
+        self.assertTrue(resp.applied)
+        self.assertEqual(resp.conflicts, ())
+
+    def test_conflicts_are_not_evaluated_when_no_update_is_available(self):
+        resp = upgrade(
+            "0.2.0", fetch=lambda: "0.2.0",
+            bundle_conflicts=lambda target: self.fail("evaluated"))
+        self.assertEqual(resp.conflicts, ())
 
 
 class TestUpgrade(unittest.TestCase):

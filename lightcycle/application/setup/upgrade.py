@@ -2,6 +2,9 @@ import os
 import re
 import sys
 from dataclasses import dataclass
+from typing import Tuple
+
+from lightcycle.domain.workflows.engine_requirement import parse_version
 
 _VERSION_RE = re.compile(r'__version__\s*=\s*"([^"]+)"')
 
@@ -12,12 +15,19 @@ class UpgradeResponse:
     remote: str
     available: bool
     applied: bool
+    conflicts: Tuple[str, ...] = ()
 
 
 class VenvBusyError(Exception):
     def __init__(self, holders):
         self.holders = holders
         super().__init__(format_holders_message(holders))
+
+
+class BundleRangeError(Exception):
+    def __init__(self, conflicts):
+        self.conflicts = tuple(conflicts)
+        super().__init__("; ".join(self.conflicts))
 
 
 class ProcessListUnreadableError(Exception):
@@ -73,16 +83,15 @@ def parse_remote_version(text):
     return match.group(1) if match else None
 
 
-def _semver(version):
-    return tuple(int(part) for part in version.split("."))
-
-
 def upgrade(current_version, check_only=False, fetch=None,
-            install=None, installed=None, holders=None):
+            install=None, installed=None, holders=None, bundle_conflicts=None, force=False):
     remote_version = fetch()
-    available = _semver(remote_version) > _semver(current_version)
+    available = parse_version(remote_version) > parse_version(current_version)
     applied = False
+    conflicts = tuple(bundle_conflicts(remote_version)) if available and bundle_conflicts else ()
     if available and not check_only:
+        if conflicts and not force:
+            raise BundleRangeError(conflicts)
         blockers = holders()
         if blockers:
             raise VenvBusyError(blockers)
@@ -92,5 +101,6 @@ def upgrade(current_version, check_only=False, fetch=None,
         if actual:
             remote_version = actual
     return UpgradeResponse(
-        current=current_version, remote=remote_version, available=available, applied=applied
+        current=current_version, remote=remote_version, available=available, applied=applied,
+        conflicts=conflicts,
     )
