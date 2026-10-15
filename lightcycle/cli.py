@@ -106,6 +106,7 @@ from lightcycle.application.inspect.show_audit_criteria import ShowAuditCriteria
 from lightcycle.domain.work.audit_criteria import UnknownMaterial
 from lightcycle.application.inspect.report_guidance import ReportGuidanceUseCase, parse_since
 from lightcycle.application.workflows.add import AddWorkflowSourceUseCase
+from lightcycle.application.workflows.bundle_check import undeclared_target_message
 from lightcycle.application.workflows.set_writable import SetOriginWritableUseCase
 from lightcycle.application.workflows.check_dir import (
     DIR_ORIGIN,
@@ -845,6 +846,7 @@ def _workflow_check(selector, as_json, flow=None):
     unknown_phases = an["unknown_phases"]
     phase_conflicts = an["phase_conflicts"]
     unknown_display = an["unknown_display"]
+    undeclared_edge_targets = an["undeclared_edge_targets"]
     unknown_pass_ends = an["unknown_pass_ends"]
     unreachable_pass_ends = an["unreachable_pass_ends"]
     hook_phase_mismatches = an["hook_phase_mismatches"]
@@ -871,6 +873,7 @@ def _workflow_check(selector, as_json, flow=None):
                     "unknown_phases": unknown_phases,
                     "phase_conflicts": phase_conflicts,
                     "unknown_display": unknown_display,
+                    "undeclared_edge_targets": undeclared_edge_targets,
                     "unknown_pass_ends": unknown_pass_ends,
                     "unreachable_pass_ends": unreachable_pass_ends,
                     "hook_phase_mismatches": hook_phase_mismatches,
@@ -929,6 +932,8 @@ def _workflow_check(selector, as_json, flow=None):
         sys.stderr.write(
             "%s on '%s' targets '%s', which resolves to nothing\n" % (hook, gate, target)
         )
+    for frm, outcome, target in undeclared_edge_targets:
+        sys.stderr.write(undeclared_target_message(frm, outcome, target) + "\n")
     if unknown_display:
         sys.stderr.write(
             "display phrase declared for a stage this bundle does not reference: %s\n"

@@ -47,6 +47,10 @@ hooks:
   pr_feedback           await-merge  handle-feedback
   ci_failed_cap         watch-ci     ci-failed  2  review-ci
   mention_token         await-merge  @lc
+
+display:
+  cleanup          Tidying up
+  review-conflict  Resolve conflict
 """
 
 _NO_ESCALATE_EDGE_WORKFLOW_TEXT = _WORKFLOW_TEXT.replace(
@@ -79,6 +83,9 @@ edges:
   review  done   finish
   review  loop   stuck
   stuck   done   stuck
+
+display:
+  finish  Finish
 """
 
 _STUCK_LOOP_STEPS = {
@@ -185,6 +192,9 @@ edges:
 hooks:
   pr_merge  spec-await-merge  spec-merged
   pr_merge  code-await-merge  merged
+
+display:
+  cleanup  Tidying up
 """
 
 _TWO_PHASE_STEPS = {
@@ -460,6 +470,9 @@ edges:
 
 hooks:
   ci_failed_cap   build   ci-failed   1   gate
+
+display:
+  finish  Finish
 """
 
 _HANDOFF_STEPS = {

@@ -50,6 +50,13 @@ def graph_text_from_metas(metas, entry=None, requires=None, provides=None, dispo
                 hooks.append("  %s  %s  %s" % (hook, step, "  ".join(sorted(val))))
             else:
                 hooks.append("  %s  %s  %s" % (hook, step, val))
+    steps = {meta.get("step") for meta in metas.values() if meta}
+    shown = {line.split()[0] for line in display}
+    for meta in metas.values():
+        for target in ((meta or {}).get("routes") or {}).values():
+            if target and target not in steps and target not in shown:
+                display.append("  %s  %s" % (target, target))
+                shown.add(target)
     out = []
     if entry:
         out.append("entry: %s" % entry)

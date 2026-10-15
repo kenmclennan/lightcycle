@@ -254,10 +254,21 @@ class TestAdd(unittest.TestCase):
         source.add_remote(
             "u", 'name = "acme"\ncontract = 1\n', "sha1",
             steps={"code": _step_text({"model": "x", "step": "code"})},
-            workflows={"build": "entry: code\n\nedges:\n  code  done  review-conflict\n"})
+            workflows={"build": "entry: code\n\ndisplay:\n  review-conflict  Resolve conflict\n\nedges:\n  code  done  review-conflict\n"})
         resp = _add(source).execute(url="u", ref="main", name=None)
         self.assertEqual(resp.origin, "acme")
         self.assertTrue(source.has_version("acme", "sha1"))
+
+    def test_edge_to_an_undeclared_target_is_refused_naming_the_edge(self):
+        source = FakeSource()
+        source.add_remote(
+            "u", 'name = "acme"\ncontract = 1\n', "sha1",
+            steps={"code": _step_text({"model": "x", "step": "code"})},
+            workflows={"build": "entry: code\n\nedges:\n  code  done  primary\n"})
+        with self.assertRaises(WorkflowSourceError) as ctx:
+            _add(source).execute(url="u", ref="main", name=None)
+        self.assertIn("code done primary", str(ctx.exception))
+        self.assertIn("fourth column", str(ctx.exception))
 
     def test_add_never_prunes_the_version_it_just_registered_at_zero_retention(self):
         source = FakeSource()

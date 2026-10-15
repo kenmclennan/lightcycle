@@ -97,6 +97,19 @@ class FlowContracts:
     def unknown_phases(self):
         return sorted(s for s in self._graph.phases if not self._flow.step_def(s).owner)
 
+    def undeclared_edge_targets(self):
+        g = self._graph
+        declared = set(g.edges) | set(g.nodes) | set(g.display) | set(g.phases)
+        if g.entry:
+            declared.add(g.entry)
+        declared.update(self._flow.steps())
+        undeclared = []
+        for frm, outcomes in g.edges.items():
+            for outcome, target in outcomes.items():
+                if target and target not in declared:
+                    undeclared.append((frm, outcome, target))
+        return sorted(undeclared)
+
     def unknown_display(self):
         known = set(self._steps) | set(self.terminals())
         return sorted(s for s in self._graph.display if s not in known)
@@ -178,6 +191,7 @@ class FlowContracts:
             not self.missing()
             and not self.phase_gaps() and not self.unknown_phases() and not self.phase_conflicts()
             and not self.unknown_display()
+            and not self.undeclared_edge_targets()
             and not self.unknown_pass_ends() and not self.unreachable_pass_ends()
             and not self.hook_phase_mismatches()
             and not self.unresolved_hook_targets()
@@ -199,6 +213,7 @@ class FlowContracts:
             "unknown_phases": self.unknown_phases(),
             "phase_conflicts": self.phase_conflicts(),
             "unknown_display": self.unknown_display(),
+            "undeclared_edge_targets": self.undeclared_edge_targets(),
             "unknown_pass_ends": self.unknown_pass_ends(),
             "unreachable_pass_ends": self.unreachable_pass_ends(),
             "hook_phase_mismatches": self.hook_phase_mismatches(),
