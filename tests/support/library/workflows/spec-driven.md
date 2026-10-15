@@ -25,6 +25,10 @@ nodes:
   code-open-pr      open-pr
   code-await-merge  await-merge
 
+display:
+  cleanup          Tidying up
+  review-conflict  Resolve conflict
+
 edges:
   spec-writer       done         spec-open-pr
   spec-open-pr      done         spec-await-merge

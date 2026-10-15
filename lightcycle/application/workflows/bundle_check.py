@@ -35,6 +35,15 @@ def merge_problems(*problem_maps):
     return merged
 
 
+def undeclared_target_message(frm, outcome, target):
+    message = "edge '%s %s %s' targets '%s', which is not a declared stage" % (
+        frm, outcome, target, target)
+    if target == "primary":
+        message += (
+            "; 'primary' belongs in the fourth column, and a terminal edge has no target")
+    return message
+
+
 def check_bundle_references(bundle):
     step_metas = {}
     for role, text in bundle.steps.items():
@@ -76,6 +85,8 @@ def check_bundle_references(bundle):
             messages.append(
                 "%s on %r has %d token(s), needs at least %d" % (hook, gate, got, want)
             )
+        for frm, outcome, target in contracts.undeclared_edge_targets():
+            messages.append(undeclared_target_message(frm, outcome, target))
         if contracts.unknown_display():
             messages.append(
                 "display phrase declared for a stage this bundle does not reference: %s"

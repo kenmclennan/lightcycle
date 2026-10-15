@@ -1,7 +1,9 @@
 import unittest
+
 from pathlib import Path
 
 from lightcycle.adapters.workflow_bundle import parse_step, step_roles, workflow_text
+from lightcycle.application.workflows.bundle_check import undeclared_target_message
 from lightcycle.domain.contracts import ArtifactRequirement, FlowContracts, StepContract
 from lightcycle.ports.workflow_bundle import StepPrompt
 from lightcycle.domain.flow import Flow
@@ -372,7 +374,7 @@ class TestUnresolvedHookTargets(unittest.TestCase):
     def test_ci_failed_cap_target_reachable_only_via_edges_is_exempt(self):
         text = (
             "entry: gate\n\n"
-            "edges:\n  other  done  target\n\n"
+            "edges:\n  other  done  target\n\ndisplay:\n  target  Target\n\n"
             "hooks:\n  ci_failed_cap  gate  ci-failed  3  target\n"
         )
         graph = parse_graph(text)
@@ -403,7 +405,7 @@ class TestUnresolvedHookTargets(unittest.TestCase):
     def test_review_rounds_cap_target_reachable_only_via_edges_is_exempt(self):
         text = (
             "entry: gate\n\n"
-            "edges:\n  other  done  target\n\n"
+            "edges:\n  other  done  target\n\ndisplay:\n  target  Target\n\n"
             "hooks:\n  review_rounds_cap  gate  rejected  target\n"
         )
         graph = parse_graph(text)
@@ -568,6 +570,51 @@ class TestDisplayContracts(unittest.TestCase):
         flow = Flow.from_graph(graph, metas)
         a = FlowContracts(flow, graph, metas)
         self.assertEqual(a.as_dict()["unknown_display"], a.unknown_display())
+
+
+class TestUndeclaredEdgeTargets(unittest.TestCase):
+    def _contracts(self, edges):
+        text = (
+            "entry: build\n\nnodes:\n  build  coder\n\nedges:\n%s\n" % edges
+        )
+        graph = parse_graph(text)
+        metas = {"coder": {"model": "x"}}
+        return FlowContracts(Flow.from_graph(graph, metas), graph, metas)
+
+    def test_target_declared_as_edge_source_is_accepted(self):
+        a = self._contracts("  build  done  ship\n  ship  done\n")
+        self.assertEqual(a.undeclared_edge_targets(), [])
+
+    def test_target_with_its_own_step_file_is_accepted(self):
+        text = "entry: build\n\nnodes:\n  build  coder\n\nedges:\n  build  done  gate\n"
+        graph = parse_graph(text)
+        metas = {"coder": {"model": "x"}, "gate": {}}
+        a = FlowContracts(Flow.from_graph(graph, metas), graph, metas)
+        self.assertEqual(a.undeclared_edge_targets(), [])
+
+    def test_terminal_edge_with_no_target_is_accepted(self):
+        a = self._contracts("  build  done\n")
+        self.assertEqual(a.undeclared_edge_targets(), [])
+
+    def test_primary_in_target_column_is_refused(self):
+        a = self._contracts("  build  done  primary\n")
+        self.assertEqual(a.undeclared_edge_targets(), [("build", "done", "primary")])
+        self.assertFalse(a.ok())
+
+    def test_undeclared_stage_name_is_refused(self):
+        a = self._contracts("  build  done  ghost\n")
+        self.assertEqual(a.undeclared_edge_targets(), [("build", "done", "ghost")])
+
+    def test_message_for_primary_names_the_fourth_column(self):
+        message = undeclared_target_message("build", "done", "primary")
+        self.assertIn("build done primary", message)
+        self.assertIn("fourth column", message)
+        self.assertIn("no target", message)
+
+    def test_message_for_other_target_omits_the_primary_hint(self):
+        message = undeclared_target_message("build", "done", "ghost")
+        self.assertIn("'ghost'", message)
+        self.assertNotIn("fourth column", message)
 
 
 class TestRealStepsFlowComposition(unittest.TestCase):
