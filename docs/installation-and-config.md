@@ -115,3 +115,9 @@ lc upgrade --check    # report only, do not install
 What an upgrade **changes**: the engine venv (code + `prompts/`). What it **does not touch**: `~/.lightcycle` - your store, config, logs, worktrees, pulled workflow bundles, and the project registry. Your data and pulled workflows survive every upgrade; workflows are updated separately with `lc workflow upgrade`.
 
 Schema changes are handled separately: when a new engine opens a store it stamps a current store with its schema version, applies the additive column and cleanup migrations that remain, and opens it. It refuses a store written before the item/step split (one that still carries the `nodes` table) with a message naming the lightcycle release able to migrate it; migrate with that release first, then reopen. Migrations are idempotent. Stop the pool loop before upgrading, so the old engine is not running against a newly-migrated store; restart it after.
+
+`lc doctor` reports what an upgrade left for you to bring up to date. Each of these findings carries a stable `kind` and a `fix` line (text and `lc doctor --json`), and is only reported, never fixed:
+
+- `config-key-blank` - a required config key is set but blank, with what it does and how to set it.
+- `guidance-conventions-outdated` - the guidance repo records an older conventions version than the engine ships; the update lands by PR.
+- `guidance-entries-nonconforming` - guidance entries on the default branch fail the current conventions; the fix is a `guidance-entry` backfill item.

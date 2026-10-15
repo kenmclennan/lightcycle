@@ -187,6 +187,44 @@ class TestCmdDoctor(unittest.TestCase):
         self.assertTrue(any("max-agents" in p["message"] and "-1" in p["message"]
                              for p in data["config"]))
 
+    def _blank_container(self):
+        class BlankFakeConfig(FakeConfig):
+            def resolved_settings(self):
+                return (
+                    ResolvedSetting(
+                        key="trusted-authors", value=None, error=None,
+                        state="unset", env_var=None, seed="",
+                    ),
+                )
+
+        return FakeContainer(FakeStore(), config=BlankFakeConfig())
+
+    def test_json_blank_key_carries_kind_and_fix(self):
+        cli.set_container(self._blank_container())
+        rc, out, err = call(cli.cmd_doctor, "--json")
+        self.assertEqual(rc, 1)
+        (finding,) = json.loads(out)["config"]
+        self.assertEqual(finding["kind"], "config-key-blank")
+        self.assertIn("trusted-authors", finding["fix"])
+
+    def test_json_finding_without_a_fix_omits_kind_and_fix(self):
+        class ObsoleteFakeConfig(FakeConfig):
+            def obsolete_config_keys(self):
+                return ("old-key",)
+
+        cli.set_container(FakeContainer(FakeStore(), config=ObsoleteFakeConfig()))
+        rc, out, err = call(cli.cmd_doctor, "--json")
+        (finding,) = json.loads(out)["config"]
+        self.assertNotIn("kind", finding)
+        self.assertNotIn("fix", finding)
+
+    def test_text_blank_key_prints_the_fix_beneath_the_message(self):
+        cli.set_container(self._blank_container())
+        rc, out, err = call(cli.cmd_doctor)
+        lines = out.splitlines()
+        at = next(i for i, ln in enumerate(lines) if "set but blank" in ln)
+        self.assertTrue(lines[at + 1].startswith("    fix: "))
+
     def test_json_unhealthy_shape_and_exit_code(self):
         store = FakeStore()
         item = store.create_step(parent="missing-parent")

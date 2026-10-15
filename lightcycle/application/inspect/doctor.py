@@ -1,5 +1,6 @@
 import datetime
 import os
+import re
 from dataclasses import dataclass
 from typing import Dict, List
 
@@ -9,11 +10,18 @@ from lightcycle.application.services.engine_fragments import with_engine_fragmen
 from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE, LEGACY_KNOWLEDGE_WORKSPACE
 from lightcycle.config import ConfigError
 from lightcycle.domain.guidance.guidance import fill, matches_project, matches_step_key, order
-from lightcycle.domain.health import Problem, fsck
+from lightcycle.domain.guidance.conventions import (
+    CONVENTIONS_VERSION, SKIPPED_NAMES, check_entries,
+)
+from lightcycle.domain.health import Problem, blank_key_fix, fsck
 from lightcycle.domain.work.state import State
 from lightcycle.domain.workflows.contract import ENGINE_CONTRACT, contract_compatible
 from lightcycle.domain.workflows.identity import format_pin, parse_pin
 from lightcycle.domain.workflows.source import parse_source_manifest
+
+
+CONVENTIONS_FILE = "CONVENTIONS.md"
+_VERSION_LINE = re.compile(r"^Conventions version:\s*(\d+)\s*$")
 
 
 @dataclass(frozen=True)
@@ -140,7 +148,10 @@ class DoctorUseCase:
             Problem("config", "required config key %r is not set" % k) for k in missing
         ]
         problems += [
-            Problem("config", "required config key %r is set but blank" % s.key)
+            Problem(
+                "config", "required config key %r is set but blank" % s.key,
+                kind="config-key-blank", fix=blank_key_fix(s.key),
+            )
             for s in settings
             if s.state == "unset" and s.key not in missing
         ]
@@ -220,7 +231,71 @@ class DoctorUseCase:
                     "set its status to draft" % entry.id,
                 ))
         problems += self._budget_problems([e for e in entries if e.is_candidate()])
+        problems += self._conventions_problems(library, repo.local_path)
+        problems += self._nonconforming_problems(library, repo.local_path, entries, unreadable, pages)
         return problems
+
+    def _conventions_problems(self, library, root):
+        ref = library.ref(root)
+        if ref is None:
+            return []
+        recorded = 0
+        if CONVENTIONS_FILE in library.files(root):
+            raw = self._git.read_file_at(root, ref, CONVENTIONS_FILE)
+            try:
+                text = raw.decode("utf-8") if raw is not None else None
+            except UnicodeDecodeError:
+                text = None
+            if text is None:
+                return [Problem(
+                    "guidance",
+                    "%s cannot be read at %s - check the guidance repo" % (CONVENTIONS_FILE, ref),
+                )]
+            for line in text.splitlines():
+                match = _VERSION_LINE.match(line.strip())
+                if match:
+                    recorded = int(match.group(1))
+                    break
+        if recorded >= CONVENTIONS_VERSION:
+            return []
+        return [Problem(
+            "guidance",
+            "guidance repo conventions are version %d, engine ships version %d"
+            % (recorded, CONVENTIONS_VERSION),
+            kind="guidance-conventions-outdated",
+            fix="update %s to version %d by PR on the guidance repo; file a `guidance-entry` "
+            "item to carry it" % (CONVENTIONS_FILE, CONVENTIONS_VERSION),
+        )]
+
+    def _nonconforming_problems(self, library, root, entries, unreadable, pages):
+        ref = library.ref(root)
+        if ref is None:
+            return []
+        paths = sorted(
+            [e.id + ".md" for e in entries]
+            + [name + ".md" for name, _ in unreadable if name != NO_REF_ENTRY]
+        )
+
+        def read_head(path):
+            raw = self._git.read_file_at(root, ref, path)
+            return "" if raw is None else raw.decode("utf-8", errors="replace")
+
+        failing = [
+            path for path in paths
+            if path.rsplit("/", 1)[-1] not in SKIPPED_NAMES
+            and check_entries("final", [path], [], pages, read_head, lambda p: None)
+        ]
+        if not failing:
+            return []
+        named = ", ".join(failing[:5])
+        if len(failing) > 5:
+            named += " and %d more" % (len(failing) - 5)
+        return [Problem(
+            "guidance",
+            "%d guidance entries fail the current conventions: %s" % (len(failing), named),
+            kind="guidance-entries-nonconforming",
+            fix="file a `guidance-entry` item to backfill them",
+        )]
 
     def _fetch_problems(self, library, root):
         problems = []

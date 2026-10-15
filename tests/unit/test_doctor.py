@@ -414,6 +414,32 @@ class TestDoctorUseCase(unittest.TestCase):
         self.assertEqual(len(problems), 1)
         self.assertIn("workflows-remote", problems[0].message)
         self.assertIn("blank", problems[0].message)
+        self.assertEqual(problems[0].kind, "config-key-blank")
+        self.assertIn("lc config --edit", problems[0].fix)
+
+    def _blank_problem(self, **blank):
+        keys = dict(_ALL_KEYS)
+        keys.update(blank)
+        source = FakeWorkflowSource()
+        source.add_bundle("acme", "sha1", 1, current=True)
+        report = _uc(FakeStore(), source, _cfg(**keys), FakeWorkflowBundle()).execute(DoctorInput())
+        (problem,) = report.problems["config"]
+        return problem
+
+    def test_blank_trusted_authors_fix_names_what_it_does(self):
+        problem = self._blank_problem(trusted_authors="")
+        self.assertEqual(problem.kind, "config-key-blank")
+        self.assertIn("PR comments", problem.fix)
+        self.assertIn("trusted-authors: <github-login>", problem.fix)
+
+    def test_blank_workflows_remote_has_its_own_fix(self):
+        problem = self._blank_problem(workflows_remote="")
+        self.assertIn("workflows-remote: <git url>", problem.fix)
+        self.assertNotIn("PR comments", problem.fix)
+
+    def test_blank_unlisted_key_gets_the_generic_fix(self):
+        problem = self._blank_problem(backups_dir="")
+        self.assertEqual(problem.fix, "set it with `lc config --edit`")
 
     def test_store_integrity_violation_surfaces_under_store(self):
         store = FakeStore()
