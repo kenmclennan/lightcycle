@@ -23,7 +23,8 @@ def check_prompts(bundle, cli_surface, json_keys):
 
 
 def check_step_structure_for(bundle, fragment_names):
-    return check_step_structure(_step_texts(bundle), fragment_names)
+    return check_step_structure(
+        _step_texts(bundle), set(fragment_names) | set(bundle.fragments))
 
 
 def merge_problems(*problem_maps):

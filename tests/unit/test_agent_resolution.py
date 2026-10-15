@@ -35,6 +35,13 @@ def _write_bundle_prompt(data, origin, sha, role, model="sonnet", body="do the t
         f.write("---\nmodel: %s\n---\n\n%s\n" % (model, body))
 
 
+def _write_bundle_fragment(data, origin, sha, name, body):
+    frags = os.path.join(data, "workflows", origin, sha, "fragments")
+    os.makedirs(frags, exist_ok=True)
+    with open(os.path.join(frags, "%s.md" % name), "w") as f:
+        f.write(body + "\n")
+
+
 def _resolve_agent(cfg, role, pin):
     return WorkflowSourceAdapter(cfg, WorkflowBundleAdapter()).resolve_agent(role, pin)
 
@@ -83,10 +90,6 @@ class TestResolveAgentForPin(unittest.TestCase):
             _Cfg(prompts, data), "nonesuch", "lightcycle/spec-driven@sha1"))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TestBundleStepIncludesEngineFragment(unittest.TestCase):
     def test_bundle_step_include_resolves_against_the_engine_fragment(self):
         prompts, data = tempfile.mkdtemp(), tempfile.mkdtemp()
@@ -106,3 +109,28 @@ class TestBundleStepIncludesEngineFragment(unittest.TestCase):
         _write_bundle_prompt(data, "lightcycle", "sha1", "audit", model="opus")
         agent = _resolve_agent(_Cfg(prompts, data), "audit", "lightcycle/spec-driven@sha1")
         self.assertEqual(agent.meta.get("model"), "haiku")
+
+    def test_bundle_step_include_resolves_against_the_bundle_fragment(self):
+        prompts, data = tempfile.mkdtemp(), tempfile.mkdtemp()
+        _write_bundle_fragment(data, "lightcycle", "sha1", "x", "origin x body")
+        _write_bundle_prompt(data, "lightcycle", "sha1", "write-code", body="@include x")
+        agent = _resolve_agent(
+            _Cfg(prompts, data), "write-code", "lightcycle/spec-driven@sha1")
+        self.assertIn("origin x body", agent.body)
+        self.assertNotIn("@include", agent.body)
+
+    def test_engine_fragment_wins_over_a_bundle_fragment_of_the_same_name(self):
+        prompts, data = tempfile.mkdtemp(), tempfile.mkdtemp()
+        os.makedirs(os.path.join(prompts, "fragments"))
+        with open(os.path.join(prompts, "fragments", "x.md"), "w") as f:
+            f.write("engine x body\n")
+        _write_bundle_fragment(data, "lightcycle", "sha1", "x", "origin x body")
+        _write_bundle_prompt(data, "lightcycle", "sha1", "write-code", body="@include x")
+        agent = _resolve_agent(
+            _Cfg(prompts, data), "write-code", "lightcycle/spec-driven@sha1")
+        self.assertIn("engine x body", agent.body)
+        self.assertNotIn("origin x body", agent.body)
+
+
+if __name__ == "__main__":
+    unittest.main()

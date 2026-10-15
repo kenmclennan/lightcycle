@@ -71,9 +71,11 @@ class WorkflowSourceAdapter(WorkflowSourcePort):
                 manifest = f.read()
             steps = self._read_dir_texts(checkout, "steps")
             workflows = self._read_dir_texts(checkout, "workflows")
+            fragments = self._read_dir_texts(checkout, "fragments")
         finally:
             shutil.rmtree(checkout, ignore_errors=True)
-        return FetchedBundle(manifest=manifest, sha=sha, steps=steps, workflows=workflows)
+        return FetchedBundle(manifest=manifest, sha=sha, steps=steps, workflows=workflows,
+                             fragments=fragments)
 
     def read_manifest(self, checkout_dir):
         with open(os.path.join(checkout_dir, _MANIFEST)) as f:
@@ -87,7 +89,8 @@ class WorkflowSourceAdapter(WorkflowSourcePort):
         os.makedirs(tmp, exist_ok=True)
         with open(os.path.join(tmp, _MANIFEST), "w") as f:
             f.write(bundle.manifest)
-        for name, texts in (("steps", bundle.steps), ("workflows", bundle.workflows)):
+        for name, texts in (("steps", bundle.steps), ("workflows", bundle.workflows),
+                             ("fragments", bundle.fragments)):
             if not texts:
                 continue
             os.makedirs(os.path.join(tmp, name), exist_ok=True)

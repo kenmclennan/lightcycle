@@ -54,7 +54,7 @@ def _includes(lines, fragment_names):
             if name and name not in fragment_names:
                 problems.append(
                     "line %d: @include %s does not resolve in a pinned bundle "
-                    "(engine fragments: %s)" % (number, name, available)
+                    "(available fragments: %s)" % (number, name, available)
                 )
             continue
         if fenced:
