@@ -14,7 +14,6 @@ from lightcycle.domain.flow.hooks import (
     PR_CONFLICT_ESCALATE,
     PR_FEEDBACK,
     PR_MERGE,
-    REVIEW_BOT_ALLOWLIST,
     REVIEW_ROUNDS_CAP,
 )
 
@@ -46,7 +45,6 @@ class StepDef:
     ci_success: Optional[str] = None
     ci_failure: Optional[str] = None
     mention_token: Optional[str] = None
-    review_bot_allowlist: frozenset = frozenset()
     ci_cap: Optional[CiCap] = None
     review_rounds_cap: Optional[ReviewRoundsCap] = None
     workspace: Optional[str] = None
@@ -81,11 +79,6 @@ class StepDef:
             if occ[0] == stage and len(occ) >= HOOK_MIN_ARITY[REVIEW_ROUNDS_CAP]:
                 review_rounds_cap = ReviewRoundsCap(occ[1], occ[2])
 
-        review_bot_allowlist = frozenset()
-        for occ in graph.hook_occurrences(REVIEW_BOT_ALLOWLIST):
-            if occ[0] == stage:
-                review_bot_allowlist = frozenset(occ[1:])
-
         hooks = frozenset(
             "on_" + name
             for name, occs in graph.hooks.items()
@@ -104,7 +97,6 @@ class StepDef:
             ci_success=first(CI_SUCCESS),
             ci_failure=first(CI_FAILURE),
             mention_token=first(MENTION_TOKEN),
-            review_bot_allowlist=review_bot_allowlist,
             ci_cap=ci_cap,
             review_rounds_cap=review_rounds_cap,
             workspace=graph.workspaces.get(stage),

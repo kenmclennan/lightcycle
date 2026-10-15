@@ -12,7 +12,7 @@ from tests.support.fake_github import FakeGitHub
 from tests.support.fake_store import FakeStore
 
 _BOT_LOGIN = "copilot-pull-request-reviewer[bot]"
-_TRUST = dict(trusted_authors=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD")
+_TRUST = dict(trusted_authors=lambda: frozenset({"reviewer", _BOT_LOGIN}), held_shortcode=lambda: "HLD")
 
 
 def plant_pr(store, item, url, phase=None, branch=None, n=1, state="open"):
@@ -109,7 +109,6 @@ _FEEDBACK_FLOW = flow_from_metas(
             "routes": {"changes": "build"},
             "on_pr_feedback": "handle-feedback",
             "on_mention_token": "@lc",
-            "on_review_bot_allowlist": [_BOT_LOGIN],
         },
     }
 )
@@ -163,7 +162,6 @@ _READY_MERGE_QUAD_FLOW = flow_from_metas({
         "on_pr_feedback": "handle-feedback",
         "on_pr_conflict": "conflicted",
         "on_mention_token": "@lc",
-        "on_review_bot_allowlist": [_BOT_LOGIN],
     },
     "resolver": {
         "model": "sonnet",
@@ -287,7 +285,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
         run = store.current_run(item, None)
         self.assertEqual(run.comments_dispatched_through, str(1300.0))
 
-    def test_allowlisted_bot_review_spawns(self):
+    def test_trusted_bot_review_spawns(self):
         url = "https://github.com/x/y/pull/30-bot"
         gh = FakeGitHub(push_time=1000.0, timed_reviews=[self._bot_review(1500.0)])
         store, item, step, worktrees, uc = self._setup(url, gh)
@@ -296,7 +294,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
 
         self.assertEqual(result.reworked, [item])
 
-    def test_non_allowlisted_bot_review_does_not_trigger(self):
+    def test_untrusted_bot_review_does_not_trigger(self):
         url = "https://github.com/x/y/pull/30-other-bot"
         gh = FakeGitHub(
             push_time=1000.0,

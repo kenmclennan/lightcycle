@@ -109,15 +109,17 @@ class TestEachRouteAppliesTheSameRule(_Base):
                 self.assertTrue(holds[0].item.startswith("HLD-"))
                 self.assertEqual(self.store.open_holds(self.rid)[0].author, "mallory")
 
-    def test_an_allowlisted_bot_dispatches_on_every_route_including_a_mention(self):
+    def test_a_trusted_bot_dispatches_on_every_route_including_a_mention(self):
         for route, make in _ROUTES.items():
             with self.subTest(route=route):
-                self._build(FakeGitHub(push_time=1000.0, **make(_BOT_LOGIN)))
+                self._build(
+                    FakeGitHub(push_time=1000.0, **make(_BOT_LOGIN)),
+                    trusted=lambda: _TRUSTED | {_BOT_LOGIN})
                 result = self.uc.execute()
                 self.assertEqual(result.reworked, [self.item])
                 self.assertEqual(self._hold_steps(), [])
 
-    def test_a_bot_off_the_allowlist_is_held_on_every_route(self):
+    def test_an_untrusted_bot_is_held_on_every_route(self):
         for route, make in _ROUTES.items():
             with self.subTest(route=route):
                 self._build(FakeGitHub(push_time=1000.0, **make("other[bot]")))
@@ -343,3 +345,19 @@ class TestInboxShowsAHold(_Base):
         self.assertTrue(row.step.item.startswith("HLD-"))
         self.assertIn("review-held-comment", row.title)
         self.assertIn("Held comment from mallory", row.title)
+
+
+class TestBotTrust(_Base):
+    def test_a_trusted_bot_dispatches_and_an_untrusted_bot_is_held_together(self):
+        gh = FakeGitHub(push_time=1000.0, timed_comments=[
+            _inline(1500.0, _BOT_LOGIN, "bot1"),
+            _inline(1600.0, "other[bot]", "bot2"),
+        ])
+        self._build(gh, trusted=lambda: _TRUSTED | {_BOT_LOGIN})
+        self.uc.execute()
+        steps = self._feedback_steps()
+        self.assertEqual(len(steps), 1)
+        self.assertEqual(self._artifact(steps[0].id), ["inline:bot1"])
+        holds = self._hold_steps()
+        self.assertEqual(len(holds), 1)
+        self.assertEqual(self.store.open_holds(self.rid)[0].author, "other[bot]")

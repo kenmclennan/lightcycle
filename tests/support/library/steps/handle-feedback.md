@@ -14,12 +14,12 @@ outstanding comment needs, reply to record what you decided, then exit.
    every comment/review since the last push (`gh api .../pulls/<n>/commits` for the push time), each
    with its id, body, author, and (for review comments) `in_reply_to_id`.
 3. For each comment/review, it is **outstanding** unless it already has an `lc` reply:
-   - an inline review comment (or a review from an allowlisted bot review) is outstanding if no
+   - an inline review comment (or a review from an trusted bot review) is outstanding if no
      reply in its thread carries `<!-- lc -->`;
    - a top-level `@lc` mention is outstanding if it is newer than the watermark (the
      `feedback-watermark` artifact on WATCHED, epoch seconds - treat missing as 0).
    Skip anything already carrying `<!-- lc -->` (that is your own prior post) and anything from a
-   non-allowlisted bot with no `@lc` mention.
+   untrusted bot with no `@lc` mention.
 4. For each outstanding item, decide: **rework** (a real defect or requested change - needs code),
    **answer** (a question, or a suggestion you're not taking - reply with your reasoning, no code),
    or **ignore leaving as-is** (say why, briefly). Post a reply that carries `<!-- lc -->`:

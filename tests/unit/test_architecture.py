@@ -265,7 +265,7 @@ class TestHookLiteralsHaveOneDefinition(unittest.TestCase):
             '"pr_merge"', '"pr_close"', '"pr_feedback"', '"pr_conflict"',
             '"pr_conflict_cap"', '"pr_conflict_escalate"', '"ci_failed_cap"',
             '"ci_success"', '"ci_failure"', '"review_rounds_cap"',
-            '"mention_token"', '"review_bot_allowlist"',
+            '"mention_token"',
         )
         offenders = []
         for path in sorted(LIGHTCYCLE.rglob("*.py")):
