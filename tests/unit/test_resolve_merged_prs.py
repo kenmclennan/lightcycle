@@ -932,3 +932,89 @@ if __name__ == "__main__":
     unittest.main()
 
 
+
+
+_TWO_GATES_ONE_PHASE = (
+    "entry: spec-writer\n\n"
+    "requires: brief repo\n\n"
+    "phase:\n"
+    "  spec-writer         spec\n"
+    "  spec-await-merge    spec\n"
+    "  nochange-await-merge spec\n"
+    "  write-code          code\n\n"
+    "nodes:\n"
+    "  spec-await-merge     await-merge\n"
+    "  nochange-await-merge await-merge\n"
+    "  write-code           coder\n"
+    "  spec-writer          coder\n\n"
+    "edges:\n"
+    "  spec-await-merge     spec-merged  write-code\n"
+    "  nochange-await-merge no-change-merged  end\n"
+    "  spec-await-merge     abandoned    spec-writer\n\n"
+    "hooks:\n"
+    "  pr_merge  nochange-await-merge  no-change-merged\n"
+    "  pr_merge  spec-await-merge      spec-merged\n"
+    "  pr_close  nochange-await-merge  no-change-abandoned\n"
+    "  pr_close  spec-await-merge      abandoned\n\n"
+    "disposition:\n"
+    "  no-change-merged     completed\n"
+    "  no-change-abandoned  abandoned\n"
+)
+
+
+class TestSharedPhaseGatesResolveOnlyTheGateTheItemIsAt(unittest.TestCase):
+    def _setup(self, at, github_kwargs):
+        from lightcycle.domain.flow import Flow
+        from lightcycle.domain.flow.graph import parse_graph
+
+        metas = {"await-merge": {"step": "await-merge"}, "coder": {"model": "sonnet"}}
+        flow = Flow.from_graph(parse_graph(_TWO_GATES_ONE_PHASE), metas)
+        store = FakeStore()
+        item = store.create_item("spec item", "a description")
+        url = "https://github.com/x/y/pull/9"
+        plant_pr(store, item, url, "spec")
+        step = store.create_step(step=at, role="human", parent=item)
+        gh = FakeGitHub(**github_kwargs(url))
+        adapter = _FlowAdapter(flow)
+        uc = ResolveMergedPrsUseCase(
+            store, gh, FakeWorktrees(), adapter, CompleteStepUseCase(store, adapter),
+            CheckContentPinUseCase(store, gh, adapter, trusted_authors=lambda: frozenset({"review-code"})),
+        )
+        return store, item, step, uc
+
+    def test_merge_at_the_edge_gate_advances_and_does_not_close_through_the_terminal_gate(self):
+        store, item, step, uc = self._setup("spec-await-merge", lambda u: {"merged_prs": {u}})
+
+        result = uc.execute()
+
+        self.assertEqual(result.merged, [item])
+        self.assertEqual(store.get_node(step).outcome, "spec-merged")
+        self.assertNotEqual(store.get_node(item).state, State.DONE)
+        self.assertEqual(
+            [s.stage for s in store.children(item) if s.state != "done"], ["write-code"]
+        )
+
+    def test_merge_at_the_terminal_gate_still_closes_the_item_with_its_disposition(self):
+        store, item, step, uc = self._setup("nochange-await-merge", lambda u: {"merged_prs": {u}})
+
+        result = uc.execute()
+
+        self.assertEqual(result.merged, [item])
+        self.assertEqual(store.get_node(item).state, State.DONE)
+
+    def test_close_at_the_edge_gate_does_not_close_through_the_terminal_gate(self):
+        store, item, step, uc = self._setup("spec-await-merge", lambda u: {"closed_prs": {u}})
+
+        result = uc.execute()
+
+        self.assertEqual(result.abandoned, [item])
+        self.assertEqual(store.get_node(step).outcome, "abandoned")
+        self.assertNotEqual(store.get_node(item).state, State.DONE)
+
+    def test_close_at_the_terminal_gate_still_closes_the_item_with_its_disposition(self):
+        store, item, step, uc = self._setup("nochange-await-merge", lambda u: {"closed_prs": {u}})
+
+        result = uc.execute()
+
+        self.assertEqual(result.abandoned, [item])
+        self.assertEqual(store.get_node(item).state, State.DONE)
