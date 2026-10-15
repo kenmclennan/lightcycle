@@ -48,11 +48,13 @@ class ResolveCiUseCase:
             if outcome == "pending":
                 continue
             if outcome == "success" and sd.ci_success:
+                self._store.add_artifact(step.id, "ci-judged-sha", sha, internal=True)
                 self._complete.execute(CompleteInput(
                     step=step.id, outcome=sd.ci_success, note="CI succeeded on %s." % sha,
                 ))
                 ci_resolved.append(step.item)
             elif outcome == "failure" and sd.ci_failure:
+                self._store.add_artifact(step.id, "ci-judged-sha", sha, internal=True)
                 fc = failing_check(checks)
                 note = "CI failed: run %s, check '%s'." % (pr_value, fc.name if fc else "unknown")
                 self._complete.execute(CompleteInput(step=step.id, outcome=sd.ci_failure, note=note))

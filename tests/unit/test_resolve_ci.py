@@ -128,6 +128,37 @@ class TestResolveCiActingStep(unittest.TestCase):
         self.assertEqual([(n.id, n.stage) for n in asked], [(poll, "poll-ci")])
 
 
+class TestResolveCiJudgedSha(unittest.TestCase):
+    def _judged(self, conclusion, checks_sha="sha1"):
+        store = FakeStore()
+        item = store.create_item("building a thing", "a description")
+        plant_pr(store, item, _URL, branch=_BRANCH)
+        step = store.create_step(step="poll-ci", role="engine", parent=item)
+
+        class _Worktrees:
+            def worktree_path(self, item_id):
+                return _ROOT
+
+        gh = FakeGitHub(check_runs_by_sha={
+            (_URL, "sha1"): (CheckRun(name="build", status=conclusion[0], conclusion=conclusion[1]),)
+        })
+        git = FakeGit(head_shas={(_ROOT, _BRANCH): "sha1"})
+        flow = _FlowAdapter(_FLOW)
+        ResolveCiUseCase(
+            store, gh, git, _Worktrees(), flow, CompleteStepUseCase(store, flow)
+        ).execute()
+        return [a.value for a in store.item_artifacts(step) if a.type == "ci-judged-sha"]
+
+    def test_success_writes_the_judged_sha(self):
+        self.assertEqual(self._judged(("completed", "success")), ["sha1"])
+
+    def test_failure_writes_the_judged_sha(self):
+        self.assertEqual(self._judged(("completed", "failure")), ["sha1"])
+
+    def test_pending_writes_nothing(self):
+        self.assertEqual(self._judged(("in_progress", None)), [])
+
+
 class TestResolveCiUseCase(unittest.TestCase):
     def _setup(self, github, git, flow=_FLOW, worktree_path=_ROOT):
         store = FakeStore()

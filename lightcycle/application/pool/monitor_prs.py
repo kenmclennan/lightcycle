@@ -4,6 +4,7 @@ from typing import List
 
 from lightcycle.application.pool.check_content_pin import CheckContentPinUseCase
 from lightcycle.application.pool.dispatch_pr_feedback import DispatchPrFeedbackUseCase
+from lightcycle.application.pool.detect_head_moved import DetectHeadMovedUseCase
 from lightcycle.application.pool.update_behind_prs import UpdateBehindPrsUseCase
 from lightcycle.application.pool.pr_sync_reads import PrSyncReads
 from lightcycle.application.pool.resolve_ci import ResolveCiUseCase
@@ -17,6 +18,7 @@ class MonitorPrsResponse:
     reworked: List[str] = field(default_factory=list)
     conflicted: List[str] = field(default_factory=list)
     ci_resolved: List[str] = field(default_factory=list)
+    head_moved: List[str] = field(default_factory=list)
     updated: List[str] = field(default_factory=list)
     update_failed: List[str] = field(default_factory=list)
 
@@ -37,6 +39,7 @@ class MonitorPrsUseCase:
             store, github, flow_service, complete,
             trusted_authors=trusted_authors, held_shortcode=held_shortcode,
         )
+        self._detect_head_moved = DetectHeadMovedUseCase(store, flow_service, complete)
         self._update_behind = UpdateBehindPrsUseCase(store, github, flow_service, time.monotonic)
         self._resolve_ci = ResolveCiUseCase(store, github, git, worktrees, flow_service, complete)
 
@@ -44,11 +47,12 @@ class MonitorPrsUseCase:
         resolved = self._resolve.execute()
         reads = PrSyncReads(self._github)
         dispatched = self._dispatch.execute(reads)
+        moved = self._detect_head_moved.execute(reads)
         behind = self._update_behind.execute(reads)
         ci = self._resolve_ci.execute()
         return MonitorPrsResponse(
             merged=resolved.merged, abandoned=resolved.abandoned,
             reworked=dispatched.reworked, conflicted=dispatched.conflicted,
-            ci_resolved=ci.ci_resolved, updated=behind.updated,
+            ci_resolved=ci.ci_resolved, head_moved=moved.head_moved, updated=behind.updated,
             update_failed=behind.update_failed,
         )
