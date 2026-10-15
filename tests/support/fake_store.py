@@ -290,6 +290,9 @@ class FakeStore(StorePort):
         return [self._to_item(b) for b in self._records.values()
                 if b.get("type") == "item"]
 
+    def items_with_label(self, label):
+        return [i for i in self.all_items_including_done() if label in self.labels_of(i.id)]
+
     def all_steps_including_done(self):
         return [self._to_step(b) for b in self._records.values()
                 if b.get("type") == "step"]

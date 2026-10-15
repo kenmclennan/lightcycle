@@ -79,6 +79,8 @@ This table documents every `_SEED_KEYS` entry - `tests/unit/test_docs_reference_
 | `guidance-budget-bytes` | cap on the bytes of guidance entry bodies delivered to one worker spawn, seeded at `6144`; an entry that does not fit is skipped whole, never truncated, and listed in the step's `guidance-skipped` record; must be `>= 0` |
 | `guidance-unused-after-deliveries` | deliveries an entry needs with no citation before `lc guidance` flags it `unused`, seeded at `60`; override with `LC_GUIDANCE_UNUSED_AFTER_DELIVERIES`; must be `>= 1` |
 | `material-audit-days` | days between engine material audits, which judge every guidance entry and every installed workflow bundle and fire on schedule whether or not anything changed, seeded at `7`; override with `LC_MATERIAL_AUDIT_DAYS`; must be `>= 1` |
+| `schedules-paused` | one switch that pauses every schedule, seeded at `false`: while `true` the pool tick evaluates no guard and files nothing, and a schedule due several times while paused fires at most once after the key goes back to `false`. An unreadable value pauses too. Never changes any schedule's `enabled` line |
+| `schedule-<id>` | a block, one per schedule, never seeded: nothing runs until you add one. Indented `key: value` lines, edited by hand - `lc init`, upgrade seeding and `lc doctor` never write or rewrite it. `enabled` (required, `true` or `false`; `false` records the schedule as off and it stays off), `workflow` (required, `<origin>/<name>`), `project` (required, a registered project with a shortcode), `cron` (five-field cron in local time: `*`, numbers, `a-b`, comma lists, `/n` steps; no names or macros), `guard` (`pending-reflections` with `min: <n>`, `materials-changed`, or `day-unsummarised`), `shortcode` (default the project's), `labels` (space-separated). `cron` and `guard` fall back to the workflow bundle's `schedule:` suggestion field by field |
 | `guidance-dormant-days` | days without a delivery before `lc guidance` flags a `stable` entry `never-delivered` (an entry never delivered flags only once it has existed that long), seeded at `60`; override with `LC_GUIDANCE_DORMANT_DAYS`; must be `>= 1` |
 | `review-rounds-cap` | consecutive review-reject rounds on one step a workflow's review-rounds-cap transition tolerates before it fires |
 | `tui-autostart-pool` | whether the TUI starts the pool loop automatically on launch |
@@ -87,6 +89,21 @@ This table documents every `_SEED_KEYS` entry - `tests/unit/test_docs_reference_
 | `tui-upgrade-check-seconds` | how often the TUI rechecks for a new engine version in the background; `0` disables the periodic recheck (the check still runs once on launch); must be `>= 0` |
 | `pool-upgrade-check-seconds` | how often `lc start`'s pool loop rechecks for a new engine version while running; `0` disables the periodic recheck (the check still runs once at startup); must be `>= 0` |
 | `price-<model>-<kind>-per-mtok` | per-million-token USD pricing used for usage cost reporting, one key per `<model>` (`sonnet`/`opus`/`haiku`) x `<kind>` (`input`/`output`/`cache-write`/`cache-read`) - twelve keys total, defaults in `config.py`'s `_SEED_KEYS`; each must be `>= 0` |
+
+Example schedule block (kept in the config file, shown here for reference):
+
+```yaml
+schedule-weekly-audit:
+  enabled: true
+  workflow: lightcycle/material-audit
+  project: lightcycle
+  cron: 0 9 * * 1
+  guard: materials-changed
+  shortcode: AUD
+  labels: audit weekly
+```
+
+`lc schedule list [--json]` shows every schedule, including bundle suggestions your config does not enable.
 
 ## Workflow sources
 

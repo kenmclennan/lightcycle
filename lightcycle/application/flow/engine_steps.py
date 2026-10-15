@@ -7,6 +7,7 @@ AUDIT_STEP = "audit"
 MATERIAL_AUDIT_STEP = "material-audit"
 FINDINGS_STEP = "review-findings"
 SUMMARY_ORIGIN_LABEL = "summary-origin"
+SCHEDULE_ORIGIN_LABEL = "schedule-origin"
 DAILY_SUMMARY_STEP = "daily-summary"
 HELD_COMMENT_STEP = "review-held-comment"
 

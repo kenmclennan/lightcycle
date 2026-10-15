@@ -72,6 +72,9 @@ class FakeConfig:
     def default_origin(self):
         return "acme"
 
+    def schedule_blocks(self):
+        return {}
+
 
 class FakeWorkflowBundle:
     def step_roles(self, root):

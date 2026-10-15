@@ -10,6 +10,7 @@ from lightcycle.application.pool.memory_gate import MemoryGateResponse
 from lightcycle.application.pool.monitor_prs import MonitorPrsResponse
 from lightcycle.application.pool.material_audit_cadence import MaterialAuditCadenceResponse
 from lightcycle.application.pool.retro_cadence import RetroCadenceResponse
+from lightcycle.application.pool.schedule_cadence import ScheduleCadenceResponse
 from lightcycle.application.pool.sweep import SweepResponse, SweepUseCase
 from lightcycle.domain.pool import PoolPlan, ReadyQueue, WorkerPool
 from lightcycle.ports.git import GitReadError
@@ -60,6 +61,7 @@ class TickResponse:
     memory: Optional[MemoryGateResponse] = None
     guidance: Optional[GuidanceSyncResponse] = None
     material_audit: Optional[MaterialAuditCadenceResponse] = None
+    schedules: Optional[ScheduleCadenceResponse] = None
 
 
 class TickUseCase:
@@ -67,7 +69,7 @@ class TickUseCase:
         self, store, workers, spawner, config, monitor, cadence_gate, breaker_gate,
         hook_completions, worktrees, git, backup_gate, fs, flow_service, spin_port, usage_gate,
         stream, memory_gate, summary_gate, guidance_gate,
-        material_audit_gate,
+        material_audit_gate, schedule_gate,
     ):
         self._store = store
         self._workers = workers
@@ -81,6 +83,7 @@ class TickUseCase:
         self._cadence_gate = cadence_gate
         self._summary_gate = summary_gate
         self._material_audit_gate = material_audit_gate
+        self._schedule_gate = schedule_gate
         self._breaker_gate = breaker_gate
         self._hook_completions = hook_completions
         self._backup_gate = backup_gate
@@ -96,6 +99,13 @@ class TickUseCase:
             sys.stderr.write("warning: guidance sync failed: %s\n" % e)
             return None
 
+    def _schedules(self, now):
+        try:
+            return self._schedule_gate.execute(now)
+        except (OSError, GitReadError, ValueError) as e:
+            sys.stderr.write("warning: schedule check failed: %s\n" % e)
+            return None
+
     def execute(self, input: TickInput) -> TickResponse:
         self._flow_service.clear_cache()
         self._workers.reap()
@@ -103,6 +113,7 @@ class TickUseCase:
         cadence_result = self._cadence_gate.execute(input.now)
         summary_result = self._summary_gate.execute(input.now)
         material_audit_result = self._material_audit_gate.execute(input.now)
+        schedules_result = self._schedules(input.now)
         breaker_result = self._breaker_gate.execute(input.now)
         breaker = breaker_result.breaker
         backup_result = self._backup_gate.execute(input.now)
@@ -178,4 +189,5 @@ class TickUseCase:
             memory=memory_result,
             guidance=guidance_result,
             material_audit=material_audit_result,
+            schedules=schedules_result,
         )

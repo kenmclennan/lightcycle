@@ -7,6 +7,7 @@ from lightcycle.application.pool.memory_gate import MemoryGateResponse
 from lightcycle.application.pool.monitor_prs import MonitorPrsResponse
 from lightcycle.application.pool.daily_summary_cadence import DailySummaryCadenceResponse
 from lightcycle.application.pool.retro_cadence import RetroCadenceResponse
+from lightcycle.application.pool.schedule_cadence import ScheduleCadenceResponse
 from lightcycle.domain.pool import Breaker
 from lightcycle.domain.pool.spin_ledger import SpinLedger
 from lightcycle.ports.git import GitReadError
@@ -30,6 +31,11 @@ class NoOpSummaryGate:
 class NoOpMaterialAuditGate:
     def execute(self, now):
         return MaterialAuditCadenceResponse()
+
+
+class NoOpScheduleGate:
+    def execute(self, now):
+        return ScheduleCadenceResponse()
 
 
 class NoOpBreakerGate:

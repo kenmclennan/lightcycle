@@ -13,6 +13,7 @@ from lightcycle.application.pool.no_op_gates import (
     NoOpMemoryGate,
     NoOpMonitor,
     NoOpMaterialAuditGate,
+    NoOpScheduleGate,
     NoOpSummaryGate,
     NoOpUsageGate,
     NoOpWorktrees,
@@ -289,6 +290,7 @@ def _pool_ticks(ctx):
         spin_port=ctx["spin_port"], usage_gate=NoOpUsageGate(), stream=ClaudeStreamAdapter(),
         memory_gate=NoOpMemoryGate(), summary_gate=NoOpSummaryGate(),
         material_audit_gate=NoOpMaterialAuditGate(),
+        schedule_gate=NoOpScheduleGate(),
         guidance_gate=NoOpGuidanceGate(),
     )
     ctx["tick_result"] = tick.execute(TickInput(now=ctx["now"]))

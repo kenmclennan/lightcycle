@@ -1229,3 +1229,65 @@ class TestAgentEnv(unittest.TestCase):
         self.assertEqual(os.path.realpath(built), os.path.realpath(self._pin()))
         c = self._env(built + os.pathsep + "/u")
         self.assertEqual(c.agent_env()["PYTHONPATH"], "/u")
+
+
+_SCHEDULE_BLOCK = (
+    "schedule-weekly-audit:\n"
+    "  enabled: false\n"
+    "  workflow: lightcycle/material-audit\n"
+    "  project: lightcycle\n"
+    "  cron: 0 9 * * 1\n"
+    "  guard: materials-changed\n"
+)
+
+
+class TestScheduleConfig(unittest.TestCase):
+    def _file_cfg(self, text):
+        p = os.path.join(tempfile.mkdtemp(), "config")
+        Path(p).write_text(text)
+        return Config(environ={"LC_CONFIG": p}), p
+
+    def _seeded_without_pause(self):
+        return "".join(
+            "%s: %s\n" % (k, v) for k, v in _SEED_KEYS if k != "schedules-paused")
+
+    def test_schedules_paused_is_a_seed_key_defaulting_to_false(self):
+        self.assertIn(("schedules-paused", "false"), _SEED_KEYS)
+
+    def test_reconcile_appends_the_pause_key_once_and_leaves_a_block_byte_identical(self):
+        c, p = self._file_cfg(self._seeded_without_pause() + _SCHEDULE_BLOCK)
+
+        c.ensure_config()
+        after_first = Path(p).read_text()
+        c.ensure_config()
+        c.reconcile_config()
+        after_third = Path(p).read_text()
+
+        self.assertIn(_SCHEDULE_BLOCK, after_first)
+        self.assertEqual(after_first.count("schedules-paused: false\n"), 1)
+        self.assertEqual(after_first, after_third)
+        self.assertEqual(c.schedule_blocks()["weekly-audit"]["enabled"], "false")
+
+    def test_a_present_pause_key_is_never_altered(self):
+        text = self._seeded_without_pause() + "schedules-paused: true\n" + _SCHEDULE_BLOCK
+        c, p = self._file_cfg(text)
+
+        c.ensure_config()
+        c.reconcile_config()
+
+        self.assertEqual(Path(p).read_text(), text)
+        self.assertTrue(c.schedules_paused())
+
+    def test_an_unreadable_pause_value_is_a_value_error(self):
+        c, _p = self._file_cfg("schedules-paused: maybe\n")
+        with self.assertRaises(ConfigValueError):
+            c.schedules_paused()
+
+    def test_schedule_blocks_are_only_the_schedule_prefixed_dicts(self):
+        c, _p = self._file_cfg("schedules-paused: false\nschedule-x:\n  enabled: true\n")
+        self.assertEqual(c.schedule_blocks(), {"x": {"enabled": "true"}})
+
+    def test_schedule_keys_are_not_obsolete_but_other_unknown_keys_are(self):
+        c, _p = self._file_cfg(
+            self._seeded_without_pause() + _SCHEDULE_BLOCK + "scheduler-thing: 1\n")
+        self.assertEqual(c.obsolete_config_keys(), ("scheduler-thing",))

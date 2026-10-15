@@ -54,6 +54,9 @@ class FakeWorkflowSource:
     def has_version(self, origin, sha):
         return sha in self.materialized.get(origin, [])
 
+    def workflow_names(self, origin, sha):
+        return []
+
     def pinned_bundle(self, origin, sha):
         return (origin, sha)
 
@@ -682,3 +685,113 @@ class TestDoctorFacets(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class _ScheduleBundle(FakeWorkflowBundle):
+    def __init__(self, known):
+        super().__init__()
+        self._known = known
+
+    def workflow_text(self, name, root):
+        return "" if "%s/%s" % (root, name) in self._known else None
+
+    def workflow_meta(self, name, root):
+        return self._known.get("%s/%s" % (root, name), {})
+
+
+class _ScheduleSource(FakeWorkflowSource):
+    def __init__(self, known):
+        super().__init__()
+        self._known = known
+        self.add_bundle("acme", "sha1", 1, current=True)
+        self.register_origin("acme", current="sha1")
+
+    def pinned_bundle(self, origin, sha):
+        return origin
+
+    def read_manifest(self, bundle):
+        return self.manifests[(bundle, "sha1")]
+
+    def workflow_names(self, origin, sha):
+        return [k.split("/", 1)[1] for k in self._known]
+
+
+class _ScheduleConfig:
+    def __init__(self, config, blocks):
+        self._config = config
+        self._blocks = blocks
+
+    def schedule_blocks(self):
+        return self._blocks
+
+    def __getattr__(self, name):
+        return getattr(self._config, name)
+
+
+def _schedule_doctor(blocks, known=None, projects=("acme/app",)):
+    store = FakeStore()
+    for p in projects:
+        store.add_project(p, shortcode="APP")
+    known = {"acme/audit": {}} if known is None else known
+    config = _ScheduleConfig(_cfg(**_ALL_KEYS), blocks)
+    uc = DoctorUseCase(
+        store, _ScheduleSource(known), config, _ScheduleBundle(known), FakeFs(),
+        FakeMachine(), _Worktrees(), FakeGit(), FakeGuidanceSyncStatus())
+    return uc.execute(DoctorInput())
+
+
+def _block(**overrides):
+    base = {"enabled": "true", "workflow": "acme/audit", "project": "acme/app",
+            "cron": "0 9 * * 1", "guard": "materials-changed"}
+    base.update(overrides)
+    return base
+
+
+class TestDoctorSchedules(unittest.TestCase):
+    def _messages(self, report, category="config"):
+        return [p.message for p in report.problems[category]]
+
+    def test_a_schedule_free_config_reports_nothing_new(self):
+        self.assertTrue(_schedule_doctor({}).healthy())
+
+    def test_a_sound_schedule_reports_nothing(self):
+        self.assertTrue(_schedule_doctor({"weekly": _block()}).healthy())
+
+    def test_each_broken_enabled_schedule_is_flagged_in_config_with_its_id(self):
+        cases = {
+            "missing-workflow": _block(workflow="acme/ghost"),
+            "bad-guard": _block(guard="shell-out"),
+            "bad-cron": _block(cron="@daily"),
+            "bad-param": _block(guard="pending-reflections", min="x"),
+            "bad-project": _block(project="acme/ghost"),
+        }
+        report = _schedule_doctor(cases)
+        messages = self._messages(report)
+        for sid in cases:
+            with self.subTest(sid):
+                self.assertTrue(
+                    any(m.startswith("schedule %s: " % sid) for m in messages), messages)
+
+    def test_the_json_category_keys_are_unchanged(self):
+        self.assertEqual(
+            set(_schedule_doctor({}).problems),
+            {"store", "pins", "contract", "origin", "config", "orphans", "facets", "guidance"})
+
+    def test_an_off_schedule_is_not_a_finding(self):
+        report = _schedule_doctor({"weekly": _block(enabled="false", guard="shell-out")})
+        self.assertEqual(self._messages(report), [])
+
+    def test_a_bundle_suggestion_naming_an_unknown_guard_is_a_contract_finding(self):
+        known = {"acme/audit": {"schedule": {"cron": "0 9 * * 1", "guard": "shell-out"}}}
+        report = _schedule_doctor({}, known=known)
+        messages = self._messages(report, "contract")
+        self.assertEqual(len(messages), 1)
+        self.assertTrue(messages[0].startswith("schedule acme/audit: "))
+        self.assertIn("unknown guard", messages[0])
+
+    def test_a_schedule_block_is_not_reported_as_an_obsolete_key(self):
+        config = _cfg(**_ALL_KEYS)
+        text = Path(config.config_path()).read_text()
+        Path(config.config_path()).write_text(
+            text + "schedule-weekly:\n  enabled: false\n  workflow: acme/audit\n")
+        config.reload()
+        self.assertEqual(config.obsolete_config_keys(), ())

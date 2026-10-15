@@ -43,6 +43,8 @@ _ENV_OVERRIDE_VARS = {
     "material-audit-days": "LC_MATERIAL_AUDIT_DAYS",
 }
 
+SCHEDULE_KEY_PREFIX = "schedule-"
+
 _TRUE = ("true", "yes", "1", "on")
 _FALSE = ("false", "no", "0", "off")
 
@@ -114,6 +116,7 @@ _SEED_KEYS = [
     ("guidance-unused-after-deliveries", "60"),
     ("guidance-dormant-days", "60"),
     ("material-audit-days", "7"),
+    ("schedules-paused", "false"),
 ]
 
 _NUMERIC_RANGES = {
@@ -290,7 +293,9 @@ class Config:
 
     def obsolete_config_keys(self):
         seed_names = {k for k, v in _SEED_KEYS}
-        return tuple(k for k in self.load_config() if k not in seed_names)
+        return tuple(
+            k for k in self.load_config()
+            if k not in seed_names and not k.startswith(SCHEDULE_KEY_PREFIX))
 
     def resolved_settings(self):
         entries = []
@@ -479,6 +484,16 @@ class Config:
         if env is not None:
             return env
         return self._required_bool("tui-autostart-pool")
+
+    def schedules_paused(self):
+        return self._required_bool("schedules-paused")
+
+    def schedule_blocks(self):
+        return {
+            k[len(SCHEDULE_KEY_PREFIX):]: dict(v)
+            for k, v in self.load_config().items()
+            if k.startswith(SCHEDULE_KEY_PREFIX) and isinstance(v, dict)
+        }
 
     def tui_metrics(self):
         env = self._env_bool("LC_TUI_METRICS", None)

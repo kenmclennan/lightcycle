@@ -4,6 +4,7 @@ import unittest
 from lightcycle.application.flow.engine_steps import (
     HELD_COMMENT_ORIGIN_LABEL,
     RETRO_ORIGIN_LABEL,
+    SCHEDULE_ORIGIN_LABEL,
     SUMMARY_ORIGIN_LABEL,
 )
 from lightcycle.application.work import DoneInput, DoneUseCase
@@ -14,6 +15,7 @@ from lightcycle.application.work.automation import (
     automation_kind,
     is_automation_item,
 )
+from lightcycle.application.work.closed_count import closed_count
 from tests.support.fake_store import FakeStore
 
 DAY = datetime.date(2026, 1, 1)
@@ -35,11 +37,43 @@ def _closed(store, id, label=None, step="build", closed_at="2026-01-01T10:00:00+
 
 
 class TestMembershipIsByLabel(unittest.TestCase):
-    def test_the_label_set_is_the_three_origin_labels(self):
+    def test_the_label_set_is_the_four_origin_labels(self):
         self.assertEqual(
             AUTOMATION_LABELS,
-            frozenset({SUMMARY_ORIGIN_LABEL, RETRO_ORIGIN_LABEL, HELD_COMMENT_ORIGIN_LABEL}),
+            frozenset({
+                SUMMARY_ORIGIN_LABEL, RETRO_ORIGIN_LABEL, HELD_COMMENT_ORIGIN_LABEL,
+                SCHEDULE_ORIGIN_LABEL,
+            }),
         )
+
+    def test_a_scheduled_item_is_automation_of_kind_scheduled(self):
+        s = FakeStore()
+        item = s.get_item(_closed(s, "SCH-1", label=SCHEDULE_ORIGIN_LABEL, step="build"))
+        self.assertTrue(is_automation_item(s, item))
+        self.assertEqual(automation_kind(s, item), "scheduled")
+
+    def test_the_same_workflow_filed_by_hand_is_project_work(self):
+        s = FakeStore()
+        item = s.get_item(_closed(s, "SCH-1", step="build"))
+        self.assertFalse(is_automation_item(s, item))
+        self.assertIsNone(automation_kind(s, item))
+
+    def test_a_scheduled_item_is_not_counted_as_a_close(self):
+        s = FakeStore()
+        _closed(s, "LC-1")
+        _closed(s, "SCH-1", label=SCHEDULE_ORIGIN_LABEL)
+        self.assertEqual(closed_count(s, DAY), 1)
+
+    def test_a_scheduled_item_is_listed_and_tallied_under_scheduled(self):
+        s = FakeStore()
+        _closed(s, "SCH-1", label=SCHEDULE_ORIGIN_LABEL, cost=0.5)
+
+        resp = AutomationUseCase(s).execute(AutomationInput())
+
+        self.assertEqual([r.step.id for r in resp.rows], ["SCH-1"])
+        self.assertEqual(resp.tallies[3].label, "Scheduled")
+        self.assertEqual(resp.tallies[3].count, 1)
+        self.assertEqual(resp.total.spend.cost_usd.micros, 500_000)
 
     def test_an_unlabelled_aud_item_is_project_work(self):
         s = FakeStore()
@@ -96,8 +130,8 @@ class TestAutomationUseCase(unittest.TestCase):
 
         resp = AutomationUseCase(s).execute(AutomationInput())
 
-        self.assertEqual([t.kind for t in resp.tallies], ["audit", "daily-summary", "held-comment"])
-        self.assertEqual([t.count for t in resp.tallies], [1, 1, 0])
+        self.assertEqual([t.kind for t in resp.tallies], ["audit", "daily-summary", "held-comment", "scheduled"])
+        self.assertEqual([t.count for t in resp.tallies], [1, 1, 0, 0])
         self.assertEqual(resp.total.count, 2)
         self.assertEqual(resp.total.spend.cost_usd.micros, 1_500_000)
 
@@ -109,7 +143,7 @@ class TestAutomationUseCase(unittest.TestCase):
         resp = AutomationUseCase(s).execute(AutomationInput())
 
         self.assertEqual([r.step.id for r in resp.rows], ["SUM-1"])
-        self.assertEqual([t.count for t in resp.tallies], [0, 1, 0])
+        self.assertEqual([t.count for t in resp.tallies], [0, 1, 0, 0])
         self.assertEqual(resp.total.count, 1)
 
     def test_day_filters_by_closed_date(self):
@@ -153,6 +187,6 @@ class TestHeldCommentItemsAreAutomation(unittest.TestCase):
         resp = AutomationUseCase(s).execute(AutomationInput())
 
         self.assertEqual([r.step.id for r in resp.rows], ["HLD-1"])
-        self.assertEqual([t.count for t in resp.tallies], [0, 0, 1])
+        self.assertEqual([t.count for t in resp.tallies], [0, 0, 1, 0])
         self.assertEqual(resp.tallies[2].label, "Held comments")
         self.assertTrue(is_automation_item(s, s.get_item("HLD-1")))

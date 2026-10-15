@@ -278,6 +278,11 @@ COMMANDS = {
         "link": CommandSpec(prog="lc goal link", args=(Arg("id"), Arg("item"))),
         "unlink": CommandSpec(prog="lc goal unlink", args=(Arg("id"), Arg("item"))),
     }),
+    "schedule": CommandSpec(prog="lc schedule", subparsers={
+        "list": CommandSpec(prog="lc schedule list", args=(
+            Arg("--json", action="store_true"),
+        )),
+    }),
     "config": CommandSpec(prog="lc config", args=(
         Arg("--edit", action="store_true"),
     )),

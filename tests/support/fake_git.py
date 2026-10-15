@@ -11,7 +11,7 @@ class FakeGit(GitPort, TeardownLedgerPort):
                  sync_default_result=True, worktree_add_fails=False,
                  torn_down_branches=(), head_shas=None, init_ok=True, commit_ok=True,
                  missing_identity=(), ref=None, ref_files=None, fetch_ok=True,
-                 fetch_detail="boom", added=None, changed=None):
+                 fetch_detail="boom", added=None, changed=None, ref_shas=None):
         self._repos = set(repos) if repos is not None else None
         self._is_repo = is_repo
         self._origin = origin
@@ -28,6 +28,7 @@ class FakeGit(GitPort, TeardownLedgerPort):
         self._worktree_add_fails = worktree_add_fails
         self._torn_down_branches = tuple(torn_down_branches)
         self._head_shas = head_shas or {}
+        self._ref_shas = dict(ref_shas or {})
         self._init_ok = init_ok
         self._commit_ok = commit_ok
         self._missing_identity = list(missing_identity)
@@ -159,6 +160,11 @@ class FakeGit(GitPort, TeardownLedgerPort):
     def remote_head_sha(self, root, branch):
         self.calls.append(("remote_head_sha", root, branch))
         return self._head_shas.get((root, branch))
+
+    def ref_sha(self, root, ref):
+        self.calls.append(("ref_sha", root, ref))
+        self._raise_if("ref_sha", root)
+        return self._ref_shas.get((root, ref))
 
     def fetch_origin(self, root):
         self.calls.append(("fetch_origin", root))

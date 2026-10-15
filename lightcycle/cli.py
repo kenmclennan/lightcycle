@@ -52,6 +52,10 @@ from lightcycle.application.goals import (
     ShowGoalUseCase,
     UnlinkGoalItemUseCase,
 )
+from lightcycle.application.inspect.list_schedules import (
+    ListSchedulesInput,
+    ListSchedulesUseCase,
+)
 from lightcycle.application.work.activate_item import ActivateItemInput, ActivateItemUseCase
 from lightcycle.application.work.resolve_backlog import link_resolves
 from lightcycle.application.work.return_to_backlog import (
@@ -278,6 +282,11 @@ COMMAND_GROUPS = [
          "--description/--project/--status \"not started|in progress|done|archived\"], "
          "log <G-n> \"<title>\" \"<body>\", "
          "link/unlink <G-n> <item> - a goal is not a node and the flow engine never touches it"),
+    ]),
+    ("Schedules", [
+        ("schedule", "<list> [--json]", "list every schedule - config-enabled and bundle-suggested - "
+         "as on, off or paused with the reason, its cadence, guard, last and next fire and the "
+         "guard's current result; read-only, config is edited by hand"),
     ]),
     ("Feedback loop", [
         ("retro", "<item>", "gather child feedback + objective signals into a read digest"),
@@ -1721,6 +1730,9 @@ def _tick_event_lines(result, ts):
     if result.material_audit is not None:
         for sid in result.material_audit.fired:
             lines.append("%s  %-7s  %s" % (ts, "material-audit", sid))
+    if result.schedules is not None:
+        for sid in result.schedules.fired:
+            lines.append("%s  %-7s  %s" % (ts, "schedule", sid))
     for step, tid, detail in result.hooks.completed:
         msg = "%s: %s" % (tid, detail) if detail else tid
         lines.append("%s  %-7s  %s" % (ts, step, msg))
@@ -2010,6 +2022,26 @@ def cmd_init(argv):
     if r.guidance_refusal:
         sys.stderr.write("lc init: guidance repo not created: %s\n" % r.guidance_refusal)
         return 1
+    return 0
+
+
+def cmd_schedule(argv):
+    parser = build_parser(COMMANDS["schedule"])
+    a = parser.parse_args(argv)
+    if a.sub is None:
+        parser.print_help()
+        return 2
+    c = _container
+    resp = ListSchedulesUseCase(
+        c.store, c.config, _flow(), c.workflow_source, c.git,
+    ).execute(ListSchedulesInput(now=time.time()))
+    if a.json:
+        print(json.dumps([r.as_dict() for r in resp.rows], indent=2))
+        return 0
+    for r in resp.rows:
+        print("%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s" % (
+            r.id, r.source, r.state, r.reason, r.cron or "-", r.guard or "-",
+            r.last_fire, r.next_fire, r.guard_result, r.workflow or "-"))
     return 0
 
 
