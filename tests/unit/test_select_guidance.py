@@ -24,7 +24,8 @@ def _entry(status="stable", verified="ken", facets=None, steps=None, body="body"
         applies.append("  facets: [%s]" % ", ".join(facets))
     if steps is not None:
         applies.append("  steps: [%s]" % ", ".join(steps))
-    lines = ["---", "type: %s" % type_, "status: %s" % status]
+    lines = ["---", "type: %s" % type_, "status: %s" % status,
+             "purpose: p", "when: w", "why: y"]
     if verified is not None:
         lines.append("verified: %s" % verified)
     lines.append("applies-to:")

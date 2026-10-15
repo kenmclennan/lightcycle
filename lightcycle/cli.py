@@ -1156,6 +1156,8 @@ def cmd_doctor(argv):
         for p in probs:
             suffix = " (%s)" % p.node_id if p.node_id else ""
             print("  %s%s" % (p.message, suffix))
+            if p.fix:
+                print("    fix: %s" % p.fix)
     print("healthy" if report.healthy() else "unhealthy")
     return 0 if report.healthy() else 1
 
