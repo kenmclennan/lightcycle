@@ -324,7 +324,7 @@ class TestHoldsExpireWithTheRun(_Base):
         flow = _FlowAdapter(_FLOW)
         resolve = ResolveMergedPrsUseCase(
             self.store, merged, FakeWorktrees(), flow, complete,
-            CheckContentPinUseCase(self.store, merged, flow),
+            CheckContentPinUseCase(self.store, merged, flow, trusted_authors=lambda: frozenset({"review-code"})),
         )
         resolve.execute()
         self.assertEqual(self.store.hold(self.rid, "mention:m1").state, "rejected")
