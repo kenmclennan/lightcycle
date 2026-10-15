@@ -963,7 +963,7 @@ _TWO_GATES_ONE_PHASE = (
 
 
 class TestSharedPhaseGatesResolveOnlyTheGateTheItemIsAt(unittest.TestCase):
-    def _setup(self, at, github_kwargs):
+    def _setup(self, at, github_kwargs, github=None):
         from lightcycle.domain.flow import Flow
         from lightcycle.domain.flow.graph import parse_graph
 
@@ -974,13 +974,28 @@ class TestSharedPhaseGatesResolveOnlyTheGateTheItemIsAt(unittest.TestCase):
         url = "https://github.com/x/y/pull/9"
         plant_pr(store, item, url, "spec")
         step = store.create_step(step=at, role="human", parent=item)
-        gh = FakeGitHub(**github_kwargs(url))
+        gh = github(url) if github else FakeGitHub(**github_kwargs(url))
         adapter = _FlowAdapter(flow)
         uc = ResolveMergedPrsUseCase(
             store, gh, FakeWorktrees(), adapter, CompleteStepUseCase(store, adapter),
             CheckContentPinUseCase(store, gh, adapter, trusted_authors=lambda: frozenset({"review-code"})),
         )
         return store, item, step, uc
+
+    def test_a_merge_read_once_is_not_lost_to_the_gate_checked_first(self):
+        from lightcycle.adapters.simulate import ScriptedGitHub
+
+        def scripted(url):
+            gh = ScriptedGitHub()
+            gh.script_merge(url)
+            return gh
+
+        store, item, step, uc = self._setup("spec-await-merge", None, github=scripted)
+
+        result = uc.execute()
+
+        self.assertEqual(result.merged, [item])
+        self.assertEqual(store.get_node(step).outcome, "spec-merged")
 
     def test_merge_at_the_edge_gate_advances_and_does_not_close_through_the_terminal_gate(self):
         store, item, step, uc = self._setup("spec-await-merge", lambda u: {"merged_prs": {u}})

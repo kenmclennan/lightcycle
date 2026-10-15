@@ -95,6 +95,7 @@ class ResolveMergedPrsUseCase:
                 continue
             flow = flow_for(self._flow_service, item)
             resolved = False
+            merged_by_pr = {}
             for stage in flow.merge_stages():
                 sd = flow.step_def(stage)
                 phase = sd.phase
@@ -105,7 +106,9 @@ class ResolveMergedPrsUseCase:
                 self._check_content_pin.execute(item, pr_value, phase)
                 merge_outcome = sd.pr_merge
                 close_outcome = sd.pr_close
-                if merge_outcome and false_on_failure(self._github.is_merged(pr_value)):
+                if merge_outcome and pr_value not in merged_by_pr:
+                    merged_by_pr[pr_value] = false_on_failure(self._github.is_merged(pr_value))
+                if merge_outcome and merged_by_pr[pr_value]:
                     nxt = flow.next(stage, merge_outcome)
                     if nxt and nxt.to_stage and not nxt.to_terminal:
                         step = active_step_at(self._store, item.id, stage)
