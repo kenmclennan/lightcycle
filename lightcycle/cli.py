@@ -126,6 +126,7 @@ from lightcycle.application.flow import (
     FlowCheckUseCase,
     UnblockInput,
 )
+from lightcycle.domain.guidance.conventions import CONVENTIONS_TEXT
 from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE, SPECS_WORKSPACE
 from lightcycle.application.pool import (
     AcquireRunLockUseCase,
@@ -300,6 +301,8 @@ COMMAND_GROUPS = [
         ("guidance-check", "[--dir PATH] [--mode draft|final] [--base REF]", "check changed "
          "guidance entries against the engine's guidance conventions (read-only; exits 1 on "
          "any failure or an unreadable base)"),
+        ("guidance-conventions", "", "print the engine's guidance conventions text exactly as "
+         "`lc init` writes it (read-only)"),
         ("audit-criteria", "<material>", "print the periodic audit's criteria for one material "
          "(guidance, workflows) from the engine's audit prompt"),
     ]),
@@ -741,6 +744,12 @@ def cmd_guidance_check(argv):
         print("\n".join(failures))
         return 1
     print("%d changed file(s) clean (%s mode)" % (checked, a.mode))
+    return 0
+
+
+def cmd_guidance_conventions(argv):
+    build_parser(COMMANDS["guidance-conventions"]).parse_args(argv)
+    sys.stdout.write(CONVENTIONS_TEXT)
     return 0
 
 

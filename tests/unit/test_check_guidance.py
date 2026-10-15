@@ -142,3 +142,17 @@ class TestWorkerPermission(unittest.TestCase):
     def test_a_worker_may_run_guidance_check(self):
         self.assertIn("guidance-check", WORKER_VERBS)
         self.assertTrue(worker_permitted("guidance-check", {}))
+
+
+class TestGuidanceConventionsCommand(unittest.TestCase):
+    def test_prints_the_text_init_writes_byte_for_byte(self):
+        from lightcycle.domain.guidance.conventions import CONVENTIONS_TEXT
+
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = cli_mod.cmd_guidance_conventions([])
+        self.assertEqual(rc, 0)
+        self.assertEqual(buf.getvalue(), CONVENTIONS_TEXT)
+
+    def test_a_worker_may_run_it(self):
+        self.assertTrue(worker_permitted("guidance-conventions", {}))

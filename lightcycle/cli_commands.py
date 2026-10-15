@@ -142,6 +142,7 @@ COMMANDS = {
         Arg("--mode", choices=("draft", "final"), default="final"),
         Arg("--base", default="origin/main", metavar="REF"),
     )),
+    "guidance-conventions": CommandSpec(prog="lc guidance-conventions"),
     "audit-criteria": CommandSpec(prog="lc audit-criteria", args=(
         Arg("material"),
     )),
