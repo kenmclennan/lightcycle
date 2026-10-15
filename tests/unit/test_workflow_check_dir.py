@@ -253,3 +253,42 @@ class TestWorkerMayCheckDir(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestScheduleNeedsRequiresEngine(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        cli.set_container(_Container())
+
+    def _build(self, schedule, requires):
+        root = _bundle(self.tmp)
+        wf = os.path.join(root, "workflows", "spec-driven.md")
+        if schedule:
+            with open(wf) as f:
+                text = f.read()
+            with open(wf, "w") as f:
+                f.write("---\nschedule:\n  cron: 0 9 * * 1\n  guard: materials-changed\n---\n" + text)
+        if requires:
+            with open(os.path.join(root, "source.toml"), "a") as f:
+                f.write('requires-engine = ">=0.6.0"\n')
+        return root
+
+    def test_a_schedule_without_requires_engine_is_reported(self):
+        rc, _out, err = run_check("--dir", self._build(True, False), "spec-driven")
+        self.assertEqual(rc, 1)
+        self.assertIn(
+            "workflow spec-driven declares schedule: but source.toml has no requires-engine; "
+            "older engines would ignore it", err)
+
+    def test_a_schedule_with_requires_engine_reports_nothing(self):
+        rc, _out, err = run_check("--dir", self._build(True, True), "spec-driven")
+        self.assertEqual(rc, 0, err)
+
+    def test_no_schedule_and_no_requires_engine_reports_nothing(self):
+        rc, _out, err = run_check("--dir", self._build(False, False), "spec-driven")
+        self.assertEqual(rc, 0, err)
+
+    def test_requires_engine_without_a_schedule_reports_nothing(self):
+        rc, _out, err = run_check("--dir", self._build(False, True), "spec-driven")
+        self.assertEqual(rc, 0, err)

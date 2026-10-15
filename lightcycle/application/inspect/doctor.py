@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from typing import Dict, List
 
 from lightcycle.application.errors import UseCaseError
+from lightcycle.application.pool.schedule_resolution import ScheduleResolver
+from lightcycle.application.services.flow import FlowService
 from lightcycle.application.workflows.engine_requirement_check import bundle_conflict_messages
 from lightcycle.application.services.guidance_library import NO_REF_ENTRY, GuidanceLibrary
 from lightcycle.application.services.engine_fragments import with_engine_fragments
@@ -52,17 +54,20 @@ class DoctorUseCase:
         self._worktrees = worktrees
         self._git = git
         self._guidance_sync_status = guidance_sync_status
+        self._schedule_resolver = ScheduleResolver(
+            store, config, FlowService(workflow_bundle, store, config, workflow_source),
+            workflow_source)
 
     def execute(self, input: DoctorInput) -> DoctorReport:
         nodes = self._store.all_nodes_including_done()
         pins, contracts = self._bundle_problems(nodes)
-        contracts = contracts + self._requirement_problems()
+        contracts = contracts + self._requirement_problems() + self._suggestion_problems()
         return DoctorReport(problems={
             "store": fsck(nodes),
             "pins": pins,
             "contract": contracts,
             "origin": self._origin_problems(),
-            "config": self._config_problems(),
+            "config": self._config_problems() + self._schedule_problems(),
             "orphans": self._orphan_problems(),
             "facets": self._guidance_registration_problems() + self._facet_problems(),
             "guidance": self._guidance_problems(),
@@ -184,6 +189,19 @@ class DoctorUseCase:
             for k in self._config.obsolete_config_keys()
         ]
         return problems
+
+    def _schedule_problems(self):
+        return [
+            Problem("config", "schedule %s: %s" % (r.schedule.id, r.problem))
+            for r in self._schedule_resolver.resolve()
+            if r.schedule.enabled and r.problem
+        ]
+
+    def _suggestion_problems(self):
+        return [
+            Problem("contract", "schedule %s: %s" % (sid, problem))
+            for sid, problem in self._schedule_resolver.bundle_suggestion_problems()
+        ]
 
     def _expected_worktree_paths(self):
         expected = set()

@@ -107,6 +107,22 @@ class StoreContractBase:
         s.label_remove(tid, "ci-pending")
         self.assertEqual(set(s.labels_of(tid)), {"ci-released:1"})
 
+    def test_items_with_label_returns_done_and_open_items_and_only_the_labelled(self):
+        s = self.make_store()
+        open_item = s.create_item("open", "d", shortcode="LC")
+        done_item = s.create_item("done", "d", shortcode="LC")
+        other = s.create_item("other", "d", shortcode="LC")
+        s.label_add(open_item, "schedule:weekly")
+        s.label_add(done_item, "schedule:weekly")
+        s.label_add(other, "schedule:daily")
+        s.complete_node(done_item, "merged")
+
+        found = s.items_with_label("schedule:weekly")
+
+        self.assertEqual({i.id for i in found}, {open_item, done_item})
+        self.assertEqual({i.state for i in found}, {s.get_item(open_item).state, "done"})
+        self.assertEqual(s.items_with_label("schedule:none"), [])
+
     def test_assign_shows_running(self):
         s = self.make_store()
         tid = self._step(s, "t", role="agent")

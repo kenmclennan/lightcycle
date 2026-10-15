@@ -198,6 +198,15 @@ def remote_head_sha(root, branch):
     return proc.stdout.strip() if proc.returncode == 0 else None
 
 
+def ref_sha(root, ref):
+    proc = git(root, "rev-parse", "--verify", "--quiet", ref + "^{commit}")
+    if proc.returncode == 0:
+        return proc.stdout.strip()
+    if proc.returncode == 1 and not proc.stderr.strip():
+        return None
+    raise GitReadError("git rev-parse failed in %s: %s" % (root, proc.stderr.strip()))
+
+
 def prune_worktrees(root):
     proc = git(root, "worktree", "prune")
     return GitOutcome(ok=proc.returncode == 0, detail=proc.stderr.strip())
@@ -362,6 +371,9 @@ class GitAdapter(GitPort):
 
     def remote_head_sha(self, root, branch):
         return remote_head_sha(root, branch)
+
+    def ref_sha(self, root, ref):
+        return ref_sha(root, ref)
 
     def fetch_origin(self, root):
         return fetch_origin(root)

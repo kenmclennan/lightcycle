@@ -783,6 +783,10 @@ class SqliteStore(StorePort):
     def all_items_including_done(self):
         return self._select_items("")
 
+    def items_with_label(self, label):
+        return self._select_items(
+            "id IN (SELECT node_id FROM labels WHERE label = ?)", (label,))
+
     def all_steps_including_done(self):
         return self._select_steps("")
 

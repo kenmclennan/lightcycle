@@ -137,6 +137,10 @@ class RecordingGit(GitPort, TeardownLedgerPort):
         self._record("remote_head_sha", root, branch)
         return "sim-sha"
 
+    def ref_sha(self, root, ref):
+        self._record("ref_sha", root, ref)
+        return "sim-sha"
+
     def fetch_origin(self, root):
         self._record("fetch_origin", root)
         return GitOutcome(ok=True)

@@ -3736,10 +3736,11 @@ class TestAutomationTab(unittest.TestCase):
 
         tally = session.app.query_one("#automation-tally", Static).render().plain.splitlines()
 
-        self.assertEqual(len(tally), 4)
+        self.assertEqual(len(tally), 5)
         self.assertTrue(tally[0].startswith("Audits"))
         self.assertTrue(tally[2].startswith("Held comments"))
-        self.assertTrue(tally[3].startswith("Total"))
+        self.assertTrue(tally[3].startswith("Scheduled"))
+        self.assertTrue(tally[4].startswith("Total"))
         table = session.app.query_one(AutomationTable)
         self.assertEqual({r.key.value for r in table.ordered_rows}, {"AUD-1", "SUM-1"})
         self.assertEqual(session.app.query_one(ShortcutBar).shortcuts, AUTOMATION_SHORTCUTS)

@@ -408,6 +408,24 @@ class TestGitAdapterRemoteHeadSha(unittest.TestCase):
         self.assertEqual(_git(consumer, "status", "--porcelain").stdout, before_status)
 
 
+class TestGitAdapterRefSha(unittest.TestCase):
+    def test_an_existing_ref_resolves_to_its_commit(self):
+        repo = _make_repo()
+        head = _git(repo, "rev-parse", "HEAD").stdout.strip()
+
+        self.assertEqual(GitAdapter().ref_sha(repo, "main"), head)
+
+    def test_a_missing_ref_is_none(self):
+        self.assertIsNone(GitAdapter().ref_sha(_make_repo(), "origin/main"))
+
+    def test_a_non_repository_root_raises_instead_of_reading_as_no_ref(self):
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+
+        with self.assertRaises(GitReadError):
+            GitAdapter().ref_sha(root, "main")
+
+
 class TestCommitAllIdentity(unittest.TestCase):
     def _no_identity_env(self):
         return mock.patch.dict(

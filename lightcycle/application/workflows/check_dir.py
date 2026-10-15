@@ -2,6 +2,7 @@ import os
 from dataclasses import dataclass, field
 from typing import List
 
+from lightcycle.frontmatter import split_frontmatter
 from lightcycle.application.workflows.bundle_check import (
     check_bundle_references,
     check_prompts,
@@ -94,6 +95,13 @@ class CheckWorkflowDirUseCase:
                 and not manifest.requires_engine.satisfied_by(self._engine_version)):
             problems.append(
                 unmet_requirement_message(manifest.requires_engine, self._engine_version))
+        if manifest.requires_engine is None:
+            for wf_name in sorted(bundle.workflows):
+                meta, _ = split_frontmatter(bundle.workflows[wf_name] or "")
+                if isinstance(meta.get("schedule"), dict) and meta["schedule"]:
+                    problems.append(
+                        "workflow %s declares schedule: but source.toml has no requires-engine; "
+                        "older engines would ignore it" % wf_name)
         references = {
             n: msgs for n, msgs in check_bundle_references(bundle).items() if n in names
         }

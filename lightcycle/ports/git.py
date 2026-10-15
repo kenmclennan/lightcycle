@@ -110,6 +110,10 @@ class GitPort(ABC):
         pass
 
     @abstractmethod
+    def ref_sha(self, root, ref):
+        pass
+
+    @abstractmethod
     def fetch_origin(self, root):
         pass
 

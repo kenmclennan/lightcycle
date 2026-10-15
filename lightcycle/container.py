@@ -22,6 +22,8 @@ from lightcycle.adapters.workers import WorkersAdapter
 from lightcycle.adapters.workflow_bundle import WorkflowBundleAdapter
 from lightcycle.adapters.workflow_source import WorkflowSourceAdapter
 from lightcycle.application.pool.guidance_sync import GuidanceSyncUseCase
+from lightcycle.application.pool.schedule_cadence import ScheduleCadenceUseCase
+from lightcycle.application.work.activate_item import ActivateItemUseCase
 from lightcycle.config import Config
 
 
@@ -102,6 +104,11 @@ class Container:
             cadence_gate=RetroCadenceUseCase(self.store, self.config),
             summary_gate=DailySummaryCadenceUseCase(self.store, self.config),
             material_audit_gate=MaterialAuditCadenceUseCase(self.store, self.config),
+            schedule_gate=ScheduleCadenceUseCase(
+                self.store, self.config, flow, self.workflow_source, self.git,
+                ActivateItemUseCase(
+                    self.store, flow, self.git, self.config, self.scaffold),
+            ),
             breaker_gate=BreakerGateUseCase(
                 self.workers, self.worker_log, self.breaker, self.config, self.claude_stream,
                 spin_port=self.spin, store=self.store,

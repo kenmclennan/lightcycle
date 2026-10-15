@@ -165,6 +165,10 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def items_with_label(self, label):
+        pass
+
+    @abstractmethod
     def update_state(self, tid, state):
         pass
 
