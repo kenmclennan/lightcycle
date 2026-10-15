@@ -33,7 +33,7 @@ Criteria. Apply all six to every stable entry.
 
 Reversal. Retiring means `status: deprecated`; restoring means `status: stable`, with the history in git. For each `deprecated` entry, find the date it was deprecated with `git log` on its file in the guidance dir, run `lc retro --since <that date>`, and run `lc search` on terms drawn from its subject. If the failure it prevented has recurred, the verdict is restore, and the finding says to restore that entry rather than draft a new one.
 
-Finding shape. Each finding states the entry id, the verdict, the criterion number, the evidence read, and the guidance-repo PR the driver should draft: the file, the front-matter or body change, and for a retirement `status: deprecated`. A promote verdict also adds a `Promotion candidate:` line naming the repo the check belongs in, the check and the entry it replaces. An entry whose verdict is keep is listed in the digest with the reason, never as a finding that needs a change.
+Finding shape. Each finding states the entry id, the verdict, the criterion number, the evidence read, and the brief for a `guidance-entry` item: the entry, the change, and for a retirement `status: deprecated`. A promote verdict also adds a `Promotion candidate:` line naming the repo the check belongs in, the check and the entry it replaces. An entry whose verdict is keep is listed in the digest with the reason, never as a finding that needs a change.
 
 These criteria are engine-owned and name no user repo's entries; read the guidance repo only through `lc guidance-dir`.
 
