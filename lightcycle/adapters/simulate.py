@@ -173,6 +173,10 @@ class RecordingGit(GitPort, TeardownLedgerPort):
         self._record("changed_paths", root, base)
         return []
 
+    def uncommitted_paths(self, root):
+        self._record("uncommitted_paths", root)
+        return []
+
 
 class ScriptedGitHub(GitHubEventsPort):
     def __init__(self, login="reviewer"):

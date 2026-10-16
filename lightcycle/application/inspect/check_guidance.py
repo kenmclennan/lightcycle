@@ -18,6 +18,15 @@ class CheckGuidanceUseCase:
             rows = self._git.changed_paths(directory, base)
         except GitReadError as e:
             raise UseCaseError(str(e))
+        try:
+            dirty = [p for p in self._git.uncommitted_paths(directory) if is_checked_path(p)]
+        except GitReadError as e:
+            raise UseCaseError(str(e))
+        if dirty:
+            return [
+                "%s: uncommitted change - commit it first, guidance-check reads only committed work" % p
+                for p in dirty
+            ], 0
         changed, deleted = [], []
         for status, path in rows:
             if not is_checked_path(path):

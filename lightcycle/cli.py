@@ -814,6 +814,9 @@ def cmd_guidance_check(argv):
     if failures:
         print("\n".join(failures))
         return 1
+    if checked == 0:
+        print("no guidance files changed between %s and HEAD (%s mode)" % (a.base, a.mode))
+        return 0
     print("%d changed file(s) clean (%s mode)" % (checked, a.mode))
     return 0
 

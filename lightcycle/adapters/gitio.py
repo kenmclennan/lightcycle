@@ -320,6 +320,21 @@ def changed_paths(root, base):
     return rows
 
 
+def uncommitted_paths(root):
+    proc = git(root, "status", "--porcelain", "-z", "--untracked-files=all")
+    if proc.returncode != 0:
+        raise GitReadError("git status failed in %s: %s" % (root, proc.stderr.strip()))
+    paths = []
+    entries = iter(proc.stdout.split("\0"))
+    for entry in entries:
+        if len(entry) < 4:
+            continue
+        paths.append(entry[3:])
+        if entry[0] in "RC" or entry[1] in "RC":
+            next(entries, None)
+    return paths
+
+
 class GitAdapter(GitPort):
     def add_worktree(self, root, path, branch, base, retries, backoff):
         return add_worktree(root, path, branch, base, retries, backoff)
@@ -374,6 +389,9 @@ class GitAdapter(GitPort):
 
     def has_uncommitted(self, root):
         return has_uncommitted(root)
+
+    def uncommitted_paths(self, root):
+        return uncommitted_paths(root)
 
     def commit_all(self, root, message):
         return commit_all(root, message)

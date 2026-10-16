@@ -79,6 +79,18 @@ class TestCheckGuidanceUseCase(unittest.TestCase):
         )
         self.assertEqual(failures, [])
 
+    def test_uncommitted_markdown_fails_without_reading_the_diff(self):
+        (failures, checked), _ = self._run(
+            [("A", "a.md")], {"a.md": entry()}, uncommitted={ROOT: ["a.md", "notes.txt"]},
+        )
+        self.assertEqual(checked, 0)
+        self.assertEqual(len(failures), 1)
+        self.assertTrue(failures[0].startswith("a.md: uncommitted change"))
+
+    def test_unreadable_status_raises_use_case_error(self):
+        with self.assertRaises(UseCaseError):
+            self._run([], {}, raises=("uncommitted_paths",))
+
     def test_failing_diff_raises_use_case_error(self):
         with self.assertRaises(UseCaseError):
             CheckGuidanceUseCase(FakeGit(raises=("changed_paths",)), _fs({})).execute(
@@ -130,6 +142,12 @@ class TestGuidanceCheckCommand(unittest.TestCase):
         rc, out, _ = self._call(["--dir", ROOT, "--mode", "draft", "--base", "main"], git, fs)
         self.assertEqual(rc, 0)
         self.assertEqual(out.strip(), "1 changed file(s) clean (draft mode)")
+
+    def test_nothing_changed_says_so_without_the_word_clean(self):
+        rc, out, err = self._call([], FakeGit(), FakeFs())
+        self.assertEqual((rc, err), (0, ""))
+        self.assertEqual(out.strip(), "no guidance files changed between origin/main and HEAD (final mode)")
+        self.assertNotIn("clean", out)
 
     def test_unresolvable_base_exits_one_with_the_reason(self):
         rc, out, err = self._call(["--base", "nope"], FakeGit(raises=("changed_paths",)), FakeFs())
