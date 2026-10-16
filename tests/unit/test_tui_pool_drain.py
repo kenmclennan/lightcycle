@@ -33,7 +33,7 @@ class TestDrainingFooter(unittest.TestCase):
         frame = render("priority-list#pool-draining")
 
         self.assertIn(
-            "%s pool draining (3 running)" % FOOTER_GLYPHS["pool-draining"].glyph, frame
+            "%s pool draining (3 workers)" % FOOTER_GLYPHS["pool-draining"].glyph, frame
         )
         self.assertNotIn("pool running", frame)
 
@@ -67,8 +67,8 @@ class TestDrainingFooter(unittest.TestCase):
         narrow = render("priority-list#pool-draining", size=(80, 30))
         wide = render("priority-list#pool-draining", size=(140, 30))
 
-        self.assertIn("pool draining (3 running)", narrow)
-        self.assertIn("pool draining (3 running)", wide)
+        self.assertIn("pool draining (3 workers)", narrow)
+        self.assertIn("pool draining (3 workers)", wide)
 
 
 class TestPoolPromptDrainOption(unittest.TestCase):

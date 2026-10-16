@@ -1872,7 +1872,7 @@ class LightcycleApp(App):
             pool_running=running,
             pool_transition_kind=self._pool_transition_kind,
             pool_transition_expired=self._pool_transition_expired,
-            pool_draining_running=drain.running if drain is not None and drain.draining else None,
+            pool_draining_waiting=drain.waiting_text() if drain is not None and drain.draining else None,
             breaker_is_open=breaker.is_open,
             breaker_is_probing=breaker.is_probing,
             breaker_reset_at=breaker.reset_at,
@@ -1889,7 +1889,9 @@ class LightcycleApp(App):
             self._clear_pool_transition()
         elif self._pool_transition_kind == "stop" and not running:
             self._clear_pool_transition()
-        drain = PoolDrainStatusUseCase(self._container.drain, self._container.workers).execute(running)
+        drain = PoolDrainStatusUseCase(
+            self._container.drain, self._container.workers, self._container.store
+        ).execute(running, self._now().timestamp())
         breaker = BreakerStatusUseCase(self._container.breaker).execute(self._now().timestamp())
         hold = PoolHoldStatusUseCase(
             self._container.memory_gate_status, self._container.workers, self._container.config,

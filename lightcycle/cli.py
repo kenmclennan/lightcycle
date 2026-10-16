@@ -10,6 +10,7 @@ import tempfile
 import time
 import traceback
 from collections import namedtuple
+from dataclasses import replace
 
 from lightcycle import __version__
 from lightcycle.adapters.simulate import (
@@ -1872,15 +1873,21 @@ def _stop_pool():
     return _stop_pool_lines(resp, grace_seconds)
 
 
-def _drain_complete(result):
-    return result.pool.draining and result.pool.alive == 0
+def _drain_complete(result, status):
+    return result.pool.draining and result.pool.alive == 0 and status.engine_steps == 0
 
 
-def _drain_progress_lines(result, last_waiting):
-    waiting = result.pool.alive
+def _drain_progress_lines(status, last_waiting):
+    waiting = status.waiting_text()
     if waiting == last_waiting:
         return [], last_waiting
-    return ["lc start draining - waiting for %d worker(s)" % waiting], waiting
+    return ["lc start draining - waiting for %s" % waiting], waiting
+
+
+def _drain_status(now, pool_running=True):
+    return PoolDrainStatusUseCase(
+        _container.drain, _container.workers, _container.store
+    ).execute(pool_running, now)
 
 
 def _shutdown_pool_lines():
@@ -1948,7 +1955,7 @@ def cmd_start(argv):
             now = time.time()
             for line in _upgrade_notice_lines(upgrade_cadence.execute(now)):
                 print(line)
-            drain = PoolDrainStatusUseCase(_container.drain, _container.workers).execute(True).draining
+            drain = _drain_status(now).draining
             try:
                 result = _run_tick(
                     tick, _container.worker_log, TickInput(now=now, since=prev_now, drain=drain), now
@@ -1966,11 +1973,12 @@ def cmd_start(argv):
             for line in lines:
                 print(line)
             if result.pool.draining:
-                progress, last_waiting = _drain_progress_lines(result, last_waiting)
+                status = replace(_drain_status(time.time()), running=result.pool.alive)
+                progress, last_waiting = _drain_progress_lines(status, last_waiting)
                 for line in progress:
                     print(line)
-                if _drain_complete(result):
-                    print("lc start drained - no workers running, stopping")
+                if _drain_complete(result, status):
+                    print("lc start drained - no workers or engine steps running, stopping")
                     for line in _shutdown_pool_lines():
                         print(line)
                     return 0
@@ -1997,7 +2005,7 @@ def cmd_stop(argv):
         if drained.outcome == "already-draining":
             print("pool already draining")
             return 0
-        print("lc stop --drain asked pid %d to drain - it exits when its running workers finish"
+        print("lc stop --drain asked pid %d to drain - it exits when its running workers and engine steps finish"
               % drained.pid)
         return 0
     resp = StopPoolSignalUseCase(_container.lock, _container.workers).execute()
@@ -2252,11 +2260,9 @@ def cmd_status(argv):
     if a.json:
         print(json.dumps({k: [t.as_dict() for t in v] for k, v in lanes.items()}, indent=2))
     else:
-        drain_status = PoolDrainStatusUseCase(_container.drain, _container.workers).execute(
-            PoolRunningUseCase(_container.lock).execute().running
-        )
+        drain_status = _drain_status(time.time(), PoolRunningUseCase(_container.lock).execute().running)
         if drain_status.draining:
-            print("pool draining (%d running)" % drain_status.running)
+            print("pool draining (%s)" % drain_status.waiting_text())
         flow_service = _flow()
         spin_ledger = _container.spin.load()
         for key in ("inbox", "active", "queue"):

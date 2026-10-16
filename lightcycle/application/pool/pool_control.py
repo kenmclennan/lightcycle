@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from lightcycle.domain.pool import WorkerPool
+from lightcycle.domain.work import State, is_engine_step
 from lightcycle.ports.workers import RegistryUnreadable
 
 
@@ -57,10 +58,26 @@ class DrainPoolResponse:
     pid: Optional[int] = None
 
 
+DRAIN_SLOW_SECONDS = 1800
+
+
+def _plural(n, noun):
+    return "%d %s%s" % (n, noun, "" if n == 1 else "s")
+
+
 @dataclass(frozen=True)
 class PoolDrainStatus:
     draining: bool
     running: int
+    engine_steps: int = 0
+    slow: bool = False
+
+    def waiting_text(self):
+        parts = [_plural(self.running, "worker")]
+        if self.engine_steps:
+            parts.append(_plural(self.engine_steps, "engine step"))
+        text = ", ".join(parts)
+        return text + " - slow" if self.slow else text
 
 
 class DrainPoolUseCase:
@@ -79,11 +96,12 @@ class DrainPoolUseCase:
 
 
 class PoolDrainStatusUseCase:
-    def __init__(self, drain, workers):
+    def __init__(self, drain, workers, store):
         self._drain = drain
         self._workers = workers
+        self._store = store
 
-    def execute(self, pool_running) -> PoolDrainStatus:
+    def execute(self, pool_running, now) -> PoolDrainStatus:
         if not (pool_running and self._drain.requested()):
             return PoolDrainStatus(draining=False, running=0)
         try:
@@ -91,7 +109,15 @@ class PoolDrainStatusUseCase:
             running = len(pool.alive(self._workers.pid_alive))
         except RegistryUnreadable:
             running = 0
-        return PoolDrainStatus(draining=True, running=running)
+        engine_steps = sum(
+            1 for step in self._store.all_steps()
+            if is_engine_step(step) and step.state in (State.QUEUED, State.RUNNING)
+        )
+        since = self._drain.requested_at()
+        slow = since is not None and now - since > DRAIN_SLOW_SECONDS
+        return PoolDrainStatus(
+            draining=True, running=running, engine_steps=engine_steps, slow=slow
+        )
 
 
 class ClearDrainUseCase:
