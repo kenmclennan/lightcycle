@@ -80,6 +80,9 @@ class _Cfg:
     def config_path(self):
         return self._path
 
+    def guidance_shortcode(self):
+        return "GDN"
+
 
 class TestAddProjectReservedShortcode(unittest.TestCase):
     def _uc(self, store):
@@ -88,6 +91,16 @@ class TestAddProjectReservedShortcode(unittest.TestCase):
         from lightcycle.application.setup import AddProjectUseCase
 
         return AddProjectUseCase(store, FakeGit(), _Cfg(__file__), FakeFs())
+
+    def test_a_product_project_cannot_take_the_guidance_shortcode(self):
+        from lightcycle.application.errors import UseCaseError
+        from lightcycle.application.setup import AddProjectInput
+
+        s = FakeStore()
+        with self.assertRaisesRegex(UseCaseError, "guidance project"):
+            self._uc(s).execute(AddProjectInput(identity="acme/app", shortcode="gdn"))
+        with self.assertRaisesRegex(UseCaseError, "guidance project"):
+            self._uc(s).execute(AddProjectInput(identity="acme/gdn"))
 
     def test_explicit_shortcode_g_is_refused_with_the_reason(self):
         from lightcycle.application.errors import UseCaseError

@@ -486,6 +486,14 @@ class TestTrustedAuthors(unittest.TestCase):
         with self.assertRaises(ConfigError):
             c.trusted_authors()
 
+    def test_the_guidance_shortcode_is_seeded_gdn_with_an_env_override(self):
+        self.assertEqual(dict(_SEED_KEYS)["guidance-shortcode"], "GDN")
+        self.assertEqual(_cfg(guidance_shortcode="GDN").guidance_shortcode(), "GDN")
+        env = _cfg(environ={"LC_GUIDANCE_SHORTCODE": "ZZZ"})
+        self.assertEqual(env.guidance_shortcode(), "ZZZ")
+        with self.assertRaises(ConfigError):
+            _cfg().guidance_shortcode()
+
     def test_the_held_comment_shortcode_is_seeded_hld_with_an_env_override(self):
         self.assertEqual(dict(_SEED_KEYS)["held-comment-shortcode"], "HLD")
         self.assertEqual(_cfg(held_comment_shortcode="HLD").held_comment_shortcode(), "HLD")

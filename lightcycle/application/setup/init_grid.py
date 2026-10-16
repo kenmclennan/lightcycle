@@ -125,19 +125,33 @@ class InitGridUseCase:
                     % (registered.local_path, wanted, GUIDANCE_WORKSPACE)
                 )
             return "unchanged", registered.local_path
+        shortcode = self._guidance_shortcode_checked()
         if not self._fs.exists(wanted):
             self._create_guidance_repo(wanted)
-            self._store.add_project(GUIDANCE_WORKSPACE, local_path=wanted, remote=None)
+            self._store.add_project(
+                GUIDANCE_WORKSPACE, shortcode=shortcode, local_path=wanted, remote=None
+            )
             return "created", wanted
         if self._git.is_repo_root(wanted):
             self._store.add_project(
-                GUIDANCE_WORKSPACE, local_path=wanted, remote=self._git.remote_url(wanted)
+                GUIDANCE_WORKSPACE, shortcode=shortcode, local_path=wanted,
+                remote=self._git.remote_url(wanted),
             )
             return "registered", wanted
         raise UseCaseError(
             "guidance repo path %s exists and is not a git repo root - remove it, choose "
             "another with --guidance-path, or run `git init` in it" % wanted
         )
+
+    def _guidance_shortcode_checked(self):
+        shortcode = self._config.guidance_shortcode()
+        for other in self._store.list_projects():
+            if other.identity != GUIDANCE_WORKSPACE and (other.shortcode or "").upper() == shortcode.upper():
+                raise UseCaseError(
+                    "shortcode '%s' is already held by project %s - change the "
+                    "guidance-shortcode config key" % (shortcode, other.identity)
+                )
+        return shortcode
 
     def _create_guidance_repo(self, path):
         outcome = self._git.init_repo(path)

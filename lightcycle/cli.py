@@ -161,7 +161,7 @@ from lightcycle.application.pool import (
 from lightcycle.application.setup import (
     AddProjectInput,
     AddProjectUseCase,
-    SetProjectFacetsUseCase,
+    SetProjectUseCase,
     InitGridUseCase,
     ListProjectsUseCase,
     ProcessListUnreadableError,
@@ -2141,13 +2141,21 @@ def cmd_project(argv):
                 print("%s already registered (shortcode %s)" % (r.identity, r.shortcode))
             return 0
         if a.sub == "set":
-            r = SetProjectFacetsUseCase(c.store).execute(a.identity, a.facets)
-            if not r.changed:
-                print("%s facets unchanged" % r.identity)
-            elif r.facets:
-                print("%s -> facets %s" % (r.identity, ",".join(r.facets)))
-            else:
-                print("%s -> no facets" % r.identity)
+            r = SetProjectUseCase(c.store, c.config).execute(
+                a.identity, a.facets, a.shortcode
+            )
+            if a.shortcode is not None:
+                if r.shortcode_changed:
+                    print("%s -> shortcode %s" % (r.identity, r.shortcode))
+                else:
+                    print("%s shortcode unchanged" % r.identity)
+            if r.facets_given:
+                if not r.changed:
+                    print("%s facets unchanged" % r.identity)
+                elif r.facets:
+                    print("%s -> facets %s" % (r.identity, ",".join(r.facets)))
+                else:
+                    print("%s -> no facets" % r.identity)
             return 0
         if a.sub == "list":
             for p in ListProjectsUseCase(c.store).execute():

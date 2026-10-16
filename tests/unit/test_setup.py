@@ -30,6 +30,9 @@ class FakeConfig:
     def config_path(self):
         return "/cfg/lightcycle/config"
 
+    def guidance_shortcode(self):
+        return "GDN"
+
     def load_config(self):
         return self._legacy
 
@@ -39,6 +42,27 @@ class FakeConfig:
 
 def _init_grid(store, fs, config, git, github=None):
     return InitGridUseCase(store, fs, config, git, github if github is not None else FakeGitHub())
+
+
+class TestInitGuidanceShortcode(unittest.TestCase):
+    def test_a_fresh_init_registers_guidance_with_the_configured_shortcode_and_specs_without(self):
+        store = FakeStore()
+        _init_grid(store, FakeFs(), FakeConfig(), FakeGit()).execute()
+        self.assertEqual(store.get_project(GUIDANCE_WORKSPACE).shortcode, "GDN")
+        self.assertIsNone(store.get_project(SPECS_WORKSPACE).shortcode)
+
+    def test_a_registered_shortcodeless_guidance_project_is_left_alone(self):
+        store = FakeStore()
+        store.add_project(GUIDANCE_WORKSPACE, local_path="/kb")
+        _init_grid(store, FakeFs(), FakeConfig(), FakeGit()).execute()
+        self.assertIsNone(store.get_project(GUIDANCE_WORKSPACE).shortcode)
+
+    def test_init_refuses_when_another_project_holds_the_shortcode_and_registers_nothing(self):
+        store = FakeStore()
+        store.add_project("acme/gdn", shortcode="gdn")
+        with self.assertRaisesRegex(UseCaseError, "already held by project acme/gdn.*guidance-shortcode"):
+            _init_grid(store, FakeFs(), FakeConfig(), FakeGit()).execute()
+        self.assertIsNone(store.get_project(GUIDANCE_WORKSPACE))
 
 
 class TestInitGrid(unittest.TestCase):

@@ -33,6 +33,7 @@ _ENV_OVERRIDE_VARS = {
     "review-rounds-cap": "LC_REVIEW_ROUNDS_CAP",
     "audit-shortcode": "LC_AUDIT_SHORTCODE",
     "held-comment-shortcode": "LC_HELD_COMMENT_SHORTCODE",
+    "guidance-shortcode": "LC_GUIDANCE_SHORTCODE",
     "memory-reserve-fraction": "LC_MEMORY_RESERVE_FRACTION",
     "guidance-budget-bytes": "LC_GUIDANCE_BUDGET_BYTES",
     "guidance-unused-after-deliveries": "LC_GUIDANCE_UNUSED_AFTER_DELIVERIES",
@@ -118,6 +119,7 @@ _SEED_KEYS = [
     ("context-artifact-types", "spec"),
     ("audit-shortcode", "AUD"),
     ("held-comment-shortcode", "HLD"),
+    ("guidance-shortcode", "GDN"),
     ("trusted-authors", ""),
     ("memory-reserve-fraction", "0.65"),
     ("guidance-budget-bytes", "6144"),
@@ -689,6 +691,12 @@ class Config:
         if env:
             return env
         return self._required_str("held-comment-shortcode")
+
+    def guidance_shortcode(self):
+        env = self._env("LC_GUIDANCE_SHORTCODE")
+        if env:
+            return env
+        return self._required_str("guidance-shortcode")
 
     def trusted_authors(self):
         return frozenset(a.casefold() for a in self._required_str("trusted-authors").split())

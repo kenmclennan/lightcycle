@@ -25,12 +25,25 @@ class TestResolveShortcode(unittest.TestCase):
         store.add_project("other/app", shortcode="OTHER")
         self.assertIn("ambiguous", self._refusal(store, "app"))
 
+    def test_a_bare_guidance_identity_without_a_shortcode_names_project_set(self):
+        store = FakeStore()
+        store.add_project("guidance", local_path="/x")
+        self.assertIn("lc project set guidance --shortcode <PREFIX>", self._refusal(store, "guidance"))
+
+    def test_guidance_with_a_shortcode_mints_under_it_after_the_fix(self):
+        store = FakeStore()
+        store.add_project("guidance", local_path="/x")
+        with self.assertRaises(UseCaseError):
+            resolve_shortcode(store, "guidance")
+        store.add_project("guidance", shortcode="GDN")
+        self.assertEqual(resolve_shortcode(store, "guidance").value, "GDN")
+
     def test_matched_project_with_no_shortcode_raises_naming_the_identity(self):
         store = FakeStore()
         store.add_project("acme/ghost", local_path="/x")
         message = self._refusal(store, "acme/ghost")
         self.assertIn("registered but has no shortcode", message)
-        self.assertIn("lc project add acme/ghost --shortcode <PREFIX>", message)
+        self.assertIn("lc project set acme/ghost --shortcode <PREFIX>", message)
 
     def test_no_project_but_registered_repo_derives_shortcode_and_project(self):
         store = FakeStore()

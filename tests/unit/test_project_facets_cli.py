@@ -7,7 +7,7 @@ from contextlib import redirect_stderr, redirect_stdout
 import lightcycle.cli as cli_mod
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.setup.project_registry import (
-    AddProjectInput, AddProjectUseCase, SetProjectFacetsUseCase,
+    AddProjectInput, AddProjectUseCase, SetProjectUseCase,
 )
 from lightcycle.cli import cmd_project
 from lightcycle.container import Container
@@ -22,6 +22,9 @@ class _Config:
 
     def config_path(self):
         return self._path
+
+    def guidance_shortcode(self):
+        return "GDN"
 
 
 def _add(store, config, **kw):
@@ -60,45 +63,46 @@ class TestProjectFacets(unittest.TestCase):
 
     def test_set_replaces_and_empty_clears(self):
         _add(self.store, self.config, identity="acme/x", facets="kotlin,spring")
-        r = SetProjectFacetsUseCase(self.store).execute("acme/x", "hexagonal")
+        r = SetProjectUseCase(self.store, self.config).execute("acme/x", "hexagonal")
         self.assertTrue(r.changed)
         self.assertEqual(self.store.get_project("acme/x").facets, ("hexagonal",))
-        SetProjectFacetsUseCase(self.store).execute("acme/x", "")
+        SetProjectUseCase(self.store, self.config).execute("acme/x", "")
         self.assertEqual(self.store.get_project("acme/x").facets, ())
 
     def test_set_of_an_identical_list_is_unchanged(self):
         _add(self.store, self.config, identity="acme/x", facets="kotlin")
-        r = SetProjectFacetsUseCase(self.store).execute("acme/x", "kotlin")
+        r = SetProjectUseCase(self.store, self.config).execute("acme/x", "kotlin")
         self.assertFalse(r.changed)
 
     def test_set_on_an_unregistered_identity_names_the_registered_ones(self):
         _add(self.store, self.config, identity="acme/x")
         with self.assertRaises(UseCaseError) as ctx:
-            SetProjectFacetsUseCase(self.store).execute("acme/ghost", "a")
+            SetProjectUseCase(self.store, self.config).execute("acme/ghost", "a")
         self.assertEqual(
             str(ctx.exception), "project 'acme/ghost' is not registered - registered: acme/x"
         )
 
     def test_set_with_nothing_registered_names_the_add_fix(self):
         with self.assertRaises(UseCaseError) as ctx:
-            SetProjectFacetsUseCase(self.store).execute("acme/ghost", "a")
+            SetProjectUseCase(self.store, self.config).execute("acme/ghost", "a")
         self.assertIn("none registered yet; run `lc project add <owner/name>", str(ctx.exception))
 
     def test_set_without_facets_refuses(self):
         _add(self.store, self.config, identity="acme/x")
         with self.assertRaises(UseCaseError) as ctx:
-            SetProjectFacetsUseCase(self.store).execute("acme/x", None)
+            SetProjectUseCase(self.store, self.config).execute("acme/x", None)
         self.assertIn("nothing to set - pass --facets", str(ctx.exception))
+        self.assertIn("--shortcode X", str(ctx.exception))
 
     def test_set_with_a_bad_facet_refuses_and_keeps_the_old_ones(self):
         _add(self.store, self.config, identity="acme/x", facets="kotlin")
         with self.assertRaises(UseCaseError):
-            SetProjectFacetsUseCase(self.store).execute("acme/x", "a_b")
+            SetProjectUseCase(self.store, self.config).execute("acme/x", "a_b")
         self.assertEqual(self.store.get_project("acme/x").facets, ("kotlin",))
 
     def test_set_works_on_a_bare_identity_such_as_guidance(self):
         self.store.add_project("guidance", local_path="/kb")
-        SetProjectFacetsUseCase(self.store).execute("guidance", "okf")
+        SetProjectUseCase(self.store, self.config).execute("guidance", "okf")
         self.assertEqual(self.store.get_project("guidance").facets, ("okf",))
 
 
@@ -108,7 +112,7 @@ class TestCmdProjectFacets(unittest.TestCase):
         self.addCleanup(lambda: cli_mod.set_container(self._orig))
         self.store = FakeStore()
         cli_mod.set_container(Container(
-            config=object(), git=FakeGit(), store=self.store, spawner=object(),
+            config=_Config(__file__), git=FakeGit(), store=self.store, spawner=object(),
             workers=object(), fs=object(), github=object(), lock=object(), breaker=object(),
         ))
 
@@ -134,3 +138,92 @@ class TestCmdProjectFacets(unittest.TestCase):
         self.store.add_project("acme/b", shortcode="B", local_path="/p/b")
         rc, out, _ = self._run("list")
         self.assertEqual(out.splitlines(), ["acme/a\tA\t/p/a\tkotlin,spring", "acme/b\tB\t/p/b\t"])
+
+
+class TestSetShortcode(unittest.TestCase):
+    def setUp(self):
+        self.store = FakeStore()
+        self.uc = SetProjectUseCase(self.store, _Config(__file__))
+
+    def _set(self, identity, shortcode, facets=None):
+        return self.uc.execute(identity, facets, shortcode)
+
+    def test_sets_a_shortcode_on_a_project_with_none(self):
+        self.store.add_project("guidance", local_path="/kb")
+        r = self._set("guidance", "GDN")
+        self.assertTrue(r.shortcode_changed)
+        self.assertEqual(self.store.get_project("guidance").shortcode, "GDN")
+
+    def test_a_project_with_none_accepts_one_despite_items_under_other_prefixes(self):
+        self.store.add_project("guidance", local_path="/kb")
+        self.store.create_item("a", "", project="guidance", shortcode="AUD")
+        self.store.create_item("b", "", project="guidance", shortcode="SUM")
+        self._set("guidance", "GDN")
+        self.assertEqual(self.store.get_project("guidance").shortcode, "GDN")
+
+    def test_changing_a_shortcode_that_has_items_is_refused_and_leaves_facets(self):
+        self.store.add_project("acme/x", shortcode="GDN", facets=("a",))
+        self.store.create_item("t", "", project="x", shortcode="GDN")
+        with self.assertRaisesRegex(UseCaseError, "ids are immutable.*1 item"):
+            self._set("acme/x", "OTHER", facets="b")
+        project = self.store.get_project("acme/x")
+        self.assertEqual((project.shortcode, project.facets), ("GDN", ("a",)))
+
+    def test_the_prefix_match_needs_the_hyphen(self):
+        self.store.add_project("acme/x", shortcode="GDN")
+        self.store.create_item("t", "", project="x", shortcode="GDNX")
+        self._set("acme/x", "OTHER")
+        self.assertEqual(self.store.get_project("acme/x").shortcode, "OTHER")
+
+    def test_changing_a_shortcode_with_no_items_succeeds(self):
+        self.store.add_project("acme/x", shortcode="OLD")
+        self._set("acme/x", "NEW")
+        self.assertEqual(self.store.get_project("acme/x").shortcode, "NEW")
+
+    def test_a_reserved_shortcode_is_refused(self):
+        self.store.add_project("acme/x")
+        with self.assertRaisesRegex(UseCaseError, "reserved"):
+            self._set("acme/x", "g")
+
+    def test_an_empty_shortcode_is_refused(self):
+        self.store.add_project("acme/x")
+        with self.assertRaisesRegex(UseCaseError, "must not be empty"):
+            self._set("acme/x", " ")
+
+    def test_a_shortcode_held_by_another_project_is_refused(self):
+        self.store.add_project("acme/x")
+        self.store.add_project("acme/y", shortcode="YY")
+        with self.assertRaisesRegex(UseCaseError, "already held by project acme/y"):
+            self._set("acme/x", "yy")
+
+    def test_the_guidance_shortcode_is_refused_for_a_product_project_only(self):
+        self.store.add_project("acme/x")
+        self.store.add_project("guidance")
+        with self.assertRaisesRegex(UseCaseError, "guidance project"):
+            self._set("acme/x", "gdn")
+        self._set("guidance", "gdn")
+        self.assertEqual(self.store.get_project("guidance").shortcode, "gdn")
+
+    def test_setting_the_current_value_is_unchanged(self):
+        self.store.add_project("acme/x", shortcode="XX")
+        self.store.create_item("t", "", project="x", shortcode="XX")
+        r = self._set("acme/x", "XX")
+        self.assertFalse(r.shortcode_changed)
+
+    def test_cli_prints_the_shortcode_line_and_unchanged(self):
+        orig = cli_mod._container
+        self.addCleanup(lambda: cli_mod.set_container(orig))
+        cli_mod.set_container(Container(
+            config=_Config(__file__), git=FakeGit(), store=self.store, spawner=object(),
+            workers=object(), fs=object(), github=object(), lock=object(), breaker=object(),
+        ))
+        self.store.add_project("guidance", local_path="/kb")
+
+        def run(*argv):
+            out = io.StringIO()
+            with redirect_stdout(out):
+                cmd_project(list(argv))
+            return out.getvalue()
+
+        self.assertEqual(run("set", "guidance", "--shortcode", "GDN"), "guidance -> shortcode GDN\n")
+        self.assertEqual(run("set", "guidance", "--shortcode", "GDN"), "guidance shortcode unchanged\n")
