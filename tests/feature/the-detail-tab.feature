@@ -38,11 +38,12 @@ Feature: The Detail tab
       | Enter |
       | →     |
 
-  Scenario: A code-await-merge step's PR is on screen the moment its hub opens, with no further navigation
+  Scenario: A code-await-merge step's hub opens on Description, with its PR one tab away on Detail
     Given a step at stage "code-await-merge" whose phase run has a PR
     When I open its hub
-    Then it lands on the Detail tab
-    And the PR is shown on screen
+    Then it lands on the Description tab
+    When I switch to its Detail tab
+    Then the PR is shown on screen
 
   Scenario: A step with no branch or PR on its phase run shows neither field
     Given a step whose phase run has no branch and no PR

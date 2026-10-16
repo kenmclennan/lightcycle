@@ -99,6 +99,7 @@ WORKFLOW_UNRESOLVED = "workflow unresolved"
 
 _ITEM_TAB_ORDER = ("description", "workflow", "artifacts", "cost")
 _STEP_TAB_ORDER = ("detail", "workflow", "log", "cost")
+_HUMAN_STEP_TAB_ORDER = ("description",) + _STEP_TAB_ORDER
 _TAB_LABELS = {
     "description": "Description", "workflow": "Workflow", "artifacts": "Artifacts",
     "detail": "Detail", "log": "Log", "cost": "Cost",
@@ -106,12 +107,20 @@ _TAB_LABELS = {
 }
 
 
+def _is_human_step(node):
+    return node.type == "step" and display_role(node.role) == "human"
+
+
 def _tab_order(node):
-    return _ITEM_TAB_ORDER if node.type == "item" else _STEP_TAB_ORDER
+    if node.type == "item":
+        return _ITEM_TAB_ORDER
+    return _HUMAN_STEP_TAB_ORDER if _is_human_step(node) else _STEP_TAB_ORDER
 
 
 def landing_tab(node):
     if node.type == "item":
+        return "description"
+    if _is_human_step(node) and node.state != State.DONE:
         return "description"
     return "log" if node.state == State.RUNNING else "detail"
 
@@ -1533,6 +1542,8 @@ class NodeHubScreen(Screen, inherit_bindings=False):
             self._render_description(node.description)
         else:
             self._render_detail(store, node, initial)
+            if _is_human_step(node):
+                self._render_description(store.get_node(node.item).description)
         self._render_cost(store, node, initial)
         self.query_one(HubTabStrip).set_active(self._active_tab)
         self._apply_tab_visibility()

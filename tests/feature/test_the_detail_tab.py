@@ -5,7 +5,7 @@ import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 from textual.widgets import Static
 
-from lightcycle.adapters.tui.hub import DetailTable, NodeHubScreen
+from lightcycle.adapters.tui.hub import DetailTable, HubTabStrip, NodeHubScreen
 from lightcycle.application.flow import BlockInput, BlockStepUseCase
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
@@ -76,9 +76,9 @@ def _set_phase_run(store, item, step_id, phase, branch=None, pr=None):
         store.set_pr(rid, pr)
 
 
-def _push_hub(ctx, node_id):
+def _push_hub(ctx, node_id, initial_tab="detail"):
     session = ctx["session"]
-    screen = NodeHubScreen(session.app.container, node_id, session.app._now)
+    screen = NodeHubScreen(session.app.container, node_id, session.app._now, initial_tab=initial_tab)
     session.run(lambda: session.app.push_screen(screen))
     session.pause()
     session.pause()
@@ -288,7 +288,7 @@ def _open_detail_tab(ctx):
 
 @when("I open its hub")
 def _open_hub(ctx):
-    _push_hub(ctx, ctx["step_id"])
+    _push_hub(ctx, ctx["step_id"], initial_tab=None)
 
 
 @when(parsers.parse("{key} is pressed"))
@@ -324,11 +324,20 @@ def _pr_opens_in_browser(ctx):
     assert ctx["launcher"].opened_urls == [ctx["pr_url"]]
 
 
-@then("it lands on the Detail tab")
-def _lands_on_detail_tab(ctx):
+@then("it lands on the Description tab")
+def _lands_on_description_tab(ctx):
     screen = ctx["session"].app.screen
     assert isinstance(screen, NodeHubScreen)
-    assert screen._active_tab == "detail"
+    assert screen._active_tab == "description"
+
+
+@when("I switch to its Detail tab")
+def _switch_to_detail_tab(ctx):
+    screen = ctx["session"].app.screen
+    screen._active_tab = "detail"
+    screen.query_one(HubTabStrip).set_active("detail")
+    screen._apply_tab_visibility()
+    ctx["session"].pause()
 
 
 @then("the PR is shown on screen")
