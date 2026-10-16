@@ -185,6 +185,28 @@ class TestEnvironment(unittest.TestCase):
         self.assertIn({"type": "brief", "value": "hello"}, stdin["item_artifacts"])
         self.assertNotIn("secret", [a["type"] for a in stdin["step_artifacts"]])
 
+    def test_a_scheduled_items_guard_state_reaches_the_stage_as_schedule_state(self):
+        rig = Rig()
+        step = rig.step()
+        item = rig.store.get_node(step).item
+        rig.store.add_artifact(item, "schedule-state", "batch: APP-1", internal=True)
+
+        rig.gate.execute(0)
+
+        stdin = json.loads(rig.runner.started[0]["stdin"])
+        self.assertEqual(stdin["schedule_state"], "batch: APP-1")
+        self.assertNotIn("schedule-state", [a["type"] for a in stdin["item_artifacts"]])
+
+    def test_a_hand_filed_item_gives_the_stage_a_null_schedule_state(self):
+        rig = Rig()
+        rig.step()
+
+        rig.gate.execute(0)
+
+        stdin = json.loads(rig.runner.started[0]["stdin"])
+        self.assertIn("schedule_state", stdin)
+        self.assertIsNone(stdin["schedule_state"])
+
     def test_a_declared_workspace_runs_in_the_item_worktree(self):
         rig = Rig(
             stages={"poll": StepDef(

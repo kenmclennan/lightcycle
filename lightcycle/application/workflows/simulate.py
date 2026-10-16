@@ -20,6 +20,7 @@ from lightcycle.domain.flow.hooks import (
 )
 from lightcycle.domain.flow.simulate_plan import build_coverage_plan
 from lightcycle.domain.runs import RUN_FIELDS
+from lightcycle.domain.schedule.state import SCHEDULE_STATE_ARTIFACT
 from lightcycle.domain.work.state import State
 from lightcycle.domain.workflows.identity import parse_pin
 from lightcycle.domain.workflows.script_stage import GUARD_OUTCOMES
@@ -85,9 +86,11 @@ class WorkflowSimulateUseCase:
         self._scripts = scripts
         self._source = source
         self._fixtures = {}
+        self._schedule_state = None
 
     def _load_script_fixtures(self, pin):
         self._fixtures = {}
+        self._schedule_state = None
         parsed = parse_pin(pin)
         if parsed is None:
             return [], []
@@ -101,6 +104,12 @@ class WorkflowSimulateUseCase:
                     directory, decl.path, decl.outcomes)
             except ValueError as e:
                 violations.append("script stage '%s': %s" % (decl.stage, e))
+        for path in decls.guards:
+            try:
+                guard = self._scripts.read_fixture(directory, path, GUARD_OUTCOMES, guard=True)
+            except ValueError:
+                continue
+            self._schedule_state = guard["pass"].state or None
         return violations, decls.guards
 
     def _run_script_guards(self, pin, guards, trace):
@@ -204,6 +213,9 @@ class WorkflowSimulateUseCase:
             if req == "repo":
                 continue
             self._store.add_artifact(item_id, req, "<simulated>")
+        if self._schedule_state:
+            self._store.add_artifact(
+                item_id, SCHEDULE_STATE_ARTIFACT, self._schedule_state, internal=True)
         role = self._flow.owner_of(graph.entry, pin)
         self._store.create_step(step=graph.entry, role=role, parent=item_id)
         return item_id
