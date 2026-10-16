@@ -109,9 +109,18 @@ class LifecycleRunnerAdapter(LifecycleRunnerPort):
             return []
         return sorted(e.name for e in os.scandir(path) if e.is_dir())
 
-    def remove_data_dir(self, path):
+    def _under_data_root(self, path):
         root = os.path.realpath(self._config.workflow_data_root())
         target = os.path.realpath(path)
         if target == root or not target.startswith(root + os.sep):
             raise ValueError("%s is not under %s" % (path, root))
-        shutil.rmtree(target, ignore_errors=True)
+        return target
+
+    def remove_data_dir(self, path):
+        shutil.rmtree(self._under_data_root(path), ignore_errors=True)
+
+    def remove_empty_dir(self, path):
+        try:
+            os.rmdir(self._under_data_root(path))
+        except OSError:
+            pass

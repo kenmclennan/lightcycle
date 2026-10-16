@@ -137,6 +137,19 @@ class TestRunnerAdapter(unittest.TestCase):
         self.runner.remove_data_dir(inside)
         self.assertFalse(self.runner.data_dir_exists(inside))
 
+    def test_remove_empty_dir_removes_only_an_empty_directory_under_the_data_root(self):
+        origin = os.path.join(self.home, "workflow-data", "acme")
+        self.runner.ensure_data_dir(os.path.join(origin, "build"))
+        self.runner.remove_empty_dir(origin)
+        self.assertTrue(os.path.isdir(origin))
+        self.runner.remove_data_dir(os.path.join(origin, "build"))
+        self.runner.remove_empty_dir(origin)
+        self.assertFalse(os.path.exists(origin))
+        outside = tempfile.mkdtemp()
+        with self.assertRaises(ValueError):
+            self.runner.remove_empty_dir(outside)
+        self.assertTrue(os.path.isdir(outside))
+
 
 class TestPinCarriesScripts(unittest.TestCase):
     def test_pin_writes_scripts_with_the_executable_bit_and_a_bundle_without_pins_as_before(self):

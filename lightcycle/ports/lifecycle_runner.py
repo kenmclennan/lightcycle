@@ -49,6 +49,10 @@ class LifecycleRunnerPort(ABC):
         pass
 
     @abstractmethod
+    def remove_empty_dir(self, path):
+        pass
+
+    @abstractmethod
     def data_dir_exists(self, path):
         pass
 
