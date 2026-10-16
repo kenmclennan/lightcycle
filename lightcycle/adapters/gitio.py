@@ -285,6 +285,15 @@ def added_at(root, ref, path):
     return lines[-1] if lines else None
 
 
+def commits_touching(root, ref, path, limit):
+    proc = git(root, "rev-list", "-n", str(limit), ref, "--", path)
+    if proc.returncode != 0:
+        raise GitReadError(
+            "git rev-list %s -- %s failed in %s: %s" % (ref, path, root, proc.stderr.strip())
+        )
+    return [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+
+
 def changed_paths(root, base):
     proc = git(root, "diff", "--name-status", "--no-renames", "%s...HEAD" % base)
     if proc.returncode != 0:
@@ -389,6 +398,9 @@ class GitAdapter(GitPort):
 
     def added_at(self, root, ref, path):
         return added_at(root, ref, path)
+
+    def commits_touching(self, root, ref, path, limit):
+        return commits_touching(root, ref, path, limit)
 
     def changed_paths(self, root, base):
         return changed_paths(root, base)

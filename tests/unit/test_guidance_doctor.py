@@ -221,5 +221,40 @@ class TestDoctorGuidance(unittest.TestCase):
         self.assertEqual(_problems(files, [("acme/x", ("kotlin",))], budget="100"), [])
 
 
+class TestDoctorRevertedEntry(unittest.TestCase):
+    def _found(self, head, history):
+        files = {"CONVENTIONS.md": _conventions(CONVENTIONS_VERSION), "a.md": head}
+        ref_files = {"origin/main": files}
+        for sha, content in history.items():
+            ref_files[sha] = {"a.md": content}
+        git = FakeGit(ref="origin/main", ref_files=ref_files, history={"a.md": list(history)})
+        store = FakeStore()
+        store.add_project("guidance", local_path="/kb")
+        source = FakeWorkflowSource()
+        source.add_bundle("acme", "sha1", 1, current=True)
+        report = DoctorUseCase(
+            store, source, _cfg(**_ALL_KEYS), FakeWorkflowBundle(), FakeFs(dirs={"/kb": []}),
+            FakeMachine(), _Worktrees(), git, FakeGuidanceSyncStatus(), FakeConfigReloadStatus(),
+            FakeLock(running=False)).execute(DoctorInput())
+        return [p for p in report.problems["guidance"] if p.kind == "guidance-entry-reverted"]
+
+    def test_stable_then_draft_is_flagged_with_the_reverting_commit(self):
+        draft, stable = _entry(status="draft"), _entry()
+        found = self._found(draft, {"c3": draft, "c2": draft, "c1": stable, "c0": stable})
+        self.assertEqual(len(found), 1)
+        self.assertIn("a", found[0].message)
+        self.assertIn("c2", found[0].message)
+        self.assertNotIn("c3", found[0].message)
+        self.assertIn("guidance-entry", found[0].fix)
+
+    def test_draft_only_is_not_flagged(self):
+        draft = _entry(status="draft")
+        self.assertEqual(self._found(draft, {"c1": draft, "c0": draft}), [])
+
+    def test_stable_then_stable_is_not_flagged(self):
+        stable = _entry()
+        self.assertEqual(self._found(stable, {"c1": stable, "c0": stable}), [])
+
+
 if __name__ == "__main__":
     unittest.main()

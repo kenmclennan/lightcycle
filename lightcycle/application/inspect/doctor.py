@@ -16,10 +16,12 @@ from lightcycle.application.services.guidance_library import NO_REF_ENTRY, Guida
 from lightcycle.application.services.engine_fragments import with_engine_fragments
 from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE, LEGACY_KNOWLEDGE_WORKSPACE
 from lightcycle.config import ConfigError
-from lightcycle.domain.guidance.guidance import fill, matches_project, matches_step_key, order
+from lightcycle.domain.guidance.guidance import ENTRY, classify, fill, matches_project, matches_step_key, order
 from lightcycle.domain.guidance.conventions import (
     CONVENTIONS_VERSION, SKIPPED_NAMES, check_entries,
 )
+from lightcycle.frontmatter import split_frontmatter
+from lightcycle.ports.git import GitReadError
 from lightcycle.domain.health import (
     Problem, blank_key_fix, fsck, obsolete_key_fix, schedule_not_enabled_fix,
 )
@@ -34,6 +36,7 @@ from lightcycle.domain.workflows.source import parse_source_manifest
 
 
 CONVENTIONS_FILE = "CONVENTIONS.md"
+REVERT_HISTORY_LIMIT = 200
 _VERSION_LINE = re.compile(r"^Conventions version:\s*(\d+)\s*$")
 
 
@@ -355,10 +358,55 @@ class DoctorUseCase:
                     "entry %s is stable but has no verified record - add `verified:` or "
                     "set its status to draft" % entry.id,
                 ))
+        problems += self._reverted_problems(library, repo.local_path, entries)
         problems += self._budget_problems([e for e in entries if e.is_candidate()])
         problems += self._conventions_problems(library, repo.local_path)
         problems += self._nonconforming_problems(library, repo.local_path, entries, unreadable, pages)
         return problems
+
+    def _reverted_problems(self, library, root, entries):
+        ref = library.ref(root)
+        if ref is None:
+            return []
+        problems = []
+        for entry in entries:
+            if entry.status != "draft":
+                continue
+            path = entry.id + ".md"
+            try:
+                commits = self._git.commits_touching(root, ref, path, REVERT_HISTORY_LIMIT)
+            except GitReadError as e:
+                problems.append(Problem(
+                    "guidance",
+                    "history of entry %s cannot be read: %s" % (entry.id, e),
+                ))
+                continue
+            reverting = self._reverting_commit(root, path, commits)
+            if reverting is not None:
+                problems.append(Problem(
+                    "guidance",
+                    "entry %s was stable and is draft since commit %s, so it is no longer delivered"
+                    % (entry.id, reverting[:12]),
+                    kind="guidance-entry-reverted",
+                    fix="file a `guidance-entry` item to verify %s again" % entry.id,
+                ))
+        return problems
+
+    def _reverting_commit(self, root, path, commits):
+        newer = None
+        for sha in commits:
+            raw = self._git.read_file_at(root, sha, path)
+            if raw is None:
+                newer = None
+                continue
+            meta, body = split_frontmatter(raw.decode("utf-8", errors="replace"))
+            result = classify(path[: -len(".md")], meta, body)
+            if result.kind != ENTRY:
+                continue
+            if result.entry.status == "stable":
+                return newer
+            newer = sha
+        return None
 
     def _conventions_problems(self, library, root):
         ref = library.ref(root)
