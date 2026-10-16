@@ -1,6 +1,6 @@
 import re
 
-CONVENTIONS_VERSION = 1
+CONVENTIONS_VERSION = 2
 
 CONVENTIONS_TEXT = """# Conventions
 
@@ -27,7 +27,7 @@ A facet is valid only when this repo has a concept page named for it, anywhere i
 
 ## Status
 
-- `status: stable` with a non-empty `verified` record, written by a human, is the only state that is delivered.
+- `status: stable` is delivered once it is on the default branch. Merging the pull request that sets it is the human approval. `verified` is optional free text and is ignored for delivery.
 - `status: draft` is never delivered.
 - `status: deprecated` is retired and never delivered.
 
@@ -45,7 +45,7 @@ Entries change by pull request only. Nothing is written to the default branch di
 
 `lc guidance-check [--dir PATH] [--mode draft|final] [--base REF]` enforces these rules over every `.md` file changed in `BASE...HEAD`, except files named `index.md` or `CONVENTIONS.md`. It exits 1 on any failure or when it cannot read the base.
 
-Both modes:
+Both modes run the same rules:
 
 1. A deleted entry fails: retire it with `status: deprecated` instead.
 2. Front matter that is missing, unclosed or malformed fails.
@@ -57,17 +57,6 @@ Both modes:
 8. A missing or empty `purpose`, `when` or `why` fails, one failure per field.
 9. An item id anywhere in the file fails, one failure per match.
 10. A changed file without `type: Guidance` that no changed entry names as a facet fails.
-
-`draft` mode also:
-
-11. `status: stable` fails unless the entry is context-only against the base.
-12. A `verified` key fails unless the entry is context-only against the base.
-
-`final` mode also:
-
-13. `status: stable` with an empty or missing `verified` fails.
-
-Context-only means the base copy exists and has front matter, and with the unindented `purpose`, `when` and `why` lines removed from both sides, the remaining front-matter lines and the body bytes after the closing `---` are identical.
 """
 
 STEP = re.compile(r"^([a-z0-9][a-z0-9-]*/)?[a-z0-9][a-z0-9-]*$")
@@ -109,17 +98,6 @@ def item_ids(text):
     return [m.group(0) for m in ITEM_ID.finditer(text) if m.group(1) not in NON_ITEM]
 
 
-def split_raw(text):
-    lines = text.splitlines(keepends=True)
-    if not lines or lines[0].strip() != "---":
-        return None
-    end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
-    if end is None:
-        return None
-    front = [ln for ln in lines[1:end] if ln.split(":", 1)[0] not in CONTEXT or ln[:1] in " \t"]
-    return front, "".join(lines[end + 1:])
-
-
 def inline_list(value):
     match = LIST.match(value)
     if not match:
@@ -130,15 +108,6 @@ def inline_list(value):
 def is_checked_path(path):
     name = path.rsplit("/", 1)[-1]
     return path.endswith(".md") and name not in SKIPPED_NAMES
-
-
-def _context_only(path, head_text, read_base):
-    base_text = read_base(path)
-    if base_text is None:
-        return False
-    old = split_raw(base_text)
-    new = split_raw(head_text)
-    return old is not None and new is not None and old == new
 
 
 def check_entries(mode, changed, deleted, facet_pages, read_head, read_base):
@@ -188,17 +157,6 @@ def check_entries(mode, changed, deleted, facet_pages, read_head, read_base):
                 "%s: names item id '%s' - record its origin on the item's finding artifact instead"
                 % (path, found)
             )
-        verified = top.get("verified", "")
-        if mode == "draft":
-            keeps = (status == "stable" or "verified" in top) and _context_only(
-                path, texts[path], read_base
-            )
-            if status == "stable" and not keeps:
-                failures.append("%s: writer output must not be status: stable" % path)
-            if "verified" in top and not keeps:
-                failures.append("%s: writer output must not carry a verified record" % path)
-        elif status == "stable" and not verified:
-            failures.append("%s: stable entry has no verified record" % path)
 
     for path, (top, _) in parsed.items():
         stem = path.rsplit("/", 1)[-1][:-3]

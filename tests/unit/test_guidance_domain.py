@@ -18,7 +18,7 @@ def _meta(**over):
 
 
 def _entry(entry_id="a", facets=(), steps=(), body="x"):
-    return GuidanceEntry(entry_id, "stable", True, tuple(facets), tuple(steps), body)
+    return GuidanceEntry(entry_id, "stable", "ken", tuple(facets), tuple(steps), body)
 
 
 class TestClassify(unittest.TestCase):
@@ -36,13 +36,19 @@ class TestClassify(unittest.TestCase):
             self.assertEqual(c.kind, ENTRY)
             self.assertFalse(c.entry.is_candidate(), status)
 
-    def test_missing_or_empty_verified_is_not_a_candidate(self):
+    def test_stable_without_verified_is_a_candidate(self):
         for verified in ("", "   ", {}):
             c = classify("a", _meta(verified=verified), "b")
-            self.assertFalse(c.entry.is_candidate())
+            self.assertTrue(c.entry.is_candidate())
         meta = _meta()
         del meta["verified"]
-        self.assertFalse(classify("a", meta, "b").entry.is_candidate())
+        self.assertTrue(classify("a", meta, "b").entry.is_candidate())
+
+    def test_draft_with_verified_is_not_a_candidate(self):
+        self.assertFalse(classify("a", _meta(status="draft"), "b").entry.is_candidate())
+
+    def test_verified_text_is_kept_for_display(self):
+        self.assertEqual(classify("a", _meta(), "b").entry.verified, "ken 2026-10-01")
 
     def test_no_applies_to_is_malformed(self):
         meta = _meta()

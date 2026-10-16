@@ -134,6 +134,10 @@ class GitPort(ABC):
         pass
 
     @abstractmethod
+    def last_change_at(self, root, ref, path):
+        pass
+
+    @abstractmethod
     def commits_touching(self, root, ref, path, limit):
         pass
 

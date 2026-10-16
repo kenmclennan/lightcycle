@@ -10,7 +10,7 @@ from lightcycle.application.setup.project_registry import ProjectRegistry
 from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE
 from lightcycle.domain.guidance.guidance import matches
 from lightcycle.domain.guidance.retirement import (
-    COVERS_UNKNOWN, CoversResult, Thresholds, Usage, build_rows,
+    APPROVAL_UNKNOWN, Approval, COVERS_UNKNOWN, CoversResult, Thresholds, Usage, build_rows,
 )
 from lightcycle.domain.workflows.identity import parse_pin
 from lightcycle.ports.github import ReadFailure
@@ -187,6 +187,16 @@ class ReportGuidanceUseCase:
             if e.status == "stable" and usage[e.id].last_delivered is None
         }
 
+    def _approvals(self, root, entries):
+        ref = GuidanceLibrary(self._git).ref(root)
+        if ref is None:
+            return {}
+        return {
+            e.id: Approval.from_git(self._git.last_change_at(root, ref, e.id + ".md"))
+            for e in entries
+            if e.status == "stable"
+        }
+
     def execute(self, now, since=None):
         project = self._store.get_project(GUIDANCE_WORKSPACE)
         if project is None or not project.local_path:
@@ -201,9 +211,15 @@ class ReportGuidanceUseCase:
             self._config.guidance_unused_after_deliveries(), self._config.guidance_dormant_days())
         moment = datetime.datetime.fromtimestamp(now).astimezone()
         added = self._added(project.local_path, entries, usage)
+        approvals = self._approvals(project.local_path, entries)
         rows = [
-            dataclasses.replace(r, deliveries=window[r.id][0], citations=window[r.id][1])
-            for r in build_rows(entries, usage, thresholds, moment, covers, added, opportunity)
+            dataclasses.replace(
+                r, deliveries=window[r.id][0], citations=window[r.id][1],
+                notes=r.notes + (
+                    ("approval unknown: git could not read history",)
+                    if r.approval.state == APPROVAL_UNKNOWN else ()))
+            for r in build_rows(
+                entries, usage, thresholds, moment, covers, added, opportunity, approvals)
         ]
         return GuidanceReport(
             tuple(rows), tuple(notes + covers_notes), since, spawns, projects)

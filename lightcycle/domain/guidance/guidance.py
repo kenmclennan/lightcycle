@@ -13,7 +13,7 @@ ENTRY = "entry"
 class GuidanceEntry:
     id: str
     status: str
-    verified: bool
+    verified: str
     facets: Tuple[str, ...]
     steps: Tuple[str, ...]
     body: str
@@ -21,7 +21,7 @@ class GuidanceEntry:
     stale_after: str = ""
 
     def is_candidate(self):
-        return self.status == "stable" and self.verified
+        return self.status == "stable"
 
     def size(self):
         return len(self.body.encode("utf-8"))
@@ -61,7 +61,7 @@ def classify(entry_id, meta, body):
     entry = GuidanceEntry(
         id=entry_id,
         status=_scalar(meta.get("status")),
-        verified=bool(_scalar(meta.get("verified"))),
+        verified=_scalar(meta.get("verified")),
         facets=facets,
         steps=steps,
         body=body.rstrip(),

@@ -359,12 +359,6 @@ class DoctorUseCase:
                         "page for it - add %s.md under the guidance repo, or remove the facet "
                         "from the entry" % (entry.id, facet, facet),
                     ))
-            if entry.status == "stable" and not entry.verified:
-                problems.append(Problem(
-                    "guidance",
-                    "entry %s is stable but has no verified record - add `verified:` or "
-                    "set its status to draft" % entry.id,
-                ))
         problems += self._reverted_problems(library, repo.local_path, entries)
         problems += self._budget_problems([e for e in entries if e.is_candidate()])
         problems += self._conventions_problems(library, repo.local_path)
@@ -395,7 +389,7 @@ class DoctorUseCase:
                     "entry %s was stable and is draft since commit %s, so it is no longer delivered"
                     % (entry.id, reverting[:12]),
                     kind="guidance-entry-reverted",
-                    fix="file a `guidance-entry` item to verify %s again" % entry.id,
+                    fix="file a `guidance-entry` item to restore %s to stable" % entry.id,
                 ))
         return problems
 
