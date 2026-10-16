@@ -24,6 +24,10 @@ def exists(path):
     return bool(path) and os.path.exists(path)
 
 
+def is_executable(path):
+    return bool(path) and os.path.isfile(path) and os.access(path, os.X_OK)
+
+
 def list_dir(path):
     if not os.path.isdir(path):
         return []
@@ -86,6 +90,9 @@ class FsAdapter(FsPort):
 
     def exists(self, path):
         return exists(path)
+
+    def is_executable(self, path):
+        return is_executable(path)
 
     def list_dir(self, path):
         return list_dir(path)

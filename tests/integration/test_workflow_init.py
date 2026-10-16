@@ -14,6 +14,7 @@ from lightcycle.application.workflows.init_origin import InitWorkflowOriginUseCa
 from lightcycle.config import Config, ConfigError
 from lightcycle.ports.workflow_source import WorkflowSourceError
 from tests.support.fake_store import FakeStore
+from tests.support.lifecycle_fakes import lifecycle_for
 
 _GIT_IDENTITY_ENV = {
     "GIT_CONFIG_COUNT": "2",
@@ -49,7 +50,7 @@ def _use_case():
     source = WorkflowSourceAdapter(config, WorkflowBundleAdapter())
     return (
         InitWorkflowOriginUseCase(
-            config, GitAdapter(), source, FakeStore(), ScaffoldAdapter(), FsAdapter(config)),
+            config, GitAdapter(), source, FakeStore(), ScaffoldAdapter(), FsAdapter(config), lifecycle_for(source)),
         config, source,
     )
 
@@ -112,7 +113,7 @@ class TestScaffoldedSimulateYmlSequence(unittest.TestCase):
         config_before_init = _real_config()
         add_before_init = AddWorkflowSourceUseCase(
             WorkflowSourceAdapter(config_before_init, WorkflowBundleAdapter()),
-            FakeStore(), config_before_init, FsAdapter(config_before_init))
+            FakeStore(), config_before_init, FsAdapter(config_before_init), lifecycle_for(WorkflowSourceAdapter(config_before_init, WorkflowBundleAdapter())))
         with self.assertRaises(ConfigError) as cm:
             add_before_init.execute(url=project_dir, ref="HEAD", name="ci-bundle")
         self.assertIn("workflow-retention", str(cm.exception))
@@ -123,7 +124,7 @@ class TestScaffoldedSimulateYmlSequence(unittest.TestCase):
         config_after_init.ensure_config()
         add_after_init = AddWorkflowSourceUseCase(
             WorkflowSourceAdapter(config_after_init, WorkflowBundleAdapter()),
-            FakeStore(), config_after_init, FsAdapter(config_after_init))
+            FakeStore(), config_after_init, FsAdapter(config_after_init), lifecycle_for(WorkflowSourceAdapter(config_after_init, WorkflowBundleAdapter())))
         resp = add_after_init.execute(url=project_dir, ref="HEAD", name="ci-bundle")
         self.assertEqual(resp.origin, "ci-bundle")
 

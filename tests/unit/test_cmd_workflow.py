@@ -16,6 +16,7 @@ from lightcycle.adapters.scaffold import ScaffoldAdapter
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_git import FakeGit
 from tests.support.fake_store import FakeStore
+from tests.support.lifecycle_fakes import lifecycle_for
 from tests.unit.test_flow_from_graph import GRAPH_TEXT, STEP_METAS
 
 
@@ -147,6 +148,10 @@ class FakeContainer:
         self.workflow_bundle = FakeFs()
         self.scaffold = ScaffoldAdapter()
         self.git = FakeGit()
+        self._lifecycle = lifecycle_for(source)
+
+    def workflow_lifecycle(self):
+        return self._lifecycle
 
 
 class TestCmdWorkflow(unittest.TestCase):

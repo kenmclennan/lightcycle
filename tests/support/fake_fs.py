@@ -86,7 +86,7 @@ def graph_text_from_metas(metas, entry=None, requires=None, provides=None, dispo
 
 class FakeFs(FsPort, WorkflowBundlePort, WorkerLogPort):
     def __init__(self, metas=None, files=None, dirs=None, workflow=None, workflows=None,
-                 bodies=None, store_ready=True, log_mtimes=None):
+                 bodies=None, store_ready=True, log_mtimes=None, executable=None):
         self._metas = metas or {}
         self._files = dict(files or {})
         self._dirs = dirs or {}
@@ -95,6 +95,7 @@ class FakeFs(FsPort, WorkflowBundlePort, WorkerLogPort):
         self._bodies = bodies or {}
         self._store_ready = store_ready
         self._log_mtimes = log_mtimes or {}
+        self._executable = set(executable or ())
         self.workflow_text_calls = []
         self.writes = []
 
@@ -138,6 +139,9 @@ class FakeFs(FsPort, WorkflowBundlePort, WorkerLogPort):
 
     def read_bytes(self, path):
         return self._files.get(path)
+
+    def is_executable(self, path):
+        return path in self._files and path in self._executable
 
     def iter_lines(self, path):
         content = self._files.get(path)

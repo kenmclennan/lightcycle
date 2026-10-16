@@ -12,6 +12,7 @@ from lightcycle.application.workflows.add import AddWorkflowSourceUseCase
 from lightcycle.application.workflows.upgrade import UpgradeWorkflowSourceUseCase
 from lightcycle.ports.workflow_source import OriginRegistration, WorkflowSourceError
 from tests.support.fake_store import FakeStore
+from tests.support.lifecycle_fakes import lifecycle_for
 
 
 class FakeConfig:
@@ -337,7 +338,7 @@ class TestBundleReferenceValidation(unittest.TestCase):
         repo = _make_source_repo_with_unresolved_step()
         source = _adapter()
         with self.assertRaises(WorkflowSourceError):
-            AddWorkflowSourceUseCase(source, FakeStore(), _Config(), FsAdapter(_Config())).execute(
+            AddWorkflowSourceUseCase(source, FakeStore(), _Config(), FsAdapter(_Config()), lifecycle_for(source)).execute(
                 url=repo, ref="main", name=None)
         self.assertIsNone(source.read_registry("acme"))
         self.assertEqual(source.list_versions("acme"), [])
@@ -345,14 +346,14 @@ class TestBundleReferenceValidation(unittest.TestCase):
     def test_upgrade_refuses_unresolved_step_reference_against_real_checkout(self):
         repo, head = _make_source_repo()
         source = _adapter()
-        AddWorkflowSourceUseCase(source, FakeStore(), _Config(), FsAdapter(_Config())).execute(
+        AddWorkflowSourceUseCase(source, FakeStore(), _Config(), FsAdapter(_Config()), lifecycle_for(source)).execute(
             url=repo, ref="main", name="acme")
         with open(os.path.join(repo, "workflows", "build.md"), "w") as f:
             f.write("entry: missing-step\n")
         _git(repo, "add", "-A")
         _git(repo, "commit", "-q", "-m", "break entry")
         with self.assertRaises(WorkflowSourceError):
-            UpgradeWorkflowSourceUseCase(source, FakeStore(), _Config(), FsAdapter(_Config())).execute("acme")
+            UpgradeWorkflowSourceUseCase(source, FakeStore(), _Config(), FsAdapter(_Config()), lifecycle_for(source)).execute("acme")
         self.assertEqual(source.current_sha("acme"), head)
 
 
@@ -360,7 +361,7 @@ class TestUpgradeReplaysNoRefOrigin(unittest.TestCase):
     def test_upgrade_replays_no_ref_origin_after_source_advances(self):
         repo, head = _make_source_repo(branch="trunk")
         source = _adapter()
-        AddWorkflowSourceUseCase(source, FakeStore(), _Config(), FsAdapter(_Config())).execute(
+        AddWorkflowSourceUseCase(source, FakeStore(), _Config(), FsAdapter(_Config()), lifecycle_for(source)).execute(
             url=repo, ref=None, name="acme")
         self.assertEqual(source.current_sha("acme"), head)
         with open(os.path.join(repo, "source.toml"), "w") as f:
@@ -370,7 +371,7 @@ class TestUpgradeReplaysNoRefOrigin(unittest.TestCase):
         new_head = subprocess.run(
             ["git", "-C", repo, "rev-parse", "HEAD"], capture_output=True, text=True
         ).stdout.strip()
-        resp = UpgradeWorkflowSourceUseCase(source, FakeStore(), _Config(), FsAdapter(_Config())).execute("acme")
+        resp = UpgradeWorkflowSourceUseCase(source, FakeStore(), _Config(), FsAdapter(_Config()), lifecycle_for(source)).execute("acme")
         self.assertEqual(resp.sha, new_head)
         self.assertEqual(source.current_sha("acme"), new_head)
 

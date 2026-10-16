@@ -6,6 +6,7 @@ from lightcycle.application.pool.backup import BackupResponse
 from lightcycle.application.pool.daily_summary_cadence import DailySummaryCadenceResponse
 from lightcycle.application.pool.guidance_sync import GuidanceSyncResponse
 from lightcycle.application.pool.hook_completions import HookCompletionsResponse
+from lightcycle.application.pool.lifecycle_cadence import LifecycleCadenceResponse
 from lightcycle.application.pool.memory_gate import MemoryGateResponse
 from lightcycle.application.pool.monitor_prs import MonitorPrsResponse
 from lightcycle.application.pool.material_audit_cadence import MaterialAuditCadenceResponse
@@ -13,7 +14,7 @@ from lightcycle.application.pool.reload_config import ReloadConfigResponse
 from lightcycle.application.pool.retro_cadence import RetroCadenceResponse
 from lightcycle.application.pool.schedule_cadence import ScheduleCadenceResponse
 from lightcycle.application.pool.sweep import SweepResponse, SweepUseCase
-from lightcycle.config import RELOAD_RELOADED, RELOAD_REJECTED
+from lightcycle.config import RELOAD_RELOADED, RELOAD_REJECTED, ConfigError
 from lightcycle.domain.pool import PoolPlan, ReadyQueue, WorkerPool
 from lightcycle.ports.git import GitReadError
 from lightcycle.ports.workers import RegistryUnreadable
@@ -64,6 +65,7 @@ class TickResponse:
     guidance: Optional[GuidanceSyncResponse] = None
     material_audit: Optional[MaterialAuditCadenceResponse] = None
     schedules: Optional[ScheduleCadenceResponse] = None
+    lifecycle: Optional[LifecycleCadenceResponse] = None
     config: Optional[ReloadConfigResponse] = None
 
 
@@ -72,7 +74,7 @@ class TickUseCase:
         self, store, workers, spawner, config, monitor, cadence_gate, breaker_gate,
         hook_completions, worktrees, git, backup_gate, fs, flow_service, spin_port, usage_gate,
         stream, memory_gate, summary_gate, guidance_gate,
-        material_audit_gate, schedule_gate, config_reload,
+        material_audit_gate, schedule_gate, config_reload, lifecycle_gate,
     ):
         self._store = store
         self._workers = workers
@@ -87,6 +89,7 @@ class TickUseCase:
         self._summary_gate = summary_gate
         self._material_audit_gate = material_audit_gate
         self._schedule_gate = schedule_gate
+        self._lifecycle_gate = lifecycle_gate
         self._config_reload = config_reload
         self._breaker_gate = breaker_gate
         self._hook_completions = hook_completions
@@ -110,10 +113,18 @@ class TickUseCase:
             sys.stderr.write("warning: schedule check failed: %s\n" % e)
             return None
 
+    def _lifecycle(self, now):
+        try:
+            return self._lifecycle_gate.execute(now)
+        except (OSError, GitReadError, ValueError, ConfigError) as e:
+            sys.stderr.write("warning: lifecycle check failed: %s\n" % e)
+            return None
+
     def _reload_config(self):
         result = self._config_reload.execute()
         if result.outcome == RELOAD_RELOADED:
             self._schedule_gate.reset()
+            self._lifecycle_gate.reset()
         elif result.outcome == RELOAD_REJECTED:
             sys.stderr.write(
                 "warning: config reload rejected: %s - keeping the last good config\n"
@@ -129,6 +140,7 @@ class TickUseCase:
         summary_result = self._summary_gate.execute(input.now)
         material_audit_result = self._material_audit_gate.execute(input.now)
         schedules_result = self._schedules(input.now)
+        lifecycle_result = self._lifecycle(input.now)
         breaker_result = self._breaker_gate.execute(input.now)
         breaker = breaker_result.breaker
         backup_result = self._backup_gate.execute(input.now)
@@ -205,5 +217,6 @@ class TickUseCase:
             guidance=guidance_result,
             material_audit=material_audit_result,
             schedules=schedules_result,
+            lifecycle=lifecycle_result,
             config=config_result,
         )

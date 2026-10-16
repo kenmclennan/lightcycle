@@ -69,6 +69,61 @@ def run_check(*args):
     return rc, out.getvalue(), err.getvalue()
 
 
+_LIFECYCLE_FRONT = (
+    "---\nlifecycle:\n  install: scripts/install.sh\n  maintain: scripts/maintain.sh\n"
+    "  cron: 0 3 * * *\nconfig:\n  api-token: required\nconfig-example:\n  api-token: x\n---\n")
+
+
+class TestWorkflowCheckDirLifecycle(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        cli.set_container(_Container())
+        self.root = _bundle(self.tmp)
+        path = os.path.join(self.root, "workflows", "spec-driven.md")
+        with open(path) as f:
+            body = f.read()
+        with open(path, "w") as f:
+            f.write(_LIFECYCLE_FRONT + body)
+        with open(os.path.join(self.root, "source.toml"), "a") as f:
+            f.write('requires-engine = ">=0.6.318"\n')
+        os.makedirs(os.path.join(self.root, "scripts"))
+        for name in ("install.sh", "maintain.sh"):
+            script = os.path.join(self.root, "scripts", name)
+            with open(script, "w") as f:
+                f.write("#!/bin/sh\n")
+            os.chmod(script, 0o755)
+
+    def test_a_sound_lifecycle_passes(self):
+        rc, _out, err = run_check("--dir", self.root, "spec-driven")
+        self.assertEqual(rc, 0, err)
+
+    def test_a_missing_script_is_listed(self):
+        os.remove(os.path.join(self.root, "scripts", "maintain.sh"))
+        rc, _out, err = run_check("--dir", self.root, "spec-driven")
+        self.assertEqual(rc, 1)
+        self.assertIn("lifecycle maintain script scripts/maintain.sh does not exist", err)
+
+    def test_a_non_executable_script_is_listed(self):
+        os.chmod(os.path.join(self.root, "scripts", "install.sh"), 0o644)
+        rc, _out, err = run_check("--dir", self.root, "spec-driven")
+        self.assertEqual(rc, 1)
+        self.assertIn("scripts/install.sh is not executable", err)
+
+    def test_a_lifecycle_without_requires_engine_is_listed(self):
+        with open(os.path.join(self.root, "source.toml"), "w") as f:
+            f.write('name = "t"\ncontract = %d\n' % ENGINE_CONTRACT)
+        rc, _out, err = run_check("--dir", self.root, "spec-driven")
+        self.assertEqual(rc, 1)
+        self.assertIn("declares lifecycle: but source.toml has no requires-engine", err)
+
+    def test_a_bundle_without_a_lifecycle_gains_no_problem(self):
+        other = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, other, ignore_errors=True)
+        rc, _out, err = run_check("--dir", _bundle(other), "spec-driven")
+        self.assertEqual(rc, 0, err)
+
+
 class TestWorkflowCheckDir(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()

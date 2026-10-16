@@ -52,6 +52,12 @@ graph LR
   done --> next[flow creates the next step]
 ```
 
+### Workflow lifecycle hooks
+
+A workflow may declare `install`, `upgrade` and `maintain` scripts (and a `cron` for `maintain`) in a `lifecycle:` front-matter block. The pin carries the bundle's `scripts/` tree with the executable bit preserved. `LifecycleRunnerPort` is the only place a hook is spawned: it runs the script directly (no shell) in `<data_root>/workflow-data/<origin>/<workflow>/` with stdin closed, stdout and stderr merged and `lifecycle-timeout-seconds` as the timeout. The environment is the engine's `agent_env()` plus `LC_WORKFLOW_HOOK`, `LC_WORKFLOW_ORIGIN`, `LC_WORKFLOW_NAME`, `LC_WORKFLOW_DATA_DIR`, `LC_WORKFLOW_BUNDLE_DIR`, `LC_WORKFLOW_SHA`, `LC_WORKFLOW_FROM_SHA`/`LC_WORKFLOW_TO_SHA` (upgrade only) and one `LC_WORKFLOW_CONFIG_<KEY>` per declared, non-blank key of the `workflow-<origin>-<name>` config block.
+
+`lc workflow add` and `lc workflow upgrade` run `install`/`upgrade` before the registry is written, so a failing hook leaves the origin unregistered or at its previous SHA. `maintain` runs only from the pool tick: `LifecycleCadenceUseCase` starts it on a background thread when `previous_due(cron, now)` is later than the due time recorded in `<data_root>/lifecycle-state.json`, reaps it on a later tick, and files one `review-lifecycle-failure` inbox item on a non-zero exit or timeout (none while one is open for that workflow). `lc workflow check` validates the block; `lc workflow simulate` runs the three hooks in a scratch data directory with the `config-example` values.
+
 ## Agnostic by construction
 
 The engine and `lc` know nothing about a specific workflow. The stages (`write-code`, `review-code`, `open-pr`, ...) and their artifact contracts live in a **workflow source** - `workflows/*.md` + `steps/*.md` in a pullable git origin - composed from generic primitives (`lc new`, `lc attach`, `lc done`, `lc dep`). Point lightcycle at a different workflow - a frontend repo, a data pipeline - by authoring or pulling a different source, not by editing the code. See [installation-and-config.md](installation-and-config.md) for workflow sources.

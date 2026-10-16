@@ -793,6 +793,86 @@ class TestDoctorSchedules(unittest.TestCase):
         config.reload()
         self.assertEqual(config.obsolete_config_keys(), ())
 
+_LIFECYCLE_META = {
+    "lifecycle": {"install": "scripts/install.sh"},
+    "config": {"api-token": "required"},
+    "config-example": {"api-token": "x"},
+}
+
+
+def _lifecycle_doctor(known, config_text="", present=("acme/scripts/install.sh",), executable=None):
+    config = _cfg(**_ALL_KEYS)
+    path = config.config_path()
+    Path(path).write_text(Path(path).read_text() + config_text)
+    config.reload()
+    fs = FakeFs(
+        files={p: b"#!/bin/sh\n" for p in present},
+        executable=present if executable is None else executable)
+    uc = DoctorUseCase(
+        FakeStore(), _ScheduleSource(known), config, _ScheduleBundle(known), fs,
+        FakeMachine(), _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(),
+        FakeConfigReloadStatus(), FakeLock(running=False))
+    return uc.execute(DoctorInput())
+
+
+class TestDoctorWorkflowLifecycle(unittest.TestCase):
+    def _messages(self, report, category):
+        return [p.message for p in report.problems[category]]
+
+    def test_a_sound_lifecycle_with_its_config_reports_nothing(self):
+        report = _lifecycle_doctor(
+            {"acme/build": _LIFECYCLE_META},
+            "workflow-acme-build:\n  api-token: tok\n")
+        self.assertTrue(report.healthy(), report.problems)
+
+    def test_a_missing_required_key_is_a_config_finding_naming_block_and_key(self):
+        report = _lifecycle_doctor({"acme/build": _LIFECYCLE_META})
+        messages = self._messages(report, "config")
+        self.assertEqual(len(messages), 1)
+        self.assertIn("'api-token'", messages[0])
+        self.assertIn("'workflow-acme-build'", messages[0])
+
+    def test_a_blank_required_key_is_a_config_finding(self):
+        report = _lifecycle_doctor(
+            {"acme/build": _LIFECYCLE_META}, "workflow-acme-build:\n  api-token:\n")
+        self.assertEqual(len(self._messages(report, "config")), 1)
+
+    def test_an_absent_optional_key_is_not_a_finding(self):
+        meta = dict(_LIFECYCLE_META, config={"api-token": "optional"})
+        self.assertTrue(_lifecycle_doctor({"acme/build": meta}).healthy())
+
+    def test_a_workflow_dict_block_is_not_reported_obsolete(self):
+        report = _lifecycle_doctor(
+            {"acme/build": _LIFECYCLE_META},
+            "workflow-acme-build:\n  api-token: tok\nworkflow-stray: 1\n")
+        messages = self._messages(report, "config")
+        self.assertEqual(len(messages), 1)
+        self.assertIn("workflow-stray", messages[0])
+
+    def test_a_missing_script_is_a_contract_finding(self):
+        report = _lifecycle_doctor(
+            {"acme/build": _LIFECYCLE_META}, "workflow-acme-build:\n  api-token: tok\n",
+            present=())
+        messages = self._messages(report, "contract")
+        self.assertEqual(len(messages), 1)
+        self.assertIn("acme/build", messages[0])
+        self.assertIn("does not exist", messages[0])
+
+    def test_two_workflows_mapping_to_one_block_are_a_config_finding(self):
+        known = {"acme/b-c": {}, "acme/b": {}}
+        source = _ScheduleSource(known)
+        source.add_bundle("acme-b", "sha1", 1, current=True)
+        source.register_origin("acme-b", current="sha1")
+        source.workflow_names = lambda origin, sha: ["c"] if origin == "acme-b" else ["b-c"]
+        config = _cfg(**_ALL_KEYS)
+        uc = DoctorUseCase(
+            FakeStore(), source, config, _ScheduleBundle(known), FakeFs(), FakeMachine(),
+            _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(),
+            FakeLock(running=False))
+        messages = [p.message for p in uc.execute(DoctorInput()).problems["config"]]
+        self.assertTrue(any("workflow-acme-b-c" in m for m in messages), messages)
+
+
 
 class TestReloadProblems(unittest.TestCase):
     def _report(self, state, pid=4242, mtime_matches=True):

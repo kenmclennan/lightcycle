@@ -8,6 +8,10 @@ from lightcycle.application.errors import UseCaseError
 from lightcycle.application.pool.schedule_resolution import ScheduleResolver
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.workflows.engine_requirement_check import bundle_conflict_messages
+from lightcycle.application.workflows.lifecycle import (
+    directory_lifecycle,
+    directory_lifecycle_problems,
+)
 from lightcycle.application.services.guidance_library import NO_REF_ENTRY, GuidanceLibrary
 from lightcycle.application.services.engine_fragments import with_engine_fragments
 from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE, LEGACY_KNOWLEDGE_WORKSPACE
@@ -20,6 +24,7 @@ from lightcycle.domain.health import Problem, blank_key_fix, fsck
 from lightcycle.domain.work.state import State
 from lightcycle.domain.workflows.contract import ENGINE_CONTRACT, contract_compatible
 from lightcycle.domain.workflows.identity import format_pin, parse_pin
+from lightcycle.domain.workflows.lifecycle import missing_required_keys
 from lightcycle.domain.workflows.source import parse_source_manifest
 
 
@@ -63,14 +68,18 @@ class DoctorUseCase:
     def execute(self, input: DoctorInput) -> DoctorReport:
         nodes = self._store.all_nodes_including_done()
         pins, contracts = self._bundle_problems(nodes)
-        contracts = contracts + self._requirement_problems() + self._suggestion_problems()
+        lifecycle_contract, lifecycle_config = self._lifecycle_problems()
+        contracts = (
+            contracts + self._requirement_problems() + self._suggestion_problems()
+            + lifecycle_contract)
         return DoctorReport(problems={
             "store": fsck(nodes),
             "pins": pins,
             "contract": contracts,
             "origin": self._origin_problems(),
             "config": (
-                self._config_problems() + self._schedule_problems() + self._reload_problems()),
+                self._config_problems() + self._schedule_problems() + self._reload_problems()
+                + lifecycle_config),
             "orphans": self._orphan_problems(),
             "facets": self._guidance_registration_problems() + self._facet_problems(),
             "guidance": self._guidance_problems(),
@@ -119,6 +128,38 @@ class DoctorUseCase:
                         n.id,
                     ))
         return pins, contracts
+
+    def _lifecycle_problems(self):
+        contract, config = [], []
+        blocks = {}
+        for origin in self._workflow_source.list_origins():
+            registry = self._workflow_source.read_registry(origin)
+            if registry is None or not registry.current:
+                continue
+            if not self._workflow_source.has_version(origin, registry.current):
+                continue
+            directory = self._workflow_source.pinned_bundle(origin, registry.current)
+            for name in self._workflow_source.workflow_names(origin, registry.current):
+                block = self._config.workflow_config_block_name(origin, name)
+                blocks.setdefault(block, []).append("%s/%s" % (origin, name))
+                for message in directory_lifecycle_problems(
+                        self._workflow_bundle, self._fs, directory, name):
+                    contract.append(Problem("contract", "%s/%s: %s" % (origin, name, message)))
+                declared, _ = directory_lifecycle(self._workflow_bundle, directory, name)
+                if declared is None:
+                    continue
+                values = self._config.workflow_config(origin, name)
+                for key in missing_required_keys(declared, values):
+                    config.append(Problem(
+                        "config",
+                        "workflow %s/%s needs config key %r in block %r, which is missing or blank"
+                        % (origin, name, key, block)))
+        for block, owners in sorted(blocks.items()):
+            if len(owners) > 1:
+                config.append(Problem(
+                    "config",
+                    "workflows %s all map to the config block %r" % (", ".join(owners), block)))
+        return contract, config
 
     def _requirement_problems(self):
         problems = []

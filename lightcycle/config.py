@@ -44,6 +44,7 @@ _ENV_OVERRIDE_VARS = {
 }
 
 SCHEDULE_KEY_PREFIX = "schedule-"
+WORKFLOW_KEY_PREFIX = "workflow-"
 
 _TRUE = ("true", "yes", "1", "on")
 _FALSE = ("false", "no", "0", "off")
@@ -131,6 +132,7 @@ _SEED_KEYS = [
     ("guidance-dormant-days", "60"),
     ("material-audit-days", "7"),
     ("schedules-paused", "false"),
+    ("lifecycle-timeout-seconds", "300"),
 ]
 
 _NUMERIC_RANGES = {
@@ -140,6 +142,7 @@ _NUMERIC_RANGES = {
     "guidance-unused-after-deliveries": (1, None),
     "guidance-dormant-days": (1, None),
     "material-audit-days": (1, None),
+    "lifecycle-timeout-seconds": (1, None),
     "workflow-retention": (1, None),
     "max-boot-seconds": (0, None),
     "max-session-seconds": (0, None),
@@ -364,8 +367,9 @@ class Config:
     def obsolete_config_keys(self):
         seed_names = {k for k, v in _SEED_KEYS}
         return tuple(
-            k for k in self.load_config()
-            if k not in seed_names and not k.startswith(SCHEDULE_KEY_PREFIX))
+            k for k, v in self.load_config().items()
+            if k not in seed_names and not k.startswith(SCHEDULE_KEY_PREFIX)
+            and not (k.startswith(WORKFLOW_KEY_PREFIX) and isinstance(v, dict)))
 
     def resolved_settings(self):
         entries = []
@@ -564,6 +568,23 @@ class Config:
             for k, v in self.load_config().items()
             if k.startswith(SCHEDULE_KEY_PREFIX) and isinstance(v, dict)
         }
+
+    def lifecycle_timeout_seconds(self):
+        return self._check_range(
+            "lifecycle-timeout-seconds", self._required_int("lifecycle-timeout-seconds"))
+
+    def workflow_config_block_name(self, origin, name):
+        return "%s%s-%s" % (WORKFLOW_KEY_PREFIX, origin, name)
+
+    def workflow_config(self, origin, name):
+        block = self.load_config().get(self.workflow_config_block_name(origin, name))
+        return dict(block) if isinstance(block, dict) else {}
+
+    def workflow_data_root(self):
+        return os.path.join(self.data_root(), "workflow-data")
+
+    def workflow_data_dir(self, origin, name):
+        return os.path.join(self.workflow_data_root(), origin, name)
 
     def tui_metrics(self):
         env = self._env_bool("LC_TUI_METRICS", None)

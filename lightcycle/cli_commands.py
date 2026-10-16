@@ -103,6 +103,9 @@ COMMANDS = {
         "rm": CommandSpec(prog="lc workflow rm", args=(
             Arg("origin"),
         )),
+        "purge": CommandSpec(prog="lc workflow purge", args=(
+            Arg("origin"), Arg("workflow", nargs="?"),
+        )),
     }),
     "show": CommandSpec(prog="lc show", args=(
         Arg("id"),

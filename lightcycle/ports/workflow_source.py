@@ -13,6 +13,7 @@ class FetchedBundle:
     steps: dict
     workflows: dict
     fragments: dict = field(default_factory=dict)
+    scripts: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
