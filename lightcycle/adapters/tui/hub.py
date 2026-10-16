@@ -67,7 +67,7 @@ from lightcycle.domain.money import Cost
 from lightcycle.domain.runs import pass_number
 from lightcycle.domain.work import (
     LogKind, State, is_human_step, item_active_seconds, item_cost, parse_timestamp,
-    row_bucket, step_cost, type_label, viewable_artifacts,
+    row_bucket, step_cost, type_label, item_viewable_artifacts,
 )
 from lightcycle.domain.workflows.identity import parse_pin
 from lightcycle.render import (
@@ -1514,7 +1514,12 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         hierarchy = HierarchyUseCase(store).execute(HierarchyInput(node=self._node_id))
         self._render_hierarchy(hierarchy.rows, hierarchy.multi_pass, initial)
         if node.type == "item":
-            self._render_artifacts(viewable_artifacts(node), initial)
+            step_artifacts = [
+                (r.node.id, store.item_artifacts(r.node.id))
+                for r in hierarchy.rows
+                if r.node.type == "step"
+            ]
+            self._render_artifacts(item_viewable_artifacts(node, step_artifacts), initial)
             self._render_description(node.description)
         else:
             self._render_detail(store, node, initial)

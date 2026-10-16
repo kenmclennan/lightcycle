@@ -1,6 +1,6 @@
 import unittest
 
-from lightcycle.adapters.tui.hub import NodeHubScreen
+from lightcycle.adapters.tui.hub import NodeHubScreen, TextArtifactViewerScreen
 from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import launch, make_test_container
 
@@ -37,6 +37,26 @@ class TestHubArtifactsShapeRetention(unittest.TestCase):
         second_shape = screen._last_artifacts_shape
         self.assertEqual(second_shape, first_shape)
         self.assertIsNot(second_shape, first_shape)
+
+    def test_step_artifact_is_listed_by_step_id_and_opens_its_text(self):
+        store = FakeStore()
+        item = store.create_item("item", "a description")
+        step = store.create_step(step="audit", role="agent", parent=item)
+        store.add_artifact(step, "findings", "the audit digest")
+        store.add_artifact(step, "reflection", "private note", internal=True)
+
+        session = self._launch(store)
+        screen = self._push_hub(session, item)
+
+        self.assertEqual(
+            [a.type for a in screen._last_artifacts], ["%s \u00b7 findings" % step]
+        )
+
+        session.run(lambda: screen._open_selected_artifact("0"))
+        session.pause()
+
+        self.assertIsInstance(session.app.screen, TextArtifactViewerScreen)
+        self.assertEqual(session.app.screen._artifact.value, "the audit digest")
 
 
 if __name__ == "__main__":
