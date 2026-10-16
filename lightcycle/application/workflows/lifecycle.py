@@ -3,7 +3,9 @@ from dataclasses import dataclass
 
 from lightcycle.domain.workflows.lifecycle import (
     SCRIPTS_PREFIX,
+    WorkflowLifecycle,
     lifecycle_problems,
+    missing_required_keys,
     parse_lifecycle,
     workflow_script_env,
 )
@@ -156,6 +158,21 @@ class WorkflowLifecycleService:
             self._config.agent_env(), hook, origin, name, data_dir, bundle_dir, sha,
             lifecycle, config, from_sha=from_sha, to_sha=to_sha)
         return script, data_dir, env
+
+    def ensure_data_dir(self, origin, name):
+        path = self.data_dir(origin, name)
+        self._runner.ensure_data_dir(path)
+        return path
+
+    def script_environment(self, origin, name, sha, bundle_dir, kind, extra):
+        declared = self.declared(origin, name, sha) or WorkflowLifecycle()
+        config = self._config.workflow_config(origin, name)
+        env = workflow_script_env(
+            self._config.agent_env(), None, origin, name, self.data_dir(origin, name),
+            bundle_dir, sha, declared, config)
+        env["LC_WORKFLOW_SCRIPT"] = kind
+        env.update(extra)
+        return env, missing_required_keys(declared, config)
 
     def run(self, hook, origin, name, sha, **kwargs):
         script, data_dir, env = self.hook_invocation(hook, origin, name, sha, **kwargs)

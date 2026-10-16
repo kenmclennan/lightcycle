@@ -14,6 +14,7 @@ from lightcycle.adapters.simulate import (
 from lightcycle.adapters.sqlite_store import SqliteStore
 from lightcycle.application.flow.claim_step import ClaimStepUseCase
 from lightcycle.application.flow.complete_step import CompleteStepUseCase
+from lightcycle.application.workflows.script_tooling import WorkflowScripts
 from lightcycle.application.workflows.simulate import SimulateInput, WorkflowSimulateUseCase
 from lightcycle.config import Config
 from lightcycle.container import Container, make_flow_service, make_worktrees
@@ -244,7 +245,9 @@ class SimulateTestCase(unittest.TestCase):
         complete = CompleteStepUseCase(store, flow, worktrees, sim_config)
         use_case = WorkflowSimulateUseCase(
             store, flow, worktrees, claim, complete, projects_root, git,
-            lifecycle=c.workflow_lifecycle(), scaffold=c.scaffold, github_factory=ScriptedGitHub, config=sim_config,
+            lifecycle=c.workflow_lifecycle(),
+            scripts=WorkflowScripts(c.workflow_bundle, c.fs), source=c.workflow_source,
+            scaffold=c.scaffold, github_factory=ScriptedGitHub, config=sim_config,
         )
         resp = use_case.execute(SimulateInput(workflow=selector))
         return resp, store

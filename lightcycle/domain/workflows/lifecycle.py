@@ -36,8 +36,10 @@ class WorkflowLifecycle:
 
 def parse_lifecycle(meta):
     block = meta.get("lifecycle")
-    if block is None:
+    if block is None and "config" not in meta and "config-example" not in meta:
         return None
+    if block is None:
+        block = {}
     if not isinstance(block, dict):
         raise ValueError("lifecycle: must be a block of install/upgrade/maintain/cron lines")
     unknown = sorted(set(block) - set(_LIFECYCLE_FIELDS))
@@ -69,12 +71,16 @@ def env_name(key):
     return key.upper().replace("-", "_")
 
 
-def _path_problem(hook, path):
+def script_path_shape_problem(label, path):
     if not path.startswith(SCRIPTS_PREFIX) or len(path) == len(SCRIPTS_PREFIX):
-        return "lifecycle %s %r must be a path under %s" % (hook, path, SCRIPTS_PREFIX)
+        return "%s %r must be a path under %s" % (label, path, SCRIPTS_PREFIX)
     if ".." in path.split("/"):
-        return "lifecycle %s %r must not contain a '..' segment" % (hook, path)
+        return "%s %r must not contain a '..' segment" % (label, path)
     return None
+
+
+def _path_problem(hook, path):
+    return script_path_shape_problem("lifecycle %s" % hook, path)
 
 
 def lifecycle_problems(lifecycle, exists, is_executable):
@@ -115,7 +121,8 @@ def lifecycle_problems(lifecycle, exists, is_executable):
 def workflow_script_env(base_env, hook, origin, name, data_dir, bundle_dir, sha,
                         lifecycle, config, from_sha=None, to_sha=None):
     env = dict(base_env)
-    env["LC_WORKFLOW_HOOK"] = hook
+    if hook is not None:
+        env["LC_WORKFLOW_HOOK"] = hook
     env["LC_WORKFLOW_ORIGIN"] = origin
     env["LC_WORKFLOW_NAME"] = name
     env["LC_WORKFLOW_DATA_DIR"] = data_dir

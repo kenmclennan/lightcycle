@@ -25,6 +25,7 @@ from lightcycle.domain.health import (
 )
 from lightcycle.domain.schedule.guards import RETIRED_JOB_SCHEDULES
 from lightcycle.domain.schedule.schedule import SOURCE_BUNDLE
+from lightcycle.application.workflows.script_tooling import WorkflowScripts
 from lightcycle.domain.work.state import State
 from lightcycle.domain.workflows.contract import ENGINE_CONTRACT, contract_compatible
 from lightcycle.domain.workflows.identity import format_pin, parse_pin
@@ -148,6 +149,9 @@ class DoctorUseCase:
                 blocks.setdefault(block, []).append("%s/%s" % (origin, name))
                 for message in directory_lifecycle_problems(
                         self._workflow_bundle, self._fs, directory, name):
+                    contract.append(Problem("contract", "%s/%s: %s" % (origin, name, message)))
+                for message in WorkflowScripts(self._workflow_bundle, self._fs).problems(
+                        directory, name):
                     contract.append(Problem("contract", "%s/%s: %s" % (origin, name, message)))
                 declared, _ = directory_lifecycle(self._workflow_bundle, directory, name)
                 if declared is None:

@@ -10,6 +10,7 @@ from lightcycle.application.pool.memory_gate import MemoryGateResponse
 from lightcycle.application.pool.monitor_prs import MonitorPrsResponse
 from lightcycle.application.pool.reload_config import ReloadConfigResponse
 from lightcycle.application.pool.schedule_cadence import ScheduleCadenceResponse
+from lightcycle.application.pool.script_stages import ScriptStagesResponse
 from lightcycle.application.pool.sweep import SweepResponse, SweepUseCase
 from lightcycle.config import RELOAD_RELOADED, RELOAD_REJECTED, ConfigError
 from lightcycle.domain.pool import PoolPlan, ReadyQueue, WorkerPool
@@ -60,6 +61,7 @@ class TickResponse:
     guidance: Optional[GuidanceSyncResponse] = None
     schedules: Optional[ScheduleCadenceResponse] = None
     lifecycle: Optional[LifecycleCadenceResponse] = None
+    scripts: Optional[ScriptStagesResponse] = None
     config: Optional[ReloadConfigResponse] = None
 
 
@@ -68,7 +70,7 @@ class TickUseCase:
         self, store, workers, spawner, config, monitor, breaker_gate,
         hook_completions, worktrees, git, backup_gate, fs, flow_service, spin_port, usage_gate,
         stream, memory_gate, guidance_gate,
-        schedule_gate, config_reload, lifecycle_gate,
+        schedule_gate, config_reload, lifecycle_gate, script_gate,
     ):
         self._store = store
         self._workers = workers
@@ -81,6 +83,7 @@ class TickUseCase:
         self._monitor = monitor
         self._schedule_gate = schedule_gate
         self._lifecycle_gate = lifecycle_gate
+        self._script_gate = script_gate
         self._config_reload = config_reload
         self._breaker_gate = breaker_gate
         self._hook_completions = hook_completions
@@ -111,11 +114,19 @@ class TickUseCase:
             sys.stderr.write("warning: lifecycle check failed: %s\n" % e)
             return None
 
+    def _scripts(self, now):
+        try:
+            return self._script_gate.execute(now)
+        except (OSError, GitReadError, ValueError, ConfigError) as e:
+            sys.stderr.write("warning: script stage check failed: %s\n" % e)
+            return None
+
     def _reload_config(self):
         result = self._config_reload.execute()
         if result.outcome == RELOAD_RELOADED:
             self._schedule_gate.reset()
             self._lifecycle_gate.reset()
+            self._script_gate.reset()
         elif result.outcome == RELOAD_REJECTED:
             sys.stderr.write(
                 "warning: config reload rejected: %s - keeping the last good config\n"
@@ -129,6 +140,7 @@ class TickUseCase:
         monitor_result = self._monitor.execute()
         schedules_result = self._schedules(input.now)
         lifecycle_result = self._lifecycle(input.now)
+        scripts_result = self._scripts(input.now)
         breaker_result = self._breaker_gate.execute(input.now)
         breaker = breaker_result.breaker
         backup_result = self._backup_gate.execute(input.now)
@@ -203,5 +215,6 @@ class TickUseCase:
             guidance=guidance_result,
             schedules=schedules_result,
             lifecycle=lifecycle_result,
+            scripts=scripts_result,
             config=config_result,
         )

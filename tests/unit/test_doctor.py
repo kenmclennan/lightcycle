@@ -897,6 +897,25 @@ class TestDoctorWorkflowLifecycle(unittest.TestCase):
         self.assertIn("acme/build", messages[0])
         self.assertIn("does not exist", messages[0])
 
+    def test_a_script_guard_with_no_script_is_a_contract_finding(self):
+        meta = {"schedule": {"cron": "0 * * * *", "guard": "script:scripts/changed.sh"}}
+
+        report = _lifecycle_doctor({"acme/build": meta}, present=())
+
+        messages = self._messages(report, "contract")
+        self.assertTrue(any(
+            "acme/build" in m and "script guard" in m and "does not exist" in m
+            for m in messages), messages)
+
+    def test_a_workflow_with_config_and_no_hooks_still_reports_a_missing_required_key(self):
+        meta = {"config": {"api-token": "required"}, "config-example": {"api-token": "x"}}
+
+        report = _lifecycle_doctor({"acme/build": meta}, present=())
+
+        messages = self._messages(report, "config")
+        self.assertEqual(len(messages), 1)
+        self.assertIn("'api-token'", messages[0])
+
     def test_two_workflows_mapping_to_one_block_are_a_config_finding(self):
         known = {"acme/b-c": {}, "acme/b": {}}
         source = _ScheduleSource(known)

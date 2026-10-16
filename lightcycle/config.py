@@ -125,6 +125,8 @@ _SEED_KEYS = [
     ("guidance-dormant-days", "60"),
     ("schedules-paused", "false"),
     ("lifecycle-timeout-seconds", "300"),
+    ("script-timeout-seconds", "300"),
+    ("script-max-running", "4"),
 ]
 
 _SEED_SCHEDULES = """\
@@ -159,6 +161,8 @@ _NUMERIC_RANGES = {
     "guidance-unused-after-deliveries": (1, None),
     "guidance-dormant-days": (1, None),
     "lifecycle-timeout-seconds": (1, None),
+    "script-timeout-seconds": (1, None),
+    "script-max-running": (1, None),
     "workflow-retention": (1, None),
     "max-boot-seconds": (0, None),
     "max-session-seconds": (0, None),
@@ -588,6 +592,13 @@ class Config:
     def lifecycle_timeout_seconds(self):
         return self._check_range(
             "lifecycle-timeout-seconds", self._required_int("lifecycle-timeout-seconds"))
+
+    def script_timeout_seconds(self):
+        return self._check_range(
+            "script-timeout-seconds", self._required_int("script-timeout-seconds"))
+
+    def script_max_running(self):
+        return self._check_range("script-max-running", self._required_int("script-max-running"))
 
     def workflow_config_block_name(self, origin, name):
         return "%s%s-%s" % (WORKFLOW_KEY_PREFIX, origin, name)

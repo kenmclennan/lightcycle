@@ -13,6 +13,7 @@ from lightcycle.application.pool.no_op_gates import (
     NoOpMonitor,
     NoOpConfigReload,
     NoOpLifecycleGate,
+    NoOpScriptGate,
     NoOpScheduleGate,
     NoOpUsageGate,
     NoOpWorktrees,
@@ -290,6 +291,7 @@ def _pool_ticks(ctx):
         memory_gate=NoOpMemoryGate(),
         schedule_gate=NoOpScheduleGate(),
         lifecycle_gate=NoOpLifecycleGate(),
+        script_gate=NoOpScriptGate(),
         config_reload=NoOpConfigReload(),
         guidance_gate=NoOpGuidanceGate(),
     )

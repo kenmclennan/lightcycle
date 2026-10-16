@@ -48,7 +48,7 @@ class GuardResult:
     state: str = ""
 
 
-def _firing_states(store, firings):
+def firing_states(store, firings):
     ordered = sorted(firings, key=lambda i: parse_timestamp(i.created_at))
     states = []
     for item in ordered:
@@ -67,7 +67,7 @@ class ScheduleGuards:
         self._workflow_source = workflow_source
 
     def evaluate(self, guard, params, firings, now_local):
-        states = _firing_states(self._store, firings)
+        states = firing_states(self._store, firings)
         try:
             if guard == PENDING_REFLECTIONS:
                 return self._pending_reflections(params["min"], states)

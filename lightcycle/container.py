@@ -9,6 +9,7 @@ from lightcycle.adapters.github import GitHubEventsAdapter
 from lightcycle.adapters.gitio import GitAdapter
 from lightcycle.adapters.launcher import LauncherAdapter
 from lightcycle.adapters.lifecycle_runner import LifecycleRunnerAdapter
+from lightcycle.adapters.script_runner import ScriptRunnerAdapter
 from lightcycle.adapters.lock import RunLockAdapter
 from lightcycle.adapters.machine import MachineAdapter
 from lightcycle.adapters.guidance_sync_status import GuidanceSyncStatusAdapter
@@ -26,7 +27,9 @@ from lightcycle.adapters.workflow_bundle import WorkflowBundleAdapter
 from lightcycle.adapters.workflow_source import WorkflowSourceAdapter
 from lightcycle.application.pool.guidance_sync import GuidanceSyncUseCase
 from lightcycle.application.pool.lifecycle_cadence import LifecycleCadenceUseCase
+from lightcycle.application.flow.park_step import ParkStepUseCase
 from lightcycle.application.pool.schedule_cadence import ScheduleCadenceUseCase
+from lightcycle.application.pool.script_stages import ScriptStageUseCase
 from lightcycle.application.work.activate_item import ActivateItemUseCase
 from lightcycle.application.workflows.lifecycle import WorkflowLifecycleService
 from lightcycle.config import Config
@@ -39,7 +42,7 @@ class Container:
         spin=None, now=None, workflow_bundle=None, worker_log=None, scaffold=None, upgrade=None,
         claude_stream=None, machine=None, memory_gate_status=None,
         drain=None, guidance_sync_status=None, config_reload_status=None,
-        lifecycle_runner=None,
+        lifecycle_runner=None, script_runner=None,
     ):
         self.config = config if config is not None else Config()
         self.store = store if store is not None else SqliteStore(self.config, now=now)
@@ -65,6 +68,9 @@ class Container:
         self.lifecycle_runner = (
             lifecycle_runner if lifecycle_runner is not None
             else LifecycleRunnerAdapter(self.config)
+        )
+        self.script_runner = (
+            script_runner if script_runner is not None else ScriptRunnerAdapter()
         )
         self.launcher = launcher if launcher is not None else LauncherAdapter()
         self.upgrade = upgrade if upgrade is not None else UpgradeAdapter(self.config)
@@ -120,6 +126,11 @@ class Container:
                 self.store, self.config, flow, self.workflow_source, self.git,
                 ActivateItemUseCase(
                     self.store, flow, self.git, self.config, self.scaffold),
+                self.script_runner, self.workflow_lifecycle(),
+            ),
+            script_gate=ScriptStageUseCase(
+                self.store, flow, self.config, self.workflow_source, self.workflow_lifecycle(),
+                self.script_runner, ParkStepUseCase(self.store), complete, worktrees,
             ),
             lifecycle_gate=LifecycleCadenceUseCase(
                 self.store, self.config, self.workflow_source, self.workflow_lifecycle(),

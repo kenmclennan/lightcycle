@@ -43,7 +43,7 @@ class TestPhaseMismatch(unittest.TestCase):
 
 
 def _use_case(store, git):
-    return WorkflowSimulateUseCase(store, None, None, None, None, None, git, lifecycle=None)
+    return WorkflowSimulateUseCase(store, None, None, None, None, None, git, lifecycle=None, scripts=None, source=None)
 
 
 class TestPassEndCoverageViolations(unittest.TestCase):
@@ -124,7 +124,7 @@ class TestClaimStage(unittest.TestCase):
         flow = SimpleNamespace(owner_of=lambda stage, pin: "agent")
         claimed = SimpleNamespace(view=SimpleNamespace(step=SimpleNamespace(id="s1")))
         claim = _RecordingClaim(response=claimed)
-        uc = WorkflowSimulateUseCase(FakeStore(), flow, None, claim, None, None, FakeGit(), lifecycle=None)
+        uc = WorkflowSimulateUseCase(FakeStore(), flow, None, claim, None, None, FakeGit(), lifecycle=None, scripts=None, source=None)
 
         step_id = uc._claim_stage("pin", "item-1", "await-merge", 0, [])
 
@@ -142,7 +142,7 @@ class TestClaimStage(unittest.TestCase):
         store.note(step_b, "item b's own reason")
         flow = SimpleNamespace(owner_of=lambda stage, pin: "agent")
         claim = _RecordingClaim(response=None)
-        uc = WorkflowSimulateUseCase(store, flow, None, claim, None, None, FakeGit(), lifecycle=None)
+        uc = WorkflowSimulateUseCase(store, flow, None, claim, None, None, FakeGit(), lifecycle=None, scripts=None, source=None)
         violations = []
 
         result = uc._claim_stage("pin", item_b, "await-merge", 0, violations)
@@ -159,7 +159,7 @@ class TestCompleteTerminal(unittest.TestCase):
         step_id = store.create_step(step="await-merge", role="agent", parent=item)
         node = store.get_step(step_id)
         claim = _RecordingClaim(response=None)
-        uc = WorkflowSimulateUseCase(store, SimpleNamespace(), None, claim, None, None, FakeGit(), lifecycle=None)
+        uc = WorkflowSimulateUseCase(store, SimpleNamespace(), None, claim, None, None, FakeGit(), lifecycle=None, scripts=None, source=None)
 
         result = uc._complete_terminal(item, "pin", SimpleNamespace(), node, [], 0)
 
@@ -234,7 +234,7 @@ class TestSeedItem(unittest.TestCase):
         scaffold = SimpleNamespace(make_dir=lambda path: None)
         uc = WorkflowSimulateUseCase(
             store, flow, None, None, None, "/projects", FakeGit(), lifecycle=None,
-            scaffold=scaffold,
+            scripts=None, source=None, scaffold=scaffold,
         )
         graph = SimpleNamespace(entry="write-code", requires=())
 
