@@ -2,9 +2,9 @@ Feature: The node hub
   Opening any node - item or step - lands on the hub: a fixed header above a
   tab strip that is type-aware, since an item and a step share no tabs. An
   item's strip is Description, Workflow, Artifacts, and Cost; a step's is
-  Detail, Workflow, Log, and Cost. Landing follows what the node is: an item
+  Detail, Workflow, Log, and Cost, with a human step's strip also opening with Description. Landing follows what the node is: an item
   always lands on Description, whatever its status; a step lands on Log while
-  its worker is running, and on Detail otherwise - the Workflow tab is never a
+  its worker is running, and on Detail otherwise, except a human step not yet done, which lands on Description - the Workflow tab is never a
   landing tab for either type, and neither is Cost. The header stays fixed
   while ] and [ cycle the tabs within whichever strip the type has; Tab leaves
   the hub exactly as Esc does, from any tab, and never cycles anything.
@@ -30,11 +30,11 @@ Feature: The node hub
       | Enter |
       | →     |
 
-  Scenario: Confirming a needs-attention row opens the step's Detail tab, not the item
+  Scenario: Confirming a needs-attention row opens the step's Description tab, not the item
     Given the priority list is showing with a needs-attention step
     When I select that step's row
     And Enter is pressed
-    Then the step's own hub opens, landing on the "Detail" tab
+    Then the step's own hub opens, landing on the "Description" tab
 
   Scenario: Confirming a queued row opens the step's Detail tab, not the item
     Given the priority list is showing with a queued step
@@ -111,12 +111,12 @@ Feature: The node hub
     Then it lands on the "<tab>" tab
 
     Examples:
-      | status                                | tab    |
-      | active                                | Log    |
-      | needs-attention, a human step         | Detail |
-      | blocked on another item's completion  | Detail |
-      | queued, not yet run                   | Detail |
-      | done                                  | Detail |
+      | status                                | tab         |
+      | active                                | Log         |
+      | needs-attention, a human step         | Description |
+      | blocked on another item's completion  | Detail      |
+      | queued, not yet run                   | Detail      |
+      | done                                  | Detail      |
 
   Scenario Outline: ] cycles forward through an item's four tabs, wrapping back to Description
     Given an item's hub is open, on the "<from>" tab
@@ -301,11 +301,11 @@ Feature: The node hub
     Then the priority list reappears with that row still selected, at the same scroll position
 
     Examples:
-      | tab    | key |
-      | Detail | Esc |
-      | Detail | ←   |
-      | Log    | Esc |
-      | Log    | ←   |
+      | tab         | key |
+      | Detail      | Esc |
+      | Detail      | ←   |
+      | Log         | Esc |
+      | Log         | ←   |
       | Cost   | Esc |
       | Cost   | ←   |
 
