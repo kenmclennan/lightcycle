@@ -3,15 +3,12 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 from lightcycle.application.pool.backup import BackupResponse
-from lightcycle.application.pool.daily_summary_cadence import DailySummaryCadenceResponse
 from lightcycle.application.pool.guidance_sync import GuidanceSyncResponse
 from lightcycle.application.pool.hook_completions import HookCompletionsResponse
 from lightcycle.application.pool.lifecycle_cadence import LifecycleCadenceResponse
 from lightcycle.application.pool.memory_gate import MemoryGateResponse
 from lightcycle.application.pool.monitor_prs import MonitorPrsResponse
-from lightcycle.application.pool.material_audit_cadence import MaterialAuditCadenceResponse
 from lightcycle.application.pool.reload_config import ReloadConfigResponse
-from lightcycle.application.pool.retro_cadence import RetroCadenceResponse
 from lightcycle.application.pool.schedule_cadence import ScheduleCadenceResponse
 from lightcycle.application.pool.sweep import SweepResponse, SweepUseCase
 from lightcycle.config import RELOAD_RELOADED, RELOAD_REJECTED, ConfigError
@@ -55,15 +52,12 @@ class TickResponse:
     sweep: SweepResponse
     spawned: List[str]
     monitor: MonitorPrsResponse
-    cadence: RetroCadenceResponse
-    summary: DailySummaryCadenceResponse
     hooks: HookCompletionsResponse
     backup: BackupResponse
     pool: PoolState
     breaker: BreakerState
     memory: Optional[MemoryGateResponse] = None
     guidance: Optional[GuidanceSyncResponse] = None
-    material_audit: Optional[MaterialAuditCadenceResponse] = None
     schedules: Optional[ScheduleCadenceResponse] = None
     lifecycle: Optional[LifecycleCadenceResponse] = None
     config: Optional[ReloadConfigResponse] = None
@@ -71,10 +65,10 @@ class TickResponse:
 
 class TickUseCase:
     def __init__(
-        self, store, workers, spawner, config, monitor, cadence_gate, breaker_gate,
+        self, store, workers, spawner, config, monitor, breaker_gate,
         hook_completions, worktrees, git, backup_gate, fs, flow_service, spin_port, usage_gate,
-        stream, memory_gate, summary_gate, guidance_gate,
-        material_audit_gate, schedule_gate, config_reload, lifecycle_gate,
+        stream, memory_gate, guidance_gate,
+        schedule_gate, config_reload, lifecycle_gate,
     ):
         self._store = store
         self._workers = workers
@@ -85,9 +79,6 @@ class TickUseCase:
             spin_port=spin_port, spin_cap=config.spin_cap(), stream=stream,
         )
         self._monitor = monitor
-        self._cadence_gate = cadence_gate
-        self._summary_gate = summary_gate
-        self._material_audit_gate = material_audit_gate
         self._schedule_gate = schedule_gate
         self._lifecycle_gate = lifecycle_gate
         self._config_reload = config_reload
@@ -136,9 +127,6 @@ class TickUseCase:
         self._flow_service.clear_cache()
         self._workers.reap()
         monitor_result = self._monitor.execute()
-        cadence_result = self._cadence_gate.execute(input.now)
-        summary_result = self._summary_gate.execute(input.now)
-        material_audit_result = self._material_audit_gate.execute(input.now)
         schedules_result = self._schedules(input.now)
         lifecycle_result = self._lifecycle(input.now)
         breaker_result = self._breaker_gate.execute(input.now)
@@ -192,8 +180,6 @@ class TickUseCase:
             sweep=swept,
             spawned=spawned,
             monitor=monitor_result,
-            cadence=cadence_result,
-            summary=summary_result,
             hooks=hook_result,
             backup=backup_result,
             pool=PoolState(
@@ -215,7 +201,6 @@ class TickUseCase:
             ),
             memory=memory_result,
             guidance=guidance_result,
-            material_audit=material_audit_result,
             schedules=schedules_result,
             lifecycle=lifecycle_result,
             config=config_result,

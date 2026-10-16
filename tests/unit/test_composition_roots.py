@@ -9,7 +9,6 @@ WIRED_BY_THE_CONTAINER = (
     "SweepUseCase",
     "MonitorPrsUseCase",
     "BreakerGateUseCase",
-    "RetroCadenceUseCase",
     "HookCompletionsUseCase",
     "BackupUseCase",
     "LiveUsageAccrualUseCase",

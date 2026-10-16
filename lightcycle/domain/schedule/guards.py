@@ -32,3 +32,15 @@ def parse_guard_params(name, raw):
                              % (name, key, raw[key]))
         params[key] = int(text)
     return params
+
+RETIRED_JOB_SCHEDULES = (
+    ("retro-audit", "lightcycle/retro-audit"),
+    ("material-audit", "lightcycle/material-audit"),
+    ("daily-summary", "lightcycle/daily-summary"),
+)
+
+GUARD_AUTOMATION_KINDS = {
+    PENDING_REFLECTIONS: "audit",
+    MATERIALS_CHANGED: "audit",
+    DAY_UNSUMMARISED: "daily-summary",
+}

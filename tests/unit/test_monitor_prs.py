@@ -5,7 +5,6 @@ from lightcycle.application.pool import MonitorPrsUseCase, TickInput, TickUseCas
 from lightcycle.application.pool.no_op_gates import (
     NoOpBackupGate,
     NoOpBreakerGate,
-    NoOpCadenceGate,
     NoOpFlowService,
     NoOpFs,
     NoOpGit,
@@ -15,11 +14,9 @@ from lightcycle.application.pool.no_op_gates import (
     NoOpMonitor,
     NoOpSpinPort,
     NoOpStream,
-    NoOpMaterialAuditGate,
     NoOpConfigReload,
     NoOpLifecycleGate,
     NoOpScheduleGate,
-    NoOpSummaryGate,
     NoOpUsageGate,
     NoOpWorktrees,
 )
@@ -182,12 +179,11 @@ class FakeConfig:
 
 def make_tick(store, workers, spawner, config, **overrides):
     kwargs = dict(
-        monitor=NoOpMonitor(), cadence_gate=NoOpCadenceGate(), breaker_gate=NoOpBreakerGate(),
+        monitor=NoOpMonitor(), breaker_gate=NoOpBreakerGate(),
         hook_completions=NoOpHookCompletions(), worktrees=NoOpWorktrees(), git=NoOpGit(),
         backup_gate=NoOpBackupGate(), fs=NoOpFs(), flow_service=NoOpFlowService(),
         spin_port=NoOpSpinPort(), usage_gate=NoOpUsageGate(), stream=NoOpStream(),
-        memory_gate=NoOpMemoryGate(), summary_gate=NoOpSummaryGate(),
-        material_audit_gate=NoOpMaterialAuditGate(),
+        memory_gate=NoOpMemoryGate(),
         schedule_gate=NoOpScheduleGate(),
         lifecycle_gate=NoOpLifecycleGate(),
         config_reload=NoOpConfigReload(),

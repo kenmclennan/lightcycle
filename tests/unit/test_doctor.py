@@ -421,7 +421,13 @@ class TestDoctorUseCase(unittest.TestCase):
         config = _cfg(**keys)
         report = _uc(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
         self.assertFalse(report.healthy())
-        self.assertTrue(any("retro-interval-items" in p.message for p in report.problems["config"]))
+        found = [p for p in report.problems["config"] if "retro-interval-items" in p.message]
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0].kind, "config-key-obsolete")
+        self.assertEqual(
+            found[0].fix,
+            'delete the "retro-interval-items:" line with lc config --edit; '
+            'this version does not read it')
 
     def test_all_seed_keys_reports_no_obsolete_key_problems(self):
         store = FakeStore()
@@ -696,11 +702,11 @@ class _ScheduleBundle(FakeWorkflowBundle):
 
 
 class _ScheduleSource(FakeWorkflowSource):
-    def __init__(self, known):
+    def __init__(self, known, origin="acme"):
         super().__init__()
         self._known = known
-        self.add_bundle("acme", "sha1", 1, current=True)
-        self.register_origin("acme", current="sha1")
+        self.add_bundle(origin, "sha1", 1, current=True)
+        self.register_origin(origin, current="sha1")
 
     def pinned_bundle(self, origin, sha):
         return origin
@@ -724,14 +730,14 @@ class _ScheduleConfig:
         return getattr(self._config, name)
 
 
-def _schedule_doctor(blocks, known=None, projects=("acme/app",)):
+def _schedule_doctor(blocks, known=None, projects=("acme/app",), origin="acme"):
     store = FakeStore()
     for p in projects:
         store.add_project(p, shortcode="APP")
     known = {"acme/audit": {}} if known is None else known
     config = _ScheduleConfig(_cfg(**_ALL_KEYS), blocks)
     uc = DoctorUseCase(
-        store, _ScheduleSource(known), config, _ScheduleBundle(known), FakeFs(),
+        store, _ScheduleSource(known, origin), config, _ScheduleBundle(known), FakeFs(),
         FakeMachine(), _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False))
     return uc.execute(DoctorInput())
 
@@ -784,6 +790,39 @@ class TestDoctorSchedules(unittest.TestCase):
         self.assertEqual(len(messages), 1)
         self.assertTrue(messages[0].startswith("schedule acme/audit: "))
         self.assertIn("unknown guard", messages[0])
+
+    def _retired(self, blocks, origin="lightcycle", names=("retro-audit", "material-audit", "daily-summary")):
+        suggestion = {"schedule": {"cron": "0 9 * * 1", "guard": "materials-changed"}}
+        known = {"%s/%s" % (origin, n): suggestion for n in names}
+        report = _schedule_doctor(blocks, known=known, origin=origin)
+        return [p for p in report.problems["config"] if p.kind == "schedule-not-enabled"]
+
+    def test_each_retired_job_with_no_block_is_a_schedule_not_enabled_finding(self):
+        found = self._retired({})
+        self.assertEqual(len(found), 3)
+        messages = sorted(p.message for p in found)
+        self.assertIn(
+            "workflow lightcycle/daily-summary has no schedule block in config; "
+            "the engine no longer runs this job itself", messages)
+        self.assertIn("lc schedule list", found[0].fix)
+        self.assertIn("upgrade skill", found[0].fix)
+
+    def test_a_block_naming_the_workflow_under_any_id_covers_it(self):
+        blocks = {"mine": _block(workflow="lightcycle/retro-audit")}
+        found = self._retired(blocks)
+        self.assertEqual(
+            sorted(p.message.split()[1] for p in found),
+            ["lightcycle/daily-summary", "lightcycle/material-audit"])
+
+    def test_a_block_recorded_as_off_still_covers_it(self):
+        blocks = {"mine": _block(workflow="lightcycle/retro-audit", enabled="false")}
+        self.assertEqual(len(self._retired(blocks)), 2)
+
+    def test_another_origins_suggestion_is_never_reported(self):
+        self.assertEqual(self._retired({}, origin="acme"), [])
+
+    def test_another_workflow_of_the_lightcycle_origin_is_never_reported(self):
+        self.assertEqual(self._retired({}, names=("audit",)), [])
 
     def test_a_schedule_block_is_not_reported_as_an_obsolete_key(self):
         config = _cfg(**_ALL_KEYS)

@@ -2,11 +2,9 @@ import dataclasses
 import unittest
 
 from lightcycle.application.pool.backup import BackupResponse
-from lightcycle.application.pool.daily_summary_cadence import DailySummaryCadenceResponse
 from lightcycle.application.pool.hook_completions import HookCompletionsResponse
 from lightcycle.application.pool.monitor_prs import MonitorPrsResponse
 from lightcycle.application.pool.reload_config import ReloadConfigResponse
-from lightcycle.application.pool.retro_cadence import RetroCadenceResponse
 from lightcycle.application.pool.sweep import SweepResponse
 from lightcycle.application.pool.tick import BreakerState, PoolState, TickResponse
 from lightcycle.cli import _format_tick, _idle_reason, _run_log_lines
@@ -17,7 +15,7 @@ _NOW = 1751500862.0  # 2025-07-03 fixed timestamp for stable output
 def _result(**kw):
     defaults = dict(
         swept=[], killed=[], pruned=0, spawned=[], merged=[], abandoned=[], reworked=[],
-        conflicted=[], ci_resolved=[], hook_completed=[], cadence_fired=[], backed_up=None,
+        conflicted=[], ci_resolved=[], hook_completed=[], backed_up=None,
         backup_pruned=[], alive=0, max_agents=4, ready=0, inflight_count=0, free_slots=0,
         breaker_open=False, breaker_reset_at=None, breaker_opened=False, breaker_closed=False,
         breaker_rearmed=False, spin_open=False, spin_opened=False, draining=False,
@@ -33,8 +31,6 @@ def _result(**kw):
             reworked=defaults["reworked"], conflicted=defaults["conflicted"],
             ci_resolved=defaults["ci_resolved"],
         ),
-        cadence=RetroCadenceResponse(fired=defaults["cadence_fired"]),
-        summary=DailySummaryCadenceResponse(),
         hooks=HookCompletionsResponse(completed=defaults["hook_completed"]),
         backup=BackupResponse(created=defaults["backed_up"], pruned=defaults["backup_pruned"]),
         pool=PoolState(
@@ -187,17 +183,6 @@ class TestFormatTick(unittest.TestCase):
         lines, _ = _format_tick(result, None, _NOW)
         self.assertEqual([l for l in lines if "state" not in l], [])
 
-    def test_cadence_fired_rendered_as_audit_line(self):
-        result = _result(cadence_fired=["audit.7"])
-        lines, _ = _format_tick(result, None, _NOW)
-        audit_lines = [l for l in lines if "audit.7" in l]
-        self.assertEqual(len(audit_lines), 1)
-        self.assertRegex(audit_lines[0], r'^\d{2}:\d{2}:\d{2}\s+audit\s+audit\.7$')
-
-    def test_cadence_fired_empty_renders_no_audit_line(self):
-        result = _result(cadence_fired=[])
-        lines, _ = _format_tick(result, None, _NOW)
-        self.assertEqual([l for l in lines if "audit" in l], [])
 
 
 class TestIdleReason(unittest.TestCase):

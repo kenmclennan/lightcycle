@@ -2,7 +2,10 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 from lightcycle.application.errors import UseCaseError
+from lightcycle.application.setup.project_registry import ProjectRegistry
 from lightcycle.application.work.resolve_shortcode import resolve_shortcode
+from lightcycle.domain.work import ProjectIdentity
+from lightcycle.ports.store import ProjectResolutionError
 from lightcycle.domain.schedule.schedule import Schedule, merge_schedule
 from lightcycle.domain.workflows.identity import format_pin, parse_pin
 
@@ -68,14 +71,23 @@ class ScheduleResolver:
         project_name = identity = shortcode = None
         if problem is None:
             try:
-                matched = resolve_shortcode(self._store, schedule.project)
-                project_name, identity = matched.project, matched.identity
-                shortcode = schedule.shortcode or matched.value
+                project_name, identity, shortcode = self._resolve_project(schedule)
             except UseCaseError as e:
                 problem = "project %s: %s" % (schedule.project, e)
         return ResolvedSchedule(
             schedule=schedule, problem=problem, project_name=project_name,
             identity=identity, shortcode=shortcode)
+
+    def _resolve_project(self, schedule):
+        if schedule.shortcode:
+            try:
+                registered = ProjectRegistry(self._store).find(schedule.project)
+            except ProjectResolutionError as e:
+                raise UseCaseError(str(e))
+            return (ProjectIdentity.short_name(registered.identity), registered.identity,
+                    schedule.shortcode)
+        matched = resolve_shortcode(self._store, schedule.project)
+        return matched.project, matched.identity, matched.value
 
     def _suggestions(self, covered):
         found = []

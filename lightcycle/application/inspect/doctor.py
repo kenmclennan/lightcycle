@@ -20,7 +20,11 @@ from lightcycle.domain.guidance.guidance import fill, matches_project, matches_s
 from lightcycle.domain.guidance.conventions import (
     CONVENTIONS_VERSION, SKIPPED_NAMES, check_entries,
 )
-from lightcycle.domain.health import Problem, blank_key_fix, fsck
+from lightcycle.domain.health import (
+    Problem, blank_key_fix, fsck, obsolete_key_fix, schedule_not_enabled_fix,
+)
+from lightcycle.domain.schedule.guards import RETIRED_JOB_SCHEDULES
+from lightcycle.domain.schedule.schedule import SOURCE_BUNDLE
 from lightcycle.domain.work.state import State
 from lightcycle.domain.workflows.contract import ENGINE_CONTRACT, contract_compatible
 from lightcycle.domain.workflows.identity import format_pin, parse_pin
@@ -78,8 +82,8 @@ class DoctorUseCase:
             "contract": contracts,
             "origin": self._origin_problems(),
             "config": (
-                self._config_problems() + self._schedule_problems() + self._reload_problems()
-                + lifecycle_config),
+                self._config_problems() + self._retired_job_problems()
+                + self._schedule_problems() + self._reload_problems() + lifecycle_config),
             "orphans": self._orphan_problems(),
             "facets": self._guidance_registration_problems() + self._facet_problems(),
             "guidance": self._guidance_problems(),
@@ -229,7 +233,10 @@ class DoctorUseCase:
             if s.state == "invalid"
         ]
         problems += [
-            Problem("config", "config key %r is set but not read by this version" % k)
+            Problem(
+                "config", "config key %r is set but not read by this version" % k,
+                kind="config-key-obsolete", fix=obsolete_key_fix(k),
+            )
             for k in self._config.obsolete_config_keys()
         ]
         return problems
@@ -253,6 +260,19 @@ class DoctorUseCase:
             problems.append(Problem(
                 "config", "running pool needs a restart for: %s" % ", ".join(restart)))
         return problems
+
+    def _retired_job_problems(self):
+        retired = {selector for _id, selector in RETIRED_JOB_SCHEDULES}
+        return [
+            Problem(
+                "config",
+                "workflow %s has no schedule block in config; the engine no longer runs this "
+                "job itself" % r.schedule.workflow,
+                kind="schedule-not-enabled", fix=schedule_not_enabled_fix(r.schedule.workflow),
+            )
+            for r in self._schedule_resolver.resolve()
+            if r.schedule.source == SOURCE_BUNDLE and r.schedule.workflow in retired
+        ]
 
     def _schedule_problems(self):
         return [

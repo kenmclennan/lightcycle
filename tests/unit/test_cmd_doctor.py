@@ -217,8 +217,8 @@ class TestCmdDoctor(unittest.TestCase):
 
     def test_json_finding_without_a_fix_omits_kind_and_fix(self):
         class ObsoleteFakeConfig(FakeConfig):
-            def obsolete_config_keys(self):
-                return ("old-key",)
+            def missing_config_keys(self):
+                return ("max-agents",)
 
         cli.set_container(FakeContainer(FakeStore(), config=ObsoleteFakeConfig()))
         rc, out, err = call(cli.cmd_doctor, "--json")

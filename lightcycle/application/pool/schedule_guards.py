@@ -1,9 +1,8 @@
 import datetime
-import re
 from dataclasses import dataclass
 
-from lightcycle.application.pool.daily_summary_cadence import _describe_day
 from lightcycle.application.work.closed_count import closed_count
+from lightcycle.application.work.done import DoneInput, DoneUseCase
 from lightcycle.application.work.pending_reflections import (
     item_reflection_count,
     pass_reflection_count,
@@ -14,14 +13,23 @@ from lightcycle.domain.schedule.guards import (
     MATERIALS_CHANGED,
     PENDING_REFLECTIONS,
 )
+from lightcycle.domain.schedule.state import (
+    SCHEDULE_STATE_ARTIFACT,
+    parse_batch_state,
+    parse_day_state,
+)
 from lightcycle.domain.work import node_id_key, parse_timestamp
 from lightcycle.ports.git import GitReadError
 from lightcycle.ports.workflow_source import WorkflowSourceError
 
-SCHEDULE_STATE_ARTIFACT = "schedule-state"
+_MIN_TIMESTAMP = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
 
-_DAY_STATE = re.compile(r"^day: (\d{4}-\d{2}-\d{2}) count: (\d+)$")
-_BATCH_PREFIX = "batch: "
+
+def _describe_day(store, day):
+    rows = DoneUseCase(store).execute(DoneInput(day=day)).rows
+    ordered = sorted(rows, key=lambda r: parse_timestamp(r.step.closed_at) or _MIN_TIMESTAMP)
+    return "\n".join("%s - %s" % (r.step.id, r.step.title) for r in ordered)
+
 
 
 GUARD_FAILURES = (ValueError, TypeError, KeyError, AttributeError, ArithmeticError, RuntimeError)
@@ -74,8 +82,7 @@ class ScheduleGuards:
     def _pending_reflections(self, minimum, states):
         seen = set()
         for _item, value in states:
-            if value and value.startswith(_BATCH_PREFIX):
-                seen.update(p.strip() for p in value[len(_BATCH_PREFIX):].split(",") if p.strip())
+            seen.update(parse_batch_state(value) or ())
         item_batch = [
             i for i in self._store.closed_unretroed_items()
             if i.id not in seen and item_reflection_count(self._store, i) > 0
@@ -126,10 +133,10 @@ class ScheduleGuards:
         today = now_local.date()
         recorded = {}
         for _item, value in states:
-            match = _DAY_STATE.match(value or "")
-            if match:
-                day = match.group(1)
-                recorded[day] = max(recorded.get(day, 0), int(match.group(2)))
+            parsed = parse_day_state(value)
+            if parsed:
+                day, count = parsed
+                recorded[day] = max(recorded.get(day, 0), count)
         for day in (today, today - datetime.timedelta(days=1)):
             count = closed_count(self._store, day)
             row = self._store.day_summary(day)

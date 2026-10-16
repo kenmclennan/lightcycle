@@ -61,7 +61,8 @@ class TestFiring(unittest.TestCase):
         self.assertEqual(item.repo, "acme/app")
         self.assertIn("schedule-state", kinds)
         self.assertTrue(is_automation_item(rig.store, item))
-        self.assertEqual(automation_kind(rig.store, item), "scheduled")
+        self.assertEqual(automation_kind(rig.store, item), "audit")
+        self.assertIn("schedule-guard:materials-changed", labels)
 
     def test_the_project_shortcode_is_the_default(self):
         rig = ScheduleRig({"weekly": block()})

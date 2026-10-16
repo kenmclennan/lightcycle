@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import List, Tuple
 
 from lightcycle.application.errors import UseCaseError
-from lightcycle.application.flow.engine_steps import SCHEDULE_ORIGIN_LABEL
+from lightcycle.application.flow.engine_steps import SCHEDULE_GUARD_LABEL_PREFIX, SCHEDULE_ORIGIN_LABEL
 from lightcycle.application.pool.schedule_guards import (
     SCHEDULE_STATE_ARTIFACT,
     GUARD_FAILURES,
@@ -120,6 +120,7 @@ class ScheduleCadenceUseCase:
             self._store.add_artifact(item_id, "repo", resolved.identity)
             self._store.label_add(item_id, SCHEDULE_ORIGIN_LABEL)
             self._store.label_add(item_id, schedule_label(schedule.id))
+            self._store.label_add(item_id, SCHEDULE_GUARD_LABEL_PREFIX + schedule.guard)
             for label in schedule.labels:
                 self._store.label_add(item_id, label)
             self._store.add_artifact(
