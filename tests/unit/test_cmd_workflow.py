@@ -64,6 +64,10 @@ class FakeSource:
     def add_remote(self, url, manifest, sha, steps=None, workflows=None):
         self.remotes[url] = (manifest, sha, steps or {}, workflows or {})
 
+    def current_sha(self, origin):
+        registry = self.registries.get(origin)
+        return registry.current if registry else None
+
     def fail_remote(self, url, message):
         self.failing[url] = message
 
@@ -159,6 +163,34 @@ class TestCmdWorkflow(unittest.TestCase):
         self.source = FakeSource()
         self.store = FakeStore()
         cli.set_container(FakeContainer(self.source, self.store))
+
+    def _registered_with_stale_item(self):
+        self.source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
+        call(cli.cmd_workflow, "add", "u")
+        item = self.store.create_item("held item", "d", workflow="acme/build@sha1")
+        self.store.update_state(item, "in_progress")
+        self.source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha2")
+        return item
+
+    def test_upgrade_of_a_moved_origin_prints_the_left_line(self):
+        self._registered_with_stale_item()
+        rc, out, err = call(cli.cmd_workflow, "upgrade", "acme")
+        self.assertEqual(rc, 0)
+        self.assertIn("left 1 in-flight item(s) on their pin", out)
+
+    def test_upgrade_with_no_repin_prints_no_repin_lines(self):
+        item = self._registered_with_stale_item()
+        rc, out, err = call(cli.cmd_workflow, "upgrade", "acme", "--no-repin")
+        self.assertEqual(rc, 0)
+        self.assertNotIn("left", out)
+        self.assertEqual(self.store.get_item(item).workflow, "acme/build@sha1")
+
+    def test_upgrade_of_a_current_origin_prints_no_repin_lines(self):
+        self.source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
+        call(cli.cmd_workflow, "add", "u")
+        rc, out, err = call(cli.cmd_workflow, "upgrade", "acme")
+        self.assertIn("already current", out)
+        self.assertNotIn("left", out)
 
     def test_add_registers_and_reports(self):
         self.source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")

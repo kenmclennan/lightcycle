@@ -9,12 +9,12 @@ from lightcycle.application.flow.engine_steps import LIFECYCLE_ORIGIN_LABEL
 from lightcycle.application.pool.schedule_resolution import ScheduleResolver
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.workflows.engine_requirement_check import bundle_conflict_messages
+from lightcycle.application.workflows.pin_drift import PinDrift
 from lightcycle.application.workflows.lifecycle import (
     directory_lifecycle,
     directory_lifecycle_problems,
 )
 from lightcycle.application.services.guidance_library import NO_REF_ENTRY, GuidanceLibrary
-from lightcycle.application.services.engine_fragments import with_engine_fragments
 from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE, LEGACY_KNOWLEDGE_WORKSPACE
 from lightcycle.config import ConfigError
 from lightcycle.domain.guidance.guidance import ENTRY, classify, fill, matches_project, matches_step_key, order
@@ -71,6 +71,7 @@ class DoctorUseCase:
         self._guidance_sync_status = guidance_sync_status
         self._config_reload_status = config_reload_status
         self._lock = lock
+        self._pin_drift = PinDrift(workflow_source, workflow_bundle, config)
         self._schedule_resolver = ScheduleResolver(
             store, config, FlowService(workflow_bundle, store, config, workflow_source),
             workflow_source)
@@ -103,6 +104,13 @@ class DoctorUseCase:
             if parsed:
                 yield n, parsed
 
+    def _open_steps(self, item_id):
+        return [
+            (s.stage or s.role, s.state == State.RUNNING)
+            for s in self._store.children(item_id)
+            if s.type == "step" and s.state != State.DONE
+        ]
+
     def _bundle_problems(self, nodes):
         pins, contracts = [], []
         for n, (origin, name, sha) in self._in_flight_pins(nodes):
@@ -121,7 +129,8 @@ class DoctorUseCase:
             current = self._workflow_source.current_sha(origin)
             if current and current != sha and self._workflow_source.has_version(origin, current):
                 try:
-                    changed = self._changed_step_roles(origin, sha, current)
+                    changed = self._pin_drift.changed_steps_ahead(
+                        self._open_steps(n.id), origin, name, sha, current)
                 except ValueError as e:
                     pins.append(Problem(
                         "pins",
@@ -190,22 +199,6 @@ class DoctorUseCase:
                     "origin %s bundle %s requires engine %s, engine is %s"
                     % (origin, sha, requirement.describe(), engine_version)))
         return problems
-
-    def _changed_step_roles(self, origin, old_sha, new_sha):
-        old_root = self._workflow_source.pinned_bundle(origin, old_sha)
-        new_root = self._workflow_source.pinned_bundle(origin, new_sha)
-        roles = set(self._workflow_bundle.step_roles(old_root)) | set(self._workflow_bundle.step_roles(new_root))
-        changed = set()
-        old_roots = with_engine_fragments(old_root, self._config)
-        new_roots = with_engine_fragments(new_root, self._config)
-        for role in roles:
-            old_step = self._workflow_bundle.parse_step(role, old_roots)
-            new_step = self._workflow_bundle.parse_step(role, new_roots)
-            old_body = old_step.body if old_step else None
-            new_body = new_step.body if new_step else None
-            if old_body != new_body:
-                changed.add(role)
-        return changed
 
     def _origin_problems(self):
         problems = []

@@ -123,6 +123,8 @@ from lightcycle.application.workflows.lifecycle import directory_lifecycle_probl
 from lightcycle.application.workflows.purge import PurgeWorkflowDataUseCase
 from lightcycle.application.workflows.remove import RemoveWorkflowSourceUseCase
 from lightcycle.application.workflows.simulate import SimulateInput, WorkflowSimulateUseCase
+from lightcycle.application.workflows.pin_drift import PinDrift
+from lightcycle.application.workflows.repin_in_flight import RepinInFlightItemsUseCase
 from lightcycle.application.workflows.upgrade import UpgradeWorkflowSourcesUseCase
 from lightcycle.application.flow import (
     AdvanceInput,
@@ -512,14 +514,19 @@ def cmd_workflow(argv):
             return 0
         if a.sub == "upgrade":
             resp = UpgradeWorkflowSourcesUseCase(
-                c.workflow_source, c.store, c.config, c.fs, c.workflow_lifecycle()
-            ).execute(a.origin)
+                c.workflow_source, c.store, c.config, c.fs, c.workflow_lifecycle(),
+                RepinInFlightItemsUseCase(
+                    c.store, c.workflow_source, _flow(),
+                    PinDrift(c.workflow_source, c.workflow_bundle, c.config), c.config)
+            ).execute(a.origin, repin=not a.no_repin)
             if not resp.results and not resp.failures:
                 print("no workflow sources registered")
                 return 0
             for r in resp.results:
                 if r.changed:
                     print("upgraded %s @ %s" % (r.origin, r.sha))
+                    for line in _repin_lines(r.repin):
+                        print(line)
                 else:
                     print("%s already current (%s)" % (r.origin, r.sha))
                 if r.prune_error:
@@ -1849,6 +1856,20 @@ def _advance_tick_state(prev_now, consecutive_failures, now, succeeded, cap):
         return now, 0, "continue"
     consecutive_failures += 1
     return prev_now, consecutive_failures, _tick_failure_action(consecutive_failures, cap)
+
+
+def _repin_lines(repin):
+    if repin is None:
+        return []
+    lines = [
+        'repinned %s "%s" -> %s: changed steps ahead: %s' % (
+            r.id, r.title, r.pin, ", ".join(r.changed_steps))
+        for r in repin.repinned
+    ]
+    lines += ["held %s: %s" % (h.id, h.reason) for h in repin.held]
+    lines.append(
+        "left %d in-flight item(s) on their pin (nothing changed ahead, or held)" % repin.left)
+    return lines
 
 
 def _upgrade_notice_lines(resp):

@@ -77,13 +77,17 @@ class FakeWorkflowSource:
 
 
 class FakeWorkflowBundle:
-    def __init__(self, bodies=None, errors=None):
+    def __init__(self, bodies=None, errors=None, texts=None):
+        self.texts = texts or {}
         self.bodies = bodies or {}
         self.errors = errors or {}
         self.parsed_roots = []
 
     def step_roles(self, root):
         return sorted(self.bodies.get(root, {}))
+
+    def workflow_text(self, name, root):
+        return self.texts.get((root, name))
 
     def parse_step(self, role, root):
         self.parsed_roots.append(root)
@@ -214,6 +218,34 @@ class TestDoctorUseCase(unittest.TestCase):
         self.assertIn("acme/build@sha1", problem.message)
         self.assertIn("acme/build@sha2", problem.message)
         self.assertIn("write-code", problem.message)
+
+    def _drifted_item(self, stage, changed_role):
+        store = FakeStore()
+        item = store.create_item("item", "a description", workflow="acme/build@sha1")
+        store.update_state(item, "in_progress")
+        step = store.create_step(step=stage, role="agent", parent=item)
+        store.update_state(step, "queued")
+        source = FakeWorkflowSource()
+        source.add_bundle("acme", "sha1", 1)
+        source.add_bundle("acme", "sha2", 1, current=True)
+        old = {"write": "w", "review": "r"}
+        new = dict(old)
+        new[changed_role] = "changed"
+        graph = "entry: write\nedges:\n  write done review\n"
+        bundle = FakeWorkflowBundle(
+            {("acme", "sha1"): old, ("acme", "sha2"): new},
+            texts={(("acme", "sha1"), "build"): graph, (("acme", "sha2"), "build"): graph})
+        return _uc(store, source, _cfg(**_ALL_KEYS), bundle).execute(DoctorInput())
+
+    def test_changed_step_only_behind_the_item_is_no_pins_problem_and_stays_healthy(self):
+        report = self._drifted_item("review", "write")
+        self.assertEqual(report.problems["pins"], [])
+        self.assertTrue(not any(report.problems["pins"]))
+
+    def test_changed_step_ahead_of_the_item_is_still_reported_with_only_that_step(self):
+        report = self._drifted_item("write", "review")
+        self.assertEqual(len(report.problems["pins"]), 1)
+        self.assertIn("changed steps: review", report.problems["pins"][0].message)
 
     def test_step_role_present_in_one_bundle_absent_in_other_counts_as_changed(self):
         store = FakeStore()
