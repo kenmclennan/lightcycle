@@ -32,13 +32,14 @@ class InitWorkflowOriginResponse:
 
 
 class InitWorkflowOriginUseCase:
-    def __init__(self, config, git, source, store, scaffold, fs):
+    def __init__(self, config, git, source, store, scaffold, fs, lifecycle):
         self._config = config
         self._git = git
         self._source = source
         self._store = store
         self._scaffold = scaffold
         self._fs = fs
+        self._lifecycle = lifecycle
 
     def execute(self, name) -> InitWorkflowOriginResponse:
         project_dir = os.path.join(self._config.projects_root(), name)
@@ -54,7 +55,7 @@ class InitWorkflowOriginUseCase:
                 "the scaffold commit failed in %s - check git's output there, then remove "
                 "the directory and retry" % project_dir)
         add_resp = AddWorkflowSourceUseCase(
-            self._source, self._store, self._config, self._fs
+            self._source, self._store, self._config, self._fs, self._lifecycle
         ).execute(url=project_dir, ref="HEAD", name=name, writable=True)
         self._config.set_personal_origin(name)
         return InitWorkflowOriginResponse(

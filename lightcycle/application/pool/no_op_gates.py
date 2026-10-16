@@ -2,6 +2,7 @@ from lightcycle.application.pool.backup import BackupResponse
 from lightcycle.application.pool.breaker_gate import BreakerGateResponse
 from lightcycle.application.pool.hook_completions import HookCompletionsResponse
 from lightcycle.application.pool.guidance_sync import GuidanceSyncResponse
+from lightcycle.application.pool.lifecycle_cadence import LifecycleCadenceResponse
 from lightcycle.application.pool.material_audit_cadence import MaterialAuditCadenceResponse
 from lightcycle.application.pool.memory_gate import MemoryGateResponse
 from lightcycle.application.pool.monitor_prs import MonitorPrsResponse
@@ -40,6 +41,17 @@ class NoOpScheduleGate:
 
     def reset(self):
         pass
+
+
+class NoOpLifecycleGate:
+    def execute(self, now):
+        return LifecycleCadenceResponse()
+
+    def reset(self):
+        pass
+
+    def in_flight(self):
+        return []
 
 
 class NoOpBreakerGate:

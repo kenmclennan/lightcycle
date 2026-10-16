@@ -138,6 +138,7 @@ def _seed_config(home):
         "backup-retention: 96",
         "max-title-length: 72",
         "review-rounds-cap: 5",
+        "lifecycle-timeout-seconds: 300",
     ]
     cfg_path = os.path.join(home, "config")
     Path(cfg_path).write_text("".join(l + "\n" for l in lines))
@@ -245,7 +246,7 @@ class SimulateTestCase(unittest.TestCase):
         complete = CompleteStepUseCase(store, flow, worktrees, sim_config)
         use_case = WorkflowSimulateUseCase(
             store, flow, worktrees, claim, complete, projects_root, git,
-            scaffold=c.scaffold, github_factory=ScriptedGitHub, config=sim_config,
+            lifecycle=c.workflow_lifecycle(), scaffold=c.scaffold, github_factory=ScriptedGitHub, config=sim_config,
         )
         resp = use_case.execute(SimulateInput(workflow=selector))
         return resp, store

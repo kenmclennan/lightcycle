@@ -1291,3 +1291,42 @@ class TestScheduleConfig(unittest.TestCase):
         c, _p = self._file_cfg(
             self._seeded_without_pause() + _SCHEDULE_BLOCK + "scheduler-thing: 1\n")
         self.assertEqual(c.obsolete_config_keys(), ("scheduler-thing",))
+
+
+def _file_config_with(text):
+    path = os.path.join(tempfile.mkdtemp(), "config")
+    seeded = "".join("%s: %s\n" % (k, v) for k, v in _SEED_KEYS)
+    Path(path).write_text(seeded + text)
+    return Config(environ={"LC_CONFIG": path, "LC_HOME": tempfile.mkdtemp()}), path
+
+
+class TestWorkflowLifecycleConfig(unittest.TestCase):
+    def test_the_hook_timeout_is_seeded_and_ranged(self):
+        c, _ = _file_config_with("")
+        self.assertEqual(c.lifecycle_timeout_seconds(), 300)
+        c, _ = _file_config_with("lifecycle-timeout-seconds: 0\n")
+        with self.assertRaises(ConfigValueError):
+            c.lifecycle_timeout_seconds()
+
+    def test_workflow_config_is_the_named_block_or_empty(self):
+        c, _ = _file_config_with("workflow-acme-build:\n  api-token: tok\n  region: eu\n")
+        self.assertEqual(c.workflow_config("acme", "build"), {"api-token": "tok", "region": "eu"})
+        self.assertEqual(c.workflow_config("acme", "other"), {})
+
+    def test_workflow_config_edits_are_read_on_the_next_load(self):
+        c, path = _file_config_with("workflow-acme-build:\n  api-token: one\n")
+        self.assertEqual(c.workflow_config("acme", "build")["api-token"], "one")
+        Path(path).write_text(Path(path).read_text().replace("one", "two"))
+        c.reload()
+        self.assertEqual(c.workflow_config("acme", "build")["api-token"], "two")
+
+    def test_the_data_dir_sits_under_the_data_root_beside_workflows(self):
+        c, _ = _file_config_with("")
+        self.assertEqual(
+            c.workflow_data_dir("acme", "build"),
+            os.path.join(c.data_root(), "workflow-data", "acme", "build"))
+
+    def test_a_workflow_dict_block_is_not_obsolete_but_a_scalar_one_is(self):
+        c, _ = _file_config_with(
+            "workflow-acme-build:\n  api-token: tok\nworkflow-stray: 1\nscheduler-thing: 1\n")
+        self.assertEqual(c.obsolete_config_keys(), ("workflow-stray", "scheduler-thing"))

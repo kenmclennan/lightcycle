@@ -20,6 +20,7 @@ from lightcycle.domain.flow.hooks import (
 from lightcycle.domain.flow.simulate_plan import build_coverage_plan
 from lightcycle.domain.runs import RUN_FIELDS
 from lightcycle.domain.work.state import State
+from lightcycle.domain.workflows.identity import parse_pin
 
 SIMULATION_SHORTCODE = "SIM"
 _ADVANCING_HOOKS = (PR_MERGE, PR_CONFLICT)
@@ -67,7 +68,7 @@ def _named_workspaces(graph):
 
 class WorkflowSimulateUseCase:
     def __init__(self, store, flow, worktrees, claim, complete, projects_root, git,
-                 scaffold=None, github_factory=None, config=None):
+                 lifecycle, scaffold=None, github_factory=None, config=None):
         self._store = store
         self._flow = flow
         self._worktrees = worktrees
@@ -78,6 +79,31 @@ class WorkflowSimulateUseCase:
         self._scaffold = scaffold
         self._github_factory = github_factory
         self._config = config
+        self._lifecycle = lifecycle
+
+    def _run_lifecycle(self, pin, trace):
+        parsed = parse_pin(pin)
+        if parsed is None:
+            return []
+        origin, name, sha = parsed
+        try:
+            declared = self._lifecycle.declared(origin, name, sha)
+        except ValueError as e:
+            return ["lifecycle: %s" % e]
+        if declared is None:
+            return []
+        data_dir = os.path.join(
+            os.path.dirname(self._projects_root), "lifecycle-data", origin, name)
+        config = {k: v for k, v in declared.examples.items() if k in declared.config_keys()}
+        for hook in declared.declared_hooks():
+            outcome = self._lifecycle.run(
+                hook, origin, name, sha, lifecycle=declared, data_dir=data_dir, config=config,
+                from_sha=sha if hook == "upgrade" else None,
+                to_sha=sha if hook == "upgrade" else None)
+            if not outcome.ok:
+                return ["lifecycle %s: %s" % (hook, outcome.detail)]
+            trace.append("lifecycle %s: ok" % hook)
+        return []
 
     def execute(self, input: SimulateInput) -> SimulateResponse:
         pin = self._flow.resolve_selection(input.workflow)
@@ -112,6 +138,7 @@ class WorkflowSimulateUseCase:
                 held_shortcode=lambda: "HLD",
             )
             violations += self._drive(item_id, pin, graph, walk, github, monitor, trace, index)
+        violations += self._run_lifecycle(pin, trace)
         violations += self._check_teardown_invariant()
         return SimulateResponse(ok=not violations, trace=trace, violations=violations)
 

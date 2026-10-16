@@ -8,6 +8,7 @@ from lightcycle.adapters.fsio import FsAdapter
 from lightcycle.adapters.github import GitHubEventsAdapter
 from lightcycle.adapters.gitio import GitAdapter
 from lightcycle.adapters.launcher import LauncherAdapter
+from lightcycle.adapters.lifecycle_runner import LifecycleRunnerAdapter
 from lightcycle.adapters.lock import RunLockAdapter
 from lightcycle.adapters.machine import MachineAdapter
 from lightcycle.adapters.guidance_sync_status import GuidanceSyncStatusAdapter
@@ -24,8 +25,10 @@ from lightcycle.adapters.workers import WorkersAdapter
 from lightcycle.adapters.workflow_bundle import WorkflowBundleAdapter
 from lightcycle.adapters.workflow_source import WorkflowSourceAdapter
 from lightcycle.application.pool.guidance_sync import GuidanceSyncUseCase
+from lightcycle.application.pool.lifecycle_cadence import LifecycleCadenceUseCase
 from lightcycle.application.pool.schedule_cadence import ScheduleCadenceUseCase
 from lightcycle.application.work.activate_item import ActivateItemUseCase
+from lightcycle.application.workflows.lifecycle import WorkflowLifecycleService
 from lightcycle.config import Config
 
 
@@ -36,6 +39,7 @@ class Container:
         spin=None, now=None, workflow_bundle=None, worker_log=None, scaffold=None, upgrade=None,
         claude_stream=None, machine=None, memory_gate_status=None,
         drain=None, guidance_sync_status=None, config_reload_status=None,
+        lifecycle_runner=None,
     ):
         self.config = config if config is not None else Config()
         self.store = store if store is not None else SqliteStore(self.config, now=now)
@@ -58,6 +62,10 @@ class Container:
             workflow_source if workflow_source is not None
             else WorkflowSourceAdapter(self.config, self.workflow_bundle)
         )
+        self.lifecycle_runner = (
+            lifecycle_runner if lifecycle_runner is not None
+            else LifecycleRunnerAdapter(self.config)
+        )
         self.launcher = launcher if launcher is not None else LauncherAdapter()
         self.upgrade = upgrade if upgrade is not None else UpgradeAdapter(self.config)
         self.claude_stream = claude_stream if claude_stream is not None else ClaudeStreamAdapter()
@@ -74,6 +82,10 @@ class Container:
             guidance_sync_status if guidance_sync_status is not None
             else GuidanceSyncStatusAdapter(self.config)
         )
+
+    def workflow_lifecycle(self):
+        return WorkflowLifecycleService(
+            self.workflow_source, self.workflow_bundle, self.config, self.lifecycle_runner)
 
     def flow_service(self):
         return make_flow_service(self.workflow_bundle, self.store, self.config, self.workflow_source)
@@ -114,6 +126,10 @@ class Container:
                 self.store, self.config, flow, self.workflow_source, self.git,
                 ActivateItemUseCase(
                     self.store, flow, self.git, self.config, self.scaffold),
+            ),
+            lifecycle_gate=LifecycleCadenceUseCase(
+                self.store, self.config, self.workflow_source, self.workflow_lifecycle(),
+                self.lifecycle_runner, self.config.audit_shortcode,
             ),
             breaker_gate=BreakerGateUseCase(
                 self.workers, self.worker_log, self.breaker, self.config, self.claude_stream,

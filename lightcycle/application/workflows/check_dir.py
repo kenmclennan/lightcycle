@@ -16,6 +16,10 @@ from lightcycle.application.workflows.prompt_check import (
     prompt_drift_detail,
 )
 from lightcycle.application.workflows.engine_requirement_check import unmet_requirement_message
+from lightcycle.application.workflows.lifecycle import (
+    directory_lifecycle,
+    directory_lifecycle_problems,
+)
 from lightcycle.domain.workflows.contract import ENGINE_CONTRACT, contract_compatible
 from lightcycle.domain.workflows.source import parse_source_manifest
 from lightcycle.ports.workflow_source import FetchedBundle, WorkflowSourceError
@@ -37,6 +41,7 @@ class DirCheckResponse:
     names: List[str]
     problems: List[str] = field(default_factory=list)
     reference_problems: dict = field(default_factory=dict)
+    lifecycle_problems: dict = field(default_factory=dict)
 
 
 class CheckWorkflowDirUseCase:
@@ -102,6 +107,16 @@ class CheckWorkflowDirUseCase:
                     problems.append(
                         "workflow %s declares schedule: but source.toml has no requires-engine; "
                         "older engines would ignore it" % wf_name)
+        lifecycle_found = {}
+        for wf_name in names:
+            found = directory_lifecycle_problems(self._bundle, self._fs, directory, wf_name)
+            declared, _ = directory_lifecycle(self._bundle, directory, wf_name)
+            if declared is not None and manifest.requires_engine is None:
+                found = found + [
+                    "workflow %s declares lifecycle: but source.toml has no requires-engine; "
+                    "older engines would ignore it" % wf_name]
+            if found:
+                lifecycle_found[wf_name] = found
         references = {
             n: msgs for n, msgs in check_bundle_references(bundle).items() if n in names
         }
@@ -116,4 +131,6 @@ class CheckWorkflowDirUseCase:
             detail = "could not determine the engine's prompt-check surface: %s" % e
         if detail:
             problems.append(detail)
-        return DirCheckResponse(names=names, problems=problems, reference_problems=references)
+        return DirCheckResponse(
+            names=names, problems=problems, reference_problems=references,
+            lifecycle_problems=lifecycle_found)

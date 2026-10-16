@@ -10,6 +10,8 @@ SUMMARY_ORIGIN_LABEL = "summary-origin"
 SCHEDULE_ORIGIN_LABEL = "schedule-origin"
 DAILY_SUMMARY_STEP = "daily-summary"
 HELD_COMMENT_STEP = "review-held-comment"
+LIFECYCLE_ORIGIN_LABEL = "lifecycle-origin"
+LIFECYCLE_FAILURE_STEP = "review-lifecycle-failure"
 
 ENGINE_STEP_DISPLAY = {
     AUDIT_STEP: "Auditing recent work",
@@ -17,6 +19,7 @@ ENGINE_STEP_DISPLAY = {
     FINDINGS_STEP: "Review the findings",
     DAILY_SUMMARY_STEP: "Writing the daily summary",
     HELD_COMMENT_STEP: "Decide whether a held comment counts",
+    LIFECYCLE_FAILURE_STEP: "Look into a failed maintenance run",
 }
 
 ENGINE_STEP_OUTCOMES = {
@@ -25,6 +28,7 @@ ENGINE_STEP_OUTCOMES = {
     FINDINGS_STEP: ("done", "filed", "reviewed"),
     DAILY_SUMMARY_STEP: ("done", "abandoned"),
     HELD_COMMENT_STEP: ("approve", "reject"),
+    LIFECYCLE_FAILURE_STEP: ("done",),
 }
 
 
@@ -43,6 +47,8 @@ def engine_outcomes_for_node(store, node):
     if node.stage == DAILY_SUMMARY_STEP and SUMMARY_ORIGIN_LABEL in labels:
         return engine_outcomes_of(node.stage)
     if node.stage == HELD_COMMENT_STEP and HELD_COMMENT_ORIGIN_LABEL in labels:
+        return engine_outcomes_of(node.stage)
+    if node.stage == LIFECYCLE_FAILURE_STEP and LIFECYCLE_ORIGIN_LABEL in labels:
         return engine_outcomes_of(node.stage)
     return None
 

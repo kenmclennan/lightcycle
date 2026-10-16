@@ -13,6 +13,7 @@ from lightcycle.application.workflows.prompt_check import (
     engine_sources,
     prompt_drift_detail,
 )
+from lightcycle.application.workflows.lifecycle import bundle_lifecycles, validate_fetched_bundle
 from lightcycle.application.workflows.pinned import pinned_shas
 from lightcycle.application.workflows.engine_requirement_check import unmet_requirement_message
 from lightcycle.domain.workflows.contract import ENGINE_CONTRACT, contract_compatible
@@ -49,11 +50,27 @@ def prune_origin_best_effort(source, store, origin, keep_n):
 
 
 class AddWorkflowSourceUseCase:
-    def __init__(self, source, store, config, fs):
+    def __init__(self, source, store, config, fs, lifecycle):
         self._source = source
         self._store = store
         self._config = config
         self._fs = fs
+        self._lifecycle = lifecycle
+
+    def _install_hooks(self, origin, bundle):
+        created = []
+        for name, declared in sorted(bundle_lifecycles(bundle).items()):
+            if not declared.install:
+                continue
+            existed = self._lifecycle.data_dir_exists(origin, name)
+            if not existed:
+                created.append(name)
+            outcome = self._lifecycle.install(origin, name, bundle.sha)
+            if not outcome.ok:
+                for made in created:
+                    self._lifecycle.remove_data_dir(origin, made)
+                self._source.remove_origin(origin)
+                raise WorkflowSourceError(outcome.detail)
 
     def execute(self, url, ref, name, writable=False) -> AddResponse:
         keep_n = self._config.workflow_retention()
@@ -98,7 +115,9 @@ class AddWorkflowSourceUseCase:
         )
         if detail:
             raise WorkflowSourceError("bundle prompts do not match this engine - %s" % detail)
+        validate_fetched_bundle(bundle)
         self._source.pin(origin, bundle)
+        self._install_hooks(origin, bundle)
         self._source.write_registry(origin, url, ref, bundle.sha, writable)
         pruned, prune_error = prune_origin_best_effort(self._source, self._store, origin, keep_n)
         return AddResponse(

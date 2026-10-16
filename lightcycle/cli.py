@@ -116,8 +116,11 @@ from lightcycle.application.workflows.check_dir import (
     DirWorkflowSource,
 )
 from lightcycle.domain.workflows.identity import format_pin
+from lightcycle.domain.workflows.identity import parse_pin
 from lightcycle.application.workflows.init_origin import InitWorkflowOriginUseCase
 from lightcycle.application.workflows.list import ListWorkflowSourcesUseCase
+from lightcycle.application.workflows.lifecycle import directory_lifecycle_problems
+from lightcycle.application.workflows.purge import PurgeWorkflowDataUseCase
 from lightcycle.application.workflows.remove import RemoveWorkflowSourceUseCase
 from lightcycle.application.workflows.simulate import SimulateInput, WorkflowSimulateUseCase
 from lightcycle.application.workflows.upgrade import UpgradeWorkflowSourcesUseCase
@@ -483,7 +486,7 @@ def cmd_workflow(argv):
         if a.workflow is None:
             sys.stderr.write("lc workflow check: pass a workflow or --dir <bundle-dir>\n")
             return 1
-        return _workflow_check(a.workflow, a.json)
+        return _workflow_check_pinned(a.workflow, a.json)
     if a.sub == "describe":
         return _workflow_describe(a.workflow, a.mermaid)
     if a.sub == "simulate":
@@ -491,7 +494,9 @@ def cmd_workflow(argv):
     c = _container
     try:
         if a.sub == "add":
-            resp = AddWorkflowSourceUseCase(c.workflow_source, c.store, c.config, c.fs).execute(
+            resp = AddWorkflowSourceUseCase(
+                c.workflow_source, c.store, c.config, c.fs, c.workflow_lifecycle()
+            ).execute(
                 url=a.url, ref=a.ref, name=a.name, writable=a.writable)
             msg = "added %s @ %s" % (resp.origin, resp.sha)
             if resp.pruned:
@@ -502,14 +507,15 @@ def cmd_workflow(argv):
             return 0
         if a.sub == "init":
             resp = InitWorkflowOriginUseCase(
-                c.config, c.git, c.workflow_source, c.store, c.scaffold, c.fs
+                c.config, c.git, c.workflow_source, c.store, c.scaffold, c.fs,
+                c.workflow_lifecycle()
             ).execute(a.name)
             print("created %s, registered as %s @ %s, personal-origin set" % (
                 resp.project_dir, resp.origin, resp.sha))
             return 0
         if a.sub == "upgrade":
             resp = UpgradeWorkflowSourcesUseCase(
-                c.workflow_source, c.store, c.config, c.fs
+                c.workflow_source, c.store, c.config, c.fs, c.workflow_lifecycle()
             ).execute(a.origin)
             if not resp.results and not resp.failures:
                 print("no workflow sources registered")
@@ -545,8 +551,19 @@ def cmd_workflow(argv):
             print("%s is now %s" % (resp.origin, "writable" if resp.writable else "read-only"))
             return 0
         if a.sub == "rm":
-            resp = RemoveWorkflowSourceUseCase(c.workflow_source, c.store).execute(a.origin)
+            resp = RemoveWorkflowSourceUseCase(
+                c.workflow_source, c.store, c.workflow_lifecycle()
+            ).execute(a.origin)
             print("removed %s" % resp.origin)
+            for path in resp.kept_data_dirs:
+                print("data kept at %s; lc workflow purge %s removes it" % (path, resp.origin))
+            return 0
+        if a.sub == "purge":
+            resp = PurgeWorkflowDataUseCase(c.workflow_lifecycle()).execute(a.origin, a.workflow)
+            if not resp.removed:
+                print("no data to purge for %s" % a.origin)
+            for path in resp.removed:
+                print("purged %s" % path)
             return 0
     except WorkflowSourceError as e:
         sys.stderr.write("lc workflow: %s\n" % e)
@@ -818,6 +835,9 @@ def _workflow_check_dir(directory, name, as_json):
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf if as_json else sys.stdout):
             wf_rc = _workflow_check(format_pin(DIR_ORIGIN, n, DIR_SHA), as_json, flow)
+        for message in resp.lifecycle_problems.get(n, []):
+            sys.stderr.write("%s: %s\n" % (n, message))
+            wf_rc = 1
         for message in resp.reference_problems.get(n, []):
             sys.stderr.write("%s: %s\n" % (n, message))
             wf_rc = 1
@@ -829,6 +849,24 @@ def _workflow_check_dir(directory, name, as_json):
     if as_json and json_out:
         print(json.dumps(next(iter(json_out.values())) if not multi else json_out, indent=2))
     return rc
+
+
+def _workflow_check_pinned(selector, as_json):
+    rc = _workflow_check(selector, as_json)
+    c = _container
+    try:
+        pin = _flow().resolve_selection(selector)
+    except ValueError:
+        return rc
+    parsed = parse_pin(pin)
+    if parsed is None:
+        return rc
+    origin, name, sha = parsed
+    directory = c.workflow_source.pinned_bundle(origin, sha)
+    problems = directory_lifecycle_problems(c.workflow_bundle, c.fs, directory, name)
+    for message in problems:
+        sys.stderr.write("%s: %s\n" % (name, message))
+    return 1 if problems else rc
 
 
 def _workflow_check(selector, as_json, flow=None):
@@ -994,7 +1032,7 @@ def _workflow_simulate(selector, trace=False):
         sim = SimulationContainer(_container, scratch)
         use_case = WorkflowSimulateUseCase(
             sim.store, sim.flow, sim.worktrees, sim.claim, sim.complete, sim.projects_root,
-            sim.git, scaffold=sim.scaffold, github_factory=ScriptedGitHub,
+            sim.git, lifecycle=_container.workflow_lifecycle(), scaffold=sim.scaffold, github_factory=ScriptedGitHub,
             config=sim.config,
         )
         try:
@@ -2209,7 +2247,8 @@ def _init_pull_default_origin():
         return
     try:
         resp = AddWorkflowSourceUseCase(
-            _container.workflow_source, _container.store, _container.config, _container.fs
+            _container.workflow_source, _container.store, _container.config, _container.fs,
+            _container.workflow_lifecycle(),
         ).execute(url=url, ref="main", name=origin)
         print("pulled %s workflows @ %s" % (resp.origin, resp.sha))
     except WorkflowSourceError as e:

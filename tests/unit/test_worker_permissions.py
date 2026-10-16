@@ -108,10 +108,16 @@ class TestWorkerRefusalMessage(unittest.TestCase):
             self.assertNotIn("resolves", worker_refusal_message("rm"))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class TestGuidanceVerbsPermittedToWorkers(unittest.TestCase):
     def test_guidance_is_a_worker_verb(self):
         self.assertTrue(worker_permitted("guidance", {}))
+
+
+class TestPurgeIsNotAWorkerVerb(unittest.TestCase):
+    def test_workflow_purge_is_refused_for_a_worker(self):
+        self.assertFalse(worker_permitted("workflow", {"sub": "purge", "origin": "acme"}))
+
+
+if __name__ == "__main__":
+    unittest.main()

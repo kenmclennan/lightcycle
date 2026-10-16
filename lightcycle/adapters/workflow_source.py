@@ -45,6 +45,23 @@ class WorkflowSourceAdapter(WorkflowSourcePort):
                     texts[entry.name[:-3]] = f.read()
         return texts
 
+    def _read_scripts(self, checkout_dir):
+        root = os.path.join(checkout_dir, "scripts")
+        if not os.path.isdir(root) or os.path.islink(root):
+            return {}
+        scripts = {}
+        for dirpath, dirnames, filenames in os.walk(root):
+            dirnames[:] = [d for d in dirnames if not os.path.islink(os.path.join(dirpath, d))]
+            for name in filenames:
+                full = os.path.join(dirpath, name)
+                if os.path.islink(full) or not os.path.isfile(full):
+                    continue
+                with open(full, "rb") as f:
+                    data = f.read()
+                rel = os.path.relpath(full, root).replace(os.sep, "/")
+                scripts[rel] = (data, bool(os.stat(full).st_mode & 0o111))
+        return scripts
+
     def fetch(self, url, ref):
         checkout = tempfile.mkdtemp(prefix="lc-workflow-src-")
         try:
@@ -72,10 +89,11 @@ class WorkflowSourceAdapter(WorkflowSourcePort):
             steps = self._read_dir_texts(checkout, "steps")
             workflows = self._read_dir_texts(checkout, "workflows")
             fragments = self._read_dir_texts(checkout, "fragments")
+            scripts = self._read_scripts(checkout)
         finally:
             shutil.rmtree(checkout, ignore_errors=True)
         return FetchedBundle(manifest=manifest, sha=sha, steps=steps, workflows=workflows,
-                             fragments=fragments)
+                             fragments=fragments, scripts=scripts)
 
     def read_manifest(self, checkout_dir):
         with open(os.path.join(checkout_dir, _MANIFEST)) as f:
@@ -97,6 +115,12 @@ class WorkflowSourceAdapter(WorkflowSourcePort):
             for role, text in texts.items():
                 with open(os.path.join(tmp, name, "%s.md" % role), "w") as f:
                     f.write(text)
+        for rel, (data, executable) in bundle.scripts.items():
+            dest = os.path.join(tmp, "scripts", *rel.split("/"))
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            with open(dest, "wb") as f:
+                f.write(data)
+            os.chmod(dest, 0o755 if executable else 0o644)
         os.makedirs(self._origin_dir(origin), exist_ok=True)
         os.replace(tmp, target)
         return target
