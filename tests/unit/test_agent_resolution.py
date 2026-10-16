@@ -75,12 +75,19 @@ class TestResolveAgentForPin(unittest.TestCase):
             _Cfg(prompts, data), "write-code", "lightcycle/spec-driven@sha1")
         self.assertEqual(agent.meta.get("model"), "opus")
 
-    def test_prompts_root_wins_over_the_bundle(self):
+    def test_bundle_wins_over_the_prompts_root(self):
         prompts, data = tempfile.mkdtemp(), tempfile.mkdtemp()
         _write_prompt(prompts, "write-code", model="haiku")
         _write_bundle_prompt(data, "lightcycle", "sha1", "write-code", model="opus")
         agent = _resolve_agent(
             _Cfg(prompts, data), "write-code", "lightcycle/spec-driven@sha1")
+        self.assertEqual(agent.meta.get("model"), "opus")
+
+    def test_engine_only_role_still_resolves_from_the_engine(self):
+        prompts, data = tempfile.mkdtemp(), tempfile.mkdtemp()
+        _write_prompt(prompts, "audit", model="haiku")
+        _write_bundle_prompt(data, "lightcycle", "sha1", "write-code")
+        agent = _resolve_agent(_Cfg(prompts, data), "audit", "lightcycle/spec-driven@sha1")
         self.assertEqual(agent.meta.get("model"), "haiku")
 
     def test_unknown_role_returns_none(self):
@@ -103,12 +110,12 @@ class TestBundleStepIncludesEngineFragment(unittest.TestCase):
         self.assertIn("engine plain language rule", agent.body)
         self.assertNotIn("@include", agent.body)
 
-    def test_engine_step_still_wins_over_a_bundle_step_of_the_same_name(self):
+    def test_bundle_step_wins_over_an_engine_step_of_the_same_name(self):
         prompts, data = tempfile.mkdtemp(), tempfile.mkdtemp()
         _write_prompt(prompts, "audit", model="haiku")
         _write_bundle_prompt(data, "lightcycle", "sha1", "audit", model="opus")
         agent = _resolve_agent(_Cfg(prompts, data), "audit", "lightcycle/spec-driven@sha1")
-        self.assertEqual(agent.meta.get("model"), "haiku")
+        self.assertEqual(agent.meta.get("model"), "opus")
 
     def test_bundle_step_include_resolves_against_the_bundle_fragment(self):
         prompts, data = tempfile.mkdtemp(), tempfile.mkdtemp()
@@ -119,7 +126,7 @@ class TestBundleStepIncludesEngineFragment(unittest.TestCase):
         self.assertIn("origin x body", agent.body)
         self.assertNotIn("@include", agent.body)
 
-    def test_engine_fragment_wins_over_a_bundle_fragment_of_the_same_name(self):
+    def test_bundle_fragment_wins_over_an_engine_fragment_of_the_same_name(self):
         prompts, data = tempfile.mkdtemp(), tempfile.mkdtemp()
         os.makedirs(os.path.join(prompts, "fragments"))
         with open(os.path.join(prompts, "fragments", "x.md"), "w") as f:
@@ -128,8 +135,8 @@ class TestBundleStepIncludesEngineFragment(unittest.TestCase):
         _write_bundle_prompt(data, "lightcycle", "sha1", "write-code", body="@include x")
         agent = _resolve_agent(
             _Cfg(prompts, data), "write-code", "lightcycle/spec-driven@sha1")
-        self.assertIn("engine x body", agent.body)
-        self.assertNotIn("origin x body", agent.body)
+        self.assertIn("origin x body", agent.body)
+        self.assertNotIn("engine x body", agent.body)
 
 
 if __name__ == "__main__":
