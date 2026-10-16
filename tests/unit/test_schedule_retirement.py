@@ -262,6 +262,29 @@ class TestScheduleCompletionSummary(unittest.TestCase):
         self._complete(s, "day: 2026-10-14 count: 4", "done", None)
         self.assertIsNone(s.day_summary(DAY))
 
+    def test_a_summary_on_the_step_alone_records_the_day(self):
+        s = FakeStore()
+        item, step = _scheduled_item(s, "day: 2026-10-14 count: 21")
+        s.add_artifact(step, "summary", "Step-level day.")
+        ScheduleCompletion(s).execute(s.get_node(step), "done")
+        row = s.day_summary(DAY)
+        self.assertEqual((row.summary, row.summarized_count), ("Step-level day.", 21))
+
+    def test_the_step_summary_wins_over_the_item_summary(self):
+        s = FakeStore()
+        item, step = _scheduled_item(s, "day: 2026-10-14 count: 2", "Item-level.")
+        s.add_artifact(step, "summary", "Step-level.")
+        ScheduleCompletion(s).execute(s.get_node(step), "done")
+        self.assertEqual(s.day_summary(DAY).summary, "Step-level.")
+
+    def test_a_summary_on_a_sibling_step_is_the_last_fallback(self):
+        s = FakeStore()
+        item, step = _scheduled_item(s, "day: 2026-10-14 count: 2")
+        sibling = s.create_step(step="earlier", role="agent", parent=item)
+        s.add_artifact(sibling, "summary", "From a sibling.")
+        ScheduleCompletion(s).execute(s.get_node(step), "done")
+        self.assertEqual(s.day_summary(DAY).summary, "From a sibling.")
+
     def test_a_legacy_row_with_a_higher_count_keeps_it(self):
         s = FakeStore()
         s.mark_day_summary_dirty(DAY)

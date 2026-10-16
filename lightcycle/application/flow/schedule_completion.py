@@ -26,9 +26,28 @@ class ScheduleCompletion:
             return
         day = parse_day_state(state)
         if day is not None and outcome == DONE_OUTCOME:
-            summary = next((a.value for a in artifacts if a.type == SUMMARY_ARTIFACT), None)
+            summary = self._find_summary(step, artifacts)
             if summary:
                 self._finish_day(day, summary)
+
+    def _find_summary(self, step, item_artifacts):
+        own = self._summary_of(self._store.item_artifacts(step.id))
+        if own:
+            return own
+        item_level = self._summary_of(item_artifacts)
+        if item_level:
+            return item_level
+        others = [c for c in self._store.children(step.item) if c.id != step.id]
+        others.sort(key=lambda c: c.created_at or "", reverse=True)
+        for other in others:
+            found = self._summary_of(self._store.item_artifacts(other.id))
+            if found:
+                return found
+        return None
+
+    @staticmethod
+    def _summary_of(artifacts):
+        return next((a.value for a in artifacts if a.type == SUMMARY_ARTIFACT and a.value), None)
 
     def _retro_batch(self, step, batch):
         unretroed = {i.id for i in self._store.closed_unretroed_items()}
