@@ -6,6 +6,7 @@ from typing import Dict, List, Optional, Tuple
 from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
 from lightcycle.domain.schedule.guards import is_script_guard, script_guard_path
+from lightcycle.domain.schedule.state import SCHEDULE_STATE_ARTIFACT
 from lightcycle.domain.workflows.script_stage import (
     GUARD_OUTCOMES,
     fixture_path,
@@ -180,8 +181,12 @@ def stdin_for_stage(item, step, stage, item_artifacts, step_artifacts):
     def visible(artifacts):
         return [{"type": a.type, "value": a.value} for a in artifacts if not a.internal]
 
+    schedule_state = next(
+        (a.value for a in item_artifacts if a.type == SCHEDULE_STATE_ARTIFACT), None)
+
     return json.dumps({
         "item": item, "step": step, "stage": stage,
+        "schedule_state": schedule_state,
         "item_artifacts": visible(item_artifacts),
         "step_artifacts": visible(step_artifacts),
     })

@@ -244,6 +244,41 @@ class TestSeedItem(unittest.TestCase):
         self.assertEqual(SIMULATION_SHORTCODE, "SIM")
         self.assertEqual([first, second], ["SIM-1", "SIM-2"])
 
+    def test_a_script_guards_pass_state_is_seeded_as_the_internal_schedule_state(self):
+        store = FakeStore()
+        flow = SimpleNamespace(meta_for_step=lambda step, pin: {}, owner_of=lambda step, pin: "agent")
+        scaffold = SimpleNamespace(make_dir=lambda path: None)
+        decls = SimpleNamespace(stages=[], guards=["scripts/changed.sh"])
+        guard = {"pass": SimpleNamespace(state="c1"), "fail": SimpleNamespace(state="")}
+        scripts = SimpleNamespace(
+            declarations=lambda directory, name: decls,
+            read_fixture=lambda directory, path, outcomes, guard=False: guard_fixture)
+        guard_fixture = guard
+        source = SimpleNamespace(pinned_bundle=lambda origin, sha: "/bundle")
+        uc = WorkflowSimulateUseCase(
+            store, flow, None, None, None, "/projects", FakeGit(), lifecycle=None,
+            scripts=scripts, source=source, scaffold=scaffold,
+        )
+        uc._load_script_fixtures("acme/build@sha1")
+
+        item = uc._seed_item("acme/build@sha1", SimpleNamespace(entry="poll", requires=()))
+
+        stored = [a for a in store.item_artifacts(item) if a.type == "schedule-state"]
+        self.assertEqual([(a.value, a.internal) for a in stored], [("c1", True)])
+
+    def test_a_workflow_without_a_script_guard_seeds_no_schedule_state(self):
+        store = FakeStore()
+        flow = SimpleNamespace(meta_for_step=lambda step, pin: {}, owner_of=lambda step, pin: "agent")
+        scaffold = SimpleNamespace(make_dir=lambda path: None)
+        uc = WorkflowSimulateUseCase(
+            store, flow, None, None, None, "/projects", FakeGit(), lifecycle=None,
+            scripts=None, source=None, scaffold=scaffold,
+        )
+
+        item = uc._seed_item("acme/build@sha1", SimpleNamespace(entry="poll", requires=()))
+
+        self.assertEqual([a for a in store.item_artifacts(item) if a.type == "schedule-state"], [])
+
 
 if __name__ == "__main__":
     unittest.main()
