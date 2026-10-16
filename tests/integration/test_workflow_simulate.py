@@ -310,7 +310,7 @@ class TestCmdWorkflowSimulateDispatch(SimulateTestCase):
         self.assertEqual(rc, 1)
         self.assertIn("gave-up", err.getvalue())
 
-    def test_trace_flag_prints_the_walk_after_pass(self):
+    def test_trace_flag_prints_the_walk_before_pass(self):
         import io
         from contextlib import redirect_stdout
 
@@ -320,10 +320,10 @@ class TestCmdWorkflowSimulateDispatch(SimulateTestCase):
             rc = cli.cmd_workflow(["simulate", selector, "--trace"])
         self.assertEqual(rc, 0)
         lines = out.getvalue().splitlines()
-        self.assertEqual(lines[0], "pass")
+        self.assertEqual(lines[-1], "pass")
         self.assertRegex(out.getvalue(), r"walk 0: -> ")
 
-    def test_trace_flag_prints_the_walk_after_the_violations(self):
+    def test_trace_flag_prints_the_walk_before_the_violations(self):
         import io
         from contextlib import redirect_stderr
 
@@ -333,7 +333,22 @@ class TestCmdWorkflowSimulateDispatch(SimulateTestCase):
             rc = cli.cmd_workflow(["simulate", selector, "--trace"])
         self.assertEqual(rc, 1)
         output = err.getvalue()
-        self.assertLess(output.index("gave-up"), output.index("walk 0: -> "))
+        self.assertLess(output.index("walk 0: -> "), output.index("gave-up"))
+
+    def test_a_failing_simulate_ends_with_its_violations_and_a_summary_line(self):
+        import io
+        from contextlib import redirect_stderr
+
+        selector = self._install(_NO_ESCALATE_EDGE_WORKFLOW_TEXT, _STEPS)
+        err = io.StringIO()
+        with redirect_stderr(err):
+            rc = cli.cmd_workflow(["simulate", selector, "--trace"])
+        self.assertEqual(rc, 1)
+        lines = err.getvalue().splitlines()
+        self.assertRegex(lines[-1], r"^simulate: \d+ violation\(s\)$")
+        first_violation = next(i for i, l in enumerate(lines) if "gave-up" in l)
+        self.assertTrue(any(l.startswith("walk 0: -> ") for l in lines[:first_violation]))
+        self.assertNotIn("walk 0: -> ", "\n".join(lines[first_violation:]))
 
     def test_without_the_trace_flag_no_walk_lines_are_printed(self):
         import io

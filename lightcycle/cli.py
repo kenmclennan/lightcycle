@@ -1063,16 +1063,17 @@ def _workflow_simulate(selector, trace=False):
             sys.stderr.write("%s\n" % e)
             return 1
         if resp.ok:
-            print("pass")
             if trace:
                 for line in resp.trace:
                     print(line)
+            print("pass")
             return 0
-        for v in resp.violations:
-            sys.stderr.write("%s\n" % v)
         if trace:
             for line in resp.trace:
                 sys.stderr.write("%s\n" % line)
+        for v in resp.violations:
+            sys.stderr.write("%s\n" % v)
+        sys.stderr.write("simulate: %d violation(s)\n" % len(resp.violations))
         return 1
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
