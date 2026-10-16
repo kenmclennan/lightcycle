@@ -21,7 +21,7 @@ def _registered_with_shortcode(store, name):
         raise UseCaseError(str(e))
     if not matched.shortcode:
         raise UseCaseError(
-            "project '%s' is registered but has no shortcode - run `lc project add %s "
+            "project '%s' is registered but has no shortcode - run `lc project set %s "
             "--shortcode <PREFIX>` to set one" % (matched.identity, matched.identity)
         )
     return matched

@@ -16,7 +16,7 @@ from tests.unit.test_select_guidance import _entry
 def _problems(files, projects=(), budget=None, git=None, status=None):
     files = {"CONVENTIONS.md": _conventions(CONVENTIONS_VERSION), **files}
     store = FakeStore()
-    store.add_project("guidance", local_path="/kb")
+    store.add_project("guidance", shortcode="GDN", local_path="/kb")
     for identity, facets in projects:
         store.add_project(identity, facets=facets)
     fs = FakeFs(dirs={"/kb": []})
@@ -38,7 +38,7 @@ def _problems(files, projects=(), budget=None, git=None, status=None):
 
 def _problem_objects(files):
     store = FakeStore()
-    store.add_project("guidance", local_path="/kb")
+    store.add_project("guidance", shortcode="GDN", local_path="/kb")
     source = FakeWorkflowSource()
     source.add_bundle("acme", "sha1", 1, current=True)
     git = FakeGit(ref="origin/main", ref_files={"origin/main": dict(files)})
@@ -173,7 +173,7 @@ class TestDoctorGuidance(unittest.TestCase):
             store, source, _cfg(**_ALL_KEYS), FakeWorkflowBundle(), FakeFs(), FakeMachine(),
             _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False)).execute(DoctorInput())
         self.assertEqual(report.problems["guidance"], [])
-        store.add_project("guidance", local_path="/gone")
+        store.add_project("guidance", shortcode="GDN", local_path="/gone")
         report = DoctorUseCase(
             store, source, _cfg(**_ALL_KEYS), FakeWorkflowBundle(), FakeFs(), FakeMachine(),
             _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False)).execute(DoctorInput())
@@ -197,6 +197,33 @@ class TestDoctorGuidance(unittest.TestCase):
 
     def test_stable_entry_without_verified_is_not_reported(self):
         self.assertEqual(_problems({"a.md": _entry(verified=None)}), [])
+
+    def test_a_guidance_project_without_a_shortcode_yields_one_finding_with_the_fix(self):
+        store = FakeStore()
+        store.add_project("guidance", local_path="/kb")
+        found = self._shortcode_findings(store, _ALL_KEYS)
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0].kind, "guidance-shortcode-missing")
+        self.assertIn("lc project set guidance --shortcode GDN", found[0].fix)
+
+    def test_no_shortcode_finding_with_a_shortcode_unregistered_or_key_absent(self):
+        with_code = FakeStore()
+        with_code.add_project("guidance", shortcode="GDN", local_path="/kb")
+        self.assertEqual(self._shortcode_findings(with_code, _ALL_KEYS), [])
+        self.assertEqual(self._shortcode_findings(FakeStore(), _ALL_KEYS), [])
+        bare = FakeStore()
+        bare.add_project("guidance", local_path="/kb")
+        keys = {k: v for k, v in _ALL_KEYS.items() if k != "guidance_shortcode"}
+        self.assertEqual(self._shortcode_findings(bare, keys), [])
+
+    def _shortcode_findings(self, store, keys):
+        source = FakeWorkflowSource()
+        source.add_bundle("acme", "sha1", 1, current=True)
+        report = DoctorUseCase(
+            store, source, _cfg(**keys), FakeWorkflowBundle(), FakeFs(), FakeMachine(),
+            _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(),
+            FakeLock(running=False)).execute(DoctorInput())
+        return [p for p in report.problems["guidance"] if p.kind == "guidance-shortcode-missing"]
 
     def test_draft_without_verified_is_not_reported(self):
         self.assertEqual(_problems({"a.md": _entry(status="draft", verified=None)}), [])
@@ -233,7 +260,7 @@ class TestDoctorRevertedEntry(unittest.TestCase):
             ref_files[sha] = {"a.md": content}
         git = FakeGit(ref="origin/main", ref_files=ref_files, history={"a.md": list(history)})
         store = FakeStore()
-        store.add_project("guidance", local_path="/kb")
+        store.add_project("guidance", shortcode="GDN", local_path="/kb")
         source = FakeWorkflowSource()
         source.add_bundle("acme", "sha1", 1, current=True)
         report = DoctorUseCase(

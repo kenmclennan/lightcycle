@@ -252,7 +252,7 @@ COMMANDS = {
             Arg("identity"), Arg("--shortcode"), Arg("--path"), Arg("--facets"),
         )),
         "set": CommandSpec(prog="lc project set", args=(
-            Arg("identity"), Arg("--facets"),
+            Arg("identity"), Arg("--facets"), Arg("--shortcode"),
         )),
         "list": CommandSpec(prog="lc project list"),
         "rm": CommandSpec(prog="lc project rm", args=(

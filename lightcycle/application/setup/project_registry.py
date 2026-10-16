@@ -2,6 +2,8 @@ import os
 from dataclasses import dataclass
 
 from lightcycle.application.errors import UseCaseError
+from lightcycle.config import ConfigError
+from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE
 from lightcycle.domain.work import ProjectIdentity, parse_facets
 from lightcycle.domain.work.project_identity import reserved_shortcode_reason
 from lightcycle.ports.git import GitReadError
@@ -51,7 +53,9 @@ class AddProjectUseCase:
             input.shortcode or (existing.shortcode if existing else None)
             or identity.default_shortcode
         )
-        reason = reserved_shortcode_reason(shortcode)
+        reason = reserved_shortcode_reason(
+            shortcode, _guidance_shortcode_for(self._config, input.identity)
+        )
         if reason and shortcode != (existing.shortcode if existing else None):
             raise UseCaseError(reason)
         remote = None
@@ -80,6 +84,15 @@ class AddProjectUseCase:
         )
 
 
+def _guidance_shortcode_for(config, identity):
+    if identity == GUIDANCE_WORKSPACE:
+        return None
+    try:
+        return config.guidance_shortcode()
+    except ConfigError:
+        return None
+
+
 def _parse(text):
     if text is None:
         return None
@@ -90,22 +103,27 @@ def _parse(text):
 
 
 @dataclass(frozen=True)
-class SetProjectFacetsResponse:
+class SetProjectResponse:
     identity: str
     facets: tuple
     changed: bool
+    shortcode: str = None
+    shortcode_changed: bool = False
+    facets_given: bool = False
 
 
-class SetProjectFacetsUseCase:
-    def __init__(self, store):
+class SetProjectUseCase:
+    def __init__(self, store, config):
         self._store = store
+        self._config = config
 
-    def execute(self, identity, facets_text):
-        if facets_text is None:
+    def execute(self, identity, facets_text=None, shortcode=None):
+        if facets_text is None and shortcode is None:
             raise UseCaseError(
-                'nothing to set - pass --facets a,b,c (or --facets "" to clear them)'
+                'nothing to set - pass --facets a,b,c (or --facets "" to clear them) '
+                "or --shortcode X"
             )
-        facets = _parse(facets_text)
+        facets = _parse(facets_text) if facets_text is not None else None
         existing = self._store.get_project(identity)
         if existing is None:
             registered = [p.identity for p in self._store.list_projects()]
@@ -118,10 +136,54 @@ class SetProjectFacetsUseCase:
                 "project '%s' is not registered - none registered yet; run "
                 "`lc project add <owner/name> --path <dir> --facets a,b,c`" % identity
             )
-        changed = existing.facets != facets
-        if changed:
+        shortcode_changed = False
+        if shortcode is not None:
+            shortcode_changed = self._check_shortcode(existing, shortcode)
+        changed = facets is not None and existing.facets != facets
+        if shortcode_changed and changed:
+            self._store.add_project(identity, shortcode=shortcode, facets=facets)
+        elif shortcode_changed:
+            self._store.add_project(identity, shortcode=shortcode)
+        elif changed:
             self._store.add_project(identity, facets=facets)
-        return SetProjectFacetsResponse(identity=identity, facets=facets, changed=changed)
+        return SetProjectResponse(
+            identity=identity,
+            facets=facets if facets is not None else existing.facets,
+            changed=changed,
+            shortcode=shortcode if shortcode is not None else existing.shortcode,
+            shortcode_changed=shortcode_changed,
+            facets_given=facets is not None,
+        )
+
+    def _check_shortcode(self, existing, shortcode):
+        if not shortcode.strip():
+            raise UseCaseError("shortcode must not be empty")
+        reason = reserved_shortcode_reason(
+            shortcode, _guidance_shortcode_for(self._config, existing.identity)
+        )
+        if reason:
+            raise UseCaseError(reason)
+        for other in self._store.list_projects():
+            if (
+                other.identity != existing.identity
+                and (other.shortcode or "").upper() == shortcode.upper()
+            ):
+                raise UseCaseError(
+                    "shortcode '%s' is already held by project %s" % (shortcode, other.identity)
+                )
+        if existing.shortcode == shortcode:
+            return False
+        if existing.shortcode:
+            prefix = existing.shortcode + "-"
+            carried = sum(
+                1 for item in self._store.all_items_including_done() if item.id.startswith(prefix)
+            )
+            if carried:
+                raise UseCaseError(
+                    "project %s keeps shortcode %s: ids are immutable and %d item(s) carry the "
+                    "%s prefix" % (existing.identity, existing.shortcode, carried, prefix)
+                )
+        return True
 
 
 class ListProjectsUseCase:

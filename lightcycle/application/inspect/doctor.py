@@ -93,7 +93,7 @@ class DoctorUseCase:
                 + self._schedule_problems() + self._reload_problems() + lifecycle_config),
             "orphans": self._orphan_problems(),
             "facets": self._guidance_registration_problems() + self._facet_problems(),
-            "guidance": self._guidance_problems(),
+            "guidance": self._guidance_problems() + self._guidance_shortcode_problems(),
         })
 
     def _in_flight_pins(self, nodes):
@@ -332,6 +332,22 @@ class DoctorUseCase:
             for name in (f.rsplit("/", 1)[-1] for f in GuidanceLibrary(self._git).files(root))
             if name.endswith(".md") and name != "index.md"
         }
+
+    def _guidance_shortcode_problems(self):
+        repo = self._store.get_project(GUIDANCE_WORKSPACE)
+        if repo is None or repo.shortcode:
+            return []
+        try:
+            shortcode = self._config.guidance_shortcode()
+        except ConfigError:
+            return []
+        return [Problem(
+            "guidance",
+            "the guidance project has no id shortcode, so --project guidance is refused and "
+            "guidance items take a product project's prefix",
+            kind="guidance-shortcode-missing",
+            fix="run lc project set %s --shortcode %s" % (GUIDANCE_WORKSPACE, shortcode),
+        )]
 
     def _guidance_problems(self):
         repo = self._store.get_project(GUIDANCE_WORKSPACE)
