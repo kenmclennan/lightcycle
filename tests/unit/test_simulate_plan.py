@@ -691,6 +691,35 @@ class TestMixedStageTargetlessCoverage(unittest.TestCase):
         self.assertNotIn(("edge", "review-ci", "reviewed"), _edge_transitions(graph))
 
 
+_ONLY_EXIT_IS_TARGETLESS_GRAPH = """
+entry: build
+
+edges:
+  build   done    audit
+  audit   remedial-filed  build
+  audit   clean
+"""
+
+_ONLY_EXIT_IS_TARGETLESS_METAS = {
+    "coder": {"step": "build"},
+    "auditor": {"step": "audit"},
+}
+
+
+class TestTargetlessExitOnMixedStage(unittest.TestCase):
+    def test_a_graph_whose_only_exit_is_a_mixed_stages_targetless_outcome_plans_no_incomplete_walk(self):
+        plan, _, _ = _plan(_ONLY_EXIT_IS_TARGETLESS_GRAPH, _ONLY_EXIT_IS_TARGETLESS_METAS)
+
+        self.assertFalse([w for w in plan.walks if w.incomplete])
+
+    def test_every_walk_in_such_a_graph_ends_on_the_targetless_outcome(self):
+        plan, _, _ = _plan(_ONLY_EXIT_IS_TARGETLESS_GRAPH, _ONLY_EXIT_IS_TARGETLESS_METAS)
+
+        self.assertTrue(plan.walks)
+        for walk in plan.walks:
+            self.assertEqual(walk.steps[-1].key(), ("edge", "audit", "clean"))
+
+
 _CI_CAP_OWNED_EDGE_GRAPH = """
 entry: build
 

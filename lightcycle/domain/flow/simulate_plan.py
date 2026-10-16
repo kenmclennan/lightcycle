@@ -163,7 +163,17 @@ def _bfs_path(graph, start, goal):
     return None
 
 
+def _exit_step(graph, stage):
+    for outcome, target in sorted((graph.edges.get(stage) or {}).items()):
+        if target is None:
+            return PlannedStep(stage=stage, kind="edge", outcome=outcome)
+    return None
+
+
 def _bfs_to_terminal(graph, start):
+    exit_here = _exit_step(graph, start)
+    if exit_here is not None:
+        return [exit_here]
     q = deque([start])
     prev = {start: None}
     while q:
@@ -172,7 +182,8 @@ def _bfs_to_terminal(graph, start):
             if not target or target in prev:
                 continue
             prev[target] = (cur, outcome)
-            if not _outgoing(graph, target):
+            exit_there = _exit_step(graph, target)
+            if exit_there is not None or not _outgoing(graph, target):
                 path = []
                 node = target
                 while prev[node] is not None:
@@ -180,6 +191,8 @@ def _bfs_to_terminal(graph, start):
                     path.append(PlannedStep(stage=p, kind="edge", outcome=o))
                     node = p
                 path.reverse()
+                if exit_there is not None:
+                    path.append(exit_there)
                 return path
             q.append(target)
     return None
