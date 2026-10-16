@@ -41,15 +41,25 @@ class TestConventionsText(unittest.TestCase):
         lines = CONVENTIONS_TEXT.splitlines()
         self.assertEqual(lines[0], "# Conventions")
         self.assertEqual(lines[2], "Conventions version: %d" % CONVENTIONS_VERSION)
-        self.assertEqual(CONVENTIONS_VERSION, 1)
+        self.assertEqual(CONVENTIONS_VERSION, 2)
 
     def test_text_names_every_rule_and_no_item_id(self):
         self.assertEqual(item_ids(CONVENTIONS_TEXT), [])
         self.assertIn("## Checks", CONVENTIONS_TEXT)
-        for n in range(1, 14):
+        for n in range(1, 11):
             self.assertIn("\n%d. " % n, CONVENTIONS_TEXT)
-        for word in ("purpose", "when", "why", "item id", "context-only"):
+        self.assertNotIn("\n11. ", CONVENTIONS_TEXT)
+        for word in ("purpose", "when", "why", "item id"):
             self.assertIn(word, CONVENTIONS_TEXT)
+
+    def test_text_is_version_two_and_drops_the_verified_rules(self):
+        self.assertIn("Conventions version: 2", CONVENTIONS_TEXT)
+        for removed in (
+            "fails unless the entry is context-only",
+            "with an empty or missing `verified` fails",
+            "Context-only means",
+        ):
+            self.assertNotIn(removed, CONVENTIONS_TEXT)
 
 
 class TestParsingEdges(unittest.TestCase):
@@ -179,58 +189,28 @@ class TestBothModes(unittest.TestCase):
         )
 
 
-class TestDraftMode(unittest.TestCase):
-    def test_rule_11_stable_fails(self):
+class TestVerifiedAndStatusAreNoLongerChecked(unittest.TestCase):
+    def test_stable_in_draft_mode_passes(self):
+        self.assertEqual(Tree({"a.md": entry(status="stable")}).check("draft"), [])
+
+    def test_a_verified_key_in_draft_mode_passes(self):
+        self.assertEqual(Tree({"a.md": entry(extra="verified: ken\n")}).check("draft"), [])
+
+    def test_stable_without_verified_in_final_mode_passes(self):
+        self.assertEqual(Tree({"a.md": entry(status="stable")}).check("final"), [])
         self.assertEqual(
-            Tree({"a.md": entry(status="stable", extra="verified: ken\n")}).check("draft"),
-            [
-                "a.md: writer output must not be status: stable",
-                "a.md: writer output must not carry a verified record",
-            ],
-        )
-
-    def test_rule_12_verified_on_a_draft_fails(self):
-        self.assertEqual(
-            Tree({"a.md": entry(extra="verified: ken\n")}).check("draft"),
-            ["a.md: writer output must not carry a verified record"],
-        )
-
-    def test_context_only_change_keeps_stable_and_verified(self):
-        base = entry(status="stable", extra="verified: ken\n", purpose="old")
-        head = entry(status="stable", extra="verified: ken\n", purpose="new", why="other")
-        self.assertEqual(Tree({"a.md": head}, base={"a.md": base}).check("draft"), [])
-
-    def test_body_change_is_not_context_only(self):
-        base = entry(status="stable", extra="verified: ken\n")
-        head = entry(status="stable", extra="verified: ken\n", body="changed\n")
-        self.assertEqual(
-            len(Tree({"a.md": head}, base={"a.md": base}).check("draft")), 2,
-        )
-
-    def test_other_front_matter_change_is_not_context_only(self):
-        base = entry(status="stable", extra="verified: ken\n")
-        head = entry(status="stable", extra="verified: sam\n")
-        self.assertEqual(
-            len(Tree({"a.md": head}, base={"a.md": base}).check("draft")), 2,
-        )
-
-    def test_no_base_copy_is_not_context_only(self):
-        head = entry(status="stable", extra="verified: ken\n")
-        self.assertEqual(len(Tree({"a.md": head}).check("draft")), 2)
-
-
-class TestFinalMode(unittest.TestCase):
-    def test_rule_13_stable_needs_verified(self):
-        self.assertEqual(
-            Tree({"a.md": entry(status="stable")}).check("final"),
-            ["a.md: stable entry has no verified record"],
-        )
-        self.assertEqual(
-            Tree({"a.md": entry(status="stable", extra="verified:\n")}).check("final"),
-            ["a.md: stable entry has no verified record"],
-        )
+            Tree({"a.md": entry(status="stable", extra="verified:\n")}).check("final"), [])
 
     def test_stable_with_verified_is_clean(self):
         self.assertEqual(
             Tree({"a.md": entry(status="stable", extra="verified: ken\n")}).check("final"), [],
         )
+
+    def test_draft_and_final_return_identical_failures_for_the_same_inputs(self):
+        head = {
+            "a.md": entry(status="stable", extra="verified: ken\n", why=None),
+            "b.md": entry(applies="  facets: [rust]", body="LC-1\n"),
+        }
+        tree = Tree(head)
+        self.assertNotEqual(tree.check("draft"), [])
+        self.assertEqual(tree.check("draft"), tree.check("final"))

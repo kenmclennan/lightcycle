@@ -12,7 +12,7 @@ class FakeGit(GitPort, TeardownLedgerPort):
                  torn_down_branches=(), head_shas=None, init_ok=True, commit_ok=True,
                  missing_identity=(), ref=None, ref_files=None, fetch_ok=True,
                  fetch_detail="boom", added=None, changed=None, ref_shas=None,
-                 history=None):
+                 history=None, approvals=None):
         self._repos = set(repos) if repos is not None else None
         self._is_repo = is_repo
         self._origin = origin
@@ -38,6 +38,7 @@ class FakeGit(GitPort, TeardownLedgerPort):
             r: dict(files) for r, files in (ref_files or {}).items()
         }
         self._added = dict(added or {})
+        self._approvals = dict(approvals or {})
         self._history = {k: list(v) for k, v in (history or {}).items()}
         self._changed = {k: list(v) for k, v in (changed or {}).items()}
         self._fetch_ok = fetch_ok
@@ -192,6 +193,10 @@ class FakeGit(GitPort, TeardownLedgerPort):
     def added_at(self, root, ref, path):
         self.calls.append(("added_at", root, ref, path))
         return self._added.get(path)
+
+    def last_change_at(self, root, ref, path):
+        self.calls.append(("last_change_at", root, ref, path))
+        return self._approvals.get(path, ())
 
     def commits_touching(self, root, ref, path, limit):
         self.calls.append(("commits_touching", root, ref, path, limit))

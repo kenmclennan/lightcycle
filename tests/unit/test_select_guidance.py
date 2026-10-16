@@ -82,7 +82,6 @@ class TestSelectGuidance(unittest.TestCase):
             "kt/other-step.md": _entry(steps=["review-code"], body="no"),
             "kt/mismatch.md": _entry(facets=["python"], body="no"),
             "kt/draft.md": _entry(status="draft", body="no"),
-            "kt/unverified.md": _entry(verified=None, body="no"),
             "kt/notes.md": _entry(type_="Concept", body="no"),
             "index.md": _entry(body="no"),
         }
@@ -90,6 +89,16 @@ class TestSelectGuidance(unittest.TestCase):
         sel = use.execute(item, "write-code", "acme/wf@abc", "S.1")
         self.assertEqual(
             sel.delivered, ("kt/origin", "kt/stepped", "all/alpha", "all/zeta"))
+
+    def test_stable_unverified_and_stable_verified_are_delivered_and_draft_is_not(self):
+        files = {
+            "kt/unverified.md": _entry(verified=None, body="u"),
+            "kt/verified.md": _entry(body="v"),
+            "kt/draft.md": _entry(status="draft", body="d"),
+        }
+        use, item = _setup(files)
+        sel = use.execute(item, "write-code", "acme/wf@abc", "S.1")
+        self.assertEqual(sel.delivered, ("kt/unverified", "kt/verified"))
         self.assertEqual(sel.skipped, ())
         self.assertEqual(sel.notes, ())
         self.assertTrue(sel.section.startswith("## Guidance for this project"))

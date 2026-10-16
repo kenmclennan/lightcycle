@@ -161,6 +161,10 @@ class RecordingGit(GitPort, TeardownLedgerPort):
         self._record("added_at", root, ref, path)
         return None
 
+    def last_change_at(self, root, ref, path):
+        self._record("last_change_at", root, ref, path)
+        return None
+
     def commits_touching(self, root, ref, path, limit):
         self._record("commits_touching", root, ref, path, limit)
         return []

@@ -734,6 +734,20 @@ def _guidance_flags_text(row):
     return "; ".join("%s (%s)" % (f.name, f.evidence) for f in row.flags) or "-"
 
 
+def _guidance_approval_text(row):
+    approval = row.approval
+    if approval.state == "unknown":
+        return "unknown"
+    text = "-"
+    if approval.state == "known":
+        text = "%s %s" % (approval.date[:10], approval.sha[:7])
+        if approval.pr:
+            text += " #%s" % approval.pr
+    if row.verified:
+        text = "%s verified: %s" % (text, row.verified) if text != "-" else "verified: %s" % row.verified
+    return text
+
+
 def cmd_guidance(argv):
     a = build_parser(COMMANDS["guidance"]).parse_args(argv)
     c = _container
@@ -748,15 +762,16 @@ def cmd_guidance(argv):
         print(json.dumps(report.as_dict(), indent=2))
         return 0
     print("window: since %s" % report.since if report.since else "window: all steps in the store")
-    lines = [("ID", "STATUS", "DELIVERED", "CITED", "OPPORTUNITY", "LAST DELIVERED", "FLAGS")]
+    lines = [("ID", "STATUS", "DELIVERED", "CITED", "OPPORTUNITY", "LAST DELIVERED", "APPROVED", "FLAGS")]
     for r in report.rows:
         lines.append((
             r.id, r.status or "-", str(r.deliveries), str(r.citations), str(r.opportunity),
-            r.last_delivered[:10] if r.last_delivered else "never", _guidance_flags_text(r),
+            r.last_delivered[:10] if r.last_delivered else "never", _guidance_approval_text(r),
+            _guidance_flags_text(r),
         ))
-    widths = [max(len(line[i]) for line in lines) for i in range(6)]
+    widths = [max(len(line[i]) for line in lines) for i in range(7)]
     for line in lines:
-        print("  ".join(line[i].ljust(widths[i]) for i in range(6)) + "  " + line[6])
+        print("  ".join(line[i].ljust(widths[i]) for i in range(7)) + "  " + line[7])
     notes = list(report.notes)
     for r in report.rows:
         notes.extend("%s: %s" % (r.id, n) for n in r.notes)

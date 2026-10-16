@@ -285,6 +285,18 @@ def added_at(root, ref, path):
     return lines[-1] if lines else None
 
 
+def last_change_at(root, ref, path):
+    proc = git(root, "log", "-1", "--first-parent", "--format=%H%x1f%cI%x1f%s", ref, "--", path)
+    if proc.returncode != 0:
+        return None
+    line = proc.stdout.strip("\n")
+    if not line.strip():
+        return ()
+    sha, _, rest = line.partition("\x1f")
+    committed, _, subject = rest.partition("\x1f")
+    return (sha, committed, subject)
+
+
 def commits_touching(root, ref, path, limit):
     proc = git(root, "rev-list", "-n", str(limit), ref, "--", path)
     if proc.returncode != 0:
@@ -398,6 +410,9 @@ class GitAdapter(GitPort):
 
     def added_at(self, root, ref, path):
         return added_at(root, ref, path)
+
+    def last_change_at(self, root, ref, path):
+        return last_change_at(root, ref, path)
 
     def commits_touching(self, root, ref, path, limit):
         return commits_touching(root, ref, path, limit)

@@ -1,4 +1,6 @@
+import dataclasses
 import datetime
+import re
 from dataclasses import dataclass
 from typing import Dict, Optional, Tuple
 
@@ -8,6 +10,12 @@ COVERS_CLOSED = "covers-closed"
 STALE = "stale"
 
 COVERS_UNKNOWN = "unknown"
+
+APPROVAL_KNOWN = "known"
+APPROVAL_NONE = "none"
+APPROVAL_UNKNOWN = "unknown"
+
+_PR_SUFFIX = re.compile(r"\(#(\d+)\)\s*$")
 
 
 @dataclass(frozen=True)
@@ -38,6 +46,29 @@ class CoversResult:
     note: str = ""
 
 
+def pr_number(subject):
+    match = _PR_SUFFIX.search(subject or "")
+    return match.group(1) if match else ""
+
+
+@dataclass(frozen=True)
+class Approval:
+    state: str = APPROVAL_NONE
+    sha: str = ""
+    date: str = ""
+    subject: str = ""
+    pr: str = ""
+
+    @classmethod
+    def from_git(cls, change):
+        if change is None:
+            return cls(APPROVAL_UNKNOWN)
+        if not change:
+            return cls(APPROVAL_NONE)
+        sha, date, subject = change
+        return cls(APPROVAL_KNOWN, sha, date, subject, pr_number(subject))
+
+
 @dataclass(frozen=True)
 class GuidanceRow:
     id: str
@@ -48,6 +79,8 @@ class GuidanceRow:
     flags: Tuple[Flag, ...] = ()
     notes: Tuple[str, ...] = ()
     opportunity: int = 0
+    approval: Approval = Approval()
+    verified: str = ""
 
     def as_dict(self):
         return {
@@ -59,6 +92,14 @@ class GuidanceRow:
             "last_delivered": self.last_delivered,
             "flags": [f.as_dict() for f in self.flags],
             "notes": list(self.notes),
+            "approval": {
+                "state": self.approval.state,
+                "sha": self.approval.sha,
+                "date": self.approval.date,
+                "subject": self.approval.subject,
+                "pr": self.approval.pr,
+                "verified": self.verified,
+            },
         }
 
 
@@ -168,13 +209,20 @@ def evaluate(entry, usage, thresholds, now, covers=None, added=None, opportunity
 
 
 def build_rows(entries, usage_by_id: Dict[str, Usage], thresholds, now, covers_by_id=None,
-               added_by_id=None, opportunity_by_id=None):
+               added_by_id=None, opportunity_by_id=None, approvals=None):
     covers_by_id = covers_by_id or {}
     added_by_id = added_by_id or {}
     opportunity_by_id = opportunity_by_id or {}
+    approvals = approvals or {}
+    verified = {e.id: e.verified for e in entries}
     rows = [
         evaluate(e, usage_by_id.get(e.id, Usage()), thresholds, now, covers_by_id.get(e.id),
                  added_by_id.get(e.id), opportunity_by_id.get(e.id, 0))
         for e in entries
+    ]
+    rows = [
+        dataclasses.replace(
+            row, approval=approvals.get(row.id, Approval()), verified=verified[row.id])
+        for row in rows
     ]
     return sorted(rows, key=lambda r: (0 if r.flags else 1, r.id))

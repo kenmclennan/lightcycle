@@ -538,6 +538,18 @@ class TestGitAdapterGuidanceRef(unittest.TestCase):
         self.assertIsNone(self.adapter.added_at(self.clone, "origin/main", "nope.md"))
         self.assertIsNone(self.adapter.added_at(self.clone, "origin/nope", "a.md"))
 
+    def test_last_change_at_reads_the_latest_commit_touching_a_path(self):
+        first = self.adapter.last_change_at(self.clone, "origin/main", "a.md")
+        _commit(self.clone, "a.md", "v2")
+        _git(self.clone, "push", "-q", "origin", "main")
+        second = self.adapter.last_change_at(self.clone, "origin/main", "a.md")
+        self.assertNotEqual(first[0], second[0])
+        self.assertRegex(second[1], r"^\d{4}-\d{2}-\d{2}T")
+        self.assertEqual(len(second[0]), 40)
+        self.assertTrue(second[2])
+        self.assertEqual(self.adapter.last_change_at(self.clone, "origin/main", "nope.md"), ())
+        self.assertIsNone(self.adapter.last_change_at(self.clone, "origin/nope", "a.md"))
+
     def test_commits_touching_lists_newest_first_and_honours_the_limit(self):
         _commit(self.clone, "a.md", "v2")
         _commit(self.clone, "other.md", "x")

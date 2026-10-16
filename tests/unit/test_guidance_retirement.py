@@ -12,7 +12,7 @@ T = Thresholds(unused_after_deliveries=60, dormant_days=60)
 
 def _entry(id="a/x", status="stable", **kw):
     return GuidanceEntry(
-        id=id, status=status, verified=True, facets=(), steps=(), body="b", **kw)
+        id=id, status=status, verified="", facets=(), steps=(), body="b", **kw)
 
 
 def _names(row):

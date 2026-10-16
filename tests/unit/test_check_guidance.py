@@ -117,19 +117,19 @@ class TestGuidanceCheckCommand(unittest.TestCase):
         self.assertEqual((rc, err), (0, ""))
         self.assertEqual(out.strip(), "1 changed file(s) clean (final mode)")
 
-    def test_final_default_fails_stable_without_verified(self):
+    def test_final_default_accepts_stable_without_verified(self):
         git = FakeGit(changed={(".", "origin/main"): [("A", "a.md")]})
         fs = FakeFs(files={"./a.md": entry(status="stable").encode(), "./kotlin.md": b"x"})
         rc, out, _ = self._call([], git, fs)
-        self.assertEqual(rc, 1)
-        self.assertEqual(out.strip(), "a.md: stable entry has no verified record")
+        self.assertEqual(rc, 0)
+        self.assertEqual(out.strip(), "1 changed file(s) clean (final mode)")
 
     def test_draft_mode_flag(self):
         git = FakeGit(changed={(ROOT, "main"): [("A", "a.md")]})
         fs = _fs({"a.md": entry(extra="verified: k\n"), "kotlin.md": "x"})
         rc, out, _ = self._call(["--dir", ROOT, "--mode", "draft", "--base", "main"], git, fs)
-        self.assertEqual(rc, 1)
-        self.assertEqual(out.strip(), "a.md: writer output must not carry a verified record")
+        self.assertEqual(rc, 0)
+        self.assertEqual(out.strip(), "1 changed file(s) clean (draft mode)")
 
     def test_unresolvable_base_exits_one_with_the_reason(self):
         rc, out, err = self._call(["--base", "nope"], FakeGit(raises=("changed_paths",)), FakeFs())

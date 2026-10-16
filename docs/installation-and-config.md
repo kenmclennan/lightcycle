@@ -142,4 +142,4 @@ Schema changes are handled separately: when a new engine opens a store it stamps
 - `config-key-blank` - a required config key is set but blank, with what it does and how to set it.
 - `guidance-conventions-outdated` - the guidance repo records an older conventions version than the engine ships; the update lands by PR.
 - `guidance-entries-nonconforming` - guidance entries on the default branch fail the current conventions; the fix is a `guidance-entry` backfill item.
-- `guidance-entry-reverted` - an entry is `draft` on the default branch but was `stable` in its last 200 commits, so it stopped being delivered; the fix is a `guidance-entry` item to verify it again.
+- `guidance-entry-reverted` - an entry is `draft` on the default branch but was `stable` in its last 200 commits, so it stopped being delivered; the fix is a `guidance-entry` item to restore it to stable.

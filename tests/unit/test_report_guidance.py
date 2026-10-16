@@ -45,13 +45,14 @@ def _entry(status="stable", covers=None, stale_after=None, facets=None, steps=No
     return "\n".join(lines).encode()
 
 
-def _setup(files, github=None, added=None):
+def _setup(files, github=None, added=None, approvals=None):
     if added is None:
         added = {name: "2020-01-01T00:00:00+00:00" for name in files}
     store = FakeStore()
     store.add_project("guidance", local_path=ROOT)
     fs = FakeFs(dirs={ROOT: []})
-    git = FakeGit(ref="origin/main", ref_files={"origin/main": dict(files)}, added=added)
+    git = FakeGit(ref="origin/main", ref_files={"origin/main": dict(files)}, added=added,
+                  approvals=approvals)
     github = github or FakeGitHub()
     return store, fs, github, ReportGuidanceUseCase(store, fs, git, github, _cfg())
 
@@ -114,6 +115,46 @@ class TestCounts(unittest.TestCase):
         store.add_project("guidance", local_path="/gone")
         with self.assertRaises(UseCaseError):
             ReportGuidanceUseCase(store, FakeFs(), FakeGit(), FakeGitHub(), _cfg()).execute(0.0)
+
+
+class _UnreadableApprovals(FakeGit):
+    def last_change_at(self, root, ref, path):
+        return None if path == "c.md" else super().last_change_at(root, ref, path)
+
+
+class TestApproval(unittest.TestCase):
+    def test_a_stable_entry_carries_sha_date_pr_and_a_verified_line(self):
+        store, fs, gh, use = _setup({"a.md": _entry()}, approvals={
+            "a.md": ("abcdef1234567", "2026-10-02T10:00:00+01:00", "feat: add a (#42)")})
+        row = _rows(use.execute(time.time()))["a"]
+        self.assertEqual(
+            (row.approval.state, row.approval.sha, row.approval.date, row.approval.pr),
+            ("known", "abcdef1234567", "2026-10-02T10:00:00+01:00", "42"))
+        self.assertEqual(row.verified, "ken")
+
+    def test_a_subject_without_a_trailing_pr_number_has_no_pr(self):
+        store, fs, gh, use = _setup({"a.md": _entry()}, approvals={
+            "a.md": ("abc1234", "2026-10-02T10:00:00+01:00", "fix (#4) later")})
+        self.assertEqual(_rows(use.execute(time.time()))["a"].approval.pr, "")
+
+    def test_known_none_and_unknown_are_told_apart(self):
+        files = {"a.md": _entry(), "b.md": _entry(), "c.md": _entry()}
+        store, fs, gh, use = _setup(files, approvals={
+            "a.md": ("abc1234", "2026-10-02T10:00:00+01:00", "feat: a (#7)"), "b.md": ()})
+        git = _UnreadableApprovals(
+            ref="origin/main", ref_files={"origin/main": dict(files)},
+            added={n: "2020-01-01T00:00:00+00:00" for n in files},
+            approvals={"a.md": ("abc1234", "2026-10-02T10:00:00+01:00", "feat: a (#7)"), "b.md": ()})
+        report = ReportGuidanceUseCase(store, fs, git, gh, _cfg()).execute(time.time())
+        rows = _rows(report)
+        self.assertEqual(
+            [rows[i].approval.state for i in "abc"], ["known", "none", "unknown"])
+        self.assertTrue(any("approval unknown" in n for n in rows["c"].notes))
+        self.assertFalse(any("approval unknown" in n for n in rows["a"].notes))
+
+    def test_a_non_stable_entry_has_state_none(self):
+        store, fs, gh, use = _setup({"a.md": _entry(status="draft")})
+        self.assertEqual(_rows(use.execute(time.time()))["a"].approval.state, "none")
 
 
 class TestNewEntries(unittest.TestCase):
@@ -314,7 +355,16 @@ class TestCmdGuidance(unittest.TestCase):
         self.assertEqual(entry["last_delivered"], "2026-10-01T09:30:00+01:00")
         self.assertEqual(set(entry), {
             "id", "status", "deliveries", "citations", "opportunity", "last_delivered", "flags",
-            "notes"})
+            "notes", "approval"})
+        self.assertEqual(entry["approval"]["state"], "none")
+
+    def test_the_text_table_shows_the_approval(self):
+        store, fs, gh, use = _setup({"a.md": _entry()}, approvals={
+            "a.md": ("abcdef1234567", "2026-10-02T10:00:00+01:00", "feat: a (#42)")})
+        rc, out, err = self._run(store, fs, [], use._git)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("APPROVED", out)
+        self.assertIn("2026-10-02 abcdef1 #42 verified: ken", out)
 
     def test_text_prints_a_table(self):
         store, fs, gh, use = _setup({"a.md": _entry()})
