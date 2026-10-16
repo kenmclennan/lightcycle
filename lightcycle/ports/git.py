@@ -144,3 +144,7 @@ class GitPort(ABC):
     @abstractmethod
     def changed_paths(self, root, base):
         pass
+
+    @abstractmethod
+    def uncommitted_paths(self, root):
+        pass
