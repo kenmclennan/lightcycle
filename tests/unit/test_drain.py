@@ -7,9 +7,12 @@ import lightcycle.cli as cli_mod
 from lightcycle.application.pool import (
     ClearDrainUseCase,
     DrainPoolUseCase,
+    PoolDrainStatus,
     PoolDrainStatusUseCase,
 )
+from lightcycle.application.pool.pool_control import DRAIN_SLOW_SECONDS
 from tests.support.fake_drain import FakeDrain
+from tests.support.fake_store import FakeStore
 from tests.support.fake_workers import FakeWorkers
 from tests.support.tui_harness import FakeLock
 
@@ -26,6 +29,19 @@ def _workers(n):
         workers=[{"spawnid": "w%d" % i, "pid": i + 1, "started": 0} for i in range(n)],
         alive_pids=tuple(range(1, n + 1)),
     )
+
+
+def _status(drain, workers, store=None):
+    return PoolDrainStatusUseCase(drain, workers, store if store is not None else FakeStore())
+
+
+def _store_with(*specs):
+    store = FakeStore()
+    item = store.create_item("t", "d")
+    for role, state in specs:
+        sid = store.create_step(step="poll-ci", role=role, parent=item)
+        store.update_state(sid, state)
+    return store
 
 
 class TestDrainPoolUseCase(unittest.TestCase):
@@ -51,24 +67,52 @@ class TestDrainPoolUseCase(unittest.TestCase):
 
 class TestPoolDrainStatusUseCase(unittest.TestCase):
     def test_draining_only_when_the_pool_runs_and_the_marker_is_set(self):
-        status = PoolDrainStatusUseCase(FakeDrain(requested=True), _workers(3))
-        self.assertTrue(status.execute(True).draining)
-        self.assertFalse(status.execute(False).draining)
-        self.assertFalse(PoolDrainStatusUseCase(FakeDrain(), _workers(3)).execute(True).draining)
+        status = _status(FakeDrain(requested=True), _workers(3))
+        self.assertTrue(status.execute(True, 0).draining)
+        self.assertFalse(status.execute(False, 0).draining)
+        self.assertFalse(_status(FakeDrain(), _workers(3)).execute(True, 0).draining)
 
     def test_running_is_the_live_worker_count(self):
-        status = PoolDrainStatusUseCase(FakeDrain(requested=True), _workers(3)).execute(True)
+        status = _status(FakeDrain(requested=True), _workers(3)).execute(True, 0)
         self.assertEqual(status.running, 3)
 
     def test_a_stale_marker_with_no_pool_reports_zero_running(self):
-        status = PoolDrainStatusUseCase(FakeDrain(requested=True), _workers(3)).execute(False)
+        status = _status(FakeDrain(requested=True), _workers(3)).execute(False, 0)
         self.assertEqual((status.draining, status.running), (False, 0))
 
     def test_an_unreadable_registry_reports_zero_running_without_raising(self):
-        status = PoolDrainStatusUseCase(
-            FakeDrain(requested=True), _UnreadableWorkers()
-        ).execute(True)
+        status = _status(FakeDrain(requested=True), _UnreadableWorkers()).execute(True, 0)
         self.assertEqual((status.draining, status.running), (True, 0))
+
+
+class TestPoolDrainWaitsForEngineSteps(unittest.TestCase):
+    def _run(self, specs, workers=0, at=None, now=0):
+        drain = FakeDrain(requested=True, at=at)
+        return _status(drain, _workers(workers), _store_with(*specs)).execute(True, now)
+
+    def test_a_queued_engine_step_is_waited_for(self):
+        status = self._run([("engine", "queued")])
+        self.assertEqual((status.running, status.engine_steps), (0, 1))
+        self.assertEqual(status.waiting_text(), "0 workers, 1 engine step")
+
+    def test_a_running_engine_step_is_waited_for(self):
+        self.assertEqual(self._run([("engine", "running")]).engine_steps, 1)
+
+    def test_human_gates_and_agent_steps_are_not_waited_for(self):
+        status = self._run([("human", "waiting"), ("agent", "queued"), ("engine", "done")])
+        self.assertEqual(status.engine_steps, 0)
+
+    def test_workers_and_engine_steps_are_both_named(self):
+        status = self._run([("engine", "queued")], workers=1)
+        self.assertEqual(status.waiting_text(), "1 worker, 1 engine step")
+
+    def test_a_drain_older_than_the_bound_is_slow_and_says_so(self):
+        status = self._run([("engine", "queued")], at=0, now=DRAIN_SLOW_SECONDS + 1)
+        self.assertTrue(status.slow)
+        self.assertTrue(status.waiting_text().endswith(" - slow"))
+
+    def test_a_drain_within_the_bound_is_not_slow(self):
+        self.assertFalse(self._run([("engine", "queued")], at=0, now=DRAIN_SLOW_SECONDS).slow)
 
 
 class TestClearDrainUseCase(unittest.TestCase):
@@ -104,7 +148,7 @@ class TestCmdStopDrain(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertEqual(
             out.strip(),
-            "lc stop --drain asked pid 42 to drain - it exits when its running workers finish",
+            "lc stop --drain asked pid 42 to drain - it exits when its running workers and engine steps finish",
         )
         self.assertTrue(drain.requested())
 
@@ -135,28 +179,23 @@ class TestCmdStopDrain(unittest.TestCase):
 
 
 class TestDrainProgressLines(unittest.TestCase):
-    def _result(self, alive):
-        class Pool:
-            pass
-
-        class Result:
-            pass
-
-        pool = Pool()
-        pool.alive = alive
-        result = Result()
-        result.pool = pool
-        return result
-
     def test_prints_on_the_first_tick_and_on_each_change_only(self):
         last = None
         printed = []
-        for alive in (5, 5, 4, 4, 1):
-            lines, last = cli_mod._drain_progress_lines(self._result(alive), last)
+        statuses = [
+            PoolDrainStatus(True, 5), PoolDrainStatus(True, 5), PoolDrainStatus(True, 1, 1),
+            PoolDrainStatus(True, 1, 1), PoolDrainStatus(True, 1, 1, slow=True),
+        ]
+        for status in statuses:
+            lines, last = cli_mod._drain_progress_lines(status, last)
             printed.extend(lines)
         self.assertEqual(
             printed,
-            ["lc start draining - waiting for %d worker(s)" % n for n in (5, 4, 1)],
+            [
+                "lc start draining - waiting for 5 workers",
+                "lc start draining - waiting for 1 worker, 1 engine step",
+                "lc start draining - waiting for 1 worker, 1 engine step - slow",
+            ],
         )
 
 
@@ -175,7 +214,8 @@ class _Config:
 
 
 class _StartContainer:
-    def __init__(self, drain, workers=None):
+    def __init__(self, drain, workers=None, store=None):
+        self.store = store if store is not None else FakeStore()
         self.lock = FakeLock(running=False)
         self.drain = drain
         self.workers = workers if workers is not None else FakeWorkers()
@@ -195,12 +235,16 @@ class TestCmdStartDrainLoop(unittest.TestCase):
         self.stopped = 0
         self.inputs = []
 
-    def _start(self, container, alive_by_tick, interrupt_after=None, request_on_first=False):
+    def _start(
+        self, container, alive_by_tick, interrupt_after=None, request_on_first=False, on_tick=None
+    ):
         cli_mod.set_container(container)
         sequence = iter(alive_by_tick)
 
         def fake_run_tick(tick, worker_log, tick_input, now):
             self.inputs.append(tick_input)
+            if on_tick is not None:
+                on_tick()
             if request_on_first and len(self.inputs) == 1:
                 container.drain.request()
             if interrupt_after is not None and len(self.inputs) > interrupt_after:
@@ -225,15 +269,37 @@ class TestCmdStartDrainLoop(unittest.TestCase):
         self.assertEqual(
             [l for l in out.splitlines() if "drain" in l],
             [
-                "lc start draining - waiting for 5 worker(s)",
-                "lc start draining - waiting for 1 worker(s)",
-                "lc start draining - waiting for 0 worker(s)",
-                "lc start drained - no workers running, stopping",
+                "lc start draining - waiting for 5 workers",
+                "lc start draining - waiting for 1 worker",
+                "lc start draining - waiting for 0 workers",
+                "lc start drained - no workers or engine steps running, stopping",
             ],
         )
 
     def test_exits_on_the_first_drain_tick_when_nothing_is_alive(self):
         rc, _ = self._start(_StartContainer(FakeDrain()), [3, 0], request_on_first=True)
+        self.assertEqual((rc, len(self.inputs)), (0, 2))
+
+    def test_keeps_ticking_while_an_engine_step_is_in_flight_then_stops(self):
+        store = _store_with(("engine", "queued"))
+        drain = FakeDrain()
+        container = _StartContainer(drain, store=store)
+
+        def finish_engine_step_on_third_tick(*_):
+            if len(self.inputs) == 4:
+                store.update_state(store.all_steps()[0].id, "done")
+
+        rc, out = self._start(
+            container, [0, 0, 0, 0, 0], request_on_first=True, on_tick=finish_engine_step_on_third_tick
+        )
+        self.assertEqual(rc, 0)
+        self.assertEqual(len(self.inputs), 4)
+        self.assertEqual(self.stopped, 1)
+        self.assertIn("lc start draining - waiting for 0 workers, 1 engine step", out)
+
+    def test_stops_at_once_when_only_human_gates_are_open(self):
+        container = _StartContainer(FakeDrain(), store=_store_with(("human", "waiting")))
+        rc, _ = self._start(container, [0, 0], request_on_first=True)
         self.assertEqual((rc, len(self.inputs)), (0, 2))
 
     def test_clears_a_stale_marker_when_it_takes_the_lock_and_does_not_drain(self):

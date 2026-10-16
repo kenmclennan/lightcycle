@@ -106,7 +106,7 @@ class TestCmdStatusDraining(unittest.TestCase):
             alive_pids=(1, 2),
         )
         _rc, out = self._run(workers=workers)
-        self.assertEqual(out.splitlines()[0], "pool draining (2 running)")
+        self.assertEqual(out.splitlines()[0], "pool draining (2 workers)")
 
     def test_plain_output_is_unchanged_when_not_draining(self):
         _rc, draining = self._run()

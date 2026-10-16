@@ -18,6 +18,12 @@ class PoolDrainAdapter(PoolDrainPort):
     def requested(self):
         return os.path.exists(drain_path(self._config.data_root()))
 
+    def requested_at(self):
+        try:
+            return os.path.getmtime(drain_path(self._config.data_root()))
+        except OSError:
+            return None
+
     def clear(self):
         try:
             os.remove(drain_path(self._config.data_root()))

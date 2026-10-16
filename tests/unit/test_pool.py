@@ -45,7 +45,10 @@ from lightcycle.application.pool.retro_cadence import RetroCadenceResponse
 from lightcycle.application.pool.sweep import SweepResponse
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
+from lightcycle.application.pool import PoolDrainStatus
 from lightcycle.cli import _drain_complete, _tick_event_lines
+
+_NO_ENGINE_STEPS = PoolDrainStatus(True, 0)
 from lightcycle.domain.pool import Breaker, SpinLedger, Worker
 from lightcycle.ports.git import GitReadError
 from lightcycle.ports.workers import RegistryUnreadable
@@ -1070,7 +1073,7 @@ class TestTick(unittest.TestCase):
             result = make_tick(s, workers, FakeSpawner(), FakeConfig(max_agents=5)).execute(
                 TickInput(now=1000.0, drain=True)
             )
-            alive[n] = (result.pool.alive, _drain_complete(result))
+            alive[n] = (result.pool.alive, _drain_complete(result, _NO_ENGINE_STEPS))
         self.assertEqual(alive, {5: (5, False), 1: (1, False), 0: (0, True)})
 
     def test_drain_never_completes_on_an_unreadable_registry(self):
@@ -1079,7 +1082,15 @@ class TestTick(unittest.TestCase):
             FakeStore(), workers, FakeSpawner(), FakeConfig(max_agents=5)
         ).execute(TickInput(now=1000.0, drain=True))
         self.assertEqual(result.pool.alive, 5)
-        self.assertFalse(_drain_complete(result))
+        self.assertFalse(_drain_complete(result, _NO_ENGINE_STEPS))
+
+    def test_drain_does_not_complete_while_an_engine_step_is_in_flight(self):
+        result = make_tick(
+            FakeStore(), FakeWorkers(), FakeSpawner(), FakeConfig(max_agents=5)
+        ).execute(TickInput(now=1000.0, drain=True))
+        self.assertEqual(result.pool.alive, 0)
+        self.assertFalse(_drain_complete(result, PoolDrainStatus(True, 0, engine_steps=1)))
+        self.assertTrue(_drain_complete(result, _NO_ENGINE_STEPS))
 
     def test_breaker_open_pre_reset_spawns_nothing(self):
         s = FakeStore()

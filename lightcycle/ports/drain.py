@@ -11,5 +11,9 @@ class PoolDrainPort(ABC):
         pass
 
     @abstractmethod
+    def requested_at(self):
+        pass
+
+    @abstractmethod
     def clear(self):
         pass
