@@ -11,7 +11,8 @@ class FakeGit(GitPort, TeardownLedgerPort):
                  sync_default_result=True, worktree_add_fails=False,
                  torn_down_branches=(), head_shas=None, init_ok=True, commit_ok=True,
                  missing_identity=(), ref=None, ref_files=None, fetch_ok=True,
-                 fetch_detail="boom", added=None, changed=None, ref_shas=None):
+                 fetch_detail="boom", added=None, changed=None, ref_shas=None,
+                 history=None):
         self._repos = set(repos) if repos is not None else None
         self._is_repo = is_repo
         self._origin = origin
@@ -37,6 +38,7 @@ class FakeGit(GitPort, TeardownLedgerPort):
             r: dict(files) for r, files in (ref_files or {}).items()
         }
         self._added = dict(added or {})
+        self._history = {k: list(v) for k, v in (history or {}).items()}
         self._changed = {k: list(v) for k, v in (changed or {}).items()}
         self._fetch_ok = fetch_ok
         self._fetch_detail = fetch_detail
@@ -190,6 +192,11 @@ class FakeGit(GitPort, TeardownLedgerPort):
     def added_at(self, root, ref, path):
         self.calls.append(("added_at", root, ref, path))
         return self._added.get(path)
+
+    def commits_touching(self, root, ref, path, limit):
+        self.calls.append(("commits_touching", root, ref, path, limit))
+        self._raise_if("commits_touching", root)
+        return list(self._history.get(path, []))[:limit]
 
     def changed_paths(self, root, base):
         self.calls.append(("changed_paths", root, base))

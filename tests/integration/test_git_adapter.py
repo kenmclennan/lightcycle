@@ -538,6 +538,20 @@ class TestGitAdapterGuidanceRef(unittest.TestCase):
         self.assertIsNone(self.adapter.added_at(self.clone, "origin/main", "nope.md"))
         self.assertIsNone(self.adapter.added_at(self.clone, "origin/nope", "a.md"))
 
+    def test_commits_touching_lists_newest_first_and_honours_the_limit(self):
+        _commit(self.clone, "a.md", "v2")
+        _commit(self.clone, "other.md", "x")
+        _git(self.clone, "push", "-q", "origin", "main")
+        shas = self.adapter.commits_touching(self.clone, "origin/main", "a.md", 10)
+        self.assertEqual(len(shas), 2)
+        self.assertEqual(self.adapter.read_file_at(self.clone, shas[0], "a.md"), b"v2")
+        self.assertEqual(self.adapter.read_file_at(self.clone, shas[1], "a.md"), b"origin-a")
+        self.assertEqual(self.adapter.commits_touching(self.clone, "origin/main", "a.md", 1), shas[:1])
+
+    def test_commits_touching_raises_for_an_unreadable_ref(self):
+        with self.assertRaises(GitReadError):
+            self.adapter.commits_touching(self.clone, "origin/nope", "a.md", 10)
+
     def test_list_files_omits_dot_directories_and_is_sorted(self):
         _commit(self.clone, "z/c.md", "c")
         _git(self.clone, "push", "-q", "origin", "main")
