@@ -414,6 +414,18 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def request_schedule_run(self, schedule_id):
+        pass
+
+    @abstractmethod
+    def schedule_run_requested(self, schedule_id):
+        pass
+
+    @abstractmethod
+    def clear_schedule_run_request(self, schedule_id):
+        pass
+
+    @abstractmethod
     def nodes_closed_since(self, since_date):
         pass
 

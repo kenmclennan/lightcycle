@@ -135,6 +135,7 @@ _TX_ATTRS = (
     "_records", "_labels", "_passes", "_runs", "_deps",
     "_history", "_projects", "_tool_usage", "_backfill_log", "_usage_accrual_state",
     "_counters", "_daily_summaries", "_goals", "_goal_log", "_goal_items", "_holds",
+    "_schedule_run_requests",
 )
 
 
@@ -152,6 +153,7 @@ class FakeStore(StorePort):
         self._usage_accrual_state = {}
         self._counters = {}
         self._daily_summaries = {}
+        self._schedule_run_requests = set()
         self._goals = {}
         self._goal_log = []
         self._goal_items = []
@@ -725,6 +727,15 @@ class FakeStore(StorePort):
             if b.get("step_id") == step_id:
                 return day
         return None
+
+    def request_schedule_run(self, schedule_id):
+        self._schedule_run_requests.add(schedule_id)
+
+    def schedule_run_requested(self, schedule_id):
+        return schedule_id in self._schedule_run_requests
+
+    def clear_schedule_run_request(self, schedule_id):
+        self._schedule_run_requests.discard(schedule_id)
 
     def create_step(self, *, step=None, role=None, parent=None, deps=None,
                     id=None):

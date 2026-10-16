@@ -14,6 +14,7 @@ from lightcycle.domain.work import State
 STATE_ON = "on"
 STATE_OFF = "off"
 STATE_PAUSED = "paused"
+RUN_REQUESTED = "run requested"
 NEVER = "never"
 NONE = "-"
 SCRIPT_GUARD_LISTING = "script guard: evaluated by the pool, not by this listing"
@@ -94,6 +95,8 @@ class ListSchedulesUseCase:
         open_items = [i for i in firings if i.state != State.DONE]
         if open_items:
             return STATE_ON, "open item %s blocks firing" % open_items[0].id
+        if self._store.schedule_run_requested(schedule.id):
+            return STATE_ON, RUN_REQUESTED
         return STATE_ON, "waiting for next due time"
 
     def _next_fire(self, schedule, now_local):

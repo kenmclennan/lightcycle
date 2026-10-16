@@ -52,6 +52,7 @@ from lightcycle.application.goals import (
     ShowGoalUseCase,
     UnlinkGoalItemUseCase,
 )
+from lightcycle.application.pool.request_schedule_run import RequestScheduleRunUseCase
 from lightcycle.application.inspect.list_schedules import (
     ListSchedulesInput,
     ListSchedulesUseCase,
@@ -290,9 +291,10 @@ COMMAND_GROUPS = [
          "link/unlink <G-n> <item> - a goal is not a node and the flow engine never touches it"),
     ]),
     ("Schedules", [
-        ("schedule", "<list> [--json]", "list every schedule - config-enabled and bundle-suggested - "
-         "as on, off or paused with the reason, its cadence, guard, last and next fire and the "
-         "guard's current result; read-only, config is edited by hand"),
+        ("schedule", "<list|run> ...", "list [--json] shows every schedule - config-enabled and "
+         "bundle-suggested - as on, off or paused with the reason, its cadence, guard, last and "
+         "next fire and the guard's current result; run <id> asks the pool to fire an enabled "
+         "schedule on its next tick, skipping only the cron check; config is edited by hand"),
     ]),
     ("Feedback loop", [
         ("retro", "<item>", "gather child feedback + objective signals into a read digest"),
@@ -2104,6 +2106,14 @@ def cmd_schedule(argv):
         parser.print_help()
         return 2
     c = _container
+    if a.sub == "run":
+        try:
+            RequestScheduleRunUseCase(c.store, c.config, _flow(), c.workflow_source).execute(a.id)
+        except UseCaseError as e:
+            sys.stderr.write("%s\n" % e)
+            return 1
+        print("schedule %s: the pool will fire it on its next tick" % a.id)
+        return 0
     resp = ListSchedulesUseCase(
         c.store, c.config, _flow(), c.workflow_source, c.git,
     ).execute(ListSchedulesInput(now=time.time()))

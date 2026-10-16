@@ -282,6 +282,7 @@ COMMANDS = {
         "list": CommandSpec(prog="lc schedule list", args=(
             Arg("--json", action="store_true"),
         )),
+        "run": CommandSpec(prog="lc schedule run", args=(Arg("id"),)),
     }),
     "config": CommandSpec(prog="lc config", args=(
         Arg("--edit", action="store_true"),

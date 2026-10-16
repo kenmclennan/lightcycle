@@ -108,14 +108,16 @@ class ScheduleCadenceUseCase:
         open_items = [i for i in firings if i.state != State.DONE]
         if open_items:
             return ("skipped", "open item %s" % open_items[0].id)
+        requested = self._store.schedule_run_requested(schedule.id)
         due = previous_due(schedule.cron, now_local)
-        last_fire = last_fire_of(firings)
-        if due is None or (last_fire is not None and due <= last_fire):
-            return ("skipped", "")
-        if self._evaluated.get(schedule.id) == due:
-            return ("skipped", "")
+        if not requested:
+            last_fire = last_fire_of(firings)
+            if due is None or (last_fire is not None and due <= last_fire):
+                return ("skipped", "")
+            if self._evaluated.get(schedule.id) == due:
+                return ("skipped", "")
         if is_script_guard(schedule.guard):
-            return self._start_script_guard(resolved, due, firings)
+            return self._start_script_guard(resolved, due, firings, requested)
         try:
             result = self._guards.evaluate(schedule.guard, schedule.params, firings, now_local)
         except GuardUnreadable as e:
@@ -125,12 +127,18 @@ class ScheduleCadenceUseCase:
             reason = "guard %s failed: %s" % (schedule.guard, e)
             self._warn(schedule.id, reason)
             return ("skipped", reason)
-        self._evaluated[schedule.id] = due
+        if requested:
+            self._store.clear_schedule_run_request(schedule.id)
+            if not result.passed:
+                sys.stderr.write("schedule %s run request not fired: guard %s did not pass: %s\n" % (
+                    schedule.id, schedule.guard, result.detail))
+        else:
+            self._evaluated[schedule.id] = due
         if not result.passed:
             return ("skipped", "")
         return self._file(resolved, result)
 
-    def _start_script_guard(self, resolved, due, firings):
+    def _start_script_guard(self, resolved, due, firings, requested=False):
         schedule = resolved.schedule
         key = GUARD_KEY_PREFIX + schedule.id
         if key in self._runner.running():
@@ -156,7 +164,10 @@ class ScheduleCadenceUseCase:
         states = firing_states(self._store, firings)
         last_state = states[-1][1] if states else None
         script = os.path.join(bundle_dir, *script_guard_path(schedule.guard).split("/"))
-        self._evaluated[schedule.id] = due
+        if requested:
+            self._store.clear_schedule_run_request(schedule.id)
+        else:
+            self._evaluated[schedule.id] = due
         self._runner.start(
             key, script, cwd, env, stdin_for_guard(schedule.id, last_state),
             self._config.script_timeout_seconds(), guard_log_label(schedule.id))
