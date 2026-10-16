@@ -18,6 +18,16 @@ class StoreContractBase:
     def make_store_with_context_artifact_types(self, types):
         raise NotImplementedError
 
+    def test_schedule_run_request_is_recorded_idempotently_and_cleared(self):
+        s = self.make_store()
+        self.assertFalse(s.schedule_run_requested("weekly"))
+        s.request_schedule_run("weekly")
+        s.request_schedule_run("weekly")
+        self.assertTrue(s.schedule_run_requested("weekly"))
+        self.assertFalse(s.schedule_run_requested("other"))
+        s.clear_schedule_run_request("weekly")
+        self.assertFalse(s.schedule_run_requested("weekly"))
+
     def test_complete_step_atomic_wins_and_files_successor(self):
         s = self.make_store()
         tid = self._step(s, "t", role="agent")

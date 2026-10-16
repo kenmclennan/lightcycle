@@ -58,3 +58,38 @@ class TestScheduleListCommand(unittest.TestCase):
         h = _harness()
         rc, _out, _err = h.run("schedule")
         self.assertEqual(rc, 2)
+
+
+class TestScheduleRunCommand(unittest.TestCase):
+    def _enabled(self, extra=""):
+        h = _harness()
+        cfg = Path(h._cfg)
+        cfg.write_text(cfg.read_text() + (
+            "schedule-weekly:\n  enabled: true\n  workflow: lightcycle/spec-driven\n"
+            "  project: acme/app\n" + extra))
+        return h
+
+    def test_run_records_a_request_and_list_shows_it_pending(self):
+        h = self._enabled()
+
+        rc, out, err = h.run("schedule", "run", "weekly")
+
+        self.assertEqual(rc, 0, err)
+        self.assertIn("next tick", out)
+        self.assertTrue(h.store.schedule_run_requested("weekly"))
+        _rc, listing, _err = h.run("schedule", "list")
+        self.assertEqual(listing.splitlines()[0].split("\t")[3], "run requested")
+
+    def test_run_refuses_an_unknown_id_and_records_nothing(self):
+        h = self._enabled()
+
+        rc, _out, err = h.run("schedule", "run", "nope")
+
+        self.assertEqual(rc, 1)
+        self.assertIn("nope", err)
+        self.assertFalse(h.store.schedule_run_requested("nope"))
+
+    def test_help_lists_run(self):
+        h = _harness()
+        rc, out, _err = h.run("schedule", "--help")
+        self.assertIn("run", out)

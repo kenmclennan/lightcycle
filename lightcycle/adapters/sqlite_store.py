@@ -214,6 +214,11 @@ CREATE TABLE IF NOT EXISTS projects (
     facets     TEXT NOT NULL DEFAULT ''
 );
 
+CREATE TABLE IF NOT EXISTS schedule_run_requests (
+    schedule_id TEXT PRIMARY KEY,
+    requested_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS daily_summaries (
     day TEXT PRIMARY KEY,
     summary TEXT,
@@ -1642,6 +1647,25 @@ class SqliteStore(StorePort):
             "SELECT day FROM daily_summaries WHERE step_id = ?", (step_id,)
         ).fetchone()
         return datetime.date.fromisoformat(row[0]) if row else None
+
+    def request_schedule_run(self, schedule_id):
+        self._conn.execute(
+            "INSERT OR IGNORE INTO schedule_run_requests (schedule_id, requested_at) VALUES (?, ?)",
+            (schedule_id, self._now()),
+        )
+        self._commit()
+
+    def schedule_run_requested(self, schedule_id):
+        row = self._conn.execute(
+            "SELECT 1 FROM schedule_run_requests WHERE schedule_id = ?", (schedule_id,)
+        ).fetchone()
+        return row is not None
+
+    def clear_schedule_run_request(self, schedule_id):
+        self._conn.execute(
+            "DELETE FROM schedule_run_requests WHERE schedule_id = ?", (schedule_id,)
+        )
+        self._commit()
 
     def nodes_closed_since(self, since_date):
         return self._select_steps(

@@ -1,6 +1,7 @@
 import datetime
 import unittest
 
+from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.engine_steps import SCHEDULE_ORIGIN_LABEL
 from lightcycle.application.work.automation import automation_kind, is_automation_item
 from tests.support.fake_git import FakeGit
@@ -231,3 +232,72 @@ class TestPause(unittest.TestCase):
         rig = ScheduleRig({"weekly": block(enabled="false")}, paused="true")
         self.assertEqual(rig.cadence.execute(epoch(11)).skipped, [])
 
+
+
+class TestRunRequest(unittest.TestCase):
+    def _request(self, rig, schedule_id="weekly"):
+        from lightcycle.application.pool.request_schedule_run import RequestScheduleRunUseCase
+        return RequestScheduleRunUseCase(
+            rig.store, rig.config, rig.flow, rig.source).execute(schedule_id)
+
+    def _not_due_rig(self, **overrides):
+        return ScheduleRig({"weekly": block(cron="0 9 * * 1", **overrides)})
+
+    def test_a_request_fires_a_schedule_whose_cron_is_not_due_once_with_the_usual_labels(self):
+        rig = self._not_due_rig()
+        seed_firing(rig, "weekly", "2026-10-14T08:00:00")
+        self._request(rig)
+
+        first = rig.cadence.execute(epoch(11))
+
+        self.assertEqual(len(first.fired), 1)
+        labels = rig.store.labels_of(first.fired[0])
+        self.assertIn("schedule:weekly", labels)
+        self.assertIn(SCHEDULE_ORIGIN_LABEL, labels)
+        self.assertFalse(rig.store.schedule_run_requested("weekly"))
+        rig.store.complete_node(first.fired[0], "merged")
+        second = rig.cadence.execute(epoch(11, 5))
+        self.assertEqual(second.fired, [])
+
+    def test_a_request_whose_guard_fails_files_nothing_is_used_up_and_says_why(self):
+        import contextlib
+        import io
+        rig = self._not_due_rig()
+        seed_firing(rig, "weekly", "2026-10-14T08:00:00")
+        CountingGuards(rig.cadence, passed=False)
+        self._request(rig)
+        err = io.StringIO()
+
+        with contextlib.redirect_stderr(err):
+            first = rig.cadence.execute(epoch(11))
+        second = rig.cadence.execute(epoch(11, 5))
+
+        self.assertEqual((first.fired, second.fired), ([], []))
+        self.assertFalse(rig.store.schedule_run_requested("weekly"))
+        self.assertIn("weekly", err.getvalue())
+        self.assertIn("forced", err.getvalue())
+
+    def test_an_unknown_id_is_refused_and_records_nothing(self):
+        rig = self._not_due_rig()
+        with self.assertRaises(UseCaseError):
+            self._request(rig, "nope")
+        self.assertFalse(rig.store.schedule_run_requested("nope"))
+
+    def test_a_disabled_schedule_is_refused_and_records_nothing(self):
+        rig = self._not_due_rig(enabled="false")
+        with self.assertRaises(UseCaseError):
+            self._request(rig)
+        self.assertFalse(rig.store.schedule_run_requested("weekly"))
+
+    def test_a_paused_pool_refuses_and_records_nothing(self):
+        rig = ScheduleRig({"weekly": block(cron="0 9 * * 1")}, paused="true")
+        with self.assertRaises(UseCaseError):
+            self._request(rig)
+        self.assertFalse(rig.store.schedule_run_requested("weekly"))
+
+    def test_an_open_item_refuses_and_records_nothing(self):
+        rig = self._not_due_rig()
+        seed_firing(rig, "weekly", "2026-10-14T08:00:00", done=False)
+        with self.assertRaises(UseCaseError):
+            self._request(rig)
+        self.assertFalse(rig.store.schedule_run_requested("weekly"))

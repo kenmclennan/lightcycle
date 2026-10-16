@@ -106,7 +106,7 @@ schedule-weekly-audit:
   labels: audit weekly
 ```
 
-`lc schedule list [--json]` shows every schedule, including bundle suggestions your config does not enable.
+`lc schedule list [--json]` shows every schedule, including bundle suggestions your config does not enable. `lc schedule run <id>` asks the running pool to fire an enabled `schedule-<id>` block on its next tick instead of waiting for the cron: the request is stored, so it survives a pool restart, and `lc schedule list` shows `run requested` until the pool takes it. The guard still decides: the request skips only the cron check, and it is used up once the guard has been evaluated, with the reason written to the pool's stderr when the guard does not pass. The command refuses, recording nothing, for an unknown id, a schedule that is not enabled, `schedules-paused` on, or a schedule with an open item.
 
 ## Workflow sources
 

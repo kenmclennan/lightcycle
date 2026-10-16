@@ -86,6 +86,22 @@ class TestStartingAGuard(unittest.TestCase):
         self.assertEqual(len(rig.runner.started), 1)
 
 
+class TestRunRequestOnAScriptGuard(unittest.TestCase):
+    def test_a_request_starts_the_guard_with_the_stdin_of_a_cron_firing_and_is_used_up(self):
+        rig = rig_with_guard(cron="0 9 * * 1")
+        seed_firing(rig, "weekly", "2026-10-14T08:00:00", state="cursor-7")
+        rig.store.request_schedule_run("weekly")
+
+        resp, _ = tick(rig, 11)
+
+        self.assertEqual(resp.fired, [])
+        self.assertEqual(rig.runner.running(), [KEY])
+        self.assertEqual(
+            json.loads(rig.runner.started[0]["stdin"]),
+            {"schedule": "weekly", "last_state": "cursor-7"})
+        self.assertFalse(rig.store.schedule_run_requested("weekly"))
+
+
 class TestReapingAGuard(unittest.TestCase):
     def _reaped(self, result, **rig_kwargs):
         rig = rig_with_guard(**rig_kwargs)
