@@ -107,6 +107,7 @@ from lightcycle.domain.work.audit_criteria import UnknownMaterial
 from lightcycle.application.inspect.report_guidance import ReportGuidanceUseCase, parse_since
 from lightcycle.application.workflows.add import AddWorkflowSourceUseCase
 from lightcycle.application.workflows.bundle_check import undeclared_target_message
+from lightcycle.application.workflows.script_tooling import WorkflowScripts
 from lightcycle.application.workflows.set_writable import SetOriginWritableUseCase
 from lightcycle.application.workflows.check_dir import (
     DIR_ORIGIN,
@@ -860,6 +861,7 @@ def _workflow_check_pinned(selector, as_json):
     origin, name, sha = parsed
     directory = c.workflow_source.pinned_bundle(origin, sha)
     problems = directory_lifecycle_problems(c.workflow_bundle, c.fs, directory, name)
+    problems = problems + WorkflowScripts(c.workflow_bundle, c.fs).problems(directory, name)
     for message in problems:
         sys.stderr.write("%s: %s\n" % (name, message))
     return 1 if problems else rc
@@ -1028,8 +1030,10 @@ def _workflow_simulate(selector, trace=False):
         sim = SimulationContainer(_container, scratch)
         use_case = WorkflowSimulateUseCase(
             sim.store, sim.flow, sim.worktrees, sim.claim, sim.complete, sim.projects_root,
-            sim.git, lifecycle=_container.workflow_lifecycle(), scaffold=sim.scaffold, github_factory=ScriptedGitHub,
-            config=sim.config,
+            sim.git, lifecycle=_container.workflow_lifecycle(),
+            scripts=WorkflowScripts(_container.workflow_bundle, _container.fs),
+            source=_container.workflow_source, scaffold=sim.scaffold,
+            github_factory=ScriptedGitHub, config=sim.config,
         )
         try:
             resp = use_case.execute(SimulateInput(workflow=selector))

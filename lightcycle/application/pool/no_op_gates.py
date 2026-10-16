@@ -7,6 +7,7 @@ from lightcycle.application.pool.memory_gate import MemoryGateResponse
 from lightcycle.application.pool.monitor_prs import MonitorPrsResponse
 from lightcycle.application.pool.reload_config import ReloadConfigResponse
 from lightcycle.application.pool.schedule_cadence import ScheduleCadenceResponse
+from lightcycle.application.pool.script_stages import ScriptStagesResponse
 from lightcycle.domain.pool import Breaker
 from lightcycle.domain.pool.spin_ledger import SpinLedger
 from lightcycle.ports.git import GitReadError
@@ -28,6 +29,17 @@ class NoOpScheduleGate:
 class NoOpLifecycleGate:
     def execute(self, now):
         return LifecycleCadenceResponse()
+
+    def reset(self):
+        pass
+
+    def in_flight(self):
+        return []
+
+
+class NoOpScriptGate:
+    def execute(self, now):
+        return ScriptStagesResponse()
 
     def reset(self):
         pass

@@ -5,6 +5,7 @@ from typing import List
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.claim_step import ClaimInput
 from lightcycle.application.flow.complete_step import CompleteInput
+from lightcycle.application.flow.script_result import apply_stage_result
 from lightcycle.application.pool.monitor_prs import MonitorPrsUseCase
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.domain.contracts import FlowContracts, StepContract
@@ -21,6 +22,7 @@ from lightcycle.domain.flow.simulate_plan import build_coverage_plan
 from lightcycle.domain.runs import RUN_FIELDS
 from lightcycle.domain.work.state import State
 from lightcycle.domain.workflows.identity import parse_pin
+from lightcycle.domain.workflows.script_stage import GUARD_OUTCOMES
 
 SIMULATION_SHORTCODE = "SIM"
 _ADVANCING_HOOKS = (PR_MERGE, PR_CONFLICT)
@@ -68,7 +70,7 @@ def _named_workspaces(graph):
 
 class WorkflowSimulateUseCase:
     def __init__(self, store, flow, worktrees, claim, complete, projects_root, git,
-                 lifecycle, scaffold=None, github_factory=None, config=None):
+                 lifecycle, scripts, source, scaffold=None, github_factory=None, config=None):
         self._store = store
         self._flow = flow
         self._worktrees = worktrees
@@ -80,6 +82,42 @@ class WorkflowSimulateUseCase:
         self._github_factory = github_factory
         self._config = config
         self._lifecycle = lifecycle
+        self._scripts = scripts
+        self._source = source
+        self._fixtures = {}
+
+    def _load_script_fixtures(self, pin):
+        self._fixtures = {}
+        parsed = parse_pin(pin)
+        if parsed is None:
+            return [], []
+        origin, name, sha = parsed
+        directory = self._source.pinned_bundle(origin, sha)
+        decls = self._scripts.declarations(directory, name)
+        violations = []
+        for decl in decls.stages:
+            try:
+                self._fixtures[decl.stage] = self._scripts.read_fixture(
+                    directory, decl.path, decl.outcomes)
+            except ValueError as e:
+                violations.append("script stage '%s': %s" % (decl.stage, e))
+        return violations, decls.guards
+
+    def _run_script_guards(self, pin, guards, trace):
+        parsed = parse_pin(pin)
+        if parsed is None:
+            return []
+        directory = self._source.pinned_bundle(parsed[0], parsed[2])
+        violations = []
+        for path in guards:
+            try:
+                self._scripts.read_fixture(directory, path, GUARD_OUTCOMES, guard=True)
+            except ValueError as e:
+                violations.append("script guard %s: %s" % (path, e))
+                continue
+            for outcome in GUARD_OUTCOMES:
+                trace.append("script guard %s: %s ok" % (path, outcome))
+        return violations
 
     def _run_lifecycle(self, pin, trace):
         parsed = parse_pin(pin)
@@ -123,6 +161,8 @@ class WorkflowSimulateUseCase:
         plan = build_coverage_plan(graph, dom_flow, self._config.review_rounds_cap())
         trace = []
         violations = list(_pass_end_coverage_violations(graph, plan))
+        fixture_violations, guards = self._load_script_fixtures(pin)
+        violations += fixture_violations
         for index, walk in enumerate(plan.walks):
             if walk.incomplete:
                 violations.append(
@@ -138,6 +178,7 @@ class WorkflowSimulateUseCase:
                 held_shortcode=lambda: "HLD",
             )
             violations += self._drive(item_id, pin, graph, walk, github, monitor, trace, index)
+        violations += self._run_script_guards(pin, guards, trace)
         violations += self._run_lifecycle(pin, trace)
         violations += self._check_teardown_invariant()
         return SimulateResponse(ok=not violations, trace=trace, violations=violations)
@@ -284,7 +325,12 @@ class WorkflowSimulateUseCase:
     def _advance_edge(self, item_id, pin, graph, step_id, planned, trace, walk_index):
         declared_target = (graph.edges.get(planned.stage) or {}).get(planned.outcome)
         try:
-            resp = self._complete.execute(CompleteInput(step=step_id, outcome=planned.outcome))
+            fixture = (self._fixtures.get(planned.stage) or {}).get(planned.outcome)
+            if fixture is not None:
+                resp = apply_stage_result(self._store, self._complete, step_id, fixture)
+            else:
+                resp = self._complete.execute(
+                    CompleteInput(step=step_id, outcome=planned.outcome))
         except UseCaseError as e:
             return ["walk %d: %s[%s] raised: %s" % (walk_index, planned.stage, planned.outcome, e)]
         trace.append(

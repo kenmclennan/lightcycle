@@ -2,6 +2,7 @@ from lightcycle.application.pool.schedule_cadence import ScheduleCadenceUseCase
 from lightcycle.config import ConfigValueError
 from lightcycle.domain.work import State
 from tests.support.fake_git import FakeGit
+from tests.support.fake_script_runner import FakeScriptRunner
 from tests.support.fake_store import FakeStore
 
 
@@ -12,6 +13,12 @@ class StubConfig:
 
     def schedule_blocks(self):
         return {k: dict(v) for k, v in self.blocks.items()}
+
+    def script_timeout_seconds(self):
+        return 300
+
+    def workflow_config_block_name(self, origin, name):
+        return "workflow-%s-%s" % (origin, name)
 
     def schedules_paused(self):
         text = str(self.paused).strip().lower()
@@ -62,6 +69,25 @@ class StubWorkflowSource:
     def workflow_names(self, origin, sha):
         return [n.split("/", 1)[1] for n in self.workflows if n.startswith(origin + "/")]
 
+    def pinned_bundle(self, origin, sha):
+        return "/bundles/%s/%s" % (origin, sha)
+
+
+class StubScriptLifecycle:
+    def __init__(self, missing=()):
+        self.missing = tuple(missing)
+
+    def script_environment(self, origin, name, sha, bundle_dir, kind, extra):
+        env = {
+            "LC_WORKFLOW_ORIGIN": origin, "LC_WORKFLOW_NAME": name,
+            "LC_WORKFLOW_SHA": sha, "LC_WORKFLOW_BUNDLE_DIR": bundle_dir,
+            "LC_WORKFLOW_SCRIPT": kind}
+        env.update(extra)
+        return env, self.missing
+
+    def ensure_data_dir(self, origin, name):
+        return "/data/%s/%s" % (origin, name)
+
 
 class RecordingActivate:
     def __init__(self, store, fail=None):
@@ -95,5 +121,8 @@ class ScheduleRig:
         self.source = source or StubWorkflowSource(shas={"lightcycle": "sha1"})
         self.git = git or FakeGit()
         self.activate = RecordingActivate(self.store, fail=activate_fail)
+        self.runner = FakeScriptRunner()
+        self.lifecycle = StubScriptLifecycle()
         self.cadence = ScheduleCadenceUseCase(
-            self.store, self.config, self.flow, self.source, self.git, self.activate)
+            self.store, self.config, self.flow, self.source, self.git, self.activate,
+            self.runner, self.lifecycle)

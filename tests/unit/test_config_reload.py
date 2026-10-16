@@ -197,7 +197,7 @@ class TestScheduleCadenceReset(unittest.TestCase):
     def test_reset_clears_both_caches(self):
         from lightcycle.application.pool.schedule_cadence import ScheduleCadenceUseCase
 
-        uc = ScheduleCadenceUseCase(None, None, None, None, None, None)
+        uc = ScheduleCadenceUseCase(None, None, None, None, None, None, None, None)
         uc._evaluated["x"] = 1
         uc._warned["x"] = "reason"
         uc.reset()

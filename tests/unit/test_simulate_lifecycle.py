@@ -8,7 +8,8 @@ from tests.unit.test_workflow_lifecycle_usecases import Harness, workflow_text
 
 def _simulate(h):
     return WorkflowSimulateUseCase(
-        None, None, None, None, None, "/scratch/projects", FakeGit(), lifecycle=h.lifecycle)
+        None, None, None, None, None, "/scratch/projects", FakeGit(), lifecycle=h.lifecycle,
+        scripts=None, source=None)
 
 
 class TestSimulateLifecycle(unittest.TestCase):

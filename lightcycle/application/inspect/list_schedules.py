@@ -7,6 +7,7 @@ from lightcycle.application.pool.schedule_guards import GUARD_FAILURES, GuardUnr
 from lightcycle.application.pool.schedule_resolution import ScheduleResolver, schedule_label
 from lightcycle.config import ConfigError
 from lightcycle.domain.schedule.cron import next_due
+from lightcycle.domain.schedule.guards import is_script_guard
 from lightcycle.domain.schedule.schedule import SOURCE_BUNDLE
 from lightcycle.domain.work import State
 
@@ -15,6 +16,7 @@ STATE_OFF = "off"
 STATE_PAUSED = "paused"
 NEVER = "never"
 NONE = "-"
+SCRIPT_GUARD_LISTING = "script guard: evaluated by the pool, not by this listing"
 
 
 @dataclass(frozen=True)
@@ -104,6 +106,8 @@ class ListSchedulesUseCase:
         schedule = resolved.schedule
         if schedule.problem:
             return NONE
+        if is_script_guard(schedule.guard):
+            return SCRIPT_GUARD_LISTING
         try:
             result = self._guards.evaluate(schedule.guard, schedule.params, firings, now_local)
         except GuardUnreadable as e:

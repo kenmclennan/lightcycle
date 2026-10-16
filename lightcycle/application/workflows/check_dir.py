@@ -16,6 +16,7 @@ from lightcycle.application.workflows.prompt_check import (
     prompt_drift_detail,
 )
 from lightcycle.application.workflows.engine_requirement_check import unmet_requirement_message
+from lightcycle.application.workflows.script_tooling import WorkflowScripts
 from lightcycle.application.workflows.lifecycle import (
     directory_lifecycle,
     directory_lifecycle_problems,
@@ -108,8 +109,14 @@ class CheckWorkflowDirUseCase:
                         "workflow %s declares schedule: but source.toml has no requires-engine; "
                         "older engines would ignore it" % wf_name)
         lifecycle_found = {}
+        scripts = WorkflowScripts(self._bundle, self._fs)
         for wf_name in names:
             found = directory_lifecycle_problems(self._bundle, self._fs, directory, wf_name)
+            found = found + scripts.problems(directory, wf_name)
+            if manifest.requires_engine is None and scripts.uses_scripts(directory, wf_name):
+                found = found + [
+                    "workflow %s declares script stages or a script guard but source.toml has "
+                    "no requires-engine; older engines would ignore them" % wf_name]
             declared, _ = directory_lifecycle(self._bundle, directory, wf_name)
             if declared is not None and manifest.requires_engine is None:
                 found = found + [

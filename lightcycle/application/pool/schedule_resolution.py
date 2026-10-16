@@ -23,6 +23,7 @@ class ResolvedSchedule:
     project_name: Optional[str] = None
     identity: Optional[str] = None
     shortcode: Optional[str] = None
+    pin: Optional[str] = None
 
 
 def _selector_of(workflow):
@@ -59,6 +60,7 @@ class ScheduleResolver:
     def _resolve_block(self, schedule_id, block, workflow):
         suggestion = None
         problem = None
+        pin = None
         if workflow:
             try:
                 pin = self._flow.resolve_selection(workflow)
@@ -76,7 +78,7 @@ class ScheduleResolver:
                 problem = "project %s: %s" % (schedule.project, e)
         return ResolvedSchedule(
             schedule=schedule, problem=problem, project_name=project_name,
-            identity=identity, shortcode=shortcode)
+            identity=identity, shortcode=shortcode, pin=pin)
 
     def _resolve_project(self, schedule):
         if schedule.shortcode:
@@ -107,7 +109,9 @@ class ScheduleResolver:
                 if suggestion is None:
                     continue
                 schedule = merge_schedule(selector, None, suggestion, workflow=selector)
-                found.append(ResolvedSchedule(schedule=schedule, problem=schedule.problem))
+                found.append(ResolvedSchedule(
+                    schedule=schedule, problem=schedule.problem,
+                    pin=format_pin(origin, name, sha)))
         return found
 
     def bundle_suggestion_problems(self):

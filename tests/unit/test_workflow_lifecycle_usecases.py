@@ -127,6 +127,17 @@ class TestAdd(unittest.TestCase):
         self.assertEqual(h.hooks(), [("install", "build"), ("install", "ship")])
         self.assertEqual(h.source.read_registry("acme").current, "sha1")
 
+    def test_a_hookless_lifecycle_runs_no_hook_on_add_or_upgrade(self):
+        hookless = "---\nconfig:\n  api-token: required\nconfig-example:\n  api-token: x\n---\nentry: code\n"
+        h = Harness()
+        h.remote("sha1", {"build": hookless})
+        h.add()
+        h.remote("sha2", {"build": hookless})
+        h.upgrade()
+
+        self.assertEqual(h.hooks(), [])
+        self.assertEqual(h.source.read_registry("acme").current, "sha2")
+
     def test_install_sees_data_dir_config_names_and_sha(self):
         h = Harness()
         h.remote("sha1", {"build": workflow_text(upgrade=False)})
