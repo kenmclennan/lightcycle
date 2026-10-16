@@ -83,6 +83,9 @@ class FakeWorkflowBundle:
     def parse_step(self, role, root):
         return None
 
+    def workflow_text(self, name, root):
+        return None
+
 
 class FakeWorktrees:
     def worktree_path(self, item):

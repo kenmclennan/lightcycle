@@ -14,6 +14,7 @@ from lightcycle.application.workflows.prompt_check import (
     engine_sources,
     prompt_drift_detail,
 )
+from lightcycle.application.workflows.repin_in_flight import RepinResponse
 from lightcycle.application.workflows.lifecycle import bundle_lifecycles, validate_fetched_bundle
 from lightcycle.application.workflows.engine_requirement_check import unmet_requirement_message
 from lightcycle.domain.workflows.contract import ENGINE_CONTRACT, contract_compatible
@@ -28,6 +29,7 @@ class UpgradeResponse:
     changed: bool
     pruned: List[str] = field(default_factory=list)
     prune_error: Optional[str] = None
+    repin: Optional[RepinResponse] = None
 
 
 @dataclass(frozen=True)
@@ -86,7 +88,7 @@ class UpgradeWorkflowSourceUseCase:
         if not outcome.ok:
             raise WorkflowSourceError(outcome.detail)
 
-    def execute(self, origin) -> UpgradeResponse:
+    def execute(self, origin, on_registered=None) -> UpgradeResponse:
         keep_n = self._config.workflow_retention()
         registry = self._source.read_registry(origin)
         if registry is None:
@@ -138,24 +140,27 @@ class UpgradeWorkflowSourceUseCase:
                     self._source.remove_version(origin, bundle.sha)
                 raise
         self._source.write_registry(origin, registry.url, registry.ref, bundle.sha, registry.writable)
+        repin = on_registered(origin) if bundle.sha != previous and on_registered else None
         pruned, prune_error = prune_origin_best_effort(self._source, self._store, origin, keep_n)
         return UpgradeResponse(
             origin=origin, sha=bundle.sha, changed=(bundle.sha != previous),
-            pruned=pruned, prune_error=prune_error)
+            pruned=pruned, prune_error=prune_error, repin=repin)
 
 
 class UpgradeWorkflowSourcesUseCase:
-    def __init__(self, source, store, config, fs, lifecycle):
+    def __init__(self, source, store, config, fs, lifecycle, repin_in_flight):
         self._source = source
         self._single = UpgradeWorkflowSourceUseCase(source, store, config, fs, lifecycle)
+        self._repin_in_flight = repin_in_flight
 
-    def execute(self, origin=None) -> UpgradeAllResponse:
+    def execute(self, origin=None, repin=True) -> UpgradeAllResponse:
+        on_registered = self._repin_in_flight.execute if repin else None
         origins = [origin] if origin else self._source.list_origins()
         results = []
         failures = []
         for o in origins:
             try:
-                results.append(self._single.execute(o))
+                results.append(self._single.execute(o, on_registered))
             except WorkflowSourceError as e:
                 failures.append(UpgradeOriginFailure(origin=o, error=str(e)))
         return UpgradeAllResponse(results=results, failures=failures)

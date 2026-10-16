@@ -11,6 +11,7 @@ from lightcycle.domain.workflows.contract import ENGINE_CONTRACT
 from lightcycle.application.workflows.set_writable import SetOriginWritableUseCase
 from lightcycle.application.workflows.list import ListWorkflowSourcesUseCase
 from lightcycle.application.workflows.remove import RemoveWorkflowSourceUseCase
+from lightcycle.application.workflows.repin_in_flight import RepinResponse
 from lightcycle.application.workflows.upgrade import (
     UpgradeWorkflowSourceUseCase, UpgradeWorkflowSourcesUseCase,
 )
@@ -18,6 +19,7 @@ from lightcycle.ports.workflow_source import FetchedBundle, OriginRegistration, 
 from tests.support.fake_git import FakeGit
 from tests.support.fake_store import FakeStore
 from tests.support.lifecycle_fakes import lifecycle_for
+from tests.support.repin_fakes import NoRepin
 
 
 def _step_text(meta, body=""):
@@ -25,6 +27,15 @@ def _step_text(meta, body=""):
     if body:
         lines.append(body)
     return "\n".join(lines) + "\n"
+
+
+class _SpyRepin:
+    def __init__(self):
+        self.calls = []
+
+    def execute(self, origin):
+        self.calls.append(origin)
+        return RepinResponse()
 
 
 class FakeSource:
@@ -498,6 +509,55 @@ class TestUpgradeCommitOrdering(unittest.TestCase):
         self.assertEqual(resp.pruned, [])
         self.assertIn("disk unreadable", resp.prune_error)
 
+    def test_callback_runs_after_the_registry_write_when_the_sha_moved(self):
+        source = FakeSource()
+        self._registered(source)
+        cfg = FakeConfig()
+        seen = []
+
+        def on_registered(origin):
+            seen.append((origin, source.read_registry(origin).current))
+            return RepinResponse(left=4)
+
+        resp = UpgradeWorkflowSourceUseCase(
+            source, FakeStore(), cfg, FsAdapter(cfg), lifecycle_for(source)
+        ).execute("acme", on_registered)
+        self.assertEqual(seen, [("acme", "sha2")])
+        self.assertEqual(resp.repin.left, 4)
+
+    def test_callback_is_not_called_when_the_sha_did_not_move(self):
+        source = FakeSource()
+        source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha1")
+        _add(source).execute(url="u", ref="main", name=None)
+        cfg = FakeConfig()
+        seen = []
+        resp = UpgradeWorkflowSourceUseCase(
+            source, FakeStore(), cfg, FsAdapter(cfg), lifecycle_for(source)
+        ).execute("acme", seen.append)
+        self.assertEqual(seen, [])
+        self.assertIsNone(resp.repin)
+
+    def test_sources_use_case_skips_repin_when_asked(self):
+        source = FakeSource()
+        self._registered(source)
+        cfg = FakeConfig()
+        spy = _SpyRepin()
+        UpgradeWorkflowSourcesUseCase(
+            source, FakeStore(), cfg, FsAdapter(cfg), lifecycle_for(source), spy
+        ).execute("acme", repin=False)
+        self.assertEqual(spy.calls, [])
+
+    def test_sources_use_case_repins_the_moved_origin(self):
+        source = FakeSource()
+        self._registered(source)
+        cfg = FakeConfig()
+        spy = _SpyRepin()
+        resp = UpgradeWorkflowSourcesUseCase(
+            source, FakeStore(), cfg, FsAdapter(cfg), lifecycle_for(source), spy
+        ).execute("acme")
+        self.assertEqual(spy.calls, ["acme"])
+        self.assertEqual(resp.results[0].repin.left, 0)
+
 
 class TestUpgradeAll(unittest.TestCase):
     def test_execute_reports_healthy_results_and_failures_separately(self):
@@ -509,7 +569,7 @@ class TestUpgradeAll(unittest.TestCase):
         source.add_remote("u1", 'name = "healthy"\ncontract = 1\n', "sha2")
         source.fail_remote("u2", "ref 'branch-x' not found in u2")
         cfg = FakeConfig()
-        resp = UpgradeWorkflowSourcesUseCase(source, FakeStore(), cfg, FsAdapter(cfg), lifecycle_for(source)).execute()
+        resp = UpgradeWorkflowSourcesUseCase(source, FakeStore(), cfg, FsAdapter(cfg), lifecycle_for(source), NoRepin()).execute()
         self.assertEqual(len(resp.results), 1)
         self.assertEqual(resp.results[0].origin, "healthy")
         self.assertEqual(resp.results[0].sha, "sha2")
@@ -563,7 +623,7 @@ class TestEngineRequirement(unittest.TestCase):
         source.add_remote("u-two", self._manifest("two", ">=9.0.0"), "sha2")
         source.add_remote("u-three", self._manifest("three", ">=0.6.0"), "sha2")
         cfg = FakeConfig(version="0.6.319")
-        resp = UpgradeWorkflowSourcesUseCase(source, FakeStore(), cfg, FsAdapter(cfg), lifecycle_for(source)).execute()
+        resp = UpgradeWorkflowSourcesUseCase(source, FakeStore(), cfg, FsAdapter(cfg), lifecycle_for(source), NoRepin()).execute()
         self.assertEqual(sorted(r.origin for r in resp.results), ["one", "three"])
         self.assertEqual([f.origin for f in resp.failures], ["two"])
         self.assertIn(">=9.0.0", resp.failures[0].error)

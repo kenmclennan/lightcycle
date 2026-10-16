@@ -82,7 +82,7 @@ COMMANDS = {
             Arg("name"),
         )),
         "upgrade": CommandSpec(prog="lc workflow upgrade", args=(
-            Arg("origin", nargs="?"),
+            Arg("origin", nargs="?"), Arg("--no-repin", action="store_true"),
         )),
         "set": CommandSpec(prog="lc workflow set", args=(
             Arg("origin"),

@@ -10,6 +10,7 @@ from lightcycle.application.workflows.upgrade import (
 from lightcycle.frontmatter import split_frontmatter
 from lightcycle.ports.lifecycle_runner import HookResult
 from lightcycle.ports.workflow_source import FetchedBundle, WorkflowSourceError
+from tests.support.repin_fakes import NoRepin
 from tests.support.fake_lifecycle_runner import FakeLifecycleRunner
 from tests.support.fake_store import FakeStore
 from tests.support.lifecycle_fakes import LifecycleFakeConfig, lifecycle_for
@@ -286,7 +287,7 @@ class TestUpgrade(unittest.TestCase):
                                 scripts=ALL_SCRIPTS)
         h.runner.program("upgrade", HookResult(exit_code=1, output="no"), workflow="two/w")
         resp = UpgradeWorkflowSourcesUseCase(
-            h.source, h.store, h.config, FsAdapter(h.config), h.lifecycle).execute()
+            h.source, h.store, h.config, FsAdapter(h.config), h.lifecycle, NoRepin()).execute()
         self.assertEqual(sorted(r.origin for r in resp.results), ["one", "three"])
         self.assertEqual([f.origin for f in resp.failures], ["two"])
         self.assertIn("two/w", resp.failures[0].error)

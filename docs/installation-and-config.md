@@ -116,13 +116,13 @@ Workflows come from pullable git **origins**, not the engine. `lc init` pulls th
 lc workflow init <name>       # scaffold + register a personal workflow-origin repo (registered writable)
 lc workflow add <url> [--writable]  # register + pull an origin; read-only unless --writable
 lc workflow set <origin> --writable|--read-only  # change whether you can edit an origin
-lc workflow upgrade <origin>  # pull the latest, re-pin
+lc workflow upgrade <origin> [--no-repin]  # pull the latest, re-pin in-flight items with a changed step ahead
 lc workflow list              # origins, each marked writable or read-only, + on-disk bundle paths
 lc workflow rm <origin>       # keeps the workflows' data directories
 lc workflow purge <origin> [<workflow>]  # delete those data directories
 ```
 
-Each item pins `<origin>/<name>@<sha>` at activation, and the loader resolves its flow and steps from that pin. A project customises its workflow by authoring its own source (see the `author-workflow` skill in the plugin), not by dropping override files anywhere. A project's `shortcode` is set when it is registered: `lc project add <owner/name> --shortcode X`.
+Each item pins `<origin>/<name>@<sha>` at activation, and the loader resolves its flow and steps from that pin. When `lc workflow upgrade` moves an origin it repins each in-flight item of that origin that still has a changed step ahead of it, as `lc set <item> --workflow <origin>/<name>` would, printing one `repinned` line per item, a `held` line for any it could not repin, and a `left N` count of the rest; an item with nothing changed ahead keeps its pin and `lc doctor` does not report it. `--no-repin` keeps every item on its old pin, and `lc doctor` then reports each one that has a changed step ahead. A project customises its workflow by authoring its own source (see the `author-workflow` skill in the plugin), not by dropping override files anywhere. A project's `shortcode` is set when it is registered: `lc project add <owner/name> --shortcode X`.
 
 ## Upgrades
 
