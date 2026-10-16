@@ -2,9 +2,9 @@ import datetime
 import json
 import os
 import shutil
-import subprocess
 import threading
 
+from lightcycle.adapters.run_log import new_log_path, run_logged
 from lightcycle.ports.lifecycle_runner import HookResult, LifecycleRunnerPort
 
 _TAIL_CHARS = 2000
@@ -15,14 +15,6 @@ def _tail(text):
     return text[-_TAIL_CHARS:]
 
 
-def _decode(raw):
-    if raw is None:
-        return ""
-    if isinstance(raw, bytes):
-        return raw.decode("utf-8", errors="replace")
-    return raw
-
-
 class LifecycleRunnerAdapter(LifecycleRunnerPort):
     def __init__(self, config):
         self._config = config
@@ -30,32 +22,33 @@ class LifecycleRunnerAdapter(LifecycleRunnerPort):
         self._results = {}
         self._lock = threading.Lock()
 
-    def run(self, script_path, cwd, env, timeout):
-        try:
-            completed = subprocess.run(
-                [script_path], cwd=cwd, env=env, stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=timeout)
-        except subprocess.TimeoutExpired as e:
-            return HookResult(
-                exit_code=None, output=_tail(_decode(e.stdout)), timed_out=True)
-        except OSError as e:
-            return HookResult(exit_code=None, output=str(e))
+    def _execute(self, log_path, script_path, cwd, env, timeout, log_label):
+        run = run_logged(
+            self._config, log_label, log_path, script_path, cwd, env, None, timeout)
+        output = _tail(run.stderr_tail + run.stdout)
         return HookResult(
-            exit_code=completed.returncode, output=_tail(_decode(completed.stdout)))
+            exit_code=run.exit_code, output=output, timed_out=run.timed_out,
+            log_path=run.log_path)
 
-    def _body(self, key, script_path, cwd, env, timeout):
-        result = self.run(script_path, cwd, env, timeout)
+    def run(self, script_path, cwd, env, timeout, log_label):
+        log_path = new_log_path(self._config, log_label)
+        return self._execute(log_path, script_path, cwd, env, timeout, log_label)
+
+    def _body(self, key, args):
+        result = self._execute(*args)
         with self._lock:
             self._results[key] = result
 
-    def start(self, key, script_path, cwd, env, timeout):
+    def start(self, key, script_path, cwd, env, timeout, log_label):
         with self._lock:
             if key in self._threads:
                 raise ValueError("lifecycle process %r is already running" % key)
-            thread = threading.Thread(
-                target=self._body, args=(key, script_path, cwd, env, timeout), daemon=True)
+            log_path = new_log_path(self._config, log_label)
+            args = (log_path, script_path, cwd, env, timeout, log_label)
+            thread = threading.Thread(target=self._body, args=(key, args), daemon=True)
             self._threads[key] = thread
         thread.start()
+        return log_path
 
     def poll(self, key):
         with self._lock:

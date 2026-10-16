@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Dict, List
 
 from lightcycle.application.errors import UseCaseError
+from lightcycle.application.flow.engine_steps import LIFECYCLE_ORIGIN_LABEL
 from lightcycle.application.pool.schedule_resolution import ScheduleResolver
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.workflows.engine_requirement_check import bundle_conflict_messages
@@ -28,6 +29,7 @@ from lightcycle.domain.health import (
 from lightcycle.domain.schedule.guards import RETIRED_JOB_SCHEDULES
 from lightcycle.domain.schedule.schedule import SOURCE_BUNDLE
 from lightcycle.application.workflows.script_tooling import WorkflowScripts
+from lightcycle.domain.work.run_log import latest_log_path
 from lightcycle.domain.work.state import State
 from lightcycle.domain.workflows.contract import ENGINE_CONTRACT, contract_compatible
 from lightcycle.domain.workflows.identity import format_pin, parse_pin
@@ -84,7 +86,7 @@ class DoctorUseCase:
             "store": fsck(nodes),
             "pins": pins,
             "contract": contracts,
-            "origin": self._origin_problems(),
+            "origin": self._origin_problems() + self._hook_failure_problems(),
             "config": (
                 self._config_problems() + self._retired_job_problems()
                 + self._schedule_problems() + self._reload_problems() + lifecycle_config),
@@ -218,6 +220,18 @@ class DoctorUseCase:
                 registry.url if registry else None, registry.ref if registry else None)
             if reason:
                 problems.append(Problem("origin", "%s: %s" % (name, reason)))
+        return problems
+
+    def _hook_failure_problems(self):
+        problems = []
+        for item in self._store.items_with_label(LIFECYCLE_ORIGIN_LABEL):
+            if item.state == State.DONE:
+                continue
+            log = latest_log_path(self._store.item_artifacts(item.id))
+            where = "log %s" % log if log else "no log recorded"
+            problems.append(Problem(
+                "origin", "open maintenance failure %s (%s): %s" % (item.id, item.title, where),
+                node_id=item.id))
         return problems
 
     def _config_problems(self):

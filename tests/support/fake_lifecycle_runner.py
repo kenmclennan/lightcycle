@@ -1,3 +1,4 @@
+import dataclasses
 import os
 
 from lightcycle.ports.lifecycle_runner import HookResult, LifecycleRunnerPort
@@ -14,6 +15,7 @@ class FakeLifecycleRunner(LifecycleRunnerPort):
         self._programmed = {}
         self._running = {}
         self._finished = {}
+        self._log_paths = {}
 
     def program(self, hook, result, workflow=None):
         self._programmed[(hook, workflow)] = result
@@ -24,17 +26,22 @@ class FakeLifecycleRunner(LifecycleRunnerPort):
         return self._programmed.get(
             (hook, name), self._programmed.get((hook, None), OK))
 
-    def run(self, script_path, cwd, env, timeout):
-        self.calls.append(
-            {"script": script_path, "cwd": cwd, "env": dict(env), "timeout": timeout})
+    def run(self, script_path, cwd, env, timeout, log_label):
+        self.calls.append({
+            "script": script_path, "cwd": cwd, "env": dict(env), "timeout": timeout,
+            "log_label": log_label})
         return self._result_for(env)
 
-    def start(self, key, script_path, cwd, env, timeout):
+    def start(self, key, script_path, cwd, env, timeout, log_label):
         if key in self._running:
             raise ValueError("lifecycle process %r is already running" % key)
-        call = {"script": script_path, "cwd": cwd, "env": dict(env), "timeout": timeout}
+        call = {
+            "script": script_path, "cwd": cwd, "env": dict(env), "timeout": timeout,
+            "log_label": log_label}
         self.started.append((key, call))
         self._running[key] = call
+        self._log_paths[key] = "%s.log" % log_label
+        return self._log_paths[key]
 
     def finish(self, key, result):
         self._finished[key] = result
@@ -45,7 +52,10 @@ class FakeLifecycleRunner(LifecycleRunnerPort):
         if key not in self._finished:
             return None
         del self._running[key]
-        return self._finished.pop(key)
+        result = self._finished.pop(key)
+        if result.log_path is None:
+            result = dataclasses.replace(result, log_path=self._log_paths[key])
+        return result
 
     def running(self):
         return sorted(self._running)

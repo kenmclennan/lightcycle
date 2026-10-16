@@ -7,13 +7,17 @@ import time
 import unittest
 
 from lightcycle.adapters.script_runner import ScriptRunnerAdapter
+from lightcycle.config import Config
 
 
 class ScriptRunnerTestCase(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.mkdtemp()
         self.addCleanup(lambda: shutil.rmtree(self.dir, ignore_errors=True))
-        self.runner = ScriptRunnerAdapter()
+        self.home = tempfile.mkdtemp()
+        self.addCleanup(lambda: shutil.rmtree(self.home, ignore_errors=True))
+        self.config = Config(environ={"LC_HOME": self.home, "LC_WORKER_HISTORY": "20"})
+        self.runner = ScriptRunnerAdapter(self.config)
 
     def script(self, body, name="s.sh"):
         path = os.path.join(self.dir, name)
@@ -41,7 +45,7 @@ class TestRun(ScriptRunnerTestCase):
     def test_stdout_and_stderr_are_captured_apart(self):
         path = self.script("echo out\necho err >&2\n")
 
-        result = self.runner.run(path, self.dir, self.env(), "", 30)
+        result = self.runner.run(path, self.dir, self.env(), "", 30, "script-t")
 
         self.assertEqual((result.exit_code, result.stdout, result.stderr_tail), (0, "out\n", "err\n"))
 
@@ -49,7 +53,7 @@ class TestRun(ScriptRunnerTestCase):
         path = self.script('echo "$LC_PROBE"\npwd -P\ncat\n')
         cwd = tempfile.mkdtemp(dir=self.dir)
 
-        result = self.runner.run(path, cwd, self.env(LC_PROBE="hello"), '{"a": 1}', 30)
+        result = self.runner.run(path, cwd, self.env(LC_PROBE="hello"), '{"a": 1}', 30, "script-t")
 
         lines = result.stdout.splitlines()
         self.assertEqual(lines[0], "hello")
@@ -59,14 +63,14 @@ class TestRun(ScriptRunnerTestCase):
     def test_stdin_is_closed_after_the_object(self):
         path = self.script("cat > /dev/null\necho done\n")
 
-        result = self.runner.run(path, self.dir, self.env(), "{}", 30)
+        result = self.runner.run(path, self.dir, self.env(), "{}", 30, "script-t")
 
         self.assertEqual((result.exit_code, result.timed_out), (0, False))
 
     def test_a_non_zero_exit_is_reported_with_the_stderr_tail(self):
         path = self.script("echo bad >&2\nexit 3\n")
 
-        result = self.runner.run(path, self.dir, self.env(), "", 30)
+        result = self.runner.run(path, self.dir, self.env(), "", 30, "script-t")
 
         self.assertEqual((result.exit_code, result.stderr_tail, result.timed_out), (3, "bad\n", False))
 
@@ -74,14 +78,14 @@ class TestRun(ScriptRunnerTestCase):
         path = self.script("echo partial\nexec sleep 30\n")
         started = time.monotonic()
 
-        result = self.runner.run(path, self.dir, self.env(), "", 1)
+        result = self.runner.run(path, self.dir, self.env(), "", 1, "script-t")
 
         self.assertTrue(result.timed_out)
         self.assertIsNone(result.exit_code)
         self.assertLess(time.monotonic() - started, 20)
 
     def test_a_script_that_cannot_start_is_reported_not_raised(self):
-        result = self.runner.run(os.path.join(self.dir, "missing.sh"), self.dir, self.env(), "", 5)
+        result = self.runner.run(os.path.join(self.dir, "missing.sh"), self.dir, self.env(), "", 5, "script-t")
 
         self.assertIsNone(result.exit_code)
         self.assertTrue(result.stderr_tail)
@@ -89,7 +93,7 @@ class TestRun(ScriptRunnerTestCase):
     def test_the_stderr_tail_is_bounded(self):
         path = self.script("i=0\nwhile [ $i -lt 3000 ]; do echo xxxxxxxxxx >&2; i=$((i+1)); done\n")
 
-        result = self.runner.run(path, self.dir, self.env(), "", 30)
+        result = self.runner.run(path, self.dir, self.env(), "", 30, "script-t")
 
         self.assertEqual(len(result.stderr_tail), 2000)
 
@@ -99,7 +103,7 @@ class TestBackground(ScriptRunnerTestCase):
         gate = os.path.join(self.dir, "gate")
         path = self.script('while [ ! -e "%s" ]; do sleep 0.05; done\necho finished\n' % gate)
 
-        self.runner.start("k", path, self.dir, self.env(), "", 30)
+        self.runner.start("k", path, self.dir, self.env(), "", 30, "script-t")
 
         self.assertEqual(self.runner.running(), ["k"])
         self.assertIsNone(self.runner.poll("k"))
@@ -112,8 +116,91 @@ class TestBackground(ScriptRunnerTestCase):
 
     def test_starting_a_running_key_is_an_error(self):
         path = self.script("sleep 5\n")
-        self.runner.start("k", path, self.dir, self.env(), "", 1)
+        self.runner.start("k", path, self.dir, self.env(), "", 1, "script-t")
 
         with self.assertRaises(ValueError):
-            self.runner.start("k", path, self.dir, self.env(), "", 1)
+            self.runner.start("k", path, self.dir, self.env(), "", 1, "script-t")
         self.wait("k")
+
+
+class TestRunLog(ScriptRunnerTestCase):
+    def logs(self, prefix=""):
+        directory = os.path.join(self.home, "logs")
+        return sorted(n for n in os.listdir(directory) if n.startswith(prefix))
+
+    def read(self, result):
+        with open(result.log_path) as f:
+            return f.read()
+
+    def test_both_streams_land_in_sections_with_an_exit_footer(self):
+        path = self.script("echo out\necho err >&2\n")
+
+        result = self.runner.run(path, self.dir, self.env(), "", 30, "script-t")
+
+        text = self.read(result)
+        self.assertIn("script: %s" % path, text)
+        self.assertLess(text.index("--- stderr ---"), text.index("err\n"))
+        self.assertLess(text.index("err\n"), text.index("--- stdout ---"))
+        self.assertLess(text.index("--- stdout ---"), text.index("out\n"))
+        self.assertIn("exit 0 (", text)
+        self.assertTrue(os.path.basename(result.log_path).startswith("script-t-"))
+
+    def test_the_log_holds_all_of_stderr_while_the_tail_is_bounded(self):
+        path = self.script("i=0; while [ $i -lt 800 ]; do echo line-$i >&2; i=$((i+1)); done\nexit 3\n")
+
+        result = self.runner.run(path, self.dir, self.env(), "", 30, "script-t")
+
+        text = self.read(result)
+        self.assertIn("line-0\n", text)
+        self.assertIn("line-799\n", text)
+        self.assertIn("exit 3 (", text)
+        self.assertEqual(len(result.stderr_tail), 2000)
+
+    def test_a_timeout_leaves_a_timed_out_footer_and_the_stdout_printed_before_the_kill(self):
+        path = self.script("echo partial\nexec sleep 30\n")
+
+        result = self.runner.run(path, self.dir, self.env(), "", 1, "script-t")
+
+        text = self.read(result)
+        self.assertIn("partial", text)
+        self.assertIn("timed out after 1s", text)
+
+    def test_a_script_that_cannot_start_leaves_a_could_not_start_footer(self):
+        result = self.runner.run(
+            os.path.join(self.dir, "missing.sh"), self.dir, self.env(), "", 5, "script-t")
+
+        self.assertIn("could not start", self.read(result))
+        self.assertTrue(result.stderr_tail)
+
+    def test_stderr_is_in_the_log_while_the_script_is_still_running(self):
+        gate = os.path.join(self.dir, "gate")
+        path = self.script('echo first >&2\nwhile [ ! -e "%s" ]; do sleep 0.05; done\n' % gate)
+
+        log_path = self.runner.start("k", path, self.dir, self.env(), "", 30, "script-t")
+
+        deadline = time.monotonic() + 30
+        seen = ""
+        while time.monotonic() < deadline and "first" not in seen:
+            time.sleep(0.05)
+            with open(log_path) as f:
+                seen = f.read()
+        open(gate, "w").close()
+        self.wait("k")
+        self.assertIn("first", seen)
+
+    def test_only_the_newest_logs_of_a_kind_survive_and_other_files_are_untouched(self):
+        config = Config(environ={"LC_HOME": self.home, "LC_WORKER_HISTORY": "2"})
+        runner = ScriptRunnerAdapter(config)
+        logs = os.path.join(self.home, "logs")
+        os.makedirs(logs, exist_ok=True)
+        for name in ("worker-agent-x.log", "guard-g-1.log"):
+            open(os.path.join(logs, name), "w").close()
+        path = self.script("true\n")
+
+        for _ in range(3):
+            runner.run(path, self.dir, self.env(), "", 30, "script-t")
+            time.sleep(0.01)
+
+        self.assertEqual(len(self.logs("script-")), 2)
+        self.assertEqual(self.logs("worker-"), ["worker-agent-x.log"])
+        self.assertEqual(self.logs("guard-"), ["guard-g-1.log"])

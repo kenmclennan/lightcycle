@@ -67,7 +67,7 @@ from lightcycle.domain.money import Cost
 from lightcycle.domain.runs import pass_number
 from lightcycle.domain.work import (
     LogKind, State, is_human_step, item_active_seconds, item_cost, parse_timestamp,
-    row_bucket, step_cost, type_label, item_viewable_artifacts,
+    row_bucket, step_cost, type_label, item_viewable_artifacts, latest_log_path,
 )
 from lightcycle.domain.workflows.identity import parse_pin
 from lightcycle.render import (
@@ -306,8 +306,14 @@ def detail_fields(step, run, session_id, reflections, worktree_path=None):
     return fields
 
 
-def log_tab_mode(node):
-    if node is None or getattr(node, "role", None) in ("human", "engine"):
+def log_tab_mode(node, artifacts=()):
+    if node is None:
+        return "no-log"
+    if getattr(node, "role", None) == "engine":
+        if latest_log_path(artifacts) is None:
+            return "no-log"
+        return "live" if node.state == State.QUEUED else "historical"
+    if getattr(node, "role", None) in ("human", "engine"):
         return "no-log"
     if node.state == State.RUNNING:
         return "live"
@@ -920,7 +926,10 @@ class HierarchyPagingTable(DataTable):
         if row_id is None or not isinstance(self.screen, NodeHubScreen):
             return
         node = _row_node(self.screen._last_rows, row_id)
-        if node is None or node.type != "step" or log_tab_mode(node) == "no-log":
+        if node is None or node.type != "step":
+            return
+        artifacts = self.screen.container.store.item_artifacts(node.id)
+        if log_tab_mode(node, artifacts) == "no-log":
             return
         self.screen.switch_at(row_id, initial_tab="log")
 
@@ -1391,7 +1400,8 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         store = self._container.store
         node = store.get_node(self._node_id)
         log_node = node if node.type == "step" else None
-        mode = log_tab_mode(log_node)
+        mode = log_tab_mode(
+            log_node, store.item_artifacts(log_node.id) if log_node is not None else ())
         self._log_mode = mode
         self._log_parser = LogLineParser()
         self._log_lines = []

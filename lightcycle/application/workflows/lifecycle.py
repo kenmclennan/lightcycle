@@ -1,6 +1,7 @@
 import os
 from dataclasses import dataclass
 
+from lightcycle.domain.work import hook_log_label
 from lightcycle.domain.workflows.lifecycle import (
     SCRIPTS_PREFIX,
     WorkflowLifecycle,
@@ -36,6 +37,8 @@ def describe_result(origin, name, hook, result, timeout):
         return "%s succeeded" % label
     if result.output.strip():
         text += ": " + result.output.strip()
+    if result.log_path:
+        text += "\nlog: %s" % result.log_path
     return text
 
 
@@ -178,7 +181,8 @@ class WorkflowLifecycleService:
         script, data_dir, env = self.hook_invocation(hook, origin, name, sha, **kwargs)
         self._runner.ensure_data_dir(data_dir)
         timeout = self._config.lifecycle_timeout_seconds()
-        result = self._runner.run(script, data_dir, env, timeout)
+        result = self._runner.run(
+            script, data_dir, env, timeout, hook_log_label(origin, name, hook))
         return HookOutcome(ok=result.ok, detail=describe_result(origin, name, hook, result, timeout))
 
     def install(self, origin, name, sha, **kwargs):

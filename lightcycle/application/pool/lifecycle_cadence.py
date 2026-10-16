@@ -9,7 +9,7 @@ from lightcycle.application.flow.engine_steps import (
 )
 from lightcycle.application.workflows.lifecycle import describe_result
 from lightcycle.domain.schedule.cron import parse_cron, previous_due
-from lightcycle.domain.work import State
+from lightcycle.domain.work import LOG_ARTIFACT, State, hook_log_label
 from lightcycle.domain.workflows.lifecycle import missing_required_keys
 
 
@@ -66,12 +66,13 @@ class LifecycleCadenceUseCase:
                 continue
             origin, _, name = key.partition("/")
             item = self._file_failure(key, describe_result(
-                origin, name, "maintain", result, self._config.lifecycle_timeout_seconds()))
+                origin, name, "maintain", result, self._config.lifecycle_timeout_seconds()),
+                result.log_path)
             if item is not None:
                 filed.append(item)
         return reaped, filed
 
-    def _file_failure(self, key, detail):
+    def _file_failure(self, key, detail, log_path=None):
         label = lifecycle_label(key)
         if any(i.state != State.DONE for i in self._store.items_with_label(label)):
             return None
@@ -82,6 +83,8 @@ class LifecycleCadenceUseCase:
             self._store.label_add(item_id, LIFECYCLE_ORIGIN_LABEL)
             self._store.label_add(item_id, label)
             self._store.create_step(step=LIFECYCLE_FAILURE_STEP, role="human", parent=item_id)
+            if log_path:
+                self._store.add_artifact(item_id, LOG_ARTIFACT, log_path)
         return item_id
 
     def _start(self, now):
@@ -132,5 +135,7 @@ class LifecycleCadenceUseCase:
             "maintain", origin, name, sha, lifecycle=declared)
         self._runner.record_due(key, due)
         self._runner.ensure_data_dir(data_dir)
-        self._runner.start(key, script, data_dir, env, self._config.lifecycle_timeout_seconds())
+        self._runner.start(
+            key, script, data_dir, env, self._config.lifecycle_timeout_seconds(),
+            hook_log_label(origin, name, "maintain"))
         return True

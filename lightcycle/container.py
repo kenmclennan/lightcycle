@@ -70,7 +70,7 @@ class Container:
             else LifecycleRunnerAdapter(self.config)
         )
         self.script_runner = (
-            script_runner if script_runner is not None else ScriptRunnerAdapter()
+            script_runner if script_runner is not None else ScriptRunnerAdapter(self.config)
         )
         self.launcher = launcher if launcher is not None else LauncherAdapter()
         self.upgrade = upgrade if upgrade is not None else UpgradeAdapter(self.config)

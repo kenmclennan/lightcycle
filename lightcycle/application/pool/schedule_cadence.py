@@ -24,7 +24,7 @@ from lightcycle.application.workflows.script_tooling import (
 from lightcycle.config import ConfigError
 from lightcycle.domain.schedule.cron import previous_due
 from lightcycle.domain.schedule.guards import is_script_guard, script_guard_path
-from lightcycle.domain.work import State, parse_timestamp
+from lightcycle.domain.work import LOG_ARTIFACT, State, guard_log_label, parse_timestamp
 from lightcycle.domain.workflows.identity import parse_pin
 from lightcycle.domain.workflows.script_stage import parse_guard_output
 
@@ -159,7 +159,7 @@ class ScheduleCadenceUseCase:
         self._evaluated[schedule.id] = due
         self._runner.start(
             key, script, cwd, env, stdin_for_guard(schedule.id, last_state),
-            self._config.script_timeout_seconds())
+            self._config.script_timeout_seconds(), guard_log_label(schedule.id))
         return ("skipped", EVALUATING)
 
     def _reap_guards(self):
@@ -193,6 +193,9 @@ class ScheduleCadenceUseCase:
             outcome = self._file(resolved, GuardResult(
                 True, output.note, output.title, output.description, output.state))
             if outcome[0] == "fired":
+                if result.log_path:
+                    self._store.add_artifact(
+                        outcome[1], LOG_ARTIFACT, result.log_path, internal=True)
                 fired.append(outcome[1])
         return fired
 

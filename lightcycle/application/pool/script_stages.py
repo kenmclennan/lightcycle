@@ -12,7 +12,7 @@ from lightcycle.application.workflows.script_tooling import (
     result_violation,
     stdin_for_stage,
 )
-from lightcycle.domain.work import State, is_engine_step
+from lightcycle.domain.work import LOG_ARTIFACT, State, is_engine_step, script_log_label
 from lightcycle.domain.workflows.identity import parse_pin
 from lightcycle.domain.workflows.script_stage import parse_stage_output
 from lightcycle.ports.store import NodeNotFoundError
@@ -163,7 +163,9 @@ class ScriptStageUseCase:
         if invocation is None:
             self._park_step(step, label, "cannot start: %s" % problem)
             return "parked"
-        self._runner.start(
+        log_path = self._runner.start(
             key, invocation.script, invocation.cwd, invocation.env, invocation.stdin_text,
-            self._config.script_timeout_seconds())
+            self._config.script_timeout_seconds(), script_log_label(step.id))
+        if log_path:
+            self._store.add_artifact(step.id, LOG_ARTIFACT, log_path, internal=True)
         return "started"

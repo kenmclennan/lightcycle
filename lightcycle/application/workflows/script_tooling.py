@@ -158,6 +158,8 @@ class WorkflowScripts:
 
 def describe_violation(label, reason, result=None, stdout_too=False):
     text = "%s %s" % (label, reason)
+    if result is not None and result.log_path:
+        text += "\nlog: %s" % result.log_path
     if result is not None:
         tail = (result.stderr_tail or "").strip()
         if tail:
