@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from lightcycle.domain.work.step import Step
 from lightcycle.domain.work.state import State
@@ -42,3 +42,14 @@ def is_engine_step(node):
 
 def viewable_artifacts(node):
     return [a for a in getattr(node, "artifacts", ()) if not a.internal]
+
+
+def item_viewable_artifacts(item, step_artifacts):
+    own = viewable_artifacts(item)
+    from_steps = [
+        replace(a, type="%s \u00b7 %s" % (step_id, a.type))
+        for step_id, artifacts in step_artifacts
+        for a in artifacts
+        if not a.internal
+    ]
+    return own + from_steps
