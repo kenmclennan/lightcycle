@@ -129,8 +129,6 @@ def write_config(projects=None, specs=None):
         "poll-seconds: 5",
         "worker-history: 20",
         "editor: vi",
-        "retro-interval-reflections: 20",
-        "material-audit-days: 7",
         "audit-shortcode: AUD",
         "backups-dir: %s" % tempfile.mkdtemp(),
         "backup-interval-minutes: 15",
@@ -3086,45 +3084,11 @@ class TestRetro(unittest.TestCase):
 
         rc, out, err = call(_cli_mod.cmd_retro, "--pending")
         self.assertEqual(rc, 0, err)
-        self.assertIn("2 / 20 reflections", out)
+        self.assertIn("== retro: pending  (2 reflections) ==", out)
         self.assertNotIn("-> fires", out)
         self.assertIn("saga friction", out)
         self.assertIn("orphan friction", out)
 
-    def test_retro_pending_shows_fires_arrow_above_interval(self):
-        cfg = write_config(projects=self.root, specs=self.root)
-        inject_container(
-            self, store=self.store, home=self.root, config_path=cfg,
-            extra_env={"LC_RETRO_INTERVAL_REFLECTIONS": "2"},
-        )
-        saga = self.store.create_item("saga work", "a description")
-        self.store.complete_node(saga, "merged")
-        k1 = self.store.create_step(step="build", role="agent", parent=saga)
-        self.store.complete_node(k1, "done")
-        call(_cli_mod.cmd_attach, k1, "feedback", "one")
-        call(_cli_mod.cmd_attach, k1, "feedback", "two")
-        call(_cli_mod.cmd_attach, k1, "feedback", "three")
-
-        rc, out, err = call(_cli_mod.cmd_retro, "--pending")
-        self.assertEqual(rc, 0, err)
-        self.assertIn("3 / 2 reflections -> fires", out)
-
-    def test_retro_pending_shows_fires_arrow_at_exact_interval_boundary(self):
-        cfg = write_config(projects=self.root, specs=self.root)
-        inject_container(
-            self, store=self.store, home=self.root, config_path=cfg,
-            extra_env={"LC_RETRO_INTERVAL_REFLECTIONS": "2"},
-        )
-        saga = self.store.create_item("saga work", "a description")
-        self.store.complete_node(saga, "merged")
-        k1 = self.store.create_step(step="build", role="agent", parent=saga)
-        self.store.complete_node(k1, "done")
-        call(_cli_mod.cmd_attach, k1, "feedback", "one")
-        call(_cli_mod.cmd_attach, k1, "feedback", "two")
-
-        rc, out, err = call(_cli_mod.cmd_retro, "--pending")
-        self.assertEqual(rc, 0, err)
-        self.assertIn("2 / 2 reflections -> fires", out)
 
     def test_retro_with_unregistered_project_refuses_before_printing_any_header(self):
         rc, out, err = call(_cli_mod.cmd_retro, "--project", "totally-made-up")

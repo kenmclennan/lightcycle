@@ -1,5 +1,4 @@
 import contextlib
-import datetime
 import io
 import json
 import os
@@ -143,7 +142,6 @@ from lightcycle.application.pool import (
     AcquireRunLockUseCase,
     BackfillUsageUseCase,
     ClearDrainUseCase,
-    DailySummaryCadenceUseCase,
     DrainPoolUseCase,
     ListWorkersUseCase,
     PoolDrainStatusUseCase,
@@ -303,8 +301,6 @@ COMMAND_GROUPS = [
         ("doctor", "[--json]", "read-only diagnostics: store fsck + pinned-bundle/config/origin drift"),
         ("backfill-usage", "", "capture usage/attribution from historical worker logs in "
          "$LC_HOME/logs that predate live capture"),
-        ("backfill-summaries", "", "one-off: spawn a daily-summary agent for each of the last 7 "
-         "days that closed at least one item and has none yet (idempotent - safe to re-run)"),
     ]),
     ("Plumbing (the loop uses these)", [
         ("advance", "<id> <outcome>", "create the next step for an outcome without closing"),
@@ -1273,23 +1269,6 @@ def cmd_backfill_usage(argv):
     return 0
 
 
-def cmd_backfill_summaries(argv):
-    a = build_parser(COMMANDS["backfill-summaries"]).parse_args(argv)
-    day = None
-    if a.day:
-        try:
-            day = datetime.date.fromisoformat(a.day)
-        except ValueError:
-            sys.stderr.write("--day must be YYYY-MM-DD, got %r\n" % a.day)
-            return 1
-    gate = DailySummaryCadenceUseCase(_container.store, _container.config)
-    spawned = gate.backfill(time.time(), day=day, force=a.force)
-    for day, tid in spawned:
-        print("%s: spawned %s" % (day.isoformat(), tid))
-    print("backfilled %d day(s)" % len(spawned))
-    return 0
-
-
 def cmd_inbox(argv):
     a = build_parser(COMMANDS["inbox"]).parse_args(argv)
     flow_service = _flow()
@@ -1775,11 +1754,6 @@ def _tick_event_lines(result, ts):
         if result.config.restart_required:
             text += " - restart needed for: %s" % ", ".join(result.config.restart_required)
         lines.append("%s  %s" % (ts, text))
-    for sid in result.cadence.fired:
-        lines.append("%s  %-7s  %s" % (ts, "audit", sid))
-    if result.material_audit is not None:
-        for sid in result.material_audit.fired:
-            lines.append("%s  %-7s  %s" % (ts, "material-audit", sid))
     if result.schedules is not None:
         for sid in result.schedules.fired:
             lines.append("%s  %-7s  %s" % (ts, "schedule", sid))
@@ -2342,13 +2316,9 @@ def cmd_worklog(argv):
     return 0
 
 
-def _print_retro(resp, interval=None):
-    if resp.subject == "pending" and interval is not None:
-        arrow = " -> fires" if resp.reflection_count >= interval else ""
-        print(
-            "== retro: pending  (%d / %d reflections%s) =="
-            % (resp.reflection_count, interval, arrow)
-        )
+def _print_retro(resp):
+    if resp.subject == "pending":
+        print("== retro: pending  (%d reflections) ==" % resp.reflection_count)
     else:
         print("== retro: %s  (N=%d) ==" % (resp.subject, resp.reflection_count))
     if resp.unreadable:
@@ -2398,6 +2368,5 @@ def cmd_retro(argv):
     inp = RetroInput(subject=a.id, since=a.since, last=a.last, project=project_ref,
                       pending=a.pending)
     resp = RetroUseCase(_container.store, _flow()).execute(inp)
-    interval = _container.config.retro_interval_reflections() if a.pending else None
-    _print_retro(resp, interval)
+    _print_retro(resp)
     return 0

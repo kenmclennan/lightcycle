@@ -78,21 +78,11 @@ class TestEditBetweenTicks(ReloadFixture):
         self.edit(lambda t: t.replace("schedules-paused: false", "schedules-paused: true")
                   + "schedule-x:\n  enabled: true\n  cron: \"0 9 * * *\"\n")
         second, _ = self.run_tick(tick)
-        self.assertEqual(self.gate.seen[0], (False, []))
-        self.assertEqual(self.gate.seen[1], (True, ["x"]))
+        seeded = ["daily-summary", "material-audit", "retro-audit"]
+        self.assertEqual(self.gate.seen[0], (False, seeded))
+        self.assertEqual(self.gate.seen[1], (True, seeded + ["x"]))
         self.assertEqual(first.config.outcome, "unchanged")
         self.assertEqual(second.config.outcome, "reloaded")
-
-    def test_engine_job_cadence_keys_are_live_on_the_reload_tick(self):
-        tick = self.tick()
-        self.run_tick(tick)
-        self.set_key("material-audit-days", "3")
-        self.set_key("retro-interval-reflections", "9")
-        self.set_key("daily-summary-debounce-seconds", "11")
-        self.run_tick(tick)
-        self.assertEqual(self.config.material_audit_days(), 3)
-        self.assertEqual(self.config.retro_interval_reflections(), 9)
-        self.assertEqual(self.config.daily_summary_debounce_seconds(), 11)
 
     def test_reloaded_result_resets_the_schedule_gate(self):
         tick = self.tick()

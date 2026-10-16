@@ -4,6 +4,7 @@ import unittest
 from lightcycle.application.flow.engine_steps import (
     HELD_COMMENT_ORIGIN_LABEL,
     RETRO_ORIGIN_LABEL,
+    SCHEDULE_GUARD_LABEL_PREFIX,
     SCHEDULE_ORIGIN_LABEL,
     SUMMARY_ORIGIN_LABEL,
 )
@@ -34,6 +35,42 @@ def _closed(store, id, label=None, step="build", closed_at="2026-01-01T10:00:00+
     if label:
         store.label_add(item, label)
     return item
+
+
+class TestScheduledItemsAreCountedByGuard(unittest.TestCase):
+    def _kind(self, guard):
+        s = FakeStore()
+        item_id = _closed(s, "SCH-1", label=SCHEDULE_ORIGIN_LABEL)
+        if guard:
+            s.label_add(item_id, SCHEDULE_GUARD_LABEL_PREFIX + guard)
+        return automation_kind(s, s.get_item(item_id))
+
+    def test_pending_reflections_is_an_audit(self):
+        self.assertEqual(self._kind("pending-reflections"), "audit")
+
+    def test_materials_changed_is_an_audit(self):
+        self.assertEqual(self._kind("materials-changed"), "audit")
+
+    def test_day_unsummarised_is_a_daily_summary(self):
+        self.assertEqual(self._kind("day-unsummarised"), "daily-summary")
+
+    def test_an_unlabelled_scheduled_item_stays_scheduled(self):
+        self.assertEqual(self._kind(None), "scheduled")
+
+    def test_another_guard_stays_scheduled(self):
+        self.assertEqual(self._kind("something-else"), "scheduled")
+
+    def test_lc_automation_tallies_each_under_its_row(self):
+        s = FakeStore()
+        for i, guard in enumerate(["pending-reflections", "day-unsummarised", None]):
+            item_id = _closed(s, "SCH-%d" % i, label=SCHEDULE_ORIGIN_LABEL)
+            if guard:
+                s.label_add(item_id, SCHEDULE_GUARD_LABEL_PREFIX + guard)
+        resp = AutomationUseCase(s).execute(AutomationInput(day=DAY))
+        counts = {t.kind: t.count for t in resp.tallies}
+        self.assertEqual(counts["audit"], 1)
+        self.assertEqual(counts["daily-summary"], 1)
+        self.assertEqual(counts["scheduled"], 1)
 
 
 class TestMembershipIsByLabel(unittest.TestCase):

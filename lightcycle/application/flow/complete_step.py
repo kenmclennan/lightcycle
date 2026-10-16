@@ -10,6 +10,7 @@ from lightcycle.application.flow.engine_steps import (
 from lightcycle.domain.feedback import RETROED_LABEL
 from lightcycle.application.flow.next_step import NextStepResolver
 from lightcycle.application.flow.passes import PassBook
+from lightcycle.application.flow.schedule_completion import ScheduleCompletion
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.application.work.closed_count import closed_count
@@ -155,6 +156,7 @@ class CompleteStepUseCase:
         if new and transition:
             self._passes.enrol(t.item, new, transition.to_stage, name)
         self._store.note(input.step, "outcome: %s" % input.outcome)
+        ScheduleCompletion(self._store).execute(t, input.outcome)
         if input.note:
             if transition:
                 self._store.note(new if new else input.step, transition.forward_note(input.note))

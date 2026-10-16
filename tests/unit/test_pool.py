@@ -24,7 +24,6 @@ from lightcycle.application.pool.guidance_sync import GuidanceSyncResponse
 from lightcycle.application.pool.no_op_gates import (
     NoOpBackupGate,
     NoOpBreakerGate,
-    NoOpCadenceGate,
     NoOpFlowService,
     NoOpFs,
     NoOpGit,
@@ -34,15 +33,12 @@ from lightcycle.application.pool.no_op_gates import (
     NoOpMonitor,
     NoOpSpinPort,
     NoOpStream,
-    NoOpMaterialAuditGate,
     NoOpConfigReload,
     NoOpLifecycleGate,
     NoOpScheduleGate,
-    NoOpSummaryGate,
     NoOpUsageGate,
     NoOpWorktrees,
 )
-from lightcycle.application.pool.retro_cadence import RetroCadenceResponse
 from lightcycle.application.pool.sweep import SweepResponse
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
@@ -176,14 +172,6 @@ class FakeGuidanceGate:
         return GuidanceSyncResponse()
 
 
-class FakeCadenceGate:
-    def __init__(self, fired):
-        self._fired = fired
-
-    def execute(self, now):
-        return RetroCadenceResponse(fired=self._fired)
-
-
 class FakeWorktrees:
     def release_run(self, run, delete_remote=True):
         self.released = getattr(self, "released", [])
@@ -281,12 +269,11 @@ def make_sweep(store, workers, **overrides):
 
 def make_tick(store, workers, spawner, config, **overrides):
     kwargs = dict(
-        monitor=NoOpMonitor(), cadence_gate=NoOpCadenceGate(), breaker_gate=NoOpBreakerGate(),
+        monitor=NoOpMonitor(), breaker_gate=NoOpBreakerGate(),
         hook_completions=NoOpHookCompletions(), worktrees=NoOpWorktrees(), git=NoOpGit(),
         backup_gate=NoOpBackupGate(), fs=NoOpFs(), flow_service=NoOpFlowService(),
         spin_port=NoOpSpinPort(), usage_gate=NoOpUsageGate(), stream=NoOpStream(),
-        memory_gate=NoOpMemoryGate(), summary_gate=NoOpSummaryGate(),
-        material_audit_gate=NoOpMaterialAuditGate(),
+        memory_gate=NoOpMemoryGate(),
         schedule_gate=NoOpScheduleGate(),
         lifecycle_gate=NoOpLifecycleGate(),
         config_reload=NoOpConfigReload(),
@@ -1407,14 +1394,6 @@ class TestTick(unittest.TestCase):
             TickInput(now=1000.0, since=1000.0)
         )
         self.assertIsNone(s.get_node(tid).active_seconds)
-
-    def test_cadence_gate_wired_in_surfaces_fired_audits(self):
-        s = FakeStore()
-        cadence_gate = FakeCadenceGate(fired=["audit.1"])
-        result = make_tick(
-            s, FakeWorkers(), FakeSpawner(), FakeConfig(max_agents=4), cadence_gate=cadence_gate
-        ).execute(TickInput(now=1000.0))
-        self.assertEqual(result.cadence.fired, ["audit.1"])
 
     def test_lc_start_tick_loop_surfaces_preserved_uncommitted_work_on_reclaim(self):
         s = FakeStore()

@@ -23,8 +23,6 @@ _ENV_OVERRIDE_VARS = {
     "poll-seconds": "LC_POLL_SECONDS",
     "worker-history": "LC_WORKER_HISTORY",
     "editor": "EDITOR",
-    "retro-interval-reflections": "LC_RETRO_INTERVAL_REFLECTIONS",
-    "daily-summary-debounce-seconds": "LC_DAILY_SUMMARY_DEBOUNCE_SECONDS",
     "tui-autostart-pool": "LC_TUI_AUTOSTART_POOL",
     "tui-metrics": "LC_TUI_METRICS",
     "developer-mode": "LC_DEVELOPER_MODE",
@@ -34,13 +32,11 @@ _ENV_OVERRIDE_VARS = {
     "tick-failure-cap": "LC_TICK_FAILURE_CAP",
     "review-rounds-cap": "LC_REVIEW_ROUNDS_CAP",
     "audit-shortcode": "LC_AUDIT_SHORTCODE",
-    "summary-shortcode": "LC_SUMMARY_SHORTCODE",
     "held-comment-shortcode": "LC_HELD_COMMENT_SHORTCODE",
     "memory-reserve-fraction": "LC_MEMORY_RESERVE_FRACTION",
     "guidance-budget-bytes": "LC_GUIDANCE_BUDGET_BYTES",
     "guidance-unused-after-deliveries": "LC_GUIDANCE_UNUSED_AFTER_DELIVERIES",
     "guidance-dormant-days": "LC_GUIDANCE_DORMANT_DAYS",
-    "material-audit-days": "LC_MATERIAL_AUDIT_DAYS",
 }
 
 SCHEDULE_KEY_PREFIX = "schedule-"
@@ -92,8 +88,6 @@ _SEED_KEYS = [
     ("poll-seconds", "5"),
     ("worker-history", "20"),
     ("editor", "vi"),
-    ("retro-interval-reflections", "20"),
-    ("daily-summary-debounce-seconds", "600"),
     ("backups-dir", "~/.lightcycle-backups"),
     ("backup-interval-minutes", "15"),
     ("guidance-fetch-minutes", "5"),
@@ -123,17 +117,40 @@ _SEED_KEYS = [
     ("review-rounds-cap", "5"),
     ("context-artifact-types", "spec"),
     ("audit-shortcode", "AUD"),
-    ("summary-shortcode", "SUM"),
     ("held-comment-shortcode", "HLD"),
     ("trusted-authors", ""),
     ("memory-reserve-fraction", "0.65"),
     ("guidance-budget-bytes", "6144"),
     ("guidance-unused-after-deliveries", "60"),
     ("guidance-dormant-days", "60"),
-    ("material-audit-days", "7"),
     ("schedules-paused", "false"),
     ("lifecycle-timeout-seconds", "300"),
 ]
+
+_SEED_SCHEDULES = """\
+schedule-retro-audit:
+  enabled: true
+  workflow: lightcycle/retro-audit
+  project: guidance
+  shortcode: AUD
+  cron: 0 9 * * *
+  guard: pending-reflections
+  min: 30
+schedule-material-audit:
+  enabled: true
+  workflow: lightcycle/material-audit
+  project: guidance
+  shortcode: AUD
+  cron: 0 9 * * 1
+  guard: materials-changed
+schedule-daily-summary:
+  enabled: true
+  workflow: lightcycle/daily-summary
+  project: guidance
+  shortcode: SUM
+  cron: 0 7 * * *
+  guard: day-unsummarised
+"""
 
 _NUMERIC_RANGES = {
     "memory-reserve-fraction": (0.0, 1.0),
@@ -141,7 +158,6 @@ _NUMERIC_RANGES = {
     "guidance-budget-bytes": (0, None),
     "guidance-unused-after-deliveries": (1, None),
     "guidance-dormant-days": (1, None),
-    "material-audit-days": (1, None),
     "lifecycle-timeout-seconds": (1, None),
     "workflow-retention": (1, None),
     "max-boot-seconds": (0, None),
@@ -343,7 +359,7 @@ class Config:
         )
 
     def _default_config_text(self):
-        return "".join("%s: %s\n" % (k, v) for k, v in _SEED_KEYS)
+        return "".join("%s: %s\n" % (k, v) for k, v in _SEED_KEYS) + _SEED_SCHEDULES
 
     def _missing_seed_keys(self, existing):
         return [(k, v) for k, v in _SEED_KEYS if k not in existing]
@@ -651,22 +667,11 @@ class Config:
         value = env if env is not None else self._required_int("guidance-dormant-days")
         return self._check_range("guidance-dormant-days", value)
 
-    def material_audit_days(self):
-        env = self._env_int("LC_MATERIAL_AUDIT_DAYS", None)
-        value = env if env is not None else self._required_int("material-audit-days")
-        return self._check_range("material-audit-days", value)
-
     def audit_shortcode(self):
         env = self._env("LC_AUDIT_SHORTCODE")
         if env:
             return env
         return self._required_str("audit-shortcode")
-
-    def summary_shortcode(self):
-        env = self._env("LC_SUMMARY_SHORTCODE")
-        if env:
-            return env
-        return self._required_str("summary-shortcode")
 
     def held_comment_shortcode(self):
         env = self._env("LC_HELD_COMMENT_SHORTCODE")
@@ -701,18 +706,6 @@ class Config:
         if raw:
             return raw
         return self._required_str("editor")
-
-    def retro_interval_reflections(self):
-        env = self._env_int("LC_RETRO_INTERVAL_REFLECTIONS", None)
-        if env is not None:
-            return env
-        return self._required_int("retro-interval-reflections")
-
-    def daily_summary_debounce_seconds(self):
-        env = self._env_int("LC_DAILY_SUMMARY_DEBOUNCE_SECONDS", None)
-        if env is not None:
-            return env
-        return self._required_int("daily-summary-debounce-seconds")
 
     def backups_dir(self):
         return self._required_path("backups-dir")

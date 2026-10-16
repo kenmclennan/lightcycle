@@ -303,8 +303,6 @@ class TestEnsureConfig(unittest.TestCase):
         self.assertIn("editor: vi", text)
         self.assertIn("worktree-retry-sleep: 0.25", text)
         self.assertIn("~/workspace/projects", text)
-        self.assertIn("retro-interval-reflections: 20", text)
-        self.assertIn("material-audit-days: 7", text)
         self.assertIn("workflows-remote: \n", text)
         self.assertIn("backups-dir: ~/.lightcycle-backups", text)
         self.assertIn("backup-interval-minutes: 15", text)
@@ -455,7 +453,7 @@ class TestRenamedShortcodeKey(unittest.TestCase):
     def test_new_shortcode_keys_are_seeded_with_their_defaults(self):
         seeds = dict(_SEED_KEYS)
         self.assertEqual(seeds["audit-shortcode"], "AUD")
-        self.assertEqual(seeds["summary-shortcode"], "SUM")
+        self.assertNotIn("summary-shortcode", seeds)
 
 
 class TestTrustedAuthors(unittest.TestCase):
@@ -528,71 +526,6 @@ class TestSpawnProtocol(unittest.TestCase):
         c = _cfg({"LC_SPAWNID": "abc123", "LC_SPAWN_CMD": "echo hi"})
         self.assertEqual(c.spawn_id(), "abc123")
         self.assertEqual(c.spawn_cmd(), "echo hi")
-
-
-class TestRetroCadenceConfig(unittest.TestCase):
-    def test_missing_key_raises(self):
-        with self.assertRaises(ConfigError):
-            _cfg().retro_interval_reflections()
-
-    def test_config_value_read(self):
-        self.assertEqual(_cfg(retro_interval_reflections="20").retro_interval_reflections(), 20)
-        self.assertEqual(_cfg(retro_interval_reflections="5").retro_interval_reflections(), 5)
-
-    def test_env_override_wins(self):
-        self.assertEqual(
-            _cfg(
-                {"LC_RETRO_INTERVAL_REFLECTIONS": "30"}, retro_interval_reflections="20"
-            ).retro_interval_reflections(),
-            30,
-        )
-
-    def test_env_override_without_config_key(self):
-        self.assertEqual(
-            _cfg({"LC_RETRO_INTERVAL_REFLECTIONS": "20"}).retro_interval_reflections(), 20
-        )
-
-    def test_malformed_config_fails_fast(self):
-        with self.assertRaises(ConfigError):
-            _cfg(retro_interval_reflections="lots").retro_interval_reflections()
-
-    def test_removed_keys_are_gone(self):
-        c = _cfg(retro_interval_reflections="20")
-        self.assertFalse(hasattr(c, "retro_interval_items"))
-        self.assertFalse(hasattr(c, "retro_interval_days"))
-        self.assertFalse(hasattr(c, "retro_min_items"))
-
-
-class TestDailySummaryDebounceConfig(unittest.TestCase):
-    def test_missing_key_raises(self):
-        with self.assertRaises(ConfigError):
-            _cfg().daily_summary_debounce_seconds()
-
-    def test_config_value_read(self):
-        self.assertEqual(
-            _cfg(daily_summary_debounce_seconds="600").daily_summary_debounce_seconds(), 600
-        )
-        self.assertEqual(
-            _cfg(daily_summary_debounce_seconds="60").daily_summary_debounce_seconds(), 60
-        )
-
-    def test_env_override_wins(self):
-        self.assertEqual(
-            _cfg(
-                {"LC_DAILY_SUMMARY_DEBOUNCE_SECONDS": "30"}, daily_summary_debounce_seconds="600"
-            ).daily_summary_debounce_seconds(),
-            30,
-        )
-
-    def test_env_override_without_config_key(self):
-        self.assertEqual(
-            _cfg({"LC_DAILY_SUMMARY_DEBOUNCE_SECONDS": "600"}).daily_summary_debounce_seconds(),
-            600,
-        )
-
-    def test_malformed_config_fails_fast(self):
-        with self.assertRaises(ConfigError):
-            _cfg(daily_summary_debounce_seconds="lots").daily_summary_debounce_seconds()
 
 
 class TestBackupConfig(unittest.TestCase):
@@ -737,24 +670,17 @@ class TestAuditAndSummaryShortcodes(unittest.TestCase):
     def test_missing_keys_raise(self):
         with self.assertRaises(ConfigError):
             _cfg().audit_shortcode()
-        with self.assertRaises(ConfigError):
-            _cfg().summary_shortcode()
 
     def test_seeded_defaults_resolve(self):
         self.assertEqual(_cfg(audit_shortcode="AUD").audit_shortcode(), "AUD")
-        self.assertEqual(_cfg(summary_shortcode="SUM").summary_shortcode(), "SUM")
 
     def test_env_override_wins(self):
         self.assertEqual(
             _cfg({"LC_AUDIT_SHORTCODE": "ADT"}, audit_shortcode="AUD").audit_shortcode(), "ADT",
         )
-        self.assertEqual(
-            _cfg({"LC_SUMMARY_SHORTCODE": "SMY"}, summary_shortcode="SUM").summary_shortcode(), "SMY",
-        )
 
     def test_env_override_without_config_key(self):
         self.assertEqual(_cfg({"LC_AUDIT_SHORTCODE": "ADT"}).audit_shortcode(), "ADT")
-        self.assertEqual(_cfg({"LC_SUMMARY_SHORTCODE": "SMY"}).summary_shortcode(), "SMY")
 
 
 class TestResolvedSettings(unittest.TestCase):

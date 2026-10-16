@@ -6,12 +6,14 @@ from lightcycle.application.flow.engine_steps import (
     DAILY_SUMMARY_STEP,
     HELD_COMMENT_ORIGIN_LABEL,
     RETRO_ORIGIN_LABEL,
+    SCHEDULE_GUARD_LABEL_PREFIX,
     SCHEDULE_ORIGIN_LABEL,
     SUMMARY_ORIGIN_LABEL,
 )
 from lightcycle.application.work.human_node_row import HumanNodeRow
 from lightcycle.application.work.item_partition import is_closed_item
 from lightcycle.application.work.project_of import project_of, repo_of
+from lightcycle.domain.schedule.guards import GUARD_AUTOMATION_KINDS
 from lightcycle.domain.work import ItemCost, item_cost, node_id_key, parse_timestamp
 
 AUTOMATION_LABELS = frozenset(
@@ -39,6 +41,10 @@ def is_automation_item(store, item):
 def automation_kind(store, item):
     labels = store.labels_of(item.id)
     if SCHEDULE_ORIGIN_LABEL in labels:
+        for label in labels:
+            if label.startswith(SCHEDULE_GUARD_LABEL_PREFIX):
+                guard = label[len(SCHEDULE_GUARD_LABEL_PREFIX):]
+                return GUARD_AUTOMATION_KINDS.get(guard, KIND_SCHEDULED)
         return KIND_SCHEDULED
     if RETRO_ORIGIN_LABEL in labels:
         return KIND_AUDIT
