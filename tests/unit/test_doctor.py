@@ -278,7 +278,7 @@ class TestDoctorUseCase(unittest.TestCase):
         _uc(store, source, config, bundle).execute(DoctorInput())
         self.assertTrue(bundle.parsed_roots)
         for roots in bundle.parsed_roots:
-            self.assertEqual(roots[0], config.prompts_root())
+            self.assertEqual(roots[-1], config.prompts_root())
 
     def test_unparseable_step_reports_pins_problem_instead_of_raising(self):
         store = FakeStore()

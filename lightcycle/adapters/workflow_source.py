@@ -207,5 +207,5 @@ class WorkflowSourceAdapter(WorkflowSourcePort):
     def resolve_agent(self, role, pin):
         parsed = parse_pin(pin) if pin else None
         bundle = self.pinned_bundle(parsed[0], parsed[2]) if parsed else None
-        roots = [self._config.prompts_root()] + ([bundle] if bundle else [])
+        roots = ([bundle] if bundle else []) + [self._config.prompts_root()]
         return self._workflow_bundle.parse_step(role, roots)
