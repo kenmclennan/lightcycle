@@ -3,7 +3,9 @@ from typing import List
 
 from lightcycle.application.pool.pr_lookups import flow_for, run_of
 from lightcycle.application.pool.pr_sync_reads import PrSyncReads
+from lightcycle.application.work.behind_reason import behind_reason
 from lightcycle.domain.work import State
+from lightcycle.domain.work.behind_marker import BEHIND_NOT_UPDATED
 from lightcycle.ports.github import ReadFailure
 
 UPDATE_CAP = 3
@@ -29,13 +31,17 @@ class UpdateBehindPrsUseCase:
         self._clock = clock
         self._rule_cache = {}
         self._attempted = set()
-        self._update_counts = {}
+        self._streaks = {}
         self._cap_noted = set()
 
     def _note_failure(self, step_id, what, failure):
         self._store.note_condition(
             step_id, "%s (exit %d): %s" % (what, failure.returncode, _first_line(failure.stderr))
         )
+
+    def _set_marker(self, step_id, text):
+        if behind_reason(self._store, step_id) != (text or None):
+            self._store.replace_artifact(step_id, BEHIND_NOT_UPDATED, text, internal=True)
 
     def _requires_up_to_date(self, base_key):
         now = self._clock()
@@ -63,21 +69,27 @@ class UpdateBehindPrsUseCase:
         return UpdateBehindPrsResponse(updated=updated, update_failed=update_failed)
 
     def _update(self, step, pr, reads, updated, update_failed):
+        streak = self._streaks.get(pr)
+        if streak is not None and streak[0] != step.id:
+            del self._streaks[pr]
+        count = self._streaks[pr][1] if pr in self._streaks else 0
         sync = reads.read(pr)
         if isinstance(sync, ReadFailure):
             self._note_failure(step.id, "gh read failed while checking whether the PR is behind", sync)
             return
         if not sync.behind:
+            self._set_marker(step.id, "")
             return
         if (pr, sync.head_sha) in self._attempted:
             return
-        if self._update_counts.get(pr, 0) >= UPDATE_CAP:
-            if pr not in self._cap_noted:
-                self._cap_noted.add(pr)
+        if count >= UPDATE_CAP:
+            if step.id not in self._cap_noted:
+                self._cap_noted.add(step.id)
                 self._store.note_condition(
                     step.id,
                     "update cap reached (%d updates), update the branch by hand" % UPDATE_CAP,
                 )
+            self._set_marker(step.id, "update cap reached (%d updates)" % UPDATE_CAP)
             return
         required = self._requires_up_to_date(sync.base_key)
         if isinstance(required, ReadFailure):
@@ -86,14 +98,17 @@ class UpdateBehindPrsUseCase:
             )
             return
         if not required:
+            self._set_marker(step.id, "")
             return
         self._attempted.add((pr, sync.head_sha))
         failure = self._github.update_branch(pr, sync.head_sha)
         if isinstance(failure, ReadFailure):
             self._note_failure(step.id, "update-branch refused", failure)
+            self._set_marker(step.id, "update-branch refused")
             update_failed.append(step.item)
             return
-        self._update_counts[pr] = self._update_counts.get(pr, 0) + 1
+        self._streaks[pr] = (step.id, count + 1)
+        self._set_marker(step.id, "")
         base = sync.base_key.partition("@")[2]
         self._store.note_condition(
             step.id,

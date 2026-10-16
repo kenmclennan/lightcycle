@@ -91,6 +91,18 @@ class TestRenderBacklog(unittest.TestCase):
         lines = render_backlog(rows, TITLE_CAP)
         self.assertTrue(all(l.startswith("[") for l in lines))
 
+    def test_behind_row_renders_phrase_reason_and_pr(self):
+        r = row(
+            kind="action", project="proj-a", step=tk(id="t1", title="one"), title="one",
+            pr="https://github.com/x/y/pull/1", behind="update cap reached (3 updates)",
+        )
+        lines = render_inbox([r], TITLE_CAP)
+        self.assertEqual(lines, [_inbox(
+            "action", "t1", "proj-a", "one",
+            "  behind base, will not be updated automatically: update cap reached (3 updates)"
+            "  pr:https://github.com/x/y/pull/1",
+        )])
+
     def test_missing_project_renders_dash(self):
         lines = render_backlog([row(project=None, step=tk(id="t1", title="one"), title="one")], TITLE_CAP)
         self.assertEqual(lines[0], _flat("t1", "-", "one"))

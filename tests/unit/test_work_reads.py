@@ -332,6 +332,17 @@ class TestInboxPerItemWorkflow(unittest.TestCase):
         self.assertEqual(outcomes[b], ["merge"])
 
 
+class TestInboxBehindMarker(unittest.TestCase):
+    def test_only_the_marked_gate_carries_behind(self):
+        s = FakeStore()
+        marked = create_owned_step(s, "marked", step="gate", role="human")
+        plain = create_owned_step(s, "plain", step="gate", role="human")
+        s.add_artifact(marked, "behind-not-updated", "update-branch refused", internal=True)
+        rows = InboxUseCase(s, _empty_flow(s)).execute(InboxInput()).rows
+        behind = {row.step.id: row.behind for row in rows}
+        self.assertEqual(behind, {marked: "update-branch refused", plain: None})
+
+
 class TestInboxBacklog(unittest.TestCase):
     def _store(self):
         s = FakeStore()
