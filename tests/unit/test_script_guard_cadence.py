@@ -104,6 +104,23 @@ class TestReapingAGuard(unittest.TestCase):
         self.assertEqual(state, ["cursor-8"])
         self.assertEqual(rig.activate.activated, [item.id])
 
+    def test_a_filed_item_carries_the_log_as_an_internal_artifact(self):
+        rig, resp, _ = self._reaped(passed())
+
+        logs = [a for a in rig.store.item_artifacts(resp.fired[0]) if a.type == "log"]
+        self.assertEqual([(a.value, a.internal) for a in logs], [("guard-weekly.log", True)])
+
+    def test_a_violation_warning_names_the_log_and_the_start_gets_the_label(self):
+        rig, resp, err = self._reaped(ScriptResult(exit_code=3, stderr_tail="kaboom"))
+
+        self.assertIn("log: guard-weekly.log", err)
+        self.assertEqual(rig.runner.started[0]["log_label"], "guard-weekly")
+
+    def test_a_guard_that_does_not_pass_adds_no_artifact(self):
+        rig, resp, _ = self._reaped(ScriptResult(exit_code=0, stdout='{"outcome": "fail"}'))
+
+        self.assertEqual(resp.fired, [])
+
     def test_fail_files_nothing(self):
         rig, resp, _ = self._reaped(ScriptResult(exit_code=0, stdout='{"outcome": "fail"}'))
 

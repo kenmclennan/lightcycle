@@ -44,6 +44,13 @@ from lightcycle.domain.work.project_facets import format_facets, parse_facets, u
 from lightcycle.domain.work.project_identity import ProjectIdentity
 from lightcycle.domain.work.projected_step import ProjectedStep
 from lightcycle.domain.work.timestamp import parse_timestamp
+from lightcycle.domain.work.run_log import (
+    LOG_ARTIFACT,
+    guard_log_label,
+    hook_log_label,
+    latest_log_path,
+    script_log_label,
+)
 from lightcycle.domain.work.worker_log import worker_log_filename
 from lightcycle.domain.work.worker_permissions import (
     WORKER_VERBS, worker_permitted, worker_refusal_message,
@@ -70,6 +77,11 @@ __all__ = [
     "merge_condition_note", "ProjectIdentity", "ProjectedStep",
     "format_facets", "parse_facets", "unformat_facets",
     "parse_timestamp",
+    "LOG_ARTIFACT",
+    "guard_log_label",
+    "hook_log_label",
+    "latest_log_path",
+    "script_log_label",
     "worker_log_filename",
     "WORKER_VERBS", "worker_permitted", "worker_refusal_message",
 ]

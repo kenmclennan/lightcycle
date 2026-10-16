@@ -46,29 +46,35 @@ class TestRunnerAdapter(unittest.TestCase):
     def test_run_reports_exit_code_output_cwd_and_environment(self):
         script = _script(self.work, "s.sh", 'echo "in $(pwd) with $GREETING"; echo oops >&2; exit 3\n')
         result = self.runner.run(
-            script, self.work, {"GREETING": "hi", "PATH": os.environ["PATH"]}, 10)
+            script, self.work, {"GREETING": "hi", "PATH": os.environ["PATH"]}, 10, "hook-t")
         self.assertEqual(result.exit_code, 3)
         self.assertFalse(result.ok)
         self.assertIn("with hi", result.output)
-        self.assertIn(os.path.realpath(self.work), os.path.realpath(result.output.split()[1]))
+        self.assertIn(os.path.realpath(self.work), os.path.realpath(result.output.split("in ")[1].split()[0]))
         self.assertIn("oops", result.output)
+
+    def test_run_leaves_a_hook_log_and_returns_its_path(self):
+        script = _script(self.work, "s.sh", "echo hi\n")
+        result = self.runner.run(script, self.work, {"PATH": os.environ["PATH"]}, 10, "hook-acme-build-maintain")
+        self.assertTrue(os.path.basename(result.log_path).startswith("hook-acme-build-maintain-"))
+        self.assertIn("hi", Path(result.log_path).read_text())
 
     def test_run_keeps_only_the_output_tail(self):
         script = _script(self.work, "s.sh", 'i=0; while [ $i -lt 3000 ]; do echo line-$i; i=$((i+1)); done\n')
-        result = self.runner.run(script, self.work, {"PATH": os.environ["PATH"]}, 10)
+        result = self.runner.run(script, self.work, {"PATH": os.environ["PATH"]}, 10, "hook-t")
         self.assertLessEqual(len(result.output), 2000)
         self.assertIn("line-2999", result.output)
 
     def test_a_timeout_kills_the_process_and_says_so(self):
         script = _script(self.work, "s.sh", "exec sleep 30\n")
         started = time.monotonic()
-        result = self.runner.run(script, self.work, {"PATH": os.environ["PATH"]}, 1)
+        result = self.runner.run(script, self.work, {"PATH": os.environ["PATH"]}, 1, "hook-t")
         self.assertTrue(result.timed_out)
         self.assertFalse(result.ok)
         self.assertLess(time.monotonic() - started, 10)
 
     def test_a_script_that_cannot_start_is_a_failure_not_an_exception(self):
-        result = self.runner.run(os.path.join(self.work, "missing.sh"), self.work, {}, 5)
+        result = self.runner.run(os.path.join(self.work, "missing.sh"), self.work, {}, 5, "hook-t")
         self.assertFalse(result.ok)
         self.assertIsNone(result.exit_code)
 
@@ -84,7 +90,7 @@ class TestRunnerAdapter(unittest.TestCase):
     def test_start_returns_before_the_script_exits_and_poll_reports_the_outcome(self):
         gate = os.path.join(self.work, "go")
         script = _script(self.work, "s.sh", 'while [ ! -e "%s" ]; do sleep 0.02; done; exit 5\n' % gate)
-        self.runner.start("acme/build", script, self.work, {"PATH": os.environ["PATH"]}, 10)
+        self.runner.start("acme/build", script, self.work, {"PATH": os.environ["PATH"]}, 10, "hook-t")
         self.assertEqual(self.runner.running(), ["acme/build"])
         self.assertIsNone(self.runner.poll("acme/build"))
         Path(gate).write_text("x")
@@ -94,14 +100,14 @@ class TestRunnerAdapter(unittest.TestCase):
 
     def test_a_background_script_outliving_its_timeout_reports_a_timeout(self):
         script = _script(self.work, "s.sh", "exec sleep 30\n")
-        self.runner.start("acme/build", script, self.work, {"PATH": os.environ["PATH"]}, 1)
+        self.runner.start("acme/build", script, self.work, {"PATH": os.environ["PATH"]}, 1, "hook-t")
         self.assertTrue(self._wait("acme/build").timed_out)
 
     def test_start_on_a_running_key_and_poll_on_an_unknown_key_are_errors(self):
         script = _script(self.work, "s.sh", "exec sleep 30\n")
-        self.runner.start("k", script, self.work, {"PATH": os.environ["PATH"]}, 1)
+        self.runner.start("k", script, self.work, {"PATH": os.environ["PATH"]}, 1, "hook-t")
         with self.assertRaises(ValueError):
-            self.runner.start("k", script, self.work, {}, 1)
+            self.runner.start("k", script, self.work, {}, 1, "hook-t")
         with self.assertRaises(KeyError):
             self.runner.poll("unknown")
         self._wait("k")

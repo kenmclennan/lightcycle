@@ -8,6 +8,7 @@ class HookResult:
     exit_code: Optional[int]
     output: str = ""
     timed_out: bool = False
+    log_path: Optional[str] = None
 
     @property
     def ok(self):
@@ -16,11 +17,11 @@ class HookResult:
 
 class LifecycleRunnerPort(ABC):
     @abstractmethod
-    def run(self, script_path, cwd, env, timeout):
+    def run(self, script_path, cwd, env, timeout, log_label):
         pass
 
     @abstractmethod
-    def start(self, key, script_path, cwd, env, timeout):
+    def start(self, key, script_path, cwd, env, timeout, log_label):
         pass
 
     @abstractmethod

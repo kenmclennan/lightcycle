@@ -2,7 +2,7 @@ import os
 from dataclasses import dataclass
 from typing import Optional
 
-from lightcycle.domain.work import worker_log_filename
+from lightcycle.domain.work import latest_log_path, worker_log_filename
 
 
 @dataclass(frozen=True)
@@ -36,6 +36,9 @@ class ResolveLogUseCase:
             node = self._store.get_node(input.target)
         except KeyError:
             return ResolveLogResponse(path=None)
+        recorded = latest_log_path(self._store.item_artifacts(node.id))
+        if recorded and os.path.exists(recorded):
+            return ResolveLogResponse(path=recorded)
         if node.role and node.claimed_by:
             candidate = os.path.join(
                 self._config.data_root(), "logs", worker_log_filename(node.role, node.claimed_by)

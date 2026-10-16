@@ -83,6 +83,40 @@ def done(outcome="found", **extra):
     return ScriptResult(exit_code=0, stdout=json.dumps(payload))
 
 
+class TestRunLog(unittest.TestCase):
+    def logs(self, rig, step):
+        return [(a.value, a.internal) for a in rig.store.item_artifacts(step) if a.type == "log"]
+
+    def test_start_gets_the_label_and_the_step_records_the_returned_path(self):
+        rig = Rig()
+        step = rig.step()
+
+        rig.gate.execute(0)
+
+        self.assertEqual(rig.runner.started[0]["log_label"], "script-%s" % step)
+        self.assertEqual(self.logs(rig, step), [("script-%s.log" % step, True)])
+
+    def test_a_clean_reap_adds_no_second_artifact(self):
+        rig = Rig()
+        step = rig.step()
+        rig.gate.execute(0)
+        rig.runner.finish(rig.key(step), done())
+
+        rig.gate.execute(1)
+
+        self.assertEqual(len(self.logs(rig, step)), 1)
+
+    def test_a_parked_stage_names_the_log(self):
+        rig = Rig()
+        step = rig.step()
+        rig.gate.execute(0)
+        rig.runner.finish(rig.key(step), ScriptResult(exit_code=2, stderr_tail="bad"))
+
+        rig.gate.execute(1)
+
+        self.assertIn("log: script-%s.log" % step, rig.store.get_node(step).park.reason or "")
+
+
 class TestReapThenStart(unittest.TestCase):
     def test_a_queued_script_step_is_started_once_and_stays_queued(self):
         rig = Rig()
@@ -155,7 +189,7 @@ class TestReapThenStart(unittest.TestCase):
 
     def test_guard_keys_on_the_shared_runner_are_not_reaped_here(self):
         rig = Rig()
-        rig.runner.start("guard:weekly", "s", "/c", {}, "{}", 1)
+        rig.runner.start("guard:weekly", "s", "/c", {}, "{}", 1, "guard-weekly")
         rig.runner.finish("guard:weekly", done())
 
         resp = rig.gate.execute(0)
