@@ -1,5 +1,6 @@
 from lightcycle.application.flow.engine_steps import StepKind
 from lightcycle.domain.flow.hooks import CI_FAILED_CAP, HOOK_MIN_ARITY, PR_FEEDBACK
+from lightcycle.domain.work.behind_marker import BEHIND_NOT_UPDATED_PHRASE
 
 
 def format_usd(cost) -> str:
@@ -120,6 +121,8 @@ def _strategy_suffix(r):
         return "  " + "  ".join(parts)
     if StepKind.of(r.step) is StepKind.ENGINE_FINDINGS and r.step.notes:
         return "  findings:%s" % _truncate(r.step.notes.splitlines()[0])
+    if r.behind and r.pr:
+        return "  %s: %s  pr:%s" % (BEHIND_NOT_UPDATED_PHRASE, r.behind, r.pr)
     if r.pr:
         return "  pr:%s" % r.pr
     return ""

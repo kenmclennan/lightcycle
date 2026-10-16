@@ -182,6 +182,27 @@ class TestAttentionRow(unittest.TestCase):
         self.assertEqual(row.step, "stuck · %s" % node.stage)
 
 
+class TestAttentionRowBehind(unittest.TestCase):
+    def test_a_marked_gate_reads_behind_and_an_unmarked_one_does_not(self):
+        store = FakeStore()
+        marked = create_owned_step(store, "marked", step="ready-merge", role="human")
+        plain = create_owned_step(store, "plain", step="ready-merge", role="human")
+        store.add_artifact(marked, "behind-not-updated", "update-branch refused", internal=True)
+
+        self.assertEqual(
+            _attention_row(store, store.get_node(marked), _FLOW).step, "behind · ready-merge")
+        self.assertEqual(
+            _attention_row(store, store.get_node(plain), _FLOW).step, "ready-merge")
+
+    def test_an_escalation_keeps_stuck_even_when_marked(self):
+        store = FakeStore()
+        step = create_owned_step(store, "stuck build", step="build", role="human")
+        store.add_artifact(step, "behind-not-updated", "x", internal=True)
+
+        self.assertEqual(
+            _attention_row(store, store.get_node(step), _FLOW).step, "stuck · build")
+
+
 _FLOW_WITH_DISPLAY = flow_from_metas(
     {
         "coder": {

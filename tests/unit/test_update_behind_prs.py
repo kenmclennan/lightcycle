@@ -2,6 +2,7 @@ import unittest
 
 from lightcycle.application.flow import CompleteStepUseCase
 from lightcycle.application.pool import MonitorPrsUseCase
+from lightcycle.application.work.behind_reason import behind_reason
 from lightcycle.application.pool.update_behind_prs import (
     RULE_TTL_SECONDS,
     UPDATE_CAP,
@@ -231,6 +232,134 @@ class TestFailureBounds(unittest.TestCase):
 
         self.assertEqual(result.updated, [good_item])
         self.assertIn("gh: boom", h.notes(bad_step))
+
+
+class TestPerGateCount(unittest.TestCase):
+    def _next_gate(self, h, item, old):
+        h.store.complete_node(old, "merged")
+        return h.store.create_step(step="watch-step", role="human", parent=item)
+
+    def test_pr_replaced_gate_by_gate_is_never_capped(self):
+        github, url = _behind(50, head="h0")
+        h = _Harness(github)
+        item, step = h.gate(url)
+        steps = [step]
+
+        for n in range(UPDATE_CAP + 2):
+            self.assertEqual(h.uc.execute().updated, [item])
+            github._behind.add(url)
+            github._head_shas[url] = "h%d" % (n + 1)
+            steps.append(self._next_gate(h, item, steps[-1]))
+
+        self.assertEqual(len(github.update_calls), UPDATE_CAP + 2)
+        for sid in steps:
+            self.assertNotIn("update cap reached", h.notes(sid))
+
+    def test_cap_note_lands_on_each_capped_gate(self):
+        github, url = _behind(51, head="h0")
+        h = _Harness(github)
+        item, a = h.gate(url)
+
+        def cap(step):
+            for _ in range(UPDATE_CAP):
+                self.assertEqual(h.uc.execute().updated, [item])
+                github._behind.add(url)
+                github._head_shas[url] += "x"
+            h.uc.execute()
+            h.uc.execute()
+
+        cap(a)
+        b = self._next_gate(h, item, a)
+        cap(b)
+
+        self.assertEqual(h.notes(a).count("update cap reached"), 1)
+        self.assertEqual(h.notes(b).count("update cap reached"), 1)
+
+
+class TestBehindMarker(unittest.TestCase):
+    def _capped(self):
+        github, url = _behind(60, head="h0")
+        h = _Harness(github)
+        item, step = h.gate(url)
+        for _ in range(UPDATE_CAP):
+            h.uc.execute()
+            github._behind.add(url)
+            github._head_shas[url] += "x"
+        h.uc.execute()
+        return github, url, h, step
+
+    def test_cap_sets_marker_and_not_behind_clears_it(self):
+        github, url, h, step = self._capped()
+
+        self.assertIn("update cap reached", behind_reason(h.store, step))
+
+        github._behind.discard(url)
+        h.uc.execute()
+
+        self.assertIsNone(behind_reason(h.store, step))
+
+    def test_marker_write_is_change_only(self):
+        github, url, h, step = self._capped()
+        real = h.store.replace_artifact
+        calls = []
+        h.store.replace_artifact = lambda *a, **k: (calls.append(a), real(*a, **k))[1]
+
+        h.uc.execute()
+        h.uc.execute()
+
+        self.assertEqual(calls, [])
+
+    def test_refused_update_sets_marker_and_success_clears_it(self):
+        github, url = _behind(61, head="h1", failing_calls={"update_branch"})
+        h = _Harness(github)
+        item, step = h.gate(url)
+
+        h.uc.execute()
+        self.assertEqual(behind_reason(h.store, step), "update-branch refused")
+
+        github._failing_calls.discard("update_branch")
+        github._head_shas[url] = "h2"
+        h.uc.execute()
+
+        self.assertIsNone(behind_reason(h.store, step))
+
+    def test_sync_read_failure_leaves_marker(self):
+        github, url, h, step = self._capped()
+        from lightcycle.ports.github import ReadFailure
+        github.pr_sync_state = lambda pr: ReadFailure(1, "gh: boom")
+
+        h.uc.execute()
+
+        self.assertIn("update cap reached", behind_reason(h.store, step))
+
+    def test_base_not_requiring_up_to_date_clears_marker(self):
+        github, url = _behind(62, head="h1", failing_calls={"update_branch"})
+        h = _Harness(github)
+        item, step = h.gate(url)
+        h.uc.execute()
+        self.assertIsNotNone(behind_reason(h.store, step))
+
+        github._strict_bases.clear()
+        github._head_shas[url] = "h2"
+        h.clock.now += RULE_TTL_SECONDS + 1
+        h.uc.execute()
+
+        self.assertIsNone(behind_reason(h.store, step))
+
+
+class TestBehindReason(unittest.TestCase):
+    def test_none_blank_and_latest_wins(self):
+        store = FakeStore()
+        item = store.create_item("f", "d")
+        step = store.create_step(step="watch-step", role="human", parent=item)
+        self.assertIsNone(behind_reason(store, step))
+
+        store.add_artifact(step, "behind-not-updated", "first", internal=True)
+        store.add_artifact(step, "behind-not-updated", "second", internal=True)
+        self.assertEqual(behind_reason(store, step), "second")
+
+        store.add_artifact(step, "behind-not-updated", "", internal=True)
+        self.assertIsNone(behind_reason(store, step))
 
 
 class TestMixedGates(unittest.TestCase):

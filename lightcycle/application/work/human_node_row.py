@@ -15,3 +15,4 @@ class HumanNodeRow:
     artifacts: tuple = ()
     pr: Optional[str] = None
     title: Optional[str] = None
+    behind: Optional[str] = None
