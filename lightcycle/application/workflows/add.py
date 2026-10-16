@@ -59,6 +59,7 @@ class AddWorkflowSourceUseCase:
 
     def _install_hooks(self, origin, bundle):
         created = []
+        origin_dir_existed = self._lifecycle.origin_dir_exists(origin)
         for name, declared in sorted(bundle_lifecycles(bundle).items()):
             if not declared.install:
                 continue
@@ -69,6 +70,8 @@ class AddWorkflowSourceUseCase:
             if not outcome.ok:
                 for made in created:
                     self._lifecycle.remove_data_dir(origin, made)
+                if not origin_dir_existed:
+                    self._lifecycle.remove_empty_origin_dir(origin)
                 self._source.remove_origin(origin)
                 raise WorkflowSourceError(outcome.detail)
 

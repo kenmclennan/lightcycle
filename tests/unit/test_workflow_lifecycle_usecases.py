@@ -168,6 +168,26 @@ class TestAdd(unittest.TestCase):
         self.assertIsNone(h.source.read_registry("acme"))
         self.assertEqual(h.source.list_origins(), [])
         self.assertEqual(h.runner.dirs, set())
+        self.assertEqual(h.runner.removed_empty, ["/data/workflow-data/acme"])
+
+    def test_a_failing_install_keeps_an_origin_dir_that_already_existed(self):
+        h = Harness()
+        h.remote("sha1", {"build": workflow_text(upgrade=False)})
+        h.runner.dirs.add("/data/workflow-data/acme")
+        h.runner.program("install", HookResult(exit_code=3, output="boom"))
+        with self.assertRaises(WorkflowSourceError):
+            h.add()
+        self.assertEqual(h.runner.removed_empty, [])
+
+    def test_a_failing_install_keeps_an_origin_dir_still_holding_other_data(self):
+        h = Harness()
+        h.remote("sha1", {"build": workflow_text(upgrade=False), "ship": workflow_text(upgrade=False)})
+        h.runner.dirs.add("/data/workflow-data/acme/ship")
+        h.runner.program("install", HookResult(exit_code=1, output="no"), workflow="acme/build")
+        with self.assertRaises(WorkflowSourceError):
+            h.add()
+        self.assertEqual(h.runner.removed_empty, [])
+        self.assertEqual(h.runner.dirs, {"/data/workflow-data/acme/ship"})
 
     def test_a_later_failure_removes_only_what_this_call_created(self):
         h = Harness()

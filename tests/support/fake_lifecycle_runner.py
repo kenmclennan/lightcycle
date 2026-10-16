@@ -12,6 +12,7 @@ class FakeLifecycleRunner(LifecycleRunnerPort):
         self.started = []
         self.due = due if due is not None else {}
         self.dirs = set(dirs or ())
+        self.removed_empty = []
         self._programmed = {}
         self._running = {}
         self._finished = {}
@@ -75,6 +76,10 @@ class FakeLifecycleRunner(LifecycleRunnerPort):
     def list_data_dirs(self, path):
         return sorted(
             os.path.basename(d) for d in self.dirs if os.path.dirname(d) == path)
+
+    def remove_empty_dir(self, path):
+        if not any(d.startswith(path + os.sep) for d in self.dirs):
+            self.removed_empty.append(path)
 
     def remove_data_dir(self, path):
         self.dirs = {d for d in self.dirs if d != path and not d.startswith(path + os.sep)}

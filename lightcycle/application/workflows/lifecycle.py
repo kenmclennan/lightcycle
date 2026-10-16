@@ -130,6 +130,15 @@ class WorkflowLifecycleService:
     def remove_data_dir(self, origin, name):
         self._runner.remove_data_dir(self.data_dir(origin, name))
 
+    def origin_dir_exists(self, origin):
+        return self._runner.data_dir_exists(self._origin_dir(origin))
+
+    def remove_empty_origin_dir(self, origin):
+        self._runner.remove_empty_dir(self._origin_dir(origin))
+
+    def _origin_dir(self, origin):
+        return os.path.dirname(self.data_dir(origin, "x"))
+
     def kept_data_dirs(self, origin):
         root = os.path.dirname(self.data_dir(origin, "x"))
         return [os.path.join(root, n) for n in self._runner.list_data_dirs(root)]
