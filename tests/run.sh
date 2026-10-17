@@ -9,6 +9,6 @@ cd "$(dirname "$0")/.."
 workers=auto
 if [ -n "${LC_MAX_AGENTS:-}" ] && [ "$LC_MAX_AGENTS" -gt 0 ] 2>/dev/null; then
   workers=$(( $(getconf _NPROCESSORS_ONLN) / LC_MAX_AGENTS ))
-  [ "$workers" -ge 1 ] || workers=1
+  [ "$workers" -ge 2 ] || workers=2
 fi
 uv run pytest -n "$workers" --dist=loadgroup "$@"
