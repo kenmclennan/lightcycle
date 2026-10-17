@@ -40,6 +40,9 @@ class StubFlowService:
     def workflow_for(self, node):
         return PIN
 
+    def meta_for_step(self, stage, name=None):
+        return {}
+
 
 class RecordingComplete:
     def __init__(self, store, fail=None):
@@ -85,7 +88,8 @@ def done(outcome="found", **extra):
 
 class TestRunLog(unittest.TestCase):
     def logs(self, rig, step):
-        return [(a.value, a.internal) for a in rig.store.item_artifacts(step) if a.type == "log"]
+        path = rig.store.get_node(step).log_path
+        return [path] if path else []
 
     def test_start_gets_the_label_and_the_step_records_the_returned_path(self):
         rig = Rig()
@@ -94,7 +98,7 @@ class TestRunLog(unittest.TestCase):
         rig.gate.execute(0)
 
         self.assertEqual(rig.runner.started[0]["log_label"], "script-%s" % step)
-        self.assertEqual(self.logs(rig, step), [("script-%s.log" % step, True)])
+        self.assertEqual(self.logs(rig, step), ["script-%s.log" % step])
 
     def test_a_clean_reap_adds_no_second_artifact(self):
         rig = Rig()

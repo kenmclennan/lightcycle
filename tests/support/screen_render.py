@@ -1043,6 +1043,11 @@ class _PresentsFlowService:
     def flow_for(self, node):
         return self._flow
 
+    def meta_for_step(self, stage, name=None):
+        if stage == "audit":
+            return {"produces": {"findings": "optional"}}
+        return self._real.meta_for_step(stage, name)
+
     def __getattr__(self, name):
         return getattr(self._real, name)
 

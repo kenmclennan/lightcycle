@@ -1,4 +1,3 @@
-import json
 import os
 
 import pytest
@@ -156,94 +155,75 @@ def _step_branch_resolvable_repo(ctx):
     _push_hub(ctx, step_id)
 
 
-@given("a step whose phase run has a branch, in an unresolvable repo")
-def _step_branch_unresolvable_repo(ctx):
-    _, step_id = _set_up_branch_in_repo(ctx, resolvable=False)
+_DECLARED_METAS = {
+    "write-code": {
+        "model": "sonnet", "step": "write-code", "phase": "code",
+        "detail": "[branch, worktree, pr]", "routes": {"done": "gate"},
+    }
+}
+
+
+@given("a step with an outcome and a report recorded")
+def _step_outcome_and_report(ctx):
+    store, step_id = _launch_step(ctx)
+    store.complete_node(step_id, "done")
+    store.set_report(step_id, "reviewed and merged")
     _push_hub(ctx, step_id)
 
 
 @given(
-    "a step whose phase run has a branch, in a resolvable repo, its Detail tab open, "
-    "the worktree field selected"
+    "a step declaring the detail list branch, worktree and pr, whose phase run has a branch "
+    "and a PR, in a resolvable repo"
 )
-def _step_worktree_field_selected(ctx):
+def _step_declared_resolvable(ctx):
+    store, step_id = _launch_step(ctx, metas=_DECLARED_METAS)
+    store.add_artifact(ctx["item_id"], "repo", "/repo")
+    _set_declared_run(ctx, store, step_id)
+    ctx["session"].app.container.fs._dirs[ctx["worktree_path"]] = []
+    _push_hub(ctx, step_id)
+
+
+@given(
+    "a step declaring the detail list branch, worktree and pr, whose phase run has a branch "
+    "and a PR, in a resolvable repo, its Detail tab open, the worktree field selected"
+)
+def _step_declared_worktree_selected(ctx):
     launcher = FakeLauncher()
     ctx["launcher"] = launcher
-    _, step_id = _set_up_branch_in_repo(ctx, launcher=launcher, resolvable=True)
+    store, step_id = _launch_step(ctx, metas=_DECLARED_METAS, launcher=launcher)
+    store.add_artifact(ctx["item_id"], "repo", "/repo")
+    _set_declared_run(ctx, store, step_id)
+    ctx["session"].app.container.fs._dirs[ctx["worktree_path"]] = []
     _push_hub(ctx, step_id)
     table = ctx["session"].app.screen.query_one(DetailTable)
     table.move_cursor(row=table.get_row_index("worktree"))
 
 
-@given("a step with a stage, a state, a role, and a model")
-def _step_stage_state_role_model(ctx):
-    store, step_id = _launch_step(ctx)
-    store.set_model(step_id, "sonnet")
+@given(
+    "a step declaring the detail list branch and worktree, whose phase run has a branch, "
+    "in an unresolvable repo"
+)
+def _step_declared_unresolvable(ctx):
+    metas = {"write-code": dict(_DECLARED_METAS["write-code"], detail="[branch, worktree]")}
+    store, step_id = _launch_step(ctx, metas=metas)
+    _set_phase_run(store, ctx["item_id"], step_id, "code", branch="feat/x")
     _push_hub(ctx, step_id)
 
 
-@given("a step with a claimed_by, an outcome, and notes recorded")
-def _step_claimed_outcome_notes(ctx):
-    store, step_id = _launch_step(ctx)
-    store.assign(step_id, "agent-1")
-    store.complete_node(step_id, "done")
-    store.set_notes(step_id, "reviewed and merged")
-    _push_hub(ctx, step_id)
-
-
-@given("a step with a session id recorded")
-def _step_session_id(ctx):
-    store, step_id = _launch_step(ctx)
-    store.add_artifact(step_id, "session-id", "sess-49d8ac0f-6398", internal=True)
-    _push_hub(ctx, step_id)
-
-
-@given("a step with a reflection and a watched_step recorded")
-def _step_reflection_watched(ctx):
-    store, step_id = _launch_step(ctx)
-    store.add_artifact(
-        step_id, "reflection",
-        json.dumps({"step": step_id, "feedback": "worked well", "spec_hash": "unknown"}),
+def _set_declared_run(ctx, store, step_id):
+    _set_phase_run(
+        store, ctx["item_id"], step_id, "code",
+        branch="feat/x", pr="https://github.com/kenmclennan/lightcycle/pull/4",
     )
-    store.set_watched_step(step_id, "LC-1.2")
-    _push_hub(ctx, step_id)
+    ctx["worktree_path"] = os.path.join("/repo", ".worktrees", "%s-code" % ctx["item_id"])
 
 
-@given("a step with two reflections recorded")
-def _step_two_reflections(ctx):
-    store, step_id = _launch_step(ctx)
-    store.add_artifact(
-        step_id, "reflection",
-        json.dumps({"step": step_id, "feedback": "first pass friction", "spec_hash": "unknown"}),
-    )
-    store.add_artifact(
-        step_id, "reflection",
-        json.dumps({"step": step_id, "feedback": "second pass friction", "spec_hash": "unknown"}),
-    )
-    _push_hub(ctx, step_id)
-
-
-@given("a step parked with a needs, a reason, and a tried all recorded")
-def _step_parked_needs_reason_tried(ctx):
+@given("a step parked with a needs and a reason recorded")
+def _step_parked_needs_reason(ctx):
     store, step_id = _launch_step(ctx)
     BlockStepUseCase(store).execute(BlockInput(
-        step=step_id, needs="decide the approach", reason="hit an ambiguity", tried="tried X and Y",
+        step=step_id, needs="decide the approach", reason="hit an ambiguity",
     ))
-    _push_hub(ctx, step_id)
-
-
-@given("a step parked with a tried recorded")
-def _step_parked_tried(ctx):
-    store, step_id = _launch_step(ctx)
-    BlockStepUseCase(store).execute(BlockInput(
-        step=step_id, needs="decide the approach", reason="hit an ambiguity", tried="tried X and Y",
-    ))
-    _push_hub(ctx, step_id)
-
-
-@given("a step with no outcome, no notes, no reflection, no watched_step, and no session_id recorded")
-def _step_missing_optional_fields(ctx):
-    _, step_id = _launch_step(ctx)
     _push_hub(ctx, step_id)
 
 
@@ -302,18 +282,28 @@ def _key_pressed(ctx, key):
     ctx["session"].press(keymap.get(key, key))
 
 
-@then("its PR and branch are shown before stage, state, role, model, claimed_by, "
-      "session_id, outcome, notes, park, reflection, and watched_step")
-def _pr_and_branch_first(ctx):
+@then("its outcome and its report are shown, in that order, at the top")
+def _outcome_report_first(ctx):
     keys = _field_keys(ctx)
-    assert keys[0] == "pr"
-    assert keys[1] == "branch"
+    assert keys[:2] == ["outcome", "report"]
+    assert _field_value(ctx, "outcome") == "done"
+    assert _field_value(ctx, "report") == "reviewed and merged"
 
 
-@then("the branch and the PR are shown")
-def _branch_and_pr_shown(ctx):
-    assert _field_present(ctx, "branch")
-    assert _field_present(ctx, "pr")
+@then("the PR is shown after the outcome and the report")
+def _pr_after_outcome_report(ctx):
+    assert _field_keys(ctx) == ["outcome", "report", "pr"]
+
+
+@then("its Detail entries are branch, worktree and pr, in that order")
+def _declared_entries_in_order(ctx):
+    assert _field_keys(ctx) == ["branch", "worktree", "pr"]
+
+
+@then("the worktree entry is shown blank")
+def _worktree_entry_blank(ctx):
+    assert _field_keys(ctx) == ["branch", "worktree"]
+    assert _field_value(ctx, "worktree") == ""
 
 
 @then('neither the words "phase run" nor "pass" appear anywhere on the tab')
@@ -383,73 +373,20 @@ def _worktree_opens_in_editor(ctx):
     assert ctx["launcher"].edited_detached == (editor, ctx["worktree_path"])
 
 
-@then("its stage, its state, its role, and its model are all shown")
-def _stage_state_role_model_shown(ctx):
-    assert _field_value(ctx, "stage") == "write-code"
-    assert _field_value(ctx, "state") != ""
-    assert _field_value(ctx, "role") == "agent"
-    assert _field_value(ctx, "model") == "sonnet"
-
-
-@then("its claimed_by, its outcome, and its notes are all shown")
-def _claimed_outcome_notes_shown(ctx):
-    assert _field_value(ctx, "claimed_by") == "agent-1"
-    assert _field_value(ctx, "outcome") == "done"
-    assert _field_value(ctx, "notes") == "reviewed and merged"
-
-
-@then("its session id is shown")
-def _session_id_shown(ctx):
-    assert _field_value(ctx, "session_id") == "sess-49d8ac0f-6398"
-
-
-@then("its reflection and its watched_step are both shown")
-def _reflection_watched_shown(ctx):
-    assert _field_value(ctx, "reflection") == "worked well"
-    assert _field_value(ctx, "watched_step") == "LC-1.2"
-
-
-@then("the park's needs, its reason, and its tried are all shown")
+@then("the park's needs and its reason are shown")
 def _park_fields_shown(ctx):
     assert _field_value(ctx, "needs") == "decide the approach"
     assert _field_value(ctx, "reason") == "hit an ambiguity"
-    assert _field_value(ctx, "tried") == "tried X and Y"
 
 
-@then("the recorded tried text is shown")
-def _tried_text_shown(ctx):
-    assert _field_value(ctx, "tried") == "tried X and Y"
+@then("no needs field is shown")
+def _no_needs_field(ctx):
+    assert not _field_present(ctx, "needs")
 
 
-@then("no outcome field is shown")
-def _no_outcome_field(ctx):
-    assert not _field_present(ctx, "outcome")
-
-
-@then("no notes field is shown")
-def _no_notes_field(ctx):
-    assert not _field_present(ctx, "notes")
-
-
-@then("both reflections are shown as separate fields")
-def _both_reflections_shown(ctx):
-    assert _field_value(ctx, "reflection") == "first pass friction"
-    assert _field_value(ctx, "reflection:2") == "second pass friction"
-
-
-@then("no reflection field is shown")
-def _no_reflection_field(ctx):
-    assert not _field_present(ctx, "reflection")
-
-
-@then("no watched_step field is shown")
-def _no_watched_step_field(ctx):
-    assert not _field_present(ctx, "watched_step")
-
-
-@then("no session_id field is shown")
-def _no_session_id_field(ctx):
-    assert not _field_present(ctx, "session_id")
+@then("no reason field is shown")
+def _no_reason_field(ctx):
+    assert not _field_present(ctx, "reason")
 
 
 @then("a brief confirmation toast is shown")

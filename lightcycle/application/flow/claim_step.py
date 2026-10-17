@@ -5,7 +5,9 @@ from typing import Optional
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.application.setup.project_registry import ProjectRegistry
+from lightcycle.application.work.item_outputs import ItemOutputs
 from lightcycle.application.work.node_read_surface import node_read_surface
+from lightcycle.application.work.step_inputs import StepInputs
 from lightcycle.config import ConfigError
 from lightcycle.domain.contracts import StepContract
 from lightcycle.domain.work import NodeView, State
@@ -19,7 +21,7 @@ class ClaimInput:
     stage: Optional[str] = None
 
 
-_STRUCTURAL_META_KEYS = ("model", "accepts", "produces", "presents")
+_STRUCTURAL_META_KEYS = ("model", "accepts", "produces", "presents", "detail")
 
 
 @dataclass(frozen=True)
@@ -103,7 +105,8 @@ class ClaimStepUseCase:
             )
             return None
         meta = self._meta_for(t.stage, pin)
-        missing = StepContract.from_meta(meta).missing_inputs(self._store.present_types(t))
+        missing = StepContract.from_meta(meta).missing_inputs(
+            ItemOutputs(self._store, self._flow).present_types(t))
         if missing:
             decision = "missing required input(s): %s" % ", ".join(sorted(missing))
             observation = (
@@ -120,10 +123,18 @@ class ClaimStepUseCase:
         try:
             if spawnid:
                 self._workers.set_step(spawnid, t.id)
+                self._record_log(spawnid, t.id)
+            StepInputs(self._store, self._flow).freeze(t)
             return self._context(t, pin, meta)
         except Exception:
             self._store.reclaim(t.id)
             raise
+
+    def _record_log(self, spawnid, step_id):
+        for w in reversed(self._workers.workers_state()):
+            if w.spawnid == spawnid and w.log:
+                self._store.set_log(step_id, w.log)
+                return
 
     def _meta_for(self, stage, pin):
         if pin:

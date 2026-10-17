@@ -35,6 +35,9 @@ class Step:
     usage_rates_used: Optional[str] = None
     usage_thinking_tokens: Optional[int] = None
     turn_count: int = 0
+    previous_step: Optional[str] = None
+    report: Optional[str] = None
+    log_path: Optional[str] = None
 
     @property
     def type(self):
@@ -81,4 +84,7 @@ class Step:
             "usage_rates_used": self.usage_rates_used,
             "usage_thinking_tokens": self.usage_thinking_tokens,
             "turn_count": self.turn_count,
+            "previous_step": self.previous_step,
+            "report": self.report,
+            "log": self.log_path,
         }

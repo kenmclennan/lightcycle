@@ -1,4 +1,8 @@
 from lightcycle.application.flow.engine_steps import engine_outcomes_for_node
+from lightcycle.application.work.item_outputs import ItemOutputs
+from lightcycle.application.work.step_detail import StepDetail
+from lightcycle.application.work.step_inputs import StepInputs
+from lightcycle.domain.work.forwarded_note import shim_notes
 
 
 def node_read_surface(store, flow, view):
@@ -8,6 +12,25 @@ def node_read_surface(store, flow, view):
     if step.type == "step":
         step_artifacts = store.item_artifacts(step.id)
         out["artifacts"] = [a.as_dict() for a in step_artifacts]
+        item_outputs = ItemOutputs(store, flow)
+        out["item_artifacts"] = [
+            a.as_dict() for a in item_outputs.reader_artifacts(step, item_outputs.for_reader(step))
+        ]
+        step_inputs = StepInputs(store, flow)
+        inputs = step_inputs.read(step)
+        output_entries = step_inputs.entry_dicts_for_step(step)
+        _produced, records = item_outputs.step_rows(step)
+        out["inputs"] = inputs
+        out["outputs"] = {"report": step.report, "artifacts": output_entries}
+        out["records"] = [
+            {"type": r.type, "label": r.label, "value": r.value} for r in records
+        ]
+        entries, presents = StepDetail(store, flow).resolve(step, inputs, output_entries)
+        out["detail"] = [e.as_dict() for e in entries]
+        out["detail_presents"] = presents
+        prev = step_inputs.previous(step)
+        if prev is not None:
+            out["notes"] = shim_notes(prev.stage, prev.outcome, prev.report, step.notes)
         artifacts = {a.type: a.value for a in step_artifacts}
         if artifacts.get("session-id"):
             out["session_id"] = artifacts["session-id"]
@@ -17,6 +40,8 @@ def node_read_surface(store, flow, view):
         ):
             if artifact_type in artifacts:
                 out[field] = [i for i in artifacts[artifact_type].split("\n") if i]
+    if step.type == "item":
+        out["outputs"] = {"artifacts": ItemOutputs(store, flow).for_item(step.id).entry_dicts()}
     out["workflow"] = store.get_item(item_id).workflow
     out["passes"] = [p.as_dict() for p in store.passes_of(item_id)]
     out["runs"] = [r.as_dict() for r in store.runs_of(item_id)]

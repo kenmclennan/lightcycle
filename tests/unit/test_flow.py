@@ -121,19 +121,16 @@ class TestTransition(unittest.TestCase):
                 "role": "agent",
                 "parent": "s-9",
                 "deps": ["t-1"],
+                "previous": "t-1",
             },
         )
 
-    def test_forward_note_provenance_format(self):
-        self.assertEqual(
-            self._t().forward_note("fix the tests"), "from build (done): fix the tests"
-        )
+    def test_next_task_spec_records_the_closing_step_as_its_predecessor(self):
+        spec = self._t().next_step_spec(make_step(id="t-1"))
+        self.assertEqual(spec.previous, "t-1")
 
-    def test_forward_note_preserves_text_verbatim(self):
-        t = self._t(from_stage="review", outcome="rejected", to_stage="build", to_role="agent")
-        self.assertEqual(
-            t.forward_note("add missing coverage"), "from review (rejected): add missing coverage"
-        )
+    def test_a_transition_carries_no_forward_note(self):
+        self.assertFalse(hasattr(self._t(), "forward_note"))
 
 
 class TestHooks(unittest.TestCase):

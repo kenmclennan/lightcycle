@@ -35,7 +35,8 @@ class TestDoneOnAStep(unittest.TestCase):
         rc, out, err = self.h.run("done", self.step, "done", "--note", SHORT)
         self.assertEqual(rc, 0, err)
         self.assertEqual(self.h.store.get_step(self.step).state, "done")
-        self.assertIn(SHORT, self.h.store.get_step(out.strip()).notes)
+        self.assertEqual(self.h.store.get_step(self.step).report, SHORT)
+        self.assertNotIn(SHORT, self.h.store.get_step(out.strip()).notes or "")
 
     def test_a_compliant_done_still_prints_the_next_step_id(self):
         rc, out, err = self.h.run("done", self.step, "done", "--note", SHORT)

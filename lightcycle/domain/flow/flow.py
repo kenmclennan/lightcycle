@@ -8,6 +8,7 @@ from lightcycle.domain.flow.hooks import (
 )
 from lightcycle.domain.flow.step_def import StepDef
 from lightcycle.domain.flow.transition import Transition
+from lightcycle.domain.work.detail import parse_detail
 
 SPECS_WORKSPACE = "specs"
 GUIDANCE_WORKSPACE = "guidance"
@@ -61,6 +62,7 @@ class Flow:
         escalation = {}
         scripts = {}
         presents = {}
+        details = {}
         for stage in stages:
             meta = step_metas.get(graph.file_for(stage))
             if meta is None:
@@ -69,6 +71,9 @@ class Flow:
             declared = meta.get("presents")
             if declared:
                 presents[stage] = str(declared).strip()
+            parsed_detail = parse_detail(meta.get("detail"))
+            if parsed_detail:
+                details[stage] = parsed_detail
             script = meta.get("script")
             if script:
                 scripts[stage] = str(script).strip()
@@ -87,6 +92,7 @@ class Flow:
                 escalation=escalation.get(stage, False),
                 script=scripts.get(stage),
                 presents=presents.get(stage),
+                detail=details.get(stage),
             )
             for stage in step_stages
         }

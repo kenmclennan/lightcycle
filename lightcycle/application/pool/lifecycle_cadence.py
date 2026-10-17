@@ -9,7 +9,7 @@ from lightcycle.application.flow.engine_steps import (
 )
 from lightcycle.application.workflows.lifecycle import describe_result
 from lightcycle.domain.schedule.cron import parse_cron, previous_due
-from lightcycle.domain.work import LOG_ARTIFACT, State, hook_log_label
+from lightcycle.domain.work import State, hook_log_label
 from lightcycle.domain.workflows.lifecycle import missing_required_keys
 
 
@@ -82,9 +82,10 @@ class LifecycleCadenceUseCase:
                 shortcode=self._shortcode())
             self._store.label_add(item_id, LIFECYCLE_ORIGIN_LABEL)
             self._store.label_add(item_id, label)
-            self._store.create_step(step=LIFECYCLE_FAILURE_STEP, role="human", parent=item_id)
+            step_id = self._store.create_step(
+                step=LIFECYCLE_FAILURE_STEP, role="human", parent=item_id)
             if log_path:
-                self._store.add_artifact(item_id, LOG_ARTIFACT, log_path)
+                self._store.set_log(step_id, log_path)
         return item_id
 
     def _start(self, now):

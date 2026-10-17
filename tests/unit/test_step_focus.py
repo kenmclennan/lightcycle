@@ -149,13 +149,21 @@ class TestResolveStepFocusUseCase(unittest.TestCase):
         step = create_owned_step(s, "s", step="gate", role="human")
         self.assertEqual(str(resolve(s, step, FlowStub(presents="description"))), "description")
 
-    def test_a_gate_presenting_an_artifact_on_a_sibling_step_resolves_to_it(self):
+    def test_a_gate_presenting_a_declared_output_of_a_sibling_step_resolves_to_it(self):
+        s = FakeStore()
+        step = create_owned_step(s, "s", step="gate", role="human")
+        sibling = s.create_step(step="audit", role="agent", parent=s.get_node(step).item)
+        s.add_artifact(sibling, "findings", "text")
+        flow = FlowStub(presents="artifact:findings", produced={"findings": "optional"})
+        self.assertEqual(str(resolve(s, step, flow)), "artifact:findings")
+
+    def test_a_gate_presenting_an_undeclared_attach_on_a_sibling_falls_back_to_description(self):
         s = FakeStore()
         step = create_owned_step(s, "s", step="gate", role="human")
         sibling = s.create_step(step="audit", role="agent", parent=s.get_node(step).item)
         s.add_artifact(sibling, "findings", "text")
         self.assertEqual(
-            str(resolve(s, step, FlowStub(presents="artifact:findings"))), "artifact:findings")
+            str(resolve(s, step, FlowStub(presents="artifact:findings"))), "description")
 
     def test_a_gate_presenting_an_artifact_not_yet_attached_falls_back_to_description(self):
         s = FakeStore()
@@ -169,10 +177,10 @@ class TestResolveStepFocusUseCase(unittest.TestCase):
         s.claim_ready("agent")
         self.assertEqual(str(resolve(s, step, FlowStub())), "log")
 
-    def test_a_queued_engine_step_with_a_log_artifact_resolves_to_log(self):
+    def test_a_queued_engine_step_with_a_log_path_resolves_to_log(self):
         s = FakeStore()
         step = create_owned_step(s, "s", step="script", role="engine")
-        s.add_artifact(step, "log", "/tmp/x.log", internal=True)
+        s.set_log(step, "/tmp/x.log")
         self.assertEqual(str(resolve(s, step, FlowStub())), "log")
 
     def test_a_done_step_producing_an_attached_artifact_resolves_to_it(self):

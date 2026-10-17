@@ -598,11 +598,11 @@ class TestDoneBlock(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         new = out.strip()
         self.assertTrue(new)
-        notes = self.store.get_node(new).notes or ""
-        self.assertIn("from build (done):", notes)
-        self.assertIn("fix the coverage", notes)
+        self.assertEqual(self.store.get_node(b).report, "fix the coverage")
+        self.assertIsNone(self.store.get_node(new).notes)
         rc2, shown_out, _ = call(_cli_mod.cmd_show, new)
         shown = json.loads(shown_out)
+        self.assertIn("from build (done):", shown.get("notes") or "")
         self.assertIn("fix the coverage", shown.get("notes") or "")
 
     def test_done_without_note_unchanged(self):
@@ -619,8 +619,7 @@ class TestDoneBlock(unittest.TestCase):
         b = self.store.create_step(step="build", role="agent", parent=item)
         rc, out, err = call(_cli_mod.cmd_done, b, "done", "--note", "fix", "the", "flaky", "test")
         self.assertEqual(rc, 0, err)
-        notes = self.store.get_node(out.strip()).notes or ""
-        self.assertIn("fix the flaky test", notes)
+        self.assertEqual(self.store.get_node(b).report, "fix the flaky test")
 
 
 class TestSweep(unittest.TestCase):
@@ -3412,6 +3411,32 @@ class TestNodeDTOReadSurface(unittest.TestCase):
         self.assertEqual(d["id"], tid)
         for field in self.AGENT_CONSUMED_FIELDS:
             self.assertIn(field, d, "lc claim dropped field: %s" % field)
+
+    STEP_MODEL_FIELDS = (
+        "inputs", "outputs", "records", "detail", "detail_presents", "report",
+        "previous_step", "log",
+    )
+
+    def test_show_and_claim_surface_the_step_model_fields(self):
+        tid = self._make_task()
+        rc, out, err = call(_cli_mod.cmd_show, tid)
+        self.assertEqual(rc, 0, err)
+        shown = json.loads(out)
+        for field in self.STEP_MODEL_FIELDS:
+            self.assertIn(field, shown, "lc show dropped field: %s" % field)
+        self.assertEqual(set(shown["outputs"]), {"report", "artifacts"})
+        rc, out, err = call(_cli_mod.cmd_claim, "agent")
+        self.assertEqual(rc, 0, err)
+        claimed = json.loads(out)
+        for field in self.STEP_MODEL_FIELDS:
+            self.assertIn(field, claimed, "lc claim dropped field: %s" % field)
+        self.assertTrue(claimed["inputs"]["frozen"])
+
+    def test_show_on_an_item_returns_outputs(self):
+        item = self.store.create_item("an item", "a description")
+        rc, out, err = call(_cli_mod.cmd_show, item)
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(json.loads(out)["outputs"], {"artifacts": []})
 
     def test_show_and_claim_surface_routes_as_an_object(self):
         tid = self._make_task()

@@ -24,7 +24,7 @@ from lightcycle.application.workflows.script_tooling import (
 from lightcycle.config import ConfigError
 from lightcycle.domain.schedule.cron import previous_due
 from lightcycle.domain.schedule.guards import is_script_guard, script_guard_path
-from lightcycle.domain.work import LOG_ARTIFACT, State, guard_log_label, parse_timestamp
+from lightcycle.domain.work import State, guard_log_label, parse_timestamp
 from lightcycle.domain.workflows.identity import parse_pin
 from lightcycle.domain.workflows.script_stage import parse_guard_output
 
@@ -205,10 +205,17 @@ class ScheduleCadenceUseCase:
                 True, output.note, output.title, output.description, output.state))
             if outcome[0] == "fired":
                 if result.log_path:
-                    self._store.add_artifact(
-                        outcome[1], LOG_ARTIFACT, result.log_path, internal=True)
+                    self._record_guard_log(outcome[1], result.log_path)
                 fired.append(outcome[1])
         return fired
+
+    def _record_guard_log(self, item_id, log_path):
+        first = sorted(
+            (c for c in self._store.children(item_id) if c.type == "step"),
+            key=lambda c: c.created_at or "",
+        )
+        if first:
+            self._store.set_log(first[0].id, log_path)
 
     def _still_fireable(self, resolved):
         schedule = resolved.schedule

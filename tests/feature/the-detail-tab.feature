@@ -1,31 +1,27 @@
 Feature: The Detail tab
-  A step's Detail tab shows its full record - everything the step carries
-  beyond what the header or a workflow-tab row already shows. Its PR and branch
-  lead, since that is what a human opening a step for review came for; both
-  live on the step's phase run in storage, but the view shows them as
-  unambiguously the step's own, never naming "phase run" or "pass". Right
-  after the branch, when its repo can be resolved, follows the worktree it was
-  built in - opening it, unlike the PR, hands it to the configured editor
-  rather than a browser. After them follow stage, state, role, model,
-  claimed_by, session_id, outcome, notes, park (needs / reason / tried),
-  reflection, and watched_step. `tried` has never been shown anywhere in the
-  TUI before this tab. A field with nothing recorded is omitted rather than
-  shown blank. An item has no step record of its own, so it has no Detail
-  tab. A parked step can also be resumed from here with a dedicated
-  keypress, replacing the header's old copy-pasteable resume command; it
-  succeeds only when the step's stage is workflow-declared agent-owned, and
-  surfaces failure rather than crashing when it isn't. It does nothing on a
-  node that isn't a parked step.
+  A step's Detail tab shows the list the step's stage declares with a
+  `detail:` front matter key, or the default list when it declares none. The
+  default list is the step's outcome and report, its PR when it has a run, and
+  its needs and reason when it is parked. Entries are resolved by the engine,
+  so the tab carries no field list of its own, and an entry shows its recorded
+  value or stays blank. A step's PR is shown as unambiguously its own, never
+  naming "phase run" or "pass". A declared entry for the branch or worktree
+  can appear too; opening the worktree, unlike the PR, hands it to the
+  configured editor rather than a browser. An item has no step record of its
+  own, so it has no Detail tab. A parked step can also be resumed from here
+  with a dedicated keypress; it succeeds only when the step's stage is
+  workflow-declared agent-owned, and surfaces failure rather than crashing
+  when it isn't. It does nothing on a node that isn't a parked step.
 
-  Scenario: A step's PR and branch are shown first, ahead of every other field
+  Scenario: A step closed with a report shows its outcome and report first by default
+    Given a step with an outcome and a report recorded
+    When I open its Detail tab
+    Then its outcome and its report are shown, in that order, at the top
+
+  Scenario: A step whose phase run has a PR shows it after the outcome and report
     Given a step whose phase run has a branch and a PR
     When I open its Detail tab
-    Then its PR and branch are shown before stage, state, role, model, claimed_by, session_id, outcome, notes, park, reflection, and watched_step
-
-  Scenario: A step's branch and PR are shown as unambiguously its own
-    Given a step whose phase run has a branch and a PR
-    When I open its Detail tab
-    Then the branch and the PR are shown
+    Then the PR is shown after the outcome and the report
     And neither the words "phase run" nor "pass" appear anywhere on the tab
 
   Scenario Outline: Confirming a step's PR opens it, the same keypress the Artifacts list uses for a URL
@@ -44,31 +40,37 @@ Feature: The Detail tab
     Then it lands on the Detail tab
     And the PR is shown on screen
 
-  Scenario: A human step with nothing beyond stage, state and role opens on Description, with Detail one tab away
+  Scenario: A human step with no run opens on Description, with Detail one tab away
     Given a waiting human step whose phase run has no branch and no PR
     When I open its hub
     Then it lands on the Description tab
     When I switch to its Detail tab
     Then no PR field is shown
 
-  Scenario: A step with no branch or PR on its phase run shows neither field
+  Scenario: A step with no run shows no PR field
     Given a step whose phase run has no branch and no PR
     When I open its Detail tab
-    Then no branch field is shown
-    And no PR field is shown
+    Then no PR field is shown
 
-  Scenario: A step whose phase run has a branch in a resolvable repo also shows its worktree
+  Scenario: The default list leaves out the branch and the worktree
     Given a step whose phase run has a branch, in a resolvable repo
     When I open its Detail tab
-    Then the worktree is shown
+    Then no branch field is shown
+    And no worktree field is shown
 
-  Scenario: A step with no repo artifact shows no worktree field, even with a branch
-    Given a step whose phase run has a branch, in an unresolvable repo
+  Scenario: A step declaring its own detail list shows exactly those entries in order
+    Given a step declaring the detail list branch, worktree and pr, whose phase run has a branch and a PR, in a resolvable repo
     When I open its Detail tab
-    Then no worktree field is shown
+    Then its Detail entries are branch, worktree and pr, in that order
+    And the worktree is shown
 
-  Scenario Outline: Confirming a step's worktree opens it in the configured editor
-    Given a step whose phase run has a branch, in a resolvable repo, its Detail tab open, the worktree field selected
+  Scenario: A declared worktree entry is blank when its repo cannot be resolved
+    Given a step declaring the detail list branch and worktree, whose phase run has a branch, in an unresolvable repo
+    When I open its Detail tab
+    Then the worktree entry is shown blank
+
+  Scenario Outline: Confirming a declared worktree entry opens it in the configured editor
+    Given a step declaring the detail list branch, worktree and pr, whose phase run has a branch and a PR, in a resolvable repo, its Detail tab open, the worktree field selected
     When <key> is pressed
     Then the worktree opens in the editor
 
@@ -77,49 +79,16 @@ Feature: The Detail tab
       | Enter |
       | →     |
 
-  Scenario: The Detail tab shows the step's stage, state, role, and model
-    Given a step with a stage, a state, a role, and a model
+  Scenario: A parked step shows its needs and reason by default
+    Given a step parked with a needs and a reason recorded
     When I open its Detail tab
-    Then its stage, its state, its role, and its model are all shown
+    Then the park's needs and its reason are shown
 
-  Scenario: The Detail tab shows the step's claimed_by, outcome, and notes
-    Given a step with a claimed_by, an outcome, and notes recorded
+  Scenario: A step that is not parked shows neither needs nor reason
+    Given a step with no park recorded, its hub open
     When I open its Detail tab
-    Then its claimed_by, its outcome, and its notes are all shown
-
-  Scenario: The Detail tab shows the step's session id
-    Given a step with a session id recorded
-    When I open its Detail tab
-    Then its session id is shown
-
-  Scenario: The Detail tab shows the step's reflection and watched_step
-    Given a step with a reflection and a watched_step recorded
-    When I open its Detail tab
-    Then its reflection and its watched_step are both shown
-
-  Scenario: A step with more than one reflection shows each of them
-    Given a step with two reflections recorded
-    When I open its Detail tab
-    Then both reflections are shown as separate fields
-
-  Scenario: The Detail tab shows the step's park fields - needs, reason, and tried
-    Given a step parked with a needs, a reason, and a tried all recorded
-    When I open its Detail tab
-    Then the park's needs, its reason, and its tried are all shown
-
-  Scenario: The tried field is shown on Detail, the only place it has ever been shown
-    Given a step parked with a tried recorded
-    When I open its Detail tab
-    Then the recorded tried text is shown
-
-  Scenario: A field with nothing recorded is omitted, not shown blank
-    Given a step with no outcome, no notes, no reflection, no watched_step, and no session_id recorded
-    When I open its Detail tab
-    Then no outcome field is shown
-    And no notes field is shown
-    And no reflection field is shown
-    And no watched_step field is shown
-    And no session_id field is shown
+    Then no needs field is shown
+    And no reason field is shown
 
   Scenario: Resuming a parked step whose stage the workflow declares agent-owned succeeds and shows a confirmation toast
     Given a step parked at a stage the workflow declares agent-owned, its hub open

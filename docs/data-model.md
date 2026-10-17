@@ -8,7 +8,7 @@ graph TD
 ```
 
 - **item** - the unit of work, and the top of the tree. It carries the `description` (the brief), the workflow-defined artifacts, the `repo`, the `project` (a separate grouping label - see [ontology.md](ontology.md)), and the workflow pin, and moves through the workflow via its steps. An item has no parent, no role and no notes.
-- **step** - one instance of a workflow stage (write-code, review-code, open-pr, ...). Steps are what agents actually claim and execute. A step's `item` is required and fixed at creation; it has no description, no artifacts and no workflow of its own. The branch, the PR and the comment ledger belong to the **phase run**, not to the step.
+- **step** - one instance of a workflow stage (write-code, review-code, open-pr, ...). Steps are what agents actually claim and execute. A step's `item` is required and fixed at creation; it has no description and no workflow of its own, but it records its `previous_step`, its `report`, its `log_path` and its frozen inputs, and the artifacts it attaches are outputs, records or bookkeeping (see [ontology.md](ontology.md)). The branch, the PR and the comment ledger belong to the **phase run**, not to the step.
 - **pass** - one traversal of the workflow for an item. A flow that loops runs several; a stage's `pass-end:` grammar declares where a traversal ends, which is why the boundary is stated and not derived (a rework back-edge and a delivery back-edge are the same shape in the graph).
 - **phase run** - one phase within one pass. A phase is one PR gate, so a run owns exactly one branch and one PR, plus the comment ledger for that PR: `comments_dispatched_through` (written by the engine at spawn) and `comments_handled_through` (written by the agent at completion). Pass and phase are orthogonal - a second pass through the same phase is a different run, which is why a run can never resolve to an earlier pass's already-merged PR.
 
@@ -47,7 +47,7 @@ One further additive table, `held_comments`, created by `CREATE TABLE IF NOT EXI
 
 ## Attachments
 
-- **artifacts** - typed values attached to an **item**: `repo`, `spec`, `brief`, `blueprint`, `spec-amendment`. Steps declare `accepts` / `produces` in their frontmatter, and the engine checks the item's artifacts against that contract before a step may close. `branch`, `pr` and `comments-handled` are NOT artifacts: `lc attach` routes them onto the item's current phase run, which is where every reader looks for them.
+- **artifacts** - typed values attached to an **item** (or to a **step**, whose declared `produces` are promoted to the item at read time): `repo`, `spec`, `brief`, `blueprint`, `spec-amendment`. Steps declare `accepts` / `produces` in their frontmatter, and the engine checks the item's artifacts against that contract before a step may close. `branch`, `pr` and `comments-handled` are NOT artifacts: `lc attach` routes them onto the item's current phase run, which is where every reader looks for them.
 - **deps** - a node can be blocked by another. A step with an unmet dependency is `blocked` and becomes claimable (`queued`, or `waiting` for a human role) only once every blocker is closed.
 
 ```mermaid
@@ -57,3 +57,7 @@ graph LR
   step1 -->|role| r[agent]
   step1 -->|state| s[running]
 ```
+
+## Schema version 2
+
+`PRAGMA user_version` is 2. The `steps` table gains `previous_step`, `report` and `log_path`, and a `step_inputs(step, frozen_at, body)` table holds the inputs frozen at claim. The additions are columns and one table, applied on open. Opening a version-1 store runs a one-time backfill: each forwarded note (`from <stage> (<outcome>): text`) is copied as the `report` of the same-item, same-stage, same-outcome step that closed last before the receiver was created (also recorded as the receiver's `previous_step`), and every `log` artifact is copied onto its step's `log_path`. The original `notes` and `log` rows are left in place; the counts are written to stderr once and kept as the store's `last_migration`.

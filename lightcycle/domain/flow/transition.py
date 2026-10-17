@@ -17,7 +17,6 @@ class Transition:
             role=self.to_role,
             parent=step.item,
             deps=(step.id,),
+            previous=step.id,
         )
 
-    def forward_note(self, text: str) -> str:
-        return "from %s (%s): %s" % (self.from_stage, self.outcome, text)

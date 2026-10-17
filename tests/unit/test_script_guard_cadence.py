@@ -120,11 +120,28 @@ class TestReapingAGuard(unittest.TestCase):
         self.assertEqual(state, ["cursor-8"])
         self.assertEqual(rig.activate.activated, [item.id])
 
-    def test_a_filed_item_carries_the_log_as_an_internal_artifact(self):
+    def test_a_filed_items_first_step_records_the_guard_log(self):
+        rig = rig_with_guard()
+        original = rig.activate.execute
+
+        def activate_with_a_step(input):
+            original(input)
+            rig.store.create_step(step="audit", role="agent", parent=input.item)
+
+        rig.activate.execute = activate_with_a_step
+        tick(rig, 11)
+        rig.runner.finish(KEY, passed())
+        resp, _ = tick(rig, 11, 1)
+
+        steps = rig.store.children(resp.fired[0])
+        self.assertEqual([s.log_path for s in steps], ["guard-weekly.log"])
+        self.assertEqual([a for a in rig.store.item_artifacts(resp.fired[0]) if a.type == "log"], [])
+
+    def test_a_filed_item_with_no_step_yet_records_no_log(self):
         rig, resp, _ = self._reaped(passed())
 
-        logs = [a for a in rig.store.item_artifacts(resp.fired[0]) if a.type == "log"]
-        self.assertEqual([(a.value, a.internal) for a in logs], [("guard-weekly.log", True)])
+        self.assertEqual(len(resp.fired), 1)
+        self.assertEqual(rig.store.children(resp.fired[0]), [])
 
     def test_a_violation_warning_names_the_log_and_the_start_gets_the_label(self):
         rig, resp, err = self._reaped(ScriptResult(exit_code=3, stderr_tail="kaboom"))

@@ -1,6 +1,7 @@
 import unittest
 
 from lightcycle.adapters.tui.hub import NodeHubScreen, TextArtifactViewerScreen
+from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import launch, make_test_container
 
@@ -40,12 +41,15 @@ class TestHubArtifactsShapeRetention(unittest.TestCase):
 
     def test_step_artifact_is_listed_by_step_id_and_opens_its_text(self):
         store = FakeStore()
-        item = store.create_item("item", "a description")
+        item = store.create_item("item", "a description", workflow="o/w@abc")
         step = store.create_step(step="audit", role="agent", parent=item)
         store.add_artifact(step, "findings", "the audit digest")
         store.add_artifact(step, "reflection", "private note", internal=True)
 
-        session = self._launch(store)
+        session = launch(make_test_container(store=store, workflow_bundle=FakeFs(
+            metas={"auditor": {
+                "model": "sonnet", "step": "audit", "produces": {"findings": "optional"}}})))
+        self.addCleanup(session.close)
         screen = self._push_hub(session, item)
 
         self.assertEqual(

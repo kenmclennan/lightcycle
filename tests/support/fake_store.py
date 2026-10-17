@@ -24,6 +24,7 @@ from lightcycle.domain.goals import GOAL_DEFAULT_STATUS, Goal, GoalLogEntry
 from lightcycle.domain.money import Cost
 from lightcycle.domain.pool import ToolUsage
 from lightcycle.domain.runs import Pass, PhaseRun, pass_id, run_id
+from lightcycle.domain.work.outputs import ArtifactRecord
 from lightcycle.domain.work import (
     Artifact, DailySummary, Item, NodeView, Park, State, Step, default_kind_for, derive_state,
     merge_condition_note, role_state,
@@ -103,6 +104,9 @@ def record_to_step(record, blocked_by=None):
         usage_rates_used=meta.get("usage_rates_used"),
         usage_thinking_tokens=meta.get("usage_thinking_tokens"),
         turn_count=meta.get("turn_count") or 0,
+        previous_step=record.get("previous_step"),
+        report=record.get("report"),
+        log_path=record.get("log_path"),
     )
 
 
@@ -135,7 +139,7 @@ _TX_ATTRS = (
     "_records", "_labels", "_passes", "_runs", "_deps",
     "_history", "_projects", "_tool_usage", "_backfill_log", "_usage_accrual_state",
     "_counters", "_daily_summaries", "_goals", "_goal_log", "_goal_items", "_holds",
-    "_schedule_run_requests",
+    "_schedule_run_requests", "_step_inputs", "_artifact_seq",
 )
 
 
@@ -158,6 +162,8 @@ class FakeStore(StorePort):
         self._goal_log = []
         self._goal_items = []
         self._holds = {}
+        self._step_inputs = {}
+        self._artifact_seq = 0
         self._now = now or (lambda: datetime.datetime.now().astimezone().isoformat())
         self._config = config
         self._tx_depth = 0
@@ -249,7 +255,8 @@ class FakeStore(StorePort):
         meta = dict(b.get("metadata") or {})
         artifacts = list(meta.get("artifacts") or [])
         resolved_kind = kind if kind is not None else self.default_kind_for(atype)
-        entry = {"type": atype, "value": value, "kind": resolved_kind}
+        self._artifact_seq += 1
+        entry = {"type": atype, "value": value, "kind": resolved_kind, "seq": self._artifact_seq}
         if label:
             entry["label"] = label
         if internal:
@@ -269,7 +276,8 @@ class FakeStore(StorePort):
             if not (a.get("type") == atype and a.get("label") == label)
         ]
         resolved_kind = kind if kind is not None else self.default_kind_for(atype)
-        entry = {"type": atype, "value": value, "kind": resolved_kind}
+        self._artifact_seq += 1
+        entry = {"type": atype, "value": value, "kind": resolved_kind, "seq": self._artifact_seq}
         if label:
             entry["label"] = label
         if internal:
@@ -738,13 +746,14 @@ class FakeStore(StorePort):
         self._schedule_run_requests.discard(schedule_id)
 
     def create_step(self, *, step=None, role=None, parent=None, deps=None,
-                    id=None):
+                    id=None, previous=None):
         if parent is None:
             raise ValueError("create_step requires a parent")
         fields = dict(
             type="step",
             parent=parent,
             labels=labels_for(role=role, step=step),
+            previous_step=previous,
         )
         if id is not None:
             fields["id"] = id
@@ -756,6 +765,32 @@ class FakeStore(StorePort):
             for dep in deps:
                 self.dep_add(tid, dep)
         return tid
+
+    def set_report(self, step, text):
+        self._get(step)["report"] = text or None
+
+    def set_log(self, step, path):
+        self._get(step)["log_path"] = path or None
+
+    def save_step_inputs(self, step, frozen_at, body):
+        self._get(step)
+        self._step_inputs[step] = (frozen_at, body)
+
+    def step_inputs(self, step):
+        return self._step_inputs.get(step)
+
+    def artifact_log(self, item_id):
+        out = []
+        for rid, record in self._records.items():
+            if rid != item_id and not (
+                record.get("type") == "step" and record.get("parent") == item_id
+            ):
+                continue
+            for index, a in enumerate((record.get("metadata") or {}).get("artifacts") or []):
+                out.append(ArtifactRecord(
+                    node_id=rid, seq=a.get("seq", index), artifact=Artifact.from_dict(a)))
+        out.sort(key=lambda r: r.seq)
+        return out
 
     def edit_node(self, tid, *, title=None, description=None, project=None,
                   workflow=None):

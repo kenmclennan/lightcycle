@@ -287,8 +287,8 @@ def test_the_stacked_named_states_show_a_readable_gap_before_the_project(state, 
 def test_a_gate_presenting_pr_opens_on_detail_not_the_description():
     frame = render("hub#gate-presents-pr", size=(100, 30))
 
-    assert "STAGE" in frame
-    assert "ROLE" in frame
+    assert "OUTCOME" in frame
+    assert "REPORT" in frame
     assert GATE_DESCRIPTION not in frame
 
 

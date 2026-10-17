@@ -12,11 +12,9 @@ from lightcycle.application.pool.resolve_log import ResolveLogInput, ResolveLogU
 from lightcycle.application.pool.tail_log import TailLogInput, TailLogUseCase
 from lightcycle.application.work import TraceInput, TraceUseCase
 from lightcycle.domain.work import (
-    LOG_ARTIFACT,
     State,
     guard_log_label,
     hook_log_label,
-    latest_log_path,
     script_log_label,
 )
 from tests.support.fake_fs import FakeFs
@@ -26,19 +24,7 @@ from tests.unit.test_doctor import FakeWorkflowBundle, FakeWorkflowSource, _ALL_
 from lightcycle.application.inspect import DoctorInput
 
 
-def art(value, atype=LOG_ARTIFACT):
-    return SimpleNamespace(type=atype, value=value)
-
-
 class TestDomain(unittest.TestCase):
-    def test_latest_log_path_is_none_for_no_log_artifact(self):
-        self.assertIsNone(latest_log_path([]))
-        self.assertIsNone(latest_log_path([art("x", "spec")]))
-
-    def test_latest_log_path_is_the_last_log_artifact(self):
-        self.assertEqual(latest_log_path([art("a")]), "a")
-        self.assertEqual(latest_log_path([art("a"), art("z", "spec"), art("b")]), "b")
-
     def test_labels_sanitise_unsafe_characters(self):
         self.assertEqual(hook_log_label("acme/x", "my build", "maintain"), "hook-acme_x-my_build-maintain")
         self.assertEqual(script_log_label("LC-1.2"), "script-LC-1.2")
@@ -71,18 +57,23 @@ class StepRig(unittest.TestCase):
 class TestResolve(StepRig):
     def test_a_recorded_log_that_exists_resolves(self):
         path = self.log_file()
-        self.store.add_artifact(self.step, LOG_ARTIFACT, path, internal=True)
+        self.store.set_log(self.step, path)
         self.assertEqual(self.resolve(), path)
 
     def test_a_recorded_log_that_is_missing_resolves_to_none(self):
-        self.store.add_artifact(self.step, LOG_ARTIFACT, os.path.join(self.root, "gone.log"))
+        self.store.set_log(self.step, os.path.join(self.root, "gone.log"))
         self.assertIsNone(self.resolve())
 
-    def test_the_later_of_two_artifacts_wins(self):
+    def test_a_later_set_log_replaces_the_earlier_one(self):
         first, second = self.log_file("script-x-1.log"), self.log_file("script-x-2.log")
-        self.store.add_artifact(self.step, LOG_ARTIFACT, first, internal=True)
-        self.store.add_artifact(self.step, LOG_ARTIFACT, second, internal=True)
+        self.store.set_log(self.step, first)
+        self.store.set_log(self.step, second)
         self.assertEqual(self.resolve(), second)
+
+    def test_a_legacy_log_artifact_is_no_longer_read(self):
+        path = self.log_file()
+        self.store.add_artifact(self.step, "log", path, internal=True)
+        self.assertIsNone(self.resolve())
 
 
 class TestTail(StepRig):
@@ -91,7 +82,7 @@ class TestTail(StepRig):
 
     def test_a_queued_step_with_a_log_is_live_then_not(self):
         path = self.log_file()
-        self.store.add_artifact(self.step, LOG_ARTIFACT, path, internal=True)
+        self.store.set_log(self.step, path)
         use_case = TailLogUseCase(self.store, FakeWorkers(), _Reader(), self.fs, self.config())
 
         self.assertTrue(use_case.execute(TailLogInput(target=self.step)).live)
@@ -108,9 +99,9 @@ class _Reader:
 
 
 class TestTrace(StepRig):
-    def test_a_script_steps_log_field_is_the_artifact_path(self):
+    def test_a_script_steps_log_field_is_the_recorded_path(self):
         path = self.log_file()
-        self.store.add_artifact(self.step, LOG_ARTIFACT, path, internal=True)
+        self.store.set_log(self.step, path)
         resp = TraceUseCase(self.store, FakeWorkers(), self.fs, self.config()).execute(
             TraceInput(item=self.item))
         self.assertEqual(resp.steps[0].log, path)
@@ -120,17 +111,16 @@ class TestLogTabMode(StepRig):
     def mode(self, state=None):
         if state is not None:
             self.store.update_state(self.step, state)
-        return log_tab_mode(
-            self.store.get_node(self.step), self.store.item_artifacts(self.step))
+        return log_tab_mode(self.store.get_node(self.step))
 
     def test_engine_step_with_a_log_is_live_while_queued_and_historical_after(self):
-        self.store.add_artifact(self.step, LOG_ARTIFACT, "p", internal=True)
+        self.store.set_log(self.step, "p")
         self.assertEqual(self.mode(), "live")
         self.assertEqual(self.mode(State.DONE), "historical")
 
     def test_a_parked_engine_step_with_a_log_is_historical(self):
-        node = SimpleNamespace(role="engine", state=State.WAITING)
-        self.assertEqual(log_tab_mode(node, [art("p")]), "historical")
+        node = SimpleNamespace(role="engine", state=State.WAITING, log_path="p")
+        self.assertEqual(log_tab_mode(node), "historical")
 
     def test_engine_step_without_a_log_has_none(self):
         self.assertEqual(self.mode(), "no-log")
@@ -145,7 +135,7 @@ class TestDoctorHookFailures(unittest.TestCase):
             store.label_add(item, LIFECYCLE_ORIGIN_LABEL)
             step = store.create_step(step=LIFECYCLE_FAILURE_STEP, role="human", parent=item)
             items[name] = (item, step)
-        store.add_artifact(items["with-log"][0], LOG_ARTIFACT, "/logs/hook-a.log")
+        store.set_log(items["with-log"][1], "/logs/hook-a.log")
         store.complete_node(items["closed"][1], "done")
         store.update_state(items["closed"][0], State.DONE)
         source = FakeWorkflowSource()

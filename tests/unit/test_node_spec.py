@@ -9,6 +9,7 @@ class TestNodeSpec(unittest.TestCase):
         self.assertEqual(spec.deps, ())
         self.assertIsNone(spec.step)
         self.assertIsNone(spec.parent)
+        self.assertIsNone(spec.previous)
 
     def test_as_kwargs_names_every_create_task_arg(self):
         spec = NodeSpec(
@@ -16,6 +17,7 @@ class TestNodeSpec(unittest.TestCase):
             role="agent",
             parent="s-1",
             deps=("t-1", "t-2"),
+            previous="t-1",
         )
         self.assertEqual(
             spec.as_kwargs(),
@@ -24,6 +26,7 @@ class TestNodeSpec(unittest.TestCase):
                 "role": "agent",
                 "parent": "s-1",
                 "deps": ["t-1", "t-2"],
+                "previous": "t-1",
             },
         )
 

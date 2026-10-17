@@ -12,7 +12,9 @@ from lightcycle.application.workflows.script_tooling import (
     result_violation,
     stdin_for_stage,
 )
-from lightcycle.domain.work import LOG_ARTIFACT, State, is_engine_step, script_log_label
+from lightcycle.application.work.item_outputs import ItemOutputs
+from lightcycle.application.work.step_inputs import StepInputs
+from lightcycle.domain.work import State, is_engine_step, script_log_label
 from lightcycle.domain.workflows.identity import parse_pin
 from lightcycle.domain.workflows.script_stage import parse_stage_output
 from lightcycle.ports.store import NodeNotFoundError
@@ -149,7 +151,8 @@ class ScriptStageUseCase:
                 return None, "the stage declares workspace %s but the item has no worktree" % (
                     sd.workspace)
         stdin = stdin_for_stage(
-            step.item, step.id, step.stage, self._store.item_artifacts(step.item),
+            step.item, step.id, step.stage,
+            ItemOutputs(self._store, self._flow_service).reader_artifacts(step),
             self._store.item_artifacts(step.id))
         script = os.path.join(bundle_dir, *sd.script.split("/"))
         return ScriptInvocation(script, cwd, env, stdin), None
@@ -163,9 +166,10 @@ class ScriptStageUseCase:
         if invocation is None:
             self._park_step(step, label, "cannot start: %s" % problem)
             return "parked"
+        StepInputs(self._store, self._flow_service).freeze(step)
         log_path = self._runner.start(
             key, invocation.script, invocation.cwd, invocation.env, invocation.stdin_text,
             self._config.script_timeout_seconds(), script_log_label(step.id))
         if log_path:
-            self._store.add_artifact(step.id, LOG_ARTIFACT, log_path, internal=True)
+            self._store.set_log(step.id, log_path)
         return "started"

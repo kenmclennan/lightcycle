@@ -29,7 +29,6 @@ from lightcycle.domain.health import (
 from lightcycle.domain.schedule.guards import RETIRED_JOB_SCHEDULES
 from lightcycle.domain.schedule.schedule import SOURCE_BUNDLE
 from lightcycle.application.workflows.script_tooling import WorkflowScripts
-from lightcycle.domain.work.run_log import latest_log_path
 from lightcycle.domain.work.state import State
 from lightcycle.domain.workflows.contract import ENGINE_CONTRACT, contract_compatible
 from lightcycle.domain.workflows.identity import format_pin, parse_pin
@@ -220,7 +219,11 @@ class DoctorUseCase:
         for item in self._store.items_with_label(LIFECYCLE_ORIGIN_LABEL):
             if item.state == State.DONE:
                 continue
-            log = latest_log_path(self._store.item_artifacts(item.id))
+            steps = sorted(
+                (c for c in self._store.children(item.id) if c.type == "step"),
+                key=lambda c: c.created_at or "",
+            )
+            log = next((c.log_path for c in steps if c.log_path), None)
             where = "log %s" % log if log else "no log recorded"
             problems.append(Problem(
                 "origin", "open maintenance failure %s (%s): %s" % (item.id, item.title, where),
