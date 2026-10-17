@@ -19,9 +19,9 @@ class BreakerGateResponse:
 
 
 class BreakerGateUseCase:
-    def __init__(self, workers, fs, breaker_port, config, stream, spin_port=None, store=None):
+    def __init__(self, workers, worker_log, breaker_port, config, stream, spin_port=None, store=None):
         self._workers = workers
-        self._fs = fs
+        self._worker_log = worker_log
         self._breaker_port = breaker_port
         self._config = config
         self._stream = stream
@@ -58,16 +58,16 @@ class BreakerGateUseCase:
         return outcome["tripped"], outcome["spin_opened"]
 
     def _probe_signal(self, w, now):
-        event = self._stream.parse_rate_limit_event(self._fs.iter_lines(w.log))
+        event = self._stream.parse_rate_limit_event(self._worker_log.iter_lines(w.log))
         if event and event.is_rejected:
             return "rejected"
-        if self._stream.saw_session_activity(self._fs.iter_lines(w.log)):
+        if self._stream.saw_session_activity(self._worker_log.iter_lines(w.log)):
             return "success"
         if w.is_stalled(
             now,
             self._config.max_boot_seconds(),
             self._config.stall_seconds(),
-            self._fs.log_mtime,
+            self._worker_log.log_mtime,
         ):
             return "stalled"
         return None
@@ -89,11 +89,11 @@ class BreakerGateUseCase:
         saw_real_activity_with_step = False
         rep_step = None
         for w in pool.dead_unchecked(probe):
-            event = self._stream.parse_rate_limit_event(self._fs.iter_lines(w.log))
-            no_work = not self._stream.saw_session_activity(self._fs.iter_lines(w.log))
+            event = self._stream.parse_rate_limit_event(self._worker_log.iter_lines(w.log))
+            no_work = not self._stream.saw_session_activity(self._worker_log.iter_lines(w.log))
             if self._store is not None and w.step is not None:
-                usage = self._stream.parse_usage_event(self._fs.iter_lines(w.log))
-                attribution = self._stream.parse_attribution_event(self._fs.iter_lines(w.log))
+                usage = self._stream.parse_usage_event(self._worker_log.iter_lines(w.log))
+                attribution = self._stream.parse_attribution_event(self._worker_log.iter_lines(w.log))
                 if not usage.has_result_line and (
                     attribution.recovered_input_tokens or attribution.recovered_output_tokens
                     or attribution.recovered_cache_read_tokens

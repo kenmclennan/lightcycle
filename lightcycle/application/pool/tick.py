@@ -68,7 +68,7 @@ class TickResponse:
 class TickUseCase:
     def __init__(
         self, store, workers, spawner, config, monitor, breaker_gate,
-        hook_completions, worktrees, git, backup_gate, fs, flow_service, spin_port, usage_gate,
+        hook_completions, worktrees, git, backup_gate, worker_log, flow_service, spin_port, usage_gate,
         stream, memory_gate, guidance_gate,
         schedule_gate, config_reload, lifecycle_gate, script_gate,
     ):
@@ -77,7 +77,7 @@ class TickUseCase:
         self._spawner = spawner
         self._config = config
         self._sweep = SweepUseCase(
-            store, workers, worktrees, git, fs,
+            store, workers, worktrees, git, worker_log,
             spin_port=spin_port, spin_cap=config.spin_cap(), stream=stream,
         )
         self._monitor = monitor

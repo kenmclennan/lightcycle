@@ -126,7 +126,7 @@ def ctx():
 
 def _run_sweep(ctx):
     use_case = SweepUseCase(
-        ctx["store"], ctx["workers"], worktrees=ctx["worktrees"], git=ctx["git"], fs=ctx["fs"],
+        ctx["store"], ctx["workers"], worktrees=ctx["worktrees"], git=ctx["git"], worker_log=ctx["fs"],
         spin_port=NoOpSpinPort(), spin_cap=3, stream=ClaudeStreamAdapter(),
     )
     ctx["result"] = use_case.execute(ctx["now"], MAX_BOOT, STALL_SECONDS)

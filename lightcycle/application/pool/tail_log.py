@@ -21,20 +21,20 @@ class TailLogResult:
 
 
 class TailLogUseCase:
-    def __init__(self, store, workers, fs, probe, config):
+    def __init__(self, store, workers, worker_log, probe, config):
         self._store = store
         self._resolve = ResolveLogUseCase(store, workers, probe, config)
         self._workers = workers
-        self._fs = fs
+        self._worker_log = worker_log
 
     def execute(self, input: TailLogInput) -> TailLogResult:
         path = self._resolve.execute(ResolveLogInput(target=input.target)).path
         if path is None:
             return TailLogResult(path=None, data=b"", offset=input.offset, live=False)
         if input.max_bytes is not None:
-            data, offset = self._fs.read_tail(path, input.max_bytes)
+            data, offset = self._worker_log.read_tail(path, input.max_bytes)
         else:
-            data, offset = self._fs.read_from(path, input.offset)
+            data, offset = self._worker_log.read_from(path, input.offset)
         return TailLogResult(path=path, data=data, offset=offset, live=self._worker_alive(input.target))
 
     def _worker_alive(self, target):

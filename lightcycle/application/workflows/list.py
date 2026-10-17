@@ -22,17 +22,17 @@ class ListResponse:
 
 
 class ListWorkflowSourcesUseCase:
-    def __init__(self, source, store, fs=None):
+    def __init__(self, source, store, workflow_bundle=None):
         self._source = source
         self._store = store
-        self._fs = fs
+        self._workflow_bundle = workflow_bundle
 
     def _workflows(self, origin, current):
-        if not current or self._fs is None:
+        if not current or self._workflow_bundle is None:
             return []
         root = self._source.pinned_bundle(origin, current)
         return [
-            (wf, self._fs.workflow_meta(wf, root).get("summary", ""))
+            (wf, self._workflow_bundle.workflow_meta(wf, root).get("summary", ""))
             for wf in sorted(self._source.workflow_names(origin, current))
         ]
 

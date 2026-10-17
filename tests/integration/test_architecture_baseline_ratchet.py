@@ -19,6 +19,8 @@ BASELINE_FILES = [
     "tests/unit/baselines/parent_package_imports.txt",
     "tests/unit/baselines/function_local_first_party_imports.txt",
     "tests/unit/baselines/required_collaborators.txt",
+    "tests/unit/baselines/undeclared_port_calls.txt",
+    "tests/unit/baselines/dead_port_methods.txt",
 ]
 
 RATCHET_CODES = {"BLE001", "RUF013", "DTZ", "SIM115"}

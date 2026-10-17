@@ -182,7 +182,7 @@ def make_tick(store, workers, spawner, config, **overrides):
     kwargs = dict(
         monitor=NoOpMonitor(), breaker_gate=NoOpBreakerGate(),
         hook_completions=NoOpHookCompletions(), worktrees=NoOpWorktrees(), git=NoOpGit(),
-        backup_gate=NoOpBackupGate(), fs=NoOpFs(), flow_service=NoOpFlowService(),
+        backup_gate=NoOpBackupGate(), worker_log=NoOpFs(), flow_service=NoOpFlowService(),
         spin_port=NoOpSpinPort(), usage_gate=NoOpUsageGate(), stream=NoOpStream(),
         memory_gate=NoOpMemoryGate(),
         schedule_gate=NoOpScheduleGate(),

@@ -19,12 +19,12 @@ class SweepResponse:
 
 
 class SweepUseCase:
-    def __init__(self, store, workers, worktrees, git, fs, spin_port, spin_cap, stream):
+    def __init__(self, store, workers, worktrees, git, worker_log, spin_port, spin_cap, stream):
         self._store = store
         self._workers = workers
         self._worktrees = worktrees
         self._git = git
-        self._fs = fs
+        self._worker_log = worker_log
         self._spin_port = spin_port
         self._spin_cap = spin_cap
         self._stream = stream
@@ -46,7 +46,7 @@ class SweepUseCase:
         return self._git.commit_tracked(path, message)
 
     def _saw_terminal_command(self, log):
-        return self._stream.saw_terminal_command(self._fs.iter_lines(log))
+        return self._stream.saw_terminal_command(self._worker_log.iter_lines(log))
 
     def _last_nonempty_line(self, lines):
         last = None
@@ -111,7 +111,7 @@ class SweepUseCase:
         booting = pool.any_booting(probe, now, max_boot)
         stalled = [
             w
-            for w in pool.stalled(probe, now, max_boot, stall_seconds, self._fs.log_mtime)
+            for w in pool.stalled(probe, now, max_boot, stall_seconds, self._worker_log.log_mtime)
             if not self._saw_terminal_command(w.log)
         ]
         stalled_ids = {w.step for w in stalled}
@@ -138,7 +138,7 @@ class SweepUseCase:
             if t.id not in stalled_ids:
                 dead = pool.dead_for_step(probe, t.id)
                 if dead is not None:
-                    lines = list(self._fs.iter_lines(dead.log))
+                    lines = list(self._worker_log.iter_lines(dead.log))
                     no_work = not self._stream.saw_session_activity(lines)
                     last_line = self._last_nonempty_line(lines)
                     if self._advance_spin(t.id, now, no_work, last_line, dead.spawnid):
@@ -150,7 +150,7 @@ class SweepUseCase:
             dead = pool.dead_for_step(probe, step_id)
             if dead is None:
                 continue
-            lines = list(self._fs.iter_lines(dead.log))
+            lines = list(self._worker_log.iter_lines(dead.log))
             no_work = not self._stream.saw_session_activity(lines)
             last_line = self._last_nonempty_line(lines)
             if self._advance_spin(step_id, now, no_work, last_line, dead.spawnid):
