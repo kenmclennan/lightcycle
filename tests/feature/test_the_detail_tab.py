@@ -124,6 +124,11 @@ def _await_merge_step_with_pr(ctx):
     _set_phase_run(store, ctx["item_id"], step_id, "code", pr=ctx["pr_url"])
 
 
+@given("a waiting human step whose phase run has no branch and no PR")
+def _waiting_human_step_bare(ctx):
+    _launch_step(ctx, step="triage", role="human")
+
+
 @given("a step whose phase run has no branch and no PR")
 def _step_no_branch_no_pr(ctx):
     _, step_id = _launch_step(ctx)
@@ -329,6 +334,13 @@ def _lands_on_description_tab(ctx):
     screen = ctx["session"].app.screen
     assert isinstance(screen, NodeHubScreen)
     assert screen._active_tab == "description"
+
+
+@then("it lands on the Detail tab")
+def _lands_on_detail_tab(ctx):
+    screen = ctx["session"].app.screen
+    assert isinstance(screen, NodeHubScreen)
+    assert screen._active_tab == "detail"
 
 
 @when("I switch to its Detail tab")

@@ -117,11 +117,16 @@ def _tab_order(node):
     return _HUMAN_STEP_TAB_ORDER if _is_human_step(node) else _STEP_TAB_ORDER
 
 
-def landing_tab(node):
+_BARE_DETAIL_KEYS = frozenset(("stage", "state", "role"))
+
+
+def landing_tab(node, fields=()):
     if node.type == "item":
         return "description"
     if _is_human_step(node) and node.state != State.DONE:
-        return "description"
+        if all(key in _BARE_DETAIL_KEYS for key, _value in fields):
+            return "description"
+        return "detail"
     return "log" if node.state == State.RUNNING else "detail"
 
 
@@ -1274,7 +1279,7 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         node = container.store.get_node(node_id)
         self._node_type = node.type
         self._tab_order = _tab_order(node)
-        self._active_tab = self._forced_initial_tab or landing_tab(node)
+        self._active_tab = self._forced_initial_tab or landing_tab(node, self._landing_fields(node))
         self._last_hierarchy_shape = None
         self._last_rows = []
         self._last_multi_pass = False
@@ -1850,20 +1855,27 @@ class NodeHubScreen(Screen, inherit_bindings=False):
             for key, value in zip(COLUMN_GRIDS["artifacts"], cells):
                 table.update_cell(str(index), key, value)
 
-    def _render_detail(self, store, step, initial) -> None:
-        run = StepRunUseCase(store, self._flow_service).execute(StepRunInput(step=step.id))
+    def _landing_fields(self, node):
+        if not _is_human_step(node) or node.state == State.DONE:
+            return ()
+        return self._fields_for(self._container.store, node, self._container.flow_service())
+
+    def _fields_for(self, store, step, flow_service):
+        run = StepRunUseCase(store, flow_service).execute(StepRunInput(step=step.id))
         artifacts = store.item_artifacts(step.id)
         reflections, _unreadable = parse_reflections(artifacts)
         session_id = next((a.value for a in artifacts if a.type == "session-id"), None)
-        worktree_path = self._worktree_path_for(run)
-        fields = detail_fields(step, run, session_id, [r.feedback for r in reflections], worktree_path)
-        self._render_detail_fields(fields, initial)
+        worktree_path = self._worktree_path_for(run, flow_service)
+        return detail_fields(step, run, session_id, [r.feedback for r in reflections], worktree_path)
 
-    def _worktree_path_for(self, run):
+    def _render_detail(self, store, step, initial) -> None:
+        self._render_detail_fields(self._fields_for(store, step, self._flow_service), initial)
+
+    def _worktree_path_for(self, run, flow_service):
         if not run.branch:
             return None
         try:
-            return self._container.worktrees(flow=self._flow_service).path_for_run(run)
+            return self._container.worktrees(flow=flow_service).path_for_run(run)
         except UseCaseError:
             return None
 
