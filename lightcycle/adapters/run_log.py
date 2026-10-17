@@ -1,6 +1,8 @@
 import contextlib
 import os
 import subprocess
+from subprocess import Popen
+import threading
 import time
 from dataclasses import dataclass
 from typing import Optional
@@ -54,6 +56,79 @@ def _write(handle, text):
     handle.flush()
 
 
+STREAM_JOIN_SECONDS = 5
+CHUNK_BYTES = 65536
+
+
+class _LogTee:
+    def __init__(self, handle):
+        self._handle = handle
+        self._lock = threading.Lock()
+        self._section = "stderr"
+        self.buffers = {"stdout": [], "stderr": []}
+
+    def feed(self, stream, chunk):
+        with self._lock:
+            self.buffers[stream].append(chunk)
+            if self._handle is None:
+                return
+            if stream != self._section:
+                self._section = stream
+                _write(self._handle, "--- %s ---\n" % stream)
+            self._handle.write(chunk)
+            self._handle.flush()
+
+    def text(self, stream):
+        with self._lock:
+            return decode(b"".join(self.buffers[stream]))
+
+
+def _pump(pipe, stream, tee):
+    try:
+        while True:
+            chunk = os.read(pipe.fileno(), CHUNK_BYTES)
+            if not chunk:
+                return
+            tee.feed(stream, chunk)
+    except (OSError, ValueError):
+        return
+
+
+def _feed_stdin(proc, stdin_bytes):
+    try:
+        proc.stdin.write(stdin_bytes)
+        proc.stdin.close()
+    except (OSError, ValueError):
+        return
+
+
+def _run_streamed(script_path, cwd, env, stdin_bytes, timeout, tee):
+    proc = Popen(
+        [script_path], cwd=cwd, env=env,
+        stdin=subprocess.DEVNULL if stdin_bytes is None else subprocess.PIPE,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    threads = [
+        threading.Thread(target=_pump, args=(proc.stdout, "stdout", tee), daemon=True),
+        threading.Thread(target=_pump, args=(proc.stderr, "stderr", tee), daemon=True),
+    ]
+    if stdin_bytes is not None:
+        threads.append(threading.Thread(target=_feed_stdin, args=(proc, stdin_bytes), daemon=True))
+    for thread in threads:
+        thread.start()
+    timed_out = False
+    try:
+        proc.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        proc.kill()
+        proc.wait()
+    for thread in threads:
+        thread.join(STREAM_JOIN_SECONDS)
+    proc.stdout.close()
+    proc.stderr.close()
+    return proc.returncode, timed_out
+
+
 def run_logged(config, label, log_path, script_path, cwd, env, stdin_bytes, timeout):
     started = time.time()
     with contextlib.ExitStack() as stack:
@@ -64,38 +139,19 @@ def run_logged(config, label, log_path, script_path, cwd, env, stdin_bytes, time
         if handle is not None:
             _write(handle, "script: %s\nstarted: %s\n--- stderr ---\n" % (
                 script_path, time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(started))))
-            stderr_from = handle.tell()
-        kwargs = dict(
-            cwd=cwd, env=env, stdout=subprocess.PIPE,
-            stderr=handle if handle is not None else subprocess.PIPE)
-        if stdin_bytes is None:
-            kwargs["stdin"] = subprocess.DEVNULL
-        else:
-            kwargs["input"] = stdin_bytes
-        exit_code, stdout, timed_out, footer, piped_err = None, "", False, None, ""
+        tee = _LogTee(handle)
+        exit_code, timed_out = None, False
         try:
-            completed = subprocess.run([script_path], timeout=timeout, **kwargs)
-            exit_code = completed.returncode
-            stdout = decode(completed.stdout)
-            piped_err = decode(completed.stderr)
-            footer = "exit %d" % exit_code
-        except subprocess.TimeoutExpired as e:
-            timed_out = True
-            stdout = decode(e.stdout)
-            piped_err = decode(e.stderr)
-            footer = "timed out after %ss" % timeout
+            exit_code, timed_out = _run_streamed(script_path, cwd, env, stdin_bytes, timeout, tee)
+            footer = "timed out after %ss" % timeout if timed_out else "exit %d" % exit_code
+            if timed_out:
+                exit_code = None
         except OSError as e:
-            piped_err = str(e)
+            tee.feed("stderr", str(e).encode("utf-8", errors="replace"))
             footer = "could not start: %s" % e
-        stderr_text = piped_err
+        stdout, stderr_text = tee.text("stdout"), tee.text("stderr")
         if handle is not None:
-            with open(log_path, "rb") as reader:
-                reader.seek(stderr_from)
-                stderr_text = decode(reader.read())
-            stderr_text = stderr_text or piped_err
-            _write(handle, "--- stdout ---\n%s%s--- end ---\n%s (%.1fs)\n" % (
-                stdout, "" if stdout.endswith("\n") or not stdout else "\n",
-                footer, time.time() - started))
+            _write(handle, "--- end ---\n%s (%.1fs)\n" % (footer, time.time() - started))
     if handle is not None:
         prune_run_logs(config, label)
     return LoggedRun(

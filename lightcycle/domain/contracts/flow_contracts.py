@@ -5,6 +5,7 @@ from lightcycle.domain.flow.hooks import (
     PR_FEEDBACK,
     REVIEW_ROUNDS_CAP,
 )
+from lightcycle.domain.work.step_focus import parse_presents, presents_artifact
 
 
 class FlowContracts:
@@ -186,6 +187,28 @@ class FlowContracts:
                     malformed.append((hook, occ[0], len(occ), min_len))
         return sorted(malformed)
 
+    def presents_problems(self):
+        produced = set()
+        for stage in self._steps:
+            produced.update(self._contract[stage].produced_types())
+        problems = []
+        for stage in self._steps:
+            step_def = self._flow.step_def(stage)
+            value = step_def.presents
+            if value is None:
+                continue
+            if step_def.owner != "human":
+                problems.append((stage, "presents is only for human steps, but this step is not one"))
+            elif parse_presents(value) is None:
+                problems.append((
+                    stage,
+                    "presents %r is not one of: pr, description, artifact:<name>" % value))
+            elif presents_artifact(value) not in produced | {None}:
+                problems.append((
+                    stage,
+                    "presents %r names an artifact no step in the workflow produces" % value))
+        return sorted(problems)
+
     def ok(self):
         return (
             not self.missing()
@@ -196,6 +219,7 @@ class FlowContracts:
             and not self.hook_phase_mismatches()
             and not self.unresolved_hook_targets()
             and not self.malformed_hook_occurrences()
+            and not self.presents_problems()
         )
 
     def as_dict(self):
@@ -219,5 +243,6 @@ class FlowContracts:
             "hook_phase_mismatches": self.hook_phase_mismatches(),
             "unresolved_hook_targets": self.unresolved_hook_targets(),
             "malformed_hook_occurrences": self.malformed_hook_occurrences(),
+            "presents_problems": self.presents_problems(),
             "ok": self.ok(),
         }

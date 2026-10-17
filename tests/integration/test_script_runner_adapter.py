@@ -139,9 +139,10 @@ class TestRunLog(ScriptRunnerTestCase):
 
         text = self.read(result)
         self.assertIn("script: %s" % path, text)
-        self.assertLess(text.index("--- stderr ---"), text.index("err\n"))
-        self.assertLess(text.index("err\n"), text.index("--- stdout ---"))
-        self.assertLess(text.index("--- stdout ---"), text.index("out\n"))
+        self.assertIn("--- stderr ---\n", text)
+        self.assertIn("--- stdout ---\n", text)
+        self.assertIn("err\n", text)
+        self.assertIn("out\n", text)
         self.assertIn("exit 0 (", text)
         self.assertTrue(os.path.basename(result.log_path).startswith("script-t-"))
 
@@ -188,6 +189,26 @@ class TestRunLog(ScriptRunnerTestCase):
         self.wait("k")
         self.assertIn("first", seen)
 
+    def test_stdout_is_in_the_log_while_the_script_is_still_running_and_the_result_is_unchanged(self):
+        gate = os.path.join(self.dir, "gate")
+        path = self.script(
+            'echo first-out\necho first-err >&2\nwhile [ ! -e "%s" ]; do sleep 0.05; done\n' % gate)
+
+        log_path = self.runner.start("k", path, self.dir, self.env(), "", 30, "script-t")
+
+        deadline = time.monotonic() + 30
+        seen = ""
+        while time.monotonic() < deadline and not ("first-out" in seen and "first-err" in seen):
+            time.sleep(0.05)
+            with open(log_path) as f:
+                seen = f.read()
+        open(gate, "w").close()
+        result = self.wait("k")
+        self.assertIn("first-out", seen)
+        self.assertIn("first-err", seen)
+        self.assertEqual(
+            (result.exit_code, result.stdout, result.stderr_tail), (0, "first-out\n", "first-err\n"))
+
     def test_only_the_newest_logs_of_a_kind_survive_and_other_files_are_untouched(self):
         config = Config(environ={"LC_HOME": self.home, "LC_WORKER_HISTORY": "2"})
         runner = ScriptRunnerAdapter(config)
@@ -204,3 +225,31 @@ class TestRunLog(ScriptRunnerTestCase):
         self.assertEqual(len(self.logs("script-")), 2)
         self.assertEqual(self.logs("worker-"), ["worker-agent-x.log"])
         self.assertEqual(self.logs("guard-"), ["guard-g-1.log"])
+
+
+class TestPrunedScriptLog(ScriptRunnerTestCase):
+    def test_a_done_script_step_whose_log_was_pruned_resolves_to_no_log(self):
+        from lightcycle.adapters.fsio import FsAdapter
+        from lightcycle.application.pool.resolve_log import ResolveLogInput, ResolveLogUseCase
+        from tests.support.fake_store import FakeStore
+        from tests.support.fake_workers import FakeWorkers
+        from tests.support.step_factory import create_owned_step
+
+        config = Config(environ={"LC_HOME": self.home, "LC_WORKER_HISTORY": "2"})
+        runner = ScriptRunnerAdapter(config)
+        path = self.script("true\n")
+        store = FakeStore()
+        steps = []
+        for index in range(3):
+            step = create_owned_step(store, "s%d" % index, step="script", role="engine")
+            log_path = runner.run(path, self.dir, self.env(), "", 30, "script-t").log_path
+            store.add_artifact(step, "log", log_path, internal=True)
+            store.complete_node(step, "done")
+            steps.append(step)
+            time.sleep(0.01)
+        resolve = ResolveLogUseCase(store, FakeWorkers(), FsAdapter(config), config)
+
+        resolved = [resolve.execute(ResolveLogInput(target=step)).path for step in steps]
+
+        self.assertIsNone(resolved[0])
+        self.assertTrue(all(resolved[1:]))

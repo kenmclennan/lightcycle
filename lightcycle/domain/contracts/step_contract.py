@@ -23,6 +23,9 @@ class StepContract:
     def optional_inputs(self):
         return {r.type for r in self.accepts if not r.required}
 
+    def produced_types(self):
+        return tuple(r.type for r in self.produces)
+
     def required_outputs(self):
         return {r.type for r in self.produces if r.required}
 
