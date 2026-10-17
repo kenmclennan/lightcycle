@@ -144,7 +144,7 @@ class Container:
             worktrees=worktrees,
             git=self.git,
             backup_gate=BackupUseCase(self.backup, self.config),
-            fs=self.worker_log,
+            worker_log=self.worker_log,
             flow_service=flow,
             spin_port=self.spin,
             usage_gate=LiveUsageAccrualUseCase(
@@ -166,7 +166,7 @@ class Container:
         return SweepUseCase(
             self.store, self.workers,
             worktrees=worktrees_for(self, flow=flow),
-            git=self.git, fs=self.worker_log,
+            git=self.git, worker_log=self.worker_log,
             spin_port=self.spin, spin_cap=self.config.spin_cap(),
             stream=self.claude_stream,
         )
@@ -179,10 +179,10 @@ class Container:
         )
 
 
-def make_flow_service(fs, store, config, workflow_source):
+def make_flow_service(workflow_bundle, store, config, workflow_source):
     from lightcycle.application.services.flow import FlowService
 
-    return FlowService(fs, store, config, workflow_source)
+    return FlowService(workflow_bundle, store, config, workflow_source)
 
 
 def make_worktrees(store, git, fs, config, flow, scaffold=None):

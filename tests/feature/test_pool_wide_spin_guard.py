@@ -286,7 +286,7 @@ def _pool_ticks(ctx):
         ctx["store"], ctx["workers"], spawner, ctx["config"],
         monitor=NoOpMonitor(), breaker_gate=breaker_gate,
         hook_completions=NoOpHookCompletions(), worktrees=NoOpWorktrees(), git=NoOpGit(),
-        backup_gate=NoOpBackupGate(), fs=ctx["fs"], flow_service=NoOpFlowService(),
+        backup_gate=NoOpBackupGate(), worker_log=ctx["fs"], flow_service=NoOpFlowService(),
         spin_port=ctx["spin_port"], usage_gate=NoOpUsageGate(), stream=ClaudeStreamAdapter(),
         memory_gate=NoOpMemoryGate(),
         schedule_gate=NoOpScheduleGate(),

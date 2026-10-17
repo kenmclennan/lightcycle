@@ -53,7 +53,7 @@ class TestStopPool(unittest.TestCase):
         )
         git = _Git(dirty=dirty)
         sweep = SweepUseCase(
-            store, workers, worktrees=_Worktrees(), git=git, fs=NoOpFs(),
+            store, workers, worktrees=_Worktrees(), git=git, worker_log=NoOpFs(),
             spin_port=NoOpSpinPort(), spin_cap=3, stream=NoOpStream(),
         )
         return store, workers, git, step, StopPoolUseCase(workers, sweep)
@@ -83,7 +83,7 @@ class TestStopPool(unittest.TestCase):
         store = FakeStore()
         workers = FakeWorkers()
         sweep = SweepUseCase(
-            store, workers, worktrees=NoOpWorktrees(), git=NoOpGit(), fs=NoOpFs(),
+            store, workers, worktrees=NoOpWorktrees(), git=NoOpGit(), worker_log=NoOpFs(),
             spin_port=NoOpSpinPort(), spin_cap=3, stream=NoOpStream(),
         )
         resp = StopPoolUseCase(workers, sweep).execute(100.0, 120, 1800)
@@ -124,7 +124,7 @@ class TestStopPool(unittest.TestCase):
             workers=[{"spawnid": "spawn-1", "pid": 4242, "step": step, "started": 0, "role": "agent"}],
         )
         sweep = SweepUseCase(
-            store, workers, worktrees=_Worktrees(), git=_Git(), fs=NoOpFs(),
+            store, workers, worktrees=_Worktrees(), git=_Git(), worker_log=NoOpFs(),
             spin_port=NoOpSpinPort(), spin_cap=3, stream=NoOpStream(),
         )
         uc = StopPoolUseCase(workers, sweep, sleep=lambda s: None)
@@ -156,7 +156,7 @@ class TestStopPool(unittest.TestCase):
             workers=[{"spawnid": "spawn-1", "pid": 4242, "step": step, "started": 0, "role": "agent"}],
         )
         sweep = SweepUseCase(
-            store, workers, worktrees=_Worktrees(), git=_Git(), fs=NoOpFs(),
+            store, workers, worktrees=_Worktrees(), git=_Git(), worker_log=NoOpFs(),
             spin_port=NoOpSpinPort(), spin_cap=3, stream=NoOpStream(),
         )
         ticks = iter(range(1000))

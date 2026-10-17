@@ -99,7 +99,7 @@ class FakeFs:
 
 def _run_sweep(ctx):
     use_case = SweepUseCase(
-        ctx["store"], ctx["workers"], worktrees=NoOpWorktrees(), git=NoOpGit(), fs=ctx["fs"],
+        ctx["store"], ctx["workers"], worktrees=NoOpWorktrees(), git=NoOpGit(), worker_log=ctx["fs"],
         spin_port=ctx["spin_port"], spin_cap=ctx["spin_cap"], stream=ClaudeStreamAdapter(),
     )
     ctx["result"] = use_case.execute(ctx["now"], MAX_BOOT, STALL_SECONDS)

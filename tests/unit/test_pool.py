@@ -260,7 +260,7 @@ class FakeConfig:
 
 def make_sweep(store, workers, **overrides):
     kwargs = dict(
-        worktrees=NoOpWorktrees(), git=NoOpGit(), fs=NoOpFs(), spin_port=NoOpSpinPort(),
+        worktrees=NoOpWorktrees(), git=NoOpGit(), worker_log=NoOpFs(), spin_port=NoOpSpinPort(),
         spin_cap=3, stream=NoOpStream(),
     )
     kwargs.update(overrides)
@@ -271,7 +271,7 @@ def make_tick(store, workers, spawner, config, **overrides):
     kwargs = dict(
         monitor=NoOpMonitor(), breaker_gate=NoOpBreakerGate(),
         hook_completions=NoOpHookCompletions(), worktrees=NoOpWorktrees(), git=NoOpGit(),
-        backup_gate=NoOpBackupGate(), fs=NoOpFs(), flow_service=NoOpFlowService(),
+        backup_gate=NoOpBackupGate(), worker_log=NoOpFs(), flow_service=NoOpFlowService(),
         spin_port=NoOpSpinPort(), usage_gate=NoOpUsageGate(), stream=NoOpStream(),
         memory_gate=NoOpMemoryGate(),
         schedule_gate=NoOpScheduleGate(),
@@ -737,7 +737,7 @@ class TestSweep(unittest.TestCase):
             alive_pids={999},
         )
         fs = FakeFs(log_mtimes={"/l/1.log": 1000 - 1800 - 1})
-        result = make_sweep(s, workers, fs=fs, stream=ClaudeStreamAdapter()).execute(now=1000, max_boot=120, stall_seconds=1800)
+        result = make_sweep(s, workers, worker_log=fs, stream=ClaudeStreamAdapter()).execute(now=1000, max_boot=120, stall_seconds=1800)
         self.assertEqual(workers.killed, [999])
         self.assertEqual(workers.checked, ["stalled-sp"])
         self.assertIn(step, result.swept)
@@ -755,7 +755,7 @@ class TestSweep(unittest.TestCase):
             alive_pids={999},
         )
         fs = FakeFs(log_mtimes={"/l/1.log": 1000 - 1800 + 1})
-        result = make_sweep(s, workers, fs=fs, stream=ClaudeStreamAdapter()).execute(now=1000, max_boot=120, stall_seconds=1800)
+        result = make_sweep(s, workers, worker_log=fs, stream=ClaudeStreamAdapter()).execute(now=1000, max_boot=120, stall_seconds=1800)
         self.assertEqual(workers.killed, [])
         self.assertEqual(result.swept, [])
         self.assertEqual(s.get_node(step).state, "running")
@@ -767,7 +767,7 @@ class TestSweep(unittest.TestCase):
             alive_pids={999},
         )
         fs = FakeFs(log_mtimes={"/l/1.log": 0})
-        result = make_sweep(s, workers, fs=fs, stream=ClaudeStreamAdapter()).execute(now=1000, max_boot=120, stall_seconds=1800)
+        result = make_sweep(s, workers, worker_log=fs, stream=ClaudeStreamAdapter()).execute(now=1000, max_boot=120, stall_seconds=1800)
         self.assertEqual(workers.killed, [])
         self.assertEqual(result.killed, [])
 
@@ -794,7 +794,7 @@ class TestSweep(unittest.TestCase):
             files={"/l/1.log": log_line.encode()},
             log_mtimes={"/l/1.log": 1000 - 1800 - 1},
         )
-        result = make_sweep(s, workers, fs=fs, stream=ClaudeStreamAdapter()).execute(now=1000, max_boot=120, stall_seconds=1800)
+        result = make_sweep(s, workers, worker_log=fs, stream=ClaudeStreamAdapter()).execute(now=1000, max_boot=120, stall_seconds=1800)
         self.assertEqual(workers.killed, [])
         self.assertEqual(result.swept, [])
         self.assertEqual(s.get_node(step).state, "running")
@@ -833,7 +833,7 @@ class TestSweep(unittest.TestCase):
             alive_pids={999},
         )
         fs = FakeFs(log_mtimes={"/l/1.log": 1000 - 1800 - 1})
-        result = make_sweep(s, workers, fs=fs, stream=ClaudeStreamAdapter()).execute(now=1000, max_boot=120, stall_seconds=1800)
+        result = make_sweep(s, workers, worker_log=fs, stream=ClaudeStreamAdapter()).execute(now=1000, max_boot=120, stall_seconds=1800)
         self.assertEqual(workers.killed, [999])
         self.assertIn(step, result.swept)
         self.assertEqual(s.get_node(step).state, "queued")
@@ -851,7 +851,7 @@ class TestSweep(unittest.TestCase):
     def test_a_no_work_death_below_the_cap_is_reclaimed_not_parked(self):
         spin_port = FakeSpinPort()
         s, step, workers, fs = self._dead_no_work_setup(spin_port)
-        result = make_sweep(s, workers, fs=fs, spin_port=spin_port, spin_cap=3, stream=ClaudeStreamAdapter()).execute(
+        result = make_sweep(s, workers, worker_log=fs, spin_port=spin_port, spin_cap=3, stream=ClaudeStreamAdapter()).execute(
             now=1000, max_boot=120, stall_seconds=1800
         )
         self.assertIn(step, result.swept)
@@ -872,7 +872,7 @@ class TestSweep(unittest.TestCase):
                 workers=[{"spawnid": spawnid, "pid": i + 1, "step": step, "started": 0, "log": log}]
             )
             fs = FakeFs(files={log: _NO_WORK_LOG})
-            result = make_sweep(s, workers, fs=fs, spin_port=spin_port, spin_cap=3, stream=ClaudeStreamAdapter()).execute(
+            result = make_sweep(s, workers, worker_log=fs, spin_port=spin_port, spin_cap=3, stream=ClaudeStreamAdapter()).execute(
                 now=1000 + i, max_boot=120, stall_seconds=1800
             )
         self.assertEqual(result.parked, [step])
@@ -894,7 +894,7 @@ class TestSweep(unittest.TestCase):
                 workers=[{"spawnid": spawnid, "pid": i + 1, "step": step, "started": 0, "log": log}]
             )
             fs = FakeFs(files={log: _NO_WORK_LOG})
-            make_sweep(s, workers, fs=fs, spin_port=spin_port, spin_cap=3, stream=ClaudeStreamAdapter()).execute(
+            make_sweep(s, workers, worker_log=fs, spin_port=spin_port, spin_cap=3, stream=ClaudeStreamAdapter()).execute(
                 now=1000 + i, max_boot=120, stall_seconds=1800
             )
 
@@ -905,7 +905,7 @@ class TestSweep(unittest.TestCase):
             workers=[{"spawnid": "dead-real-activity", "pid": 50, "step": step, "started": 0, "log": log}]
         )
         fs = FakeFs(files={log: _REAL_ACTIVITY_LOG})
-        result = make_sweep(s, workers, fs=fs, spin_port=spin_port, spin_cap=3, stream=ClaudeStreamAdapter()).execute(
+        result = make_sweep(s, workers, worker_log=fs, spin_port=spin_port, spin_cap=3, stream=ClaudeStreamAdapter()).execute(
             now=2000, max_boot=120, stall_seconds=1800
         )
         self.assertIn(step, result.swept)
@@ -920,7 +920,7 @@ class TestSweep(unittest.TestCase):
                 workers=[{"spawnid": spawnid, "pid": 60 + i, "step": step, "started": 0, "log": log}]
             )
             fs = FakeFs(files={log: _NO_WORK_LOG})
-            result = make_sweep(s, workers, fs=fs, spin_port=spin_port, spin_cap=3, stream=ClaudeStreamAdapter()).execute(
+            result = make_sweep(s, workers, worker_log=fs, spin_port=spin_port, spin_cap=3, stream=ClaudeStreamAdapter()).execute(
                 now=3000 + i, max_boot=120, stall_seconds=1800
             )
         self.assertEqual(result.parked, [], "streak should not yet have reached the cap again")
@@ -951,7 +951,7 @@ class TestSweep(unittest.TestCase):
             alive_pids={999},
         )
         fs = FakeFs(log_mtimes={"/l/1.log": 1000 - 1800 - 1})
-        result = make_sweep(s, workers, fs=fs, spin_port=spin_port, spin_cap=3, stream=ClaudeStreamAdapter()).execute(
+        result = make_sweep(s, workers, worker_log=fs, spin_port=spin_port, spin_cap=3, stream=ClaudeStreamAdapter()).execute(
             now=1000, max_boot=120, stall_seconds=1800
         )
         self.assertIn(step, result.swept)

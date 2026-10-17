@@ -7,9 +7,9 @@ MAX_ACCRUAL_READ_BYTES = 5_000_000
 
 
 class LiveUsageAccrualUseCase:
-    def __init__(self, store, fs, workers, config, stream):
+    def __init__(self, store, worker_log, workers, config, stream):
         self._store = store
-        self._fs = fs
+        self._worker_log = worker_log
         self._workers = workers
         self._config = config
         self._stream = stream
@@ -28,7 +28,7 @@ class LiveUsageAccrualUseCase:
     def _accrue(self, w, rates):
         resume = self._store.usage_accrual_state(w.spawnid) or UsageResume()
         offset = resume.offset
-        data, _ = self._fs.read_from_bounded(w.log, offset, MAX_ACCRUAL_READ_BYTES)
+        data, _ = self._worker_log.read_from_bounded(w.log, offset, MAX_ACCRUAL_READ_BYTES)
         if not data:
             return
         last_newline = data.rfind(b"\n")
