@@ -1,7 +1,6 @@
 import contextlib
 import os
 import subprocess
-from subprocess import Popen
 import threading
 import time
 from dataclasses import dataclass
@@ -103,7 +102,7 @@ def _feed_stdin(proc, stdin_bytes):
 
 
 def _run_streamed(script_path, cwd, env, stdin_bytes, timeout, tee):
-    proc = Popen(
+    proc = subprocess.Popen(
         [script_path], cwd=cwd, env=env,
         stdin=subprocess.DEVNULL if stdin_bytes is None else subprocess.PIPE,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
