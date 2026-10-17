@@ -651,7 +651,7 @@ def cmd_logs(argv):
     a = build_parser(COMMANDS["logs"]).parse_args(argv)
     try:
         path = (
-            ResolveLogUseCase(_container.store, _container.workers, _container.config)
+            ResolveLogUseCase(_container.store, _container.workers, _container.fs, _container.config)
             .execute(ResolveLogInput(target=a.target))
             .path
         )
@@ -1185,9 +1185,9 @@ def cmd_reopen(argv):
 def cmd_trace(argv):
     a = build_parser(COMMANDS["trace"]).parse_args(argv)
     try:
-        resp = TraceUseCase(_container.store, _container.workers, _container.config).execute(
-            TraceInput(item=a.item)
-        )
+        resp = TraceUseCase(
+            _container.store, _container.workers, _container.fs, _container.config
+        ).execute(TraceInput(item=a.item))
     except RegistryUnreadable as e:
         sys.stderr.write("%s\n" % e)
         return 1

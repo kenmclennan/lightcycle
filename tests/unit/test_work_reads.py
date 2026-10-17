@@ -1,5 +1,4 @@
 import os
-import tempfile
 import unittest
 
 from lightcycle.application.work import (
@@ -146,7 +145,7 @@ class TestTrace(unittest.TestCase):
         s.add_artifact(sid, "spec", "specs/x.md")
         k = s.create_step(step="build", role="agent", parent=sid)
         workers = _Workers([{"role": "agent", "step": k, "log": "/l/k.log"}])
-        resp = TraceUseCase(s, workers, _Config()).execute(TraceInput(item=sid))
+        resp = TraceUseCase(s, workers, FakeFs(), _Config()).execute(TraceInput(item=sid))
         self.assertEqual(resp.item.id, sid)
         self.assertEqual(resp.artifacts[0].type, "spec")
         self.assertEqual(resp.steps[0].id, k)
@@ -157,7 +156,7 @@ class TestTrace(unittest.TestCase):
         sid = s.create_item("st", "d")
         k = s.create_step(step="audit", role="agent", parent=sid)
         s.add_artifact(k, "findings", "the digest")
-        resp = TraceUseCase(s, _Workers([]), _Config()).execute(TraceInput(item=sid))
+        resp = TraceUseCase(s, _Workers([]), FakeFs(), _Config()).execute(TraceInput(item=sid))
         self.assertEqual(
             resp.as_dict()["steps"][0]["artifacts"][0]["type"], "findings")
         self.assertEqual(
@@ -167,14 +166,14 @@ class TestTrace(unittest.TestCase):
         s = FakeStore()
         sid = s.create_item("st", "a description")
         s.create_step(step="build", role="agent", parent=sid)
-        resp = TraceUseCase(s, _Workers([]), _Config()).execute(TraceInput(item=sid))
+        resp = TraceUseCase(s, _Workers([]), FakeFs(), _Config()).execute(TraceInput(item=sid))
         self.assertEqual(resp.steps[0].role, "agent")
 
     def test_human_role_survives_to_the_trace_unchanged(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")
         s.create_step(step="ready-merge", role="human", parent=sid)
-        resp = TraceUseCase(s, _Workers([]), _Config()).execute(TraceInput(item=sid))
+        resp = TraceUseCase(s, _Workers([]), FakeFs(), _Config()).execute(TraceInput(item=sid))
         self.assertEqual(resp.steps[0].role, "human")
 
     def test_resolves_log_from_disk_when_registry_entry_is_pruned(self):
@@ -182,12 +181,9 @@ class TestTrace(unittest.TestCase):
         sid = s.create_item("st", "a description")
         k = s.create_step(step="build", role="agent", parent=sid)
         s.assign(k, "sp1")
-        root = tempfile.mkdtemp()
-        os.makedirs(os.path.join(root, "logs"))
+        root = "/grid"
         log_path = os.path.join(root, "logs", "worker-agent-sp1.log")
-        with open(log_path, "w") as f:
-            f.write("log\n")
-        resp = TraceUseCase(s, _Workers([]), _Config(root=root)).execute(TraceInput(item=sid))
+        resp = TraceUseCase(s, _Workers([]), FakeFs(files={log_path: b"log\n"}), _Config(root=root)).execute(TraceInput(item=sid))
         self.assertEqual(resp.steps[0].log, log_path)
 
     def test_resolves_no_log_when_pruned_and_nothing_on_disk(self):
@@ -195,16 +191,14 @@ class TestTrace(unittest.TestCase):
         sid = s.create_item("st", "a description")
         k = s.create_step(step="build", role="agent", parent=sid)
         s.assign(k, "sp1")
-        root = tempfile.mkdtemp()
-        resp = TraceUseCase(s, _Workers([]), _Config(root=root)).execute(TraceInput(item=sid))
+        resp = TraceUseCase(s, _Workers([]), FakeFs(), _Config(root="/grid")).execute(TraceInput(item=sid))
         self.assertIsNone(resp.steps[0].log)
 
     def test_resolves_no_log_for_a_step_never_claimed(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")
         s.create_step(step="build", role="agent", parent=sid)
-        root = tempfile.mkdtemp()
-        resp = TraceUseCase(s, _Workers([]), _Config(root=root)).execute(TraceInput(item=sid))
+        resp = TraceUseCase(s, _Workers([]), FakeFs(), _Config(root="/grid")).execute(TraceInput(item=sid))
         self.assertIsNone(resp.steps[0].log)
 
 

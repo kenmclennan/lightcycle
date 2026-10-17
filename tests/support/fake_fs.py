@@ -153,6 +153,9 @@ class FakeFs(FsPort, WorkflowBundlePort, WorkerLogPort):
     def exists(self, path):
         return path in self._files or path in self._dirs
 
+    def real_path(self, path):
+        return path
+
     def read_from(self, path, offset):
         content = self._files.get(path)
         if content is None:

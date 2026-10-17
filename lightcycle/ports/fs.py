@@ -19,6 +19,10 @@ class FsPort(ABC):
         pass
 
     @abstractmethod
+    def real_path(self, path):
+        pass
+
+    @abstractmethod
     def is_executable(self, path):
         pass
 

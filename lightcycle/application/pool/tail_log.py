@@ -21,9 +21,9 @@ class TailLogResult:
 
 
 class TailLogUseCase:
-    def __init__(self, store, workers, fs, config):
+    def __init__(self, store, workers, fs, probe, config):
         self._store = store
-        self._resolve = ResolveLogUseCase(store, workers, config)
+        self._resolve = ResolveLogUseCase(store, workers, probe, config)
         self._workers = workers
         self._fs = fs
 

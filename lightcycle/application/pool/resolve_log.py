@@ -16,9 +16,10 @@ class ResolveLogResponse:
 
 
 class ResolveLogUseCase:
-    def __init__(self, store, workers, config):
+    def __init__(self, store, workers, fs, config):
         self._store = store
         self._workers = workers
+        self._fs = fs
         self._config = config
 
     def execute(self, input: ResolveLogInput) -> ResolveLogResponse:
@@ -37,13 +38,13 @@ class ResolveLogUseCase:
         except KeyError:
             return ResolveLogResponse(path=None)
         recorded = latest_log_path(self._store.item_artifacts(node.id))
-        if recorded and os.path.exists(recorded):
+        if recorded and self._fs.exists(recorded):
             return ResolveLogResponse(path=recorded)
         if node.role and node.claimed_by:
             candidate = os.path.join(
                 self._config.data_root(), "logs", worker_log_filename(node.role, node.claimed_by)
             )
-            if os.path.exists(candidate):
+            if self._fs.exists(candidate):
                 return ResolveLogResponse(path=candidate)
         return ResolveLogResponse(path=None)
 

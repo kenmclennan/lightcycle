@@ -41,9 +41,10 @@ class TraceResponse:
 
 
 class TraceUseCase:
-    def __init__(self, store, workers, config):
+    def __init__(self, store, workers, fs, config):
         self._store = store
         self._workers = workers
+        self._fs = fs
         self._config = config
 
     def _log_for_step(self, node):
@@ -54,7 +55,7 @@ class TraceUseCase:
             candidate = os.path.join(
                 self._config.data_root(), "logs", worker_log_filename(node.role, node.claimed_by)
             )
-            if os.path.exists(candidate):
+            if self._fs.exists(candidate):
                 return candidate
         return latest_log_path(self._store.item_artifacts(node.id))
 

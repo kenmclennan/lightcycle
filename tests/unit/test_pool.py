@@ -2,7 +2,6 @@ import contextlib
 import io
 import json
 import os
-import tempfile
 import unittest
 
 from lightcycle.adapters.claude_stream import ClaudeStreamAdapter
@@ -296,7 +295,7 @@ class TestListWorkers(unittest.TestCase):
 
 class TestResolveLog(unittest.TestCase):
     def test_run_target(self):
-        resp = ResolveLogUseCase(FakeStore(), FakeWorkers(), FakeConfig(root="/grid")).execute(
+        resp = ResolveLogUseCase(FakeStore(), FakeWorkers(), FakeFs(), FakeConfig(root="/grid")).execute(
             ResolveLogInput(target="run")
         )
         self.assertEqual(resp.path, "/grid/logs/run.log")
@@ -309,19 +308,19 @@ class TestResolveLog(unittest.TestCase):
             ]
         )
         self.assertEqual(
-            ResolveLogUseCase(FakeStore(), workers, FakeConfig())
+            ResolveLogUseCase(FakeStore(), workers, FakeFs(), FakeConfig())
             .execute(ResolveLogInput(target="b1")).path,
             "/l/old.log",
         )
         self.assertEqual(
-            ResolveLogUseCase(FakeStore(), workers, FakeConfig())
+            ResolveLogUseCase(FakeStore(), workers, FakeFs(), FakeConfig())
             .execute(ResolveLogInput(target="coder")).path,
             "/l/new.log",
         )
 
     def test_unknown_target_is_none(self):
         self.assertIsNone(
-            ResolveLogUseCase(FakeStore(), FakeWorkers(), FakeConfig())
+            ResolveLogUseCase(FakeStore(), FakeWorkers(), FakeFs(), FakeConfig())
             .execute(ResolveLogInput(target="nope"))
             .path
         )
@@ -330,18 +329,15 @@ class TestResolveLog(unittest.TestCase):
         s = FakeStore()
         step_id = create_owned_step(s, "build: x", step="build", role="agent")
         s.assign(step_id, "sp1")
-        root = tempfile.mkdtemp()
-        os.makedirs(os.path.join(root, "logs"))
+        root = "/grid"
         log_path = os.path.join(root, "logs", "worker-agent-sp1.log")
-        with open(log_path, "w") as f:
-            f.write("log\n")
-        resp = ResolveLogUseCase(s, FakeWorkers(), FakeConfig(root=root)).execute(
+        resp = ResolveLogUseCase(s, FakeWorkers(), FakeFs(files={log_path: b"log\n"}), FakeConfig(root=root)).execute(
             ResolveLogInput(target=step_id)
         )
         self.assertEqual(resp.path, log_path)
 
     def test_role_only_target_is_not_covered_by_the_durable_fallback(self):
-        resp = ResolveLogUseCase(FakeStore(), FakeWorkers(), FakeConfig()).execute(
+        resp = ResolveLogUseCase(FakeStore(), FakeWorkers(), FakeFs(), FakeConfig()).execute(
             ResolveLogInput(target="coder")
         )
         self.assertIsNone(resp.path)
@@ -349,7 +345,7 @@ class TestResolveLog(unittest.TestCase):
     def test_step_never_claimed_by_a_spawned_worker_is_none(self):
         s = FakeStore()
         step_id = create_owned_step(s, "build: x", step="build", role="agent")
-        resp = ResolveLogUseCase(s, FakeWorkers(), FakeConfig()).execute(
+        resp = ResolveLogUseCase(s, FakeWorkers(), FakeFs(), FakeConfig()).execute(
             ResolveLogInput(target=step_id)
         )
         self.assertIsNone(resp.path)
@@ -359,7 +355,7 @@ class TestTailLog(unittest.TestCase):
     def test_max_bytes_set_calls_read_tail_and_ignores_offset(self):
         fs = FakeFs(files={"/l/x.log": b"01234\n6789"})
         workers = FakeWorkers(workers=[{"role": "coder", "step": "s1", "log": "/l/x.log", "pid": 1}])
-        result = TailLogUseCase(FakeStore(), workers, fs, FakeConfig()).execute(
+        result = TailLogUseCase(FakeStore(), workers, fs, FakeFs(), FakeConfig()).execute(
             TailLogInput(target="s1", offset=999, max_bytes=4)
         )
         self.assertEqual(result.data, b"6789")
@@ -368,7 +364,7 @@ class TestTailLog(unittest.TestCase):
     def test_max_bytes_unset_is_unchanged_from_today(self):
         fs = FakeFs(files={"/l/x.log": b"0123456789"})
         workers = FakeWorkers(workers=[{"role": "coder", "step": "s1", "log": "/l/x.log", "pid": 1}])
-        result = TailLogUseCase(FakeStore(), workers, fs, FakeConfig()).execute(
+        result = TailLogUseCase(FakeStore(), workers, fs, FakeFs(), FakeConfig()).execute(
             TailLogInput(target="s1", offset=4)
         )
         self.assertEqual(result.data, b"456789")

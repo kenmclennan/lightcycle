@@ -28,7 +28,7 @@ class _Config:
 
 
 def _add(store, config, **kw):
-    return AddProjectUseCase(store, FakeGit(), config, FakeFs()).execute(AddProjectInput(**kw))
+    return AddProjectUseCase(store, FakeGit(), config, FakeFs(files={config.config_path(): b""})).execute(AddProjectInput(**kw))
 
 
 class TestProjectFacets(unittest.TestCase):
