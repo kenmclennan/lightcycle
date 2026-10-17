@@ -187,6 +187,7 @@ from lightcycle.container import (
     worktrees_for,
 )
 from lightcycle.ports.store import NodeNotFoundError
+from lightcycle.ports.upgrade import UpgradeInstallError
 from lightcycle.ports.workers import RegistryUnreadable
 from lightcycle.ports.workflow_source import WorkflowSourceError
 
@@ -385,6 +386,9 @@ def cmd_upgrade(argv):
         return 1
     except (RemoteVersionUnavailableError, ValueError) as e:
         sys.stderr.write("could not check for updates: %s\n" % e)
+        return 1
+    except UpgradeInstallError as e:
+        sys.stderr.write("lc upgrade failed: %s\n" % e)
         return 1
     if not resp.available:
         print("already at latest (%s)" % resp.current)

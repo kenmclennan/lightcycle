@@ -11,7 +11,7 @@ from lightcycle.application.setup import (
     VenvBusyError,
 )
 from lightcycle.cli import cmd_upgrade
-from lightcycle.ports.upgrade import UpgradePort
+from lightcycle.ports.upgrade import UpgradeInstallError, UpgradePort
 
 
 class FakeUpgradePort(UpgradePort):
@@ -145,6 +145,15 @@ class TestCmdUpgrade(unittest.TestCase):
                 rc = cmd_upgrade([]) or 0
         self.assertEqual(rc, 1)
         self.assertIn("could not check for updates", err.getvalue())
+
+    def test_reports_a_failed_install_in_one_line_and_exits_one(self):
+        with patch("lightcycle.cli.upgrade") as fake_upgrade:
+            fake_upgrade.side_effect = UpgradeInstallError("install exited with status 2")
+            err = io.StringIO()
+            with redirect_stderr(err):
+                rc = cmd_upgrade([]) or 0
+        self.assertEqual(rc, 1)
+        self.assertEqual(err.getvalue(), "lc upgrade failed: install exited with status 2\n")
 
 
 if __name__ == "__main__":

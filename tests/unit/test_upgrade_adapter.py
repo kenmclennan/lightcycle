@@ -4,6 +4,7 @@ import urllib.error
 from unittest.mock import patch
 
 from lightcycle.adapters.upgrade import UpgradeAdapter
+from lightcycle.ports.upgrade import UpgradeInstallError
 from lightcycle.application.setup.upgrade import (
     ProcessListUnreadableError,
     RemoteVersionUnavailableError,
@@ -43,6 +44,20 @@ class TestFetchRemoteVersion(unittest.TestCase):
                    side_effect=urllib.error.URLError("unreachable")):
             with self.assertRaises(RemoteVersionUnavailableError):
                 _adapter().fetch_remote_version()
+
+
+class TestInstallUpgrade(unittest.TestCase):
+    def test_translates_a_nonzero_exit_into_upgrade_install_error(self):
+        failure = subprocess.CalledProcessError(2, ["pipx"])
+        with patch("lightcycle.adapters.upgrade.subprocess.run", side_effect=failure):
+            with self.assertRaisesRegex(UpgradeInstallError, "status 2"):
+                _adapter().install_upgrade()
+
+    def test_translates_a_timeout_into_upgrade_install_error(self):
+        failure = subprocess.TimeoutExpired(["pipx"], 300)
+        with patch("lightcycle.adapters.upgrade.subprocess.run", side_effect=failure):
+            with self.assertRaisesRegex(UpgradeInstallError, "300 seconds"):
+                _adapter().install_upgrade()
 
 
 if __name__ == "__main__":

@@ -8,7 +8,7 @@ from lightcycle.application.setup.upgrade import (
     RemoteVersionUnavailableError,
     parse_remote_version,
 )
-from lightcycle.ports.upgrade import UpgradePort
+from lightcycle.ports.upgrade import UpgradeInstallError, UpgradePort
 
 _REMOTE_INIT_URL = "https://raw.githubusercontent.com/kenmclennan/lightcycle/main/lightcycle/__init__.py"
 _INSTALL_CMD = ["pipx", "install", "--force", "git+https://github.com/kenmclennan/lightcycle"]
@@ -44,7 +44,12 @@ class UpgradeAdapter(UpgradePort):
     def install_upgrade(self):
         env = self._config.base_env()
         env["UV_VENV_CLEAR"] = "1"
-        subprocess.run(_INSTALL_CMD, check=True, env=env, timeout=300)
+        try:
+            subprocess.run(_INSTALL_CMD, check=True, env=env, timeout=300)
+        except subprocess.CalledProcessError as e:
+            raise UpgradeInstallError("install exited with status %d" % e.returncode) from e
+        except subprocess.TimeoutExpired as e:
+            raise UpgradeInstallError("install timed out after %d seconds" % e.timeout) from e
 
     def installed_version(self):
         try:

@@ -1,6 +1,10 @@
 from abc import ABC, abstractmethod
 
 
+class UpgradeInstallError(Exception):
+    pass
+
+
 class UpgradePort(ABC):
     @abstractmethod
     def list_processes(self):
