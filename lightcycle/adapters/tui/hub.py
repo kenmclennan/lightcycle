@@ -61,6 +61,10 @@ from lightcycle.application.work import (
     StepRunUseCase,
 )
 from lightcycle.application.work.current_step import current_step
+from lightcycle.application.work.step_focus import (
+    ResolveStepFocusInput,
+    ResolveStepFocusUseCase,
+)
 from lightcycle.application.work.project_of import project_of, short_project_label
 from lightcycle.domain.feedback import Duration, parse_reflections
 from lightcycle.domain.money import Cost
@@ -68,6 +72,10 @@ from lightcycle.domain.runs import pass_number
 from lightcycle.domain.work import (
     LogKind, State, is_human_step, item_active_seconds, item_cost, parse_timestamp,
     row_bucket, step_cost, type_label, item_viewable_artifacts, latest_log_path,
+)
+from lightcycle.domain.work.step_focus import (
+    FOCUS_ARTIFACT, FOCUS_DESCRIPTION, FOCUS_DETAIL, FOCUS_LOG, FOCUS_PR, FOCUS_REASON,
+    detail_field_entries,
 )
 from lightcycle.domain.workflows.identity import parse_pin
 from lightcycle.render import (
@@ -100,6 +108,7 @@ WORKFLOW_UNRESOLVED = "workflow unresolved"
 _ITEM_TAB_ORDER = ("description", "workflow", "artifacts", "cost")
 _STEP_TAB_ORDER = ("detail", "workflow", "log", "cost")
 _HUMAN_STEP_TAB_ORDER = ("description",) + _STEP_TAB_ORDER
+_HUMAN_STEP_ARTIFACT_TAB_ORDER = ("description", "detail", "artifacts", "workflow", "log", "cost")
 _TAB_LABELS = {
     "description": "Description", "workflow": "Workflow", "artifacts": "Artifacts",
     "detail": "Detail", "log": "Log", "cost": "Cost",
@@ -111,23 +120,28 @@ def _is_human_step(node):
     return node.type == "step" and display_role(node.role) == "human"
 
 
-def _tab_order(node):
+def _tab_order(node, focus=None):
     if node.type == "item":
         return _ITEM_TAB_ORDER
-    return _HUMAN_STEP_TAB_ORDER if _is_human_step(node) else _STEP_TAB_ORDER
+    if not _is_human_step(node):
+        return _STEP_TAB_ORDER
+    if focus is not None and focus.kind == FOCUS_ARTIFACT:
+        return _HUMAN_STEP_ARTIFACT_TAB_ORDER
+    return _HUMAN_STEP_TAB_ORDER
 
 
-_BARE_DETAIL_KEYS = frozenset(("stage", "state", "role"))
+_TAB_BY_FOCUS = {
+    FOCUS_LOG: "log",
+    FOCUS_REASON: "detail",
+    FOCUS_PR: "detail",
+    FOCUS_DETAIL: "detail",
+    FOCUS_DESCRIPTION: "description",
+    FOCUS_ARTIFACT: "artifacts",
+}
 
 
-def landing_tab(node, fields=()):
-    if node.type == "item":
-        return "description"
-    if _is_human_step(node) and node.state != State.DONE:
-        if all(key in _BARE_DETAIL_KEYS for key, _value in fields):
-            return "description"
-        return "detail"
-    return "log" if node.state == State.RUNNING else "detail"
+def landing_tab(focus):
+    return _TAB_BY_FOCUS[focus.kind]
 
 
 def display_role(role):
@@ -285,39 +299,8 @@ def _hierarchy_default_row_id(store, node):
 
 
 def detail_fields(step, run, session_id, reflections, worktree_path=None):
-    fields = []
-    if run.pr:
-        fields.append(("pr", run.pr))
-    if run.branch:
-        fields.append(("branch", run.branch))
-    if worktree_path:
-        fields.append(("worktree", worktree_path))
-    fields.append(("stage", step.stage))
-    fields.append(("state", str(step.state)))
-    fields.append(("role", display_role(step.role)))
-    if step.model:
-        fields.append(("model", step.model))
-    if step.claimed_by:
-        fields.append(("claimed_by", step.claimed_by))
-    if session_id:
-        fields.append(("session_id", session_id))
-    if step.outcome:
-        fields.append(("outcome", step.outcome))
-    if step.notes:
-        fields.append(("notes", step.notes))
-    if step.park.needs:
-        fields.append(("needs", step.park.needs))
-    if step.park.reason:
-        fields.append(("reason", step.park.reason))
-    if step.park.tried:
-        fields.append(("tried", step.park.tried))
-    if reflections:
-        for index, text in enumerate(reflections):
-            key = "reflection" if index == 0 else "reflection:%d" % (index + 1)
-            fields.append((key, text))
-    if step.watched_step:
-        fields.append(("watched_step", step.watched_step))
-    return fields
+    return detail_field_entries(
+        step, run.pr, run.branch, worktree_path, session_id, reflections)
 
 
 def log_tab_mode(node, artifacts=()):
@@ -1278,8 +1261,11 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         self._forced_initial_tab = initial_tab
         node = container.store.get_node(node_id)
         self._node_type = node.type
-        self._tab_order = _tab_order(node)
-        self._active_tab = self._forced_initial_tab or landing_tab(node, self._landing_fields(node))
+        self._focus = ResolveStepFocusUseCase(
+            container.store, container.flow_service()
+        ).execute(ResolveStepFocusInput(step=node_id)).focus
+        self._tab_order = _tab_order(node, self._focus)
+        self._active_tab = self._forced_initial_tab or landing_tab(self._focus)
         self._last_hierarchy_shape = None
         self._last_rows = []
         self._last_multi_pass = False
@@ -1538,17 +1524,18 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         hierarchy = HierarchyUseCase(store).execute(HierarchyInput(node=self._node_id))
         self._render_hierarchy(hierarchy.rows, hierarchy.multi_pass, initial)
         if node.type == "item":
-            step_artifacts = [
-                (r.node.id, store.item_artifacts(r.node.id))
-                for r in hierarchy.rows
-                if r.node.type == "step"
-            ]
-            self._render_artifacts(item_viewable_artifacts(node, step_artifacts), initial)
+            self._render_artifacts(self._viewable_artifacts(store, node, hierarchy), initial)
             self._render_description(node.description)
         else:
             self._render_detail(store, node, initial)
             if _is_human_step(node):
-                self._render_description(store.get_node(node.item).description)
+                item = store.get_node(node.item)
+                self._render_description(item.description)
+                if "artifacts" in self._tab_order:
+                    artifacts = self._viewable_artifacts(store, item, hierarchy)
+                    self._render_artifacts(artifacts, initial)
+                    if initial:
+                        self._select_focused_artifact(artifacts)
         self._render_cost(store, node, initial)
         self.query_one(HubTabStrip).set_active(self._active_tab)
         self._apply_tab_visibility()
@@ -1855,10 +1842,20 @@ class NodeHubScreen(Screen, inherit_bindings=False):
             for key, value in zip(COLUMN_GRIDS["artifacts"], cells):
                 table.update_cell(str(index), key, value)
 
-    def _landing_fields(self, node):
-        if not _is_human_step(node) or node.state == State.DONE:
-            return ()
-        return self._fields_for(self._container.store, node, self._container.flow_service())
+    def _viewable_artifacts(self, store, item, hierarchy):
+        step_artifacts = [
+            (r.node.id, store.item_artifacts(r.node.id))
+            for r in hierarchy.rows
+            if r.node.type == "step"
+        ]
+        return item_viewable_artifacts(item, step_artifacts)
+
+    def _select_focused_artifact(self, artifacts):
+        name = self._focus.name
+        for index, artifact in enumerate(artifacts):
+            if artifact.type == name or artifact.type.endswith("\u00b7 %s" % name):
+                self.query_one(ArtifactsTable).move_cursor(row=index)
+                return
 
     def _fields_for(self, store, step, flow_service):
         run = StepRunUseCase(store, flow_service).execute(StepRunInput(step=step.id))

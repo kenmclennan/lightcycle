@@ -60,11 +60,15 @@ class Flow:
         owner = {}
         escalation = {}
         scripts = {}
+        presents = {}
         for stage in stages:
             meta = step_metas.get(graph.file_for(stage))
             if meta is None:
                 continue
             escalation[stage] = bool(meta.get("escalation"))
+            declared = meta.get("presents")
+            if declared:
+                presents[stage] = str(declared).strip()
             script = meta.get("script")
             if script:
                 scripts[stage] = str(script).strip()
@@ -82,6 +86,7 @@ class Flow:
                 owner=owner.get(stage),
                 escalation=escalation.get(stage, False),
                 script=scripts.get(stage),
+                presents=presents.get(stage),
             )
             for stage in step_stages
         }
