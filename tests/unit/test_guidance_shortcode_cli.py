@@ -47,6 +47,12 @@ class _InitConfig(InitConfig):
         return self._shortcode
 
 
+def _container(store, config):
+    container = DoctorContainer(store, config=config)
+    container.fs = FakeFs(files={config.config_path(): b""})
+    return container
+
+
 def _init(store, shortcode="GDN"):
     InitGridUseCase(store, FakeFs(), _InitConfig(shortcode), FakeGit(), FakeGitHub()).execute()
 
@@ -62,7 +68,7 @@ class TestGuidanceShortcodeEndToEnd(unittest.TestCase):
     def setUp(self):
         self.store = FakeStore()
         self.addCleanup(cli.set_container, cli._container)
-        cli.set_container(DoctorContainer(self.store, config=_Config()))
+        cli.set_container(_container(self.store, _Config()))
 
     def test_after_init_a_guidance_item_mints_a_gdn_id(self):
         _init(self.store)
@@ -91,7 +97,7 @@ class TestGuidanceShortcodeEndToEnd(unittest.TestCase):
         self.assertTrue(out.strip().startswith("GDN-"), out)
 
     def test_init_uses_a_custom_configured_shortcode(self):
-        cli.set_container(DoctorContainer(self.store, config=_Config("KB")))
+        cli.set_container(_container(self.store, _Config("KB")))
         _init(self.store, "KB")
         self.assertEqual(self.store.get_project("guidance").shortcode, "KB")
         rc, out, err = _file_guidance_item()

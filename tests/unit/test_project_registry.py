@@ -90,7 +90,7 @@ class TestAddProjectReservedShortcode(unittest.TestCase):
         from tests.support.fake_git import FakeGit
         from lightcycle.application.setup import AddProjectUseCase
 
-        return AddProjectUseCase(store, FakeGit(), _Cfg(__file__), FakeFs())
+        return AddProjectUseCase(store, FakeGit(), _Cfg(__file__), FakeFs(files={__file__: b""}))
 
     def test_a_product_project_cannot_take_the_guidance_shortcode(self):
         from lightcycle.application.errors import UseCaseError

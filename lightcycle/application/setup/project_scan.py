@@ -22,11 +22,11 @@ class ScanProjectsUseCase:
 
     def execute(self, directory):
         root = os.path.abspath(directory or ".")
-        data_home = os.path.realpath(self._config.data_root())
+        data_home = self._fs.real_path(self._config.data_root())
         return self._walk(root, data_home, set())
 
     def _walk(self, path, data_home, seen):
-        real = os.path.realpath(path)
+        real = self._fs.real_path(path)
         if real in seen or real == data_home:
             return []
         seen.add(real)

@@ -91,6 +91,9 @@ class FsAdapter(FsPort):
     def exists(self, path):
         return exists(path)
 
+    def real_path(self, path):
+        return os.path.realpath(path)
+
     def is_executable(self, path):
         return is_executable(path)
 

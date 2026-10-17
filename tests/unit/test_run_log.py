@@ -48,6 +48,7 @@ class TestDomain(unittest.TestCase):
 class StepRig(unittest.TestCase):
     def setUp(self):
         self.store = FakeStore()
+        self.fs = FakeFs({})
         self.root = tempfile.mkdtemp()
         os.makedirs(os.path.join(self.root, "logs"))
         item = self.store.create_item("t", "d")
@@ -56,15 +57,14 @@ class StepRig(unittest.TestCase):
 
     def log_file(self, name="script-x-1.log", text="out\n"):
         path = os.path.join(self.root, "logs", name)
-        with open(path, "w") as f:
-            f.write(text)
+        self.fs.write_text(path, text)
         return path
 
     def config(self):
         return SimpleNamespace(data_root=lambda: self.root)
 
     def resolve(self):
-        return ResolveLogUseCase(self.store, FakeWorkers(), self.config()).execute(
+        return ResolveLogUseCase(self.store, FakeWorkers(), self.fs, self.config()).execute(
             ResolveLogInput(target=self.step)).path
 
 
@@ -87,12 +87,12 @@ class TestResolve(StepRig):
 
 class TestTail(StepRig):
     def tail(self):
-        return TailLogUseCase(self.store, FakeWorkers(), FakeFs({}), self.config())
+        return TailLogUseCase(self.store, FakeWorkers(), FakeFs({}), self.fs, self.config())
 
     def test_a_queued_step_with_a_log_is_live_then_not(self):
         path = self.log_file()
         self.store.add_artifact(self.step, LOG_ARTIFACT, path, internal=True)
-        use_case = TailLogUseCase(self.store, FakeWorkers(), _Reader(), self.config())
+        use_case = TailLogUseCase(self.store, FakeWorkers(), _Reader(), self.fs, self.config())
 
         self.assertTrue(use_case.execute(TailLogInput(target=self.step)).live)
         self.store.update_state(self.step, State.DONE)
@@ -111,7 +111,7 @@ class TestTrace(StepRig):
     def test_a_script_steps_log_field_is_the_artifact_path(self):
         path = self.log_file()
         self.store.add_artifact(self.step, LOG_ARTIFACT, path, internal=True)
-        resp = TraceUseCase(self.store, FakeWorkers(), self.config()).execute(
+        resp = TraceUseCase(self.store, FakeWorkers(), self.fs, self.config()).execute(
             TraceInput(item=self.item))
         self.assertEqual(resp.steps[0].log, path)
 

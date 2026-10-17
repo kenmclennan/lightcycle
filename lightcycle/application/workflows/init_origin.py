@@ -43,7 +43,7 @@ class InitWorkflowOriginUseCase:
 
     def execute(self, name) -> InitWorkflowOriginResponse:
         project_dir = os.path.join(self._config.projects_root(), name)
-        if os.path.exists(project_dir):
+        if self._fs.exists(project_dir):
             raise WorkflowSourceError(
                 "%s already exists; choose a different name or remove it first" % project_dir)
         require_git_identity(self._git, project_dir, WorkflowSourceError)

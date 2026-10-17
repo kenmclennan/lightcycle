@@ -36,7 +36,7 @@ class AddProjectUseCase:
         self._fs = fs
 
     def _require_global(self):
-        if not os.path.exists(self._config.config_path()):
+        if not self._fs.exists(self._config.config_path()):
             raise UseCaseError("global config missing - run `lc init` first")
         if not self._fs.store_ready():
             raise UseCaseError("lightcycle store not initialised - run `lc init` first")
