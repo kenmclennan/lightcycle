@@ -7,6 +7,8 @@ from lightcycle.application.flow.engine_steps import (
     RETRO_ORIGIN_LABEL,
     SUMMARY_ORIGIN_LABEL,
 )
+from lightcycle.domain.flow import Flow
+from lightcycle.domain.flow.step_def import StepDef
 from lightcycle.domain.pool import ToolUsage
 from lightcycle.domain.work import State
 from tests.support.fake_fs import FakeFs
@@ -1033,6 +1035,49 @@ def _hub_gate(size):
     return _open_hub(_launch(store, size=size), item)
 
 
+class _PresentsFlowService:
+    def __init__(self, real, stage, presents):
+        self._real = real
+        self._flow = Flow({stage: StepDef(owner="human", presents=presents)})
+
+    def flow_for(self, node):
+        return self._flow
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+
+GATE_DESCRIPTION = "Triage description the gate presents"
+GATE_FINDINGS = "Findings digest the gate presents"
+
+
+def _gate_presenting(size, stage, presents, findings=False):
+    store = DemoStore(now=lambda: _at(6))
+    item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
+    store.edit_node(item, description=GATE_DESCRIPTION)
+    gate = store.step("LC-143.3.6", step=stage, role="human", parent=item)
+    if findings:
+        audit = store.step("LC-143.3.5", step="audit", role="agent", parent=item)
+        store.add_artifact(audit, "findings", GATE_FINDINGS)
+    session = _launch(store, size=size)
+    container = session.app._container
+    real = container.flow_service()
+    container.flow_service = lambda: _PresentsFlowService(real, stage, presents)
+    return _open_hub(session, gate)
+
+
+def _hub_gate_presents_pr(size):
+    return _gate_presenting(size, "await-merge", "pr")
+
+
+def _hub_gate_presents_description(size):
+    return _gate_presenting(size, "review-scope", "description")
+
+
+def _hub_gate_presents_findings(size):
+    return _gate_presenting(size, "review-findings", "artifact:findings", findings=True)
+
+
 def _hub_escalation(size):
     store, item, fs = _escalated_step_store()
     return _open_hub(_launch(store, size=size, fs=fs), item)
@@ -1514,6 +1559,9 @@ SCREENS = {
     "hub#no-workflow": _hub_no_workflow,
     "hub#running-with-dependency": _hub_running_with_dependency,
     "hub#gate": _hub_gate,
+    "hub#gate-presents-pr": _hub_gate_presents_pr,
+    "hub#gate-presents-description": _hub_gate_presents_description,
+    "hub#gate-presents-findings": _hub_gate_presents_findings,
     "hub#escalation": _hub_escalation,
     "hub#escalated-long-reason": _hub_escalated_long_reason,
     "hub#step-node": _hub_step_node,

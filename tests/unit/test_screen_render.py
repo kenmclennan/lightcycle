@@ -4,7 +4,9 @@ import pytest
 
 from lightcycle.adapters.log_parser import MAX_LOG_LINE_CHARS, LogLineParser
 from lightcycle.adapters.tui.app import BacklogTable, DoneTable, PriorityTable
-from tests.support.screen_render import DEFAULT_SIZE, SCREENS, UNRENDERABLE, _LOG_EXCERPT, render
+from tests.support.screen_render import (
+    DEFAULT_SIZE, GATE_DESCRIPTION, GATE_FINDINGS, SCREENS, UNRENDERABLE, _LOG_EXCERPT, render,
+)
 
 
 @pytest.mark.parametrize("state", sorted(SCREENS))
@@ -280,3 +282,30 @@ def test_the_stacked_named_states_show_a_readable_gap_before_the_project(state, 
     row = next(line for line in frame.split("\n") if project_text in line)
     before = row.split(project_text, 1)[0]
     assert before.endswith("  ")
+
+
+def test_a_gate_presenting_pr_opens_on_detail_not_the_description():
+    frame = render("hub#gate-presents-pr", size=(100, 30))
+
+    assert "STAGE" in frame
+    assert "ROLE" in frame
+    assert GATE_DESCRIPTION not in frame
+
+
+def test_a_gate_presenting_description_opens_on_the_description():
+    frame = render("hub#gate-presents-description", size=(100, 30))
+
+    assert GATE_DESCRIPTION in frame
+
+
+def test_a_gate_presenting_findings_opens_on_the_artifacts_with_findings_selected():
+    frame = render("hub#gate-presents-findings", size=(100, 30))
+
+    assert GATE_FINDINGS in frame
+    assert GATE_DESCRIPTION not in frame
+
+
+def test_a_running_agent_opens_on_its_log():
+    frame = render("hub#active-log", size=(100, 30))
+
+    assert "Nothing live to stream." not in frame

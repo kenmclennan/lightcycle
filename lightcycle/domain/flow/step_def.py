@@ -55,6 +55,7 @@ class StepDef:
     primary: Optional[str] = None
     display: Optional[str] = None
     script: Optional[str] = None
+    presents: Optional[str] = None
 
     def __post_init__(self):
         object.__setattr__(self, "routes", MappingProxyType(dict(self.routes)))
