@@ -1,6 +1,7 @@
 import unittest
+from types import SimpleNamespace
 
-from lightcycle.adapters.tui.hub import NodeHubScreen, _tab_order, display_role, landing_tab
+from lightcycle.adapters.tui.hub import NodeHubScreen, _tab_order, detail_fields, display_role, landing_tab
 from tests.support.fake_store import FakeStore
 from tests.support.step_factory import create_owned_step
 from tests.support.tui_harness import launch, make_test_container
@@ -18,10 +19,21 @@ class TestLandingTab(unittest.TestCase):
         s.claim_ready("agent")
         self.assertEqual(landing_tab(s.get_node(step)), "log")
 
-    def test_waiting_human_step_lands_on_description(self):
+    def test_waiting_await_merge_step_with_pr_lands_on_detail(self):
         s = FakeStore()
         step = create_owned_step(s, "s", step="await-merge", role="human")
-        self.assertEqual(landing_tab(s.get_node(step)), "description")
+        node = s.get_node(step)
+        run = SimpleNamespace(pr="https://github.com/o/r/pull/1", branch=None)
+        fields = detail_fields(node, run, None, [])
+        self.assertEqual(landing_tab(node, fields), "detail")
+
+    def test_waiting_human_step_with_only_stage_state_role_lands_on_description(self):
+        s = FakeStore()
+        step = create_owned_step(s, "s", step="triage", role="human")
+        node = s.get_node(step)
+        fields = detail_fields(node, SimpleNamespace(pr=None, branch=None), None, [])
+        self.assertEqual([key for key, _ in fields], ["stage", "state", "role"])
+        self.assertEqual(landing_tab(node, fields), "description")
 
     def test_done_human_step_lands_on_detail(self):
         s = FakeStore()
