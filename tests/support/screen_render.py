@@ -1174,6 +1174,25 @@ def _hub_escalation(size):
     return _open_hub(_launch(store, size=size, fs=fs), item)
 
 
+SCRIPT_PARK_REASON = "check exited 1: 2 source files failed validation"
+
+
+def _hub_script_parked(size):
+    store = DemoStore(now=lambda: _at(6))
+    item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
+    step = store.step("LC-143.3.4", step="check", role="agent", parent=item)
+    store.update_metadata(
+        step, {"needs": "Fix the failing sources", "reason": SCRIPT_PARK_REASON})
+    route_to_human(store, step, "BLOCKED: Fix the failing sources")
+    session = _launch(store, size=size)
+    container = session.app._container
+    flow = _PresentsFlowService(
+        container.flow_service(), "check", None,
+        detail=("outcome", "out:check-report"), owner="agent")
+    container.flow_service = lambda: flow
+    return _open_hub(session, step)
+
+
 def _hub_escalated_long_reason(size):
     store, item = _long_reason_store()
     return _open_hub(_launch(store, size=size), item)
@@ -1701,6 +1720,7 @@ SCREENS = {
     "hub#step-done-context": _hub_step_done_context,
     "hub#step-done-context-reconstructed": _hub_step_done_context_reconstructed,
     "hub#escalation": _hub_escalation,
+    "hub#script-parked": _hub_script_parked,
     "hub#escalated-long-reason": _hub_escalated_long_reason,
     "hub#step-node": _hub_step_node,
     "hub#step-composite-title": _hub_step_composite_title,

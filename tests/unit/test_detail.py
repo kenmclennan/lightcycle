@@ -10,6 +10,7 @@ from lightcycle.domain.work.detail import (
     legacy_presents_key,
     parse_detail,
     resolve_detail,
+    with_park,
 )
 
 
@@ -30,21 +31,37 @@ class TestGrammar(unittest.TestCase):
 
 
 class TestDefaultAndResolution(unittest.TestCase):
-    def test_default_list_adds_pr_with_a_run_and_park_fields_when_parked(self):
-        self.assertEqual(default_detail(False, False), ("outcome", "report"))
-        self.assertEqual(default_detail(True, False), ("outcome", "report", "pr"))
+    def test_default_list_adds_pr_with_a_run(self):
+        self.assertEqual(default_detail(False), ("outcome", "report"))
+        self.assertEqual(default_detail(True), ("outcome", "report", "pr"))
+
+    def test_a_parked_step_leads_with_reason_and_needs_after_the_declared_names(self):
         self.assertEqual(
-            default_detail(True, True), ("outcome", "report", "pr", "needs", "reason"))
+            with_park(("outcome", "out:check-report"), True),
+            ("reason", "needs", "outcome", "out:check-report"))
+
+    def test_park_entries_declared_already_are_not_duplicated(self):
+        self.assertEqual(
+            with_park(("outcome", "needs", "reason"), True), ("reason", "needs", "outcome"))
+
+    def test_a_step_not_parked_keeps_its_declared_names(self):
+        self.assertEqual(
+            with_park(("outcome", "needs"), False), ("outcome", "needs"))
+
+    def test_the_default_list_on_a_parked_step_yields_reason_and_needs_once(self):
+        self.assertEqual(
+            with_park(default_detail(True), True),
+            ("reason", "needs", "outcome", "report", "pr"))
 
     def test_a_legacy_presents_becomes_the_leading_default_entry(self):
-        self.assertEqual(default_detail(False, False, "pr"), ("pr", "outcome", "report"))
-        self.assertEqual(default_detail(True, False, "pr"), ("outcome", "report", "pr"))
+        self.assertEqual(default_detail(False, "pr"), ("pr", "outcome", "report"))
+        self.assertEqual(default_detail(True, "pr"), ("outcome", "report", "pr"))
         self.assertEqual(
-            default_detail(False, False, "description"), ("in:description", "outcome", "report"))
+            default_detail(False, "description"), ("in:description", "outcome", "report"))
         self.assertEqual(
-            default_detail(False, False, "artifact:findings"),
+            default_detail(False, "artifact:findings"),
             ("in:findings", "outcome", "report"))
-        self.assertEqual(default_detail(False, False, "in:findings"), ("outcome", "report"))
+        self.assertEqual(default_detail(False, "in:findings"), ("outcome", "report"))
 
     def test_legacy_presents_key_translates_only_the_legacy_forms(self):
         self.assertEqual(legacy_presents_key("pr"), "pr")

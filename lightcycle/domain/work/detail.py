@@ -73,12 +73,19 @@ def legacy_presents_key(presents):
     return None
 
 
-def default_detail(has_run, parked, presents=None):
+PARK_FIELDS = ("reason", "needs")
+
+
+def with_park(names, parked):
+    if not parked:
+        return tuple(names)
+    return PARK_FIELDS + tuple(n for n in names if n not in PARK_FIELDS)
+
+
+def default_detail(has_run, presents=None):
     names = ["outcome", "report"]
     if has_run:
         names.append("pr")
-    if parked:
-        names.extend(["needs", "reason"])
     legacy = legacy_presents_key(presents)
     if legacy is not None and legacy not in names:
         names.insert(0, legacy)
