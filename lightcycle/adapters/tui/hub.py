@@ -82,6 +82,7 @@ from lightcycle.domain.work import (
     LogKind, State, is_human_step, item_active_seconds, item_cost, parse_timestamp,
     row_bucket, step_cost,
 )
+from lightcycle.domain.work.detail import detail_value_is_url
 from lightcycle.domain.work.output_rows import output_lines
 from lightcycle.domain.work.step_focus import (
     FOCUS_CONTEXT, FOCUS_DESCRIPTION, FOCUS_DETAIL, FOCUS_LOG, FOCUS_REASON, FOCUS_WORKFLOW,
@@ -2716,19 +2717,19 @@ class NodeHubScreen(Screen, inherit_bindings=False):
     def _open_selected_detail_field(self, key_value) -> None:
         if key_value.endswith(DETAIL_BODY_SUFFIX):
             key_value = key_value[: -len(DETAIL_BODY_SUFFIX)]
-        if key_value not in ("pr", "worktree"):
-            return
         value = next(
             (v for k, v in self._last_detail_fields if k == key_value), None
         )
         if not value:
             return
-        if key_value == "pr":
-            use_case = OpenArtifactUseCase(self._container.fs, self._container.launcher)
-            result = use_case.execute(OpenArtifactInput(kind="url", value=value))
-            self._show_toast(result.success, result.message, "url", value, tab="detail")
+        if key_value == "worktree":
+            self._open_worktree(value)
             return
-        self._open_worktree(value)
+        if key_value == "pr" or detail_value_is_url(value):
+            url = value.strip()
+            use_case = OpenArtifactUseCase(self._container.fs, self._container.launcher)
+            result = use_case.execute(OpenArtifactInput(kind="url", value=url))
+            self._show_toast(result.success, result.message, "url", url, tab="detail")
 
     def _open_worktree(self, path, tab="detail") -> None:
         use_case = OpenArtifactUseCase(self._container.fs, self._container.launcher)

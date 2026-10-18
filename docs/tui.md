@@ -50,9 +50,9 @@ A running step's log is the only thing changing, so that is where the hub puts y
 
 ## What Detail carries
 
-Detail renders the engine's resolved `detail` list for the step, in order, and the TUI keeps no field list of its own. A step that declares `detail:` shows exactly those entries; one that does not gets the default list (`outcome`, `report`, plus `pr` when it has a run and `needs`/`reason` when parked), led by the entry a legacy `presents` names (`pr`, `in:description` or `in:<name>`). A value that contains a newline or is longer than 80 characters is a **block**: its key on one row and the body beneath it, rendered with headings and `[[ID]]` references. Any other value is a **line**, key and value on one row. A declared entry with no value stays listed, blank; when every entry is blank the tab says so instead of showing an empty table.
+Detail renders the engine's resolved `detail` list for the step, in order, and the TUI keeps no field list of its own. A step that declares `detail:` shows exactly those entries; one that does not gets the default list (`outcome`, `report`, plus `pr` when it has a run), led by the entry a legacy `presents` names (`pr`, `in:description` or `in:<name>`). A parked step's Detail always leads with `reason` and `needs`, whatever the step declares. A value that contains a newline or is longer than 80 characters is a **block**: its key on one row and the body beneath it, rendered with headings and `[[ID]]` references. Any other value is a **line**, key and value on one row. A declared entry with no value stays listed, blank; when every entry is blank the tab says so instead of showing an empty table.
 
-Selecting `pr` opens it in the browser and `worktree` in the configured editor (`lc config`'s `editor` key); no other Detail entry opens anything.
+Selecting `pr` opens it in the browser and `worktree` in the configured editor (`lc config`'s `editor` key). Any other entry whose value is a single `http://` or `https://` URL opens in the browser too; other entries open nothing.
 
 ## What Context carries
 

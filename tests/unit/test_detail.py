@@ -7,6 +7,7 @@ from lightcycle.domain.work.detail import (
     default_detail,
     detail_presents,
     detail_shape_problem,
+    detail_value_is_url,
     legacy_presents_key,
     parse_detail,
     resolve_detail,
@@ -153,6 +154,31 @@ class TestBundleCheck(unittest.TestCase):
                 found = messages_for(front)
                 self.assertEqual(len(found), 1)
                 self.assertIn("'gate'", found[0])
+
+
+class TestDetailValueIsUrl(unittest.TestCase):
+    def test_a_url_is_accepted(self):
+        self.assertTrue(detail_value_is_url("https://example.com/a"))
+        self.assertTrue(detail_value_is_url("http://example.com"))
+
+    def test_surrounding_whitespace_is_trimmed(self):
+        self.assertTrue(detail_value_is_url("  https://example.com/a\n"))
+
+    def test_a_two_line_value_is_rejected(self):
+        self.assertFalse(detail_value_is_url("https://example.com/a\nhttps://example.com/b"))
+
+    def test_a_value_with_a_space_is_rejected(self):
+        self.assertFalse(detail_value_is_url("see https://example.com/a"))
+
+    def test_a_bare_domain_is_rejected(self):
+        self.assertFalse(detail_value_is_url("example.com"))
+
+    def test_a_path_is_rejected(self):
+        self.assertFalse(detail_value_is_url("/tmp/notes.md"))
+
+    def test_an_empty_value_is_rejected(self):
+        self.assertFalse(detail_value_is_url(""))
+        self.assertFalse(detail_value_is_url(None))
 
 
 if __name__ == "__main__":
