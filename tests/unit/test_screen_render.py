@@ -4,7 +4,11 @@ import pytest
 
 from lightcycle.adapters.log_parser import MAX_LOG_LINE_CHARS, LogLineParser
 from lightcycle.adapters.tui.app import BacklogTable, DoneTable, PriorityTable
-from lightcycle.adapters.tui.hub import CONTEXT_EMPTY_MESSAGE, detail_value_is_block
+from lightcycle.adapters.tui.hub import (
+    CONTEXT_EMPTY_MESSAGE,
+    DETAIL_EMPTY_MESSAGE,
+    detail_value_is_block,
+)
 from tests.support.screen_render import (
     CONTEXT_FINDINGS, CONTEXT_REFLECTION, CONTEXT_SPEC_REPORT, DEFAULT_SIZE, GATE_DESCRIPTION,
     GATE_FINDINGS_LINES, MERGE_PR, MERGE_REPORT, SCREENS, UNRENDERABLE, _LOG_EXCERPT,
@@ -343,6 +347,13 @@ def test_a_merge_gate_listing_an_input_it_lacks_shows_it_blank_beside_the_valued
     assert any("IN:REPORT" in r and MERGE_REPORT in r for r in rows)
     findings = next(r for r in rows if "IN:FINDINGS" in r)
     assert findings.strip("│ ") == "IN:FINDINGS"
+
+
+def test_a_parked_script_stage_with_declared_detail_shows_its_reason_not_the_empty_message():
+    frame = render("hub#script-parked", size=(140, 30))
+
+    assert "check exited 1: 2 source files failed validation" in frame
+    assert DETAIL_EMPTY_MESSAGE not in frame
 
 
 def test_a_closed_step_without_frozen_inputs_shows_the_reconstructed_header_and_the_table():

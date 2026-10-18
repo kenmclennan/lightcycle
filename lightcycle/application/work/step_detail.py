@@ -4,6 +4,7 @@ from lightcycle.domain.work.detail import (
     default_detail,
     detail_presents,
     resolve_detail,
+    with_park,
 )
 
 
@@ -18,7 +19,8 @@ class StepDetail:
         step_def = self._flow.flow_for(step).step_def(step.stage)
         parked = bool(step.park.reason or step.park.needs)
         has_run = bool(run.pr or run.branch)
-        names = step_def.detail or default_detail(has_run, parked, step_def.presents)
+        names = with_park(
+            step_def.detail or default_detail(has_run, step_def.presents), parked)
         session = next(
             (a.value for a in self._store.item_artifacts(step.id) if a.type == "session-id"),
             None,
