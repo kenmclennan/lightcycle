@@ -2,6 +2,7 @@ import os
 from dataclasses import dataclass, field
 from typing import List, Optional
 
+from lightcycle.application.errors import UseCaseError
 from lightcycle.domain.work import Artifact, Item, worker_log_filename
 
 
@@ -63,6 +64,10 @@ class TraceUseCase:
 
     def execute(self, input: TraceInput) -> TraceResponse:
         item = self._store.get_node(input.item)
+        if item.type == "step":
+            raise UseCaseError(
+                "lc trace takes an item id; %s is a step of %s" % (input.item, item.item)
+            )
         artifacts = self._store.item_artifacts(input.item)
         steps = [
             TraceNode(
