@@ -89,7 +89,7 @@ Feature: The dashboard adopts the design system's visual vocabulary
       | priority-list#normal              |
       | priority-list#claude-unavailable  |
       | backlog#normal                    |
-      | hub#artifacts                     |
+      | hub#outputs                       |
       | artifact-viewer#list              |
       | artifact-viewer#text              |
 
@@ -217,7 +217,7 @@ Feature: The dashboard adopts the design system's visual vocabulary
       | Priority List |
       | Backlog       |
       | Workflow tab  |
-      | Artifacts tab |
+      | Outputs tab   |
 
   Scenario Outline: The footer's shared vocabulary pairs a colour with its own glyph for each status token
     Given the shared footer status vocabulary

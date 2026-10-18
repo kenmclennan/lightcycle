@@ -12,7 +12,7 @@ Feature: The workflow tab
   as the operator scrolls past its parent item, that item's row stays
   pinned to the top so context is never lost. Arrow keys move the
   selection; Enter or → opens whatever is highlighted into its own hub;
-  a and l jump straight to a highlighted node's Artifacts or Log, skipping
+  o and l jump straight to a highlighted node's Outputs or Log, skipping
   its own contextual default.
 
   Scenario: An item's hierarchy shows the item itself as the root
@@ -210,15 +210,15 @@ Feature: The workflow tab
     When it renders
     Then its row shows its own state icon, using the same icon and colour vocabulary as every other row
 
-  Scenario: Pressing a on a highlighted item opens its Artifacts tab directly
+  Scenario: Pressing o on a highlighted item opens its Outputs tab directly
     Given an item is highlighted in the hierarchy, not yet opened
-    When a is pressed
-    Then its Artifacts tab opens directly, skipping its own contextual default
+    When o is pressed
+    Then its Outputs tab opens directly, skipping its own contextual default
 
-  Scenario: a is a no-op on a highlighted step, since a step has no Artifacts tab
+  Scenario: o is a no-op on a highlighted step, since a step has no Outputs tab
     Given a step is highlighted in the hierarchy, not yet opened
-    When a is pressed
-    Then nothing happens, since there is no Artifacts tab to open
+    When o is pressed
+    Then nothing happens, since there is no Outputs tab to open
 
   Scenario: Pressing l on a highlighted active node opens its live log directly
     Given an active step is highlighted in the hierarchy

@@ -48,7 +48,7 @@ class TestLandingTab(unittest.TestCase):
         }
         for kind, tab in expected.items():
             self.assertEqual(landing_tab(StepFocus(kind)), tab, kind)
-        self.assertEqual(landing_tab(StepFocus(FOCUS_ARTIFACT, "findings")), "artifacts")
+        self.assertEqual(landing_tab(StepFocus(FOCUS_ARTIFACT, "findings")), "outputs")
 
     def test_item_lands_on_description(self):
         s = FakeStore()
@@ -105,7 +105,7 @@ class TestLandingTab(unittest.TestCase):
         s = FakeStore()
         step = create_owned_step(s, "s", step="review-findings", role="human")
         s.add_artifact(step, "findings", "text")
-        self.assertEqual(landing_of(s, step, presents="artifact:findings"), "artifacts")
+        self.assertEqual(landing_of(s, step, presents="artifact:findings"), "outputs")
 
 
 class TestStepTabOrder(unittest.TestCase):
@@ -140,7 +140,7 @@ class TestHumanStepDescriptionTab(unittest.TestCase):
         step = s.create_step(step="triage", role="human", parent=item)
         screen = self._hub(s, step)
         self.assertEqual(screen._active_tab, "description")
-        self.assertEqual(screen._description_text, "triage these issues")
+        self.assertEqual(screen._description_item.description, "triage these issues")
 
     def test_empty_item_description_shows_empty_message(self):
         s = FakeStore()

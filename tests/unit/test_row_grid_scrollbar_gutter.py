@@ -2,7 +2,7 @@ import datetime
 import unittest
 
 from lightcycle.adapters.tui.app import BacklogTable, PriorityTable
-from lightcycle.adapters.tui.hub import ArtifactsTable, HierarchyPagingTable, NodeHubScreen
+from lightcycle.adapters.tui.hub import OutputsTable, HierarchyPagingTable, NodeHubScreen
 from lightcycle.adapters.tui.row_grid import scrollbar_reservation_width
 from lightcycle.domain.work import State
 from tests.support.fake_store import FakeStore
@@ -158,30 +158,30 @@ class TestHierarchyTableScrollbarDoesNotClipTime(unittest.TestCase):
         self.assertEqual(table.scrollbar_gutter.width, scrollbar_reservation_width(HierarchyPagingTable))
 
 
-class TestArtifactsTableScrollbarDoesNotClipValue(unittest.TestCase):
+class TestOutputsTableScrollbarDoesNotClipValue(unittest.TestCase):
     _VALUE = "shortval"
 
     def _launch(self, count):
         store, item = _artifacts_item_store(count, self._VALUE)
         session = launch(make_test_container(store=store), size=_SIZE)
         self.addCleanup(session.close)
-        return _open_hub(session, item, "artifacts")
+        return _open_hub(session, item, "outputs")
 
     def test_short_list_shows_full_value_with_no_scrollbars(self):
         session = self._launch(_SHORT_COUNT)
-        table = session.app.screen.query_one(ArtifactsTable)
+        table = session.app.screen.query_one(OutputsTable)
         self.assertFalse(table.show_vertical_scrollbar)
         self.assertFalse(table.show_horizontal_scrollbar)
         self.assertIn(self._VALUE, _frame_text(session))
 
     def test_long_list_still_shows_full_value_and_no_horizontal_scrollbar(self):
         session = self._launch(_LONG_COUNT)
-        table = session.app.screen.query_one(ArtifactsTable)
+        table = session.app.screen.query_one(OutputsTable)
         self.assertTrue(table.show_vertical_scrollbar)
         self.assertFalse(table.show_horizontal_scrollbar)
         self.assertIn(self._VALUE, _frame_text(session))
 
     def test_scrollbar_reservation_width_matches_mounted_gutter(self):
         session = self._launch(_SHORT_COUNT)
-        table = session.app.screen.query_one(ArtifactsTable)
-        self.assertEqual(table.scrollbar_gutter.width, scrollbar_reservation_width(ArtifactsTable))
+        table = session.app.screen.query_one(OutputsTable)
+        self.assertEqual(table.scrollbar_gutter.width, scrollbar_reservation_width(OutputsTable))

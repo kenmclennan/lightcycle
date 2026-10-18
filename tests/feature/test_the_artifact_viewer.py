@@ -9,7 +9,7 @@ from lightcycle.adapters.tui.app import BacklogView
 from lightcycle.adapters.tui.design_system import COLOURS, FOOTER_GLYPHS
 from lightcycle.adapters.tui.hub import (
     ArtifactListTable,
-    ArtifactsTable,
+    OutputsTable,
     ArtifactTextBody,
     ArtifactViewerScreen,
     ListArtifactViewerScreen,
@@ -83,7 +83,7 @@ def _setup(ctx, artifacts, launcher=None, fs=None, size=None):
     )
     ctx["session"] = launch(container, size=size, upgrade_check=ctx.get("upgrade_check"))
     session = ctx["session"]
-    screen = NodeHubScreen(session.app.container, item, session.app._now, initial_tab="artifacts")
+    screen = NodeHubScreen(session.app.container, item, session.app._now, initial_tab="outputs")
     session.run(lambda: session.app.push_screen(screen))
     session.pause()
     session.pause()
@@ -160,7 +160,7 @@ def _long_list_open(ctx):
 def _opened_kind_from_list(ctx, kind):
     value = "some text" if kind == "text" else "a\nb\nc"
     _setup(ctx, [("note", "some note", "text"), ("finding", value, kind)])
-    table = ctx["session"].app.screen.query_one(ArtifactsTable)
+    table = ctx["session"].app.screen.query_one(OutputsTable)
     ctx["session"].run(lambda: table.move_cursor(row=1))
     ctx["session"].pause()
     ctx["selected_index"] = 1
@@ -175,7 +175,7 @@ def _node_has_n_artifacts(ctx, total):
 
 @given(parsers.parse("I open the text artifact at position {position:d} in that list"))
 def _open_text_artifact_at_position(ctx, position):
-    table = ctx["session"].app.screen.query_one(ArtifactsTable)
+    table = ctx["session"].app.screen.query_one(OutputsTable)
     ctx["session"].run(lambda: table.move_cursor(row=position - 1))
     ctx["session"].pause()
     ctx["session"].press("enter")
@@ -287,7 +287,7 @@ def _opens_in_browser(ctx):
 @then("a brief confirmation toast is shown")
 def _toast_shown(ctx):
     screen = ctx["session"].app.screen
-    toast = screen.query_one("#hub-artifacts-toast", Static)
+    toast = screen.query_one("#hub-outputs-toast", Static)
     assert toast.display
     assert "Opened" in _widget_text(toast)
 
@@ -299,12 +299,12 @@ def _artifact_list_reappears(ctx):
     session.run(screen._dismiss_toast)
     session.pause()
     assert isinstance(screen, NodeHubScreen)
-    assert screen.query_one(ArtifactsTable).display
+    assert screen.query_one(OutputsTable).display
 
 
 @then("a clear message is shown, not a silent failure")
 def _clear_failure_message(ctx):
-    toast = ctx["session"].app.screen.query_one("#hub-artifacts-toast", Static)
+    toast = ctx["session"].app.screen.query_one("#hub-outputs-toast", Static)
     assert toast.display
     assert "Could not open" in _widget_text(toast)
     assert ctx["launcher"].opened_urls == ["https://gh/pr/1"]
@@ -317,7 +317,7 @@ def _opens_via_os_handler(ctx):
 
 @then("a clear message is shown, not a silent failure or crash")
 def _clear_failure_message_crash(ctx):
-    toast = ctx["session"].app.screen.query_one("#hub-artifacts-toast", Static)
+    toast = ctx["session"].app.screen.query_one("#hub-outputs-toast", Static)
     assert toast.display
     assert "no longer exists" in _widget_text(toast)
     assert ctx["launcher"].opened_paths == []
@@ -363,7 +363,7 @@ def _every_item_reachable(ctx):
 def _artifact_list_reappears_selected(ctx):
     screen = ctx["session"].app.screen
     assert isinstance(screen, NodeHubScreen)
-    table = screen.query_one(ArtifactsTable)
+    table = screen.query_one(OutputsTable)
     assert table.cursor_row == ctx["selected_index"]
 
 

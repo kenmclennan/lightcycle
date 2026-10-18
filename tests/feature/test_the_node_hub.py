@@ -109,7 +109,7 @@ def _painted_spans(strip):
 
 _HUB_TABS_BY_TYPE = {
     "item": (
-        ("description", "Description"), ("workflow", "Workflow"), ("artifacts", "Artifacts"),
+        ("description", "Description"), ("outputs", "Outputs"), ("workflow", "Workflow"),
         ("cost", "Cost"),
     ),
     "step": (
@@ -946,7 +946,7 @@ def _reclaimed_shows_queued(ctx):
     assert identity_style is not None
     assert identity_style.color.get_truecolor().hex.lower() == COLOURS[queued_glyph.colour].lower()
 
-    if screen._active_tab != "workflow":
+    while screen._active_tab != "workflow":
         ctx["session"].press("]")
 
     table = screen.query_one(HierarchyPagingTable)
@@ -972,7 +972,7 @@ def _running_with_dependency_shows_active(ctx):
     assert identity_style is not None
     assert identity_style.color.get_truecolor().hex.lower() == COLOURS[active_glyph.colour].lower()
 
-    if screen._active_tab != "workflow":
+    while screen._active_tab != "workflow":
         ctx["session"].press("]")
 
     table = screen.query_one(HierarchyPagingTable)
@@ -987,7 +987,7 @@ def _running_with_dependency_shows_active(ctx):
 @then("it shows an empty state placeholder")
 def _empty_state_placeholder(ctx):
     screen = ctx["session"].app.screen
-    selector = "#hub-log-empty" if screen._active_tab == "log" else "#hub-artifacts-empty"
+    selector = "#hub-log-empty" if screen._active_tab == "log" else "#hub-outputs-empty"
     widget = screen.query_one(selector, Static)
     assert widget.display
     lines = [

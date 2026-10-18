@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from lightcycle.adapters.tui.hub import ArtifactsTable, CostPane, DetailTable, HierarchyPagingTable, NodeHubScreen
+from lightcycle.adapters.tui.hub import OutputsTable, CostPane, DetailTable, HierarchyPagingTable, NodeHubScreen
 from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import launch, make_test_container
 
@@ -97,10 +97,10 @@ class TestHierarchyShapeGuard(unittest.TestCase):
         self.assertFalse(screen._hierarchy_stacked)
 
 
-class TestArtifactsShapeGuard(unittest.TestCase):
+class TestOutputsShapeGuard(unittest.TestCase):
     _ITEM = "LC-1"
-    _STACKED_WIDTH = 34
-    _FLOOR_WIDTH = 33
+    _STACKED_WIDTH = 38
+    _FLOOR_WIDTH = 37
 
     def _store(self):
         store = FakeStore()
@@ -115,15 +115,15 @@ class TestArtifactsShapeGuard(unittest.TestCase):
 
     def test_hidden_then_polled_with_unchanged_rows_still_updates_cells(self):
         session = self._launch(self._STACKED_WIDTH)
-        screen = _push_hub(session, self._ITEM, "artifacts")
-        table = screen.query_one(ArtifactsTable)
-        self.assertTrue(screen._artifacts_stacked)
+        screen = _push_hub(session, self._ITEM, "outputs")
+        table = screen.query_one(OutputsTable)
+        self.assertTrue(screen._outputs_stacked)
 
         session.run(screen.action_next_tab)
         session.pause()
         self.assertEqual(table.size.width, 0)
 
-        with patch.object(NodeHubScreen, "_update_artifact_cells") as update:
+        with patch.object(NodeHubScreen, "_update_output_cells") as update:
             session.run(screen.poll_refresh)
             session.pause()
             update.assert_called_once()
@@ -133,48 +133,48 @@ class TestArtifactsShapeGuard(unittest.TestCase):
         session.run(screen.poll_refresh)
         session.pause()
         self.assertGreater(table.row_count, 0)
-        self.assertTrue(screen._artifacts_stacked)
+        self.assertTrue(screen._outputs_stacked)
 
     def test_resize_wide_clears_the_floor_and_renders_the_table(self):
         session = self._launch(self._FLOOR_WIDTH)
-        screen = _push_hub(session, self._ITEM, "artifacts")
-        table = screen.query_one(ArtifactsTable)
-        self.assertTrue(screen._artifacts_floor)
+        screen = _push_hub(session, self._ITEM, "outputs")
+        table = screen.query_one(OutputsTable)
+        self.assertTrue(screen._outputs_floor)
         self.assertEqual(table.row_count, 0)
 
         session.resize(200, 24)
 
-        self.assertFalse(screen._artifacts_floor)
+        self.assertFalse(screen._outputs_floor)
         self.assertTrue(table.display)
         self.assertGreater(table.row_count, 0)
 
     def test_floor_entered_then_polled_again_stays_at_floor_without_raising(self):
         session = self._launch(self._FLOOR_WIDTH)
-        screen = _push_hub(session, self._ITEM, "artifacts")
-        table = screen.query_one(ArtifactsTable)
+        screen = _push_hub(session, self._ITEM, "outputs")
+        table = screen.query_one(OutputsTable)
 
-        self.assertTrue(screen._artifacts_floor)
-        self.assertTrue(screen._artifacts_needs_rebuild)
+        self.assertTrue(screen._outputs_floor)
+        self.assertTrue(screen._outputs_needs_rebuild)
         self.assertEqual(table.row_count, 0)
 
         session.run(screen.poll_refresh)
         session.pause()
 
-        self.assertTrue(screen._artifacts_floor)
-        self.assertTrue(screen._artifacts_needs_rebuild)
+        self.assertTrue(screen._outputs_floor)
+        self.assertTrue(screen._outputs_needs_rebuild)
         self.assertEqual(table.row_count, 0)
 
     def test_stacked_mismatch_forces_rebuild_not_cheap_update(self):
         session = self._launch(200)
-        screen = _push_hub(session, self._ITEM, "artifacts")
-        self.assertFalse(screen._artifacts_stacked)
+        screen = _push_hub(session, self._ITEM, "outputs")
+        self.assertFalse(screen._outputs_stacked)
 
-        screen._artifacts_stacked = True
-        with patch.object(NodeHubScreen, "_update_artifact_cells") as update:
+        screen._outputs_stacked = True
+        with patch.object(NodeHubScreen, "_update_output_cells") as update:
             session.run(screen.poll_refresh)
             session.pause()
             update.assert_not_called()
-        self.assertFalse(screen._artifacts_stacked)
+        self.assertFalse(screen._outputs_stacked)
 
 
 class TestDetailShapeGuard(unittest.TestCase):

@@ -4,7 +4,7 @@ from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import launch, make_test_container
 from lightcycle.adapters.tui.footer import DashboardFooter
 from lightcycle.adapters.tui.hub import (
-    ArtifactsTable,
+    OutputsTable,
     CostPane,
     DescriptionPane,
     DetailTable,
@@ -131,16 +131,16 @@ def test_backlog_footer_status_and_shortcut_lines_are_painted():
 _PANE_WIDGET_BY_TAB = {
     "workflow": HierarchyPagingTable,
     "log": LogPane,
-    "artifacts": ArtifactsTable,
+    "outputs": OutputsTable,
     "detail": DetailTable,
     "description": DescriptionPane,
     "cost": CostPane,
 }
 
-_EMPTY_MESSAGE_IDS = ("#hub-log-empty", "#hub-artifacts-empty", "#hub-description-empty", "#hub-cost-empty")
+_EMPTY_MESSAGE_IDS = ("#hub-log-empty", "#hub-outputs-empty", "#hub-description-empty", "#hub-cost-empty")
 
 
-@pytest.mark.parametrize("tab", ["workflow", "log", "artifacts", "detail", "description", "cost"])
+@pytest.mark.parametrize("tab", ["workflow", "log", "outputs", "detail", "description", "cost"])
 def test_pre_refresh_frame_shows_only_the_active_tabs_pane_and_no_empty_message(tab):
     store = FakeStore()
     if tab in ("log", "detail"):
@@ -163,7 +163,7 @@ def test_pre_refresh_frame_shows_only_the_active_tabs_pane_and_no_empty_message(
         session.close()
 
 
-@pytest.mark.parametrize("tab", ["workflow", "log", "artifacts", "detail", "description", "cost"])
+@pytest.mark.parametrize("tab", ["workflow", "log", "outputs", "detail", "description", "cost"])
 def test_hub_tab_strip_composes_with_only_the_active_tab_marked(tab):
     tabs = list(_PANE_WIDGET_BY_TAB)
     strip = HubTabStrip(tabs, tab)
