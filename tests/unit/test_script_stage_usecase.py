@@ -59,13 +59,22 @@ class RecordingComplete:
 
 
 class Rig:
-    def __init__(self, stages=None, cap=4, lifecycle=None, complete_fail=None, worktree=None):
+    def __init__(self, stages=None, cap=4, lifecycle=None, complete_fail=None, worktree=None,
+                 ensure_error=None):
         self.store = FakeStore()
         self.runner = FakeScriptRunner()
         defs = stages or {
             "poll": StepDef(script="scripts/poll.sh", routes={"found": "next", "none": "poll"})}
         self.complete = RecordingComplete(self.store, complete_fail)
-        worktrees = SimpleNamespace(worktree_path=lambda step: worktree)
+        self.ensured = []
+
+        def ensure(step):
+            self.ensured.append(step)
+            if ensure_error:
+                raise ensure_error
+            return worktree
+
+        worktrees = SimpleNamespace(ensure=ensure)
         self.gate = ScriptStageUseCase(
             self.store, StubFlowService(defs), StubConfig(cap=cap),
             StubWorkflowSource(shas={"acme": "sha1"}), lifecycle or StubScriptLifecycle(),
@@ -250,11 +259,44 @@ class TestEnvironment(unittest.TestCase):
             stages={"poll": StepDef(
                 script="scripts/poll.sh", routes={"found": "n"}, workspace="project")},
             worktree="/wt/item")
+        step = rig.step()
+
+        rig.gate.execute(0)
+
+        self.assertEqual([s.id for s in rig.ensured], [step])
+        self.assertEqual(rig.runner.started[0]["cwd"], "/wt/item")
+
+    def _workspace_stage(self):
+        return {"poll": StepDef(
+            script="scripts/poll.sh", routes={"found": "n"}, workspace="project")}
+
+    def test_a_workspace_with_no_worktree_parks_and_starts_nothing(self):
+        rig = Rig(stages=self._workspace_stage(), worktree=None)
+        step = rig.step()
+
+        resp = rig.gate.execute(0)
+
+        self.assertEqual(rig.runner.started, [])
+        self.assertEqual(resp.parked, ["step:%s" % step])
+        self.assertIn("item has no worktree", rig.store.get_node(step).park.reason)
+
+    def test_a_failed_ensure_parks_with_its_text_and_starts_nothing(self):
+        rig = Rig(stages=self._workspace_stage(), ensure_error=UseCaseError("git worktree add failed"))
+        step = rig.step()
+
+        resp = rig.gate.execute(0)
+
+        self.assertEqual(rig.runner.started, [])
+        self.assertEqual(resp.parked, ["step:%s" % step])
+        self.assertIn("git worktree add failed", rig.store.get_node(step).park.reason)
+
+    def test_a_stage_without_a_workspace_never_ensures_a_worktree(self):
+        rig = Rig()
         rig.step()
 
         rig.gate.execute(0)
 
-        self.assertEqual(rig.runner.started[0]["cwd"], "/wt/item")
+        self.assertEqual(rig.ensured, [])
 
 
 class TestViolationsPark(unittest.TestCase):

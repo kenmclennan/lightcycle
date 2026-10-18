@@ -146,7 +146,7 @@ class ScriptStageUseCase:
                 ", ".join(missing), self._config.workflow_config_block_name(origin, name))
         cwd = self._lifecycle.ensure_data_dir(origin, name)
         if sd.workspace is not None:
-            cwd = self._worktrees.worktree_path(step)
+            cwd = self._worktrees.ensure(step)
             if not cwd:
                 return None, "the stage declares workspace %s but the item has no worktree" % (
                     sd.workspace)
@@ -161,7 +161,7 @@ class ScriptStageUseCase:
         label = self._label(step, sd)
         try:
             invocation, problem = self._invocation(step, sd)
-        except ValueError as e:
+        except (ValueError, UseCaseError) as e:
             invocation, problem = None, str(e)
         if invocation is None:
             self._park_step(step, label, "cannot start: %s" % problem)
