@@ -26,6 +26,7 @@ class TestHierarchyShapeGuard(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("Item", "a description", id=self._ITEM)
         store.create_step(step="build", role="agent", parent=item, id=self._STEP)
+        store.set_report(self._STEP, "built the thing")
         return store
 
     def _launch(self, width):
@@ -187,6 +188,7 @@ class TestDetailShapeGuard(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("Item", "a description", id=self._ITEM)
         store.create_step(step="build", role="agent", parent=item, id=self._STEP)
+        store.set_report(self._STEP, "built the thing")
         return store
 
     def _launch(self, width):

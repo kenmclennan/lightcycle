@@ -60,19 +60,36 @@ def detail_shape_problem(value):
     return None
 
 
-def default_detail(has_run, parked):
+def legacy_presents_key(presents):
+    if presents is None:
+        return None
+    text = str(presents).strip()
+    if text == "pr":
+        return "pr"
+    if text == "description":
+        return IN_PREFIX + "description"
+    if text.startswith("artifact:") and text[len("artifact:"):].strip():
+        return IN_PREFIX + text[len("artifact:"):].strip()
+    return None
+
+
+def default_detail(has_run, parked, presents=None):
     names = ["outcome", "report"]
     if has_run:
         names.append("pr")
     if parked:
         names.extend(["needs", "reason"])
+    legacy = legacy_presents_key(presents)
+    if legacy is not None and legacy not in names:
+        names.insert(0, legacy)
     return tuple(names)
 
 
 def detail_presents(presents, entries):
     keys = [e.key for e in entries]
-    if presents in keys:
-        return presents
+    wanted = legacy_presents_key(presents) or presents
+    if wanted in keys:
+        return wanted
     return keys[0] if keys else None
 
 

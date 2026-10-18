@@ -40,12 +40,11 @@ Feature: The Detail tab
     Then it lands on the Detail tab
     And the PR is shown on screen
 
-  Scenario: A human step with no run opens on Description, with Detail one tab away
-    Given a waiting human step whose phase run has no branch and no PR
+  Scenario: A human step with no run opens on Detail, with no PR field shown
+    Given a parked human step whose phase run has no branch and no PR
     When I open its hub
-    Then it lands on the Description tab
-    When I switch to its Detail tab
-    Then no PR field is shown
+    Then it lands on the Detail tab
+    And no PR field is shown
 
   Scenario: A step with no run shows no PR field
     Given a step whose phase run has no branch and no PR

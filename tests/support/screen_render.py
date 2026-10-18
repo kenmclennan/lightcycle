@@ -3,6 +3,7 @@ import datetime
 import os
 import sys
 
+from lightcycle.application.work.step_inputs import StepInputs
 from lightcycle.application.flow.engine_steps import (
     RETRO_ORIGIN_LABEL,
     SUMMARY_ORIGIN_LABEL,
@@ -1036,9 +1037,9 @@ def _hub_gate(size):
 
 
 class _PresentsFlowService:
-    def __init__(self, real, stage, presents):
+    def __init__(self, real, stage, presents, detail=None, owner="human"):
         self._real = real
-        self._flow = Flow({stage: StepDef(owner="human", presents=presents)})
+        self._flow = Flow({stage: StepDef(owner=owner, presents=presents, detail=detail)})
 
     def flow_for(self, node):
         return self._flow
@@ -1053,10 +1054,20 @@ class _PresentsFlowService:
 
 
 GATE_DESCRIPTION = "Triage description the gate presents"
-GATE_FINDINGS = "Findings digest the gate presents"
+GATE_FINDINGS_LINES = (
+    "Findings digest the gate presents",
+    "- registry.py: scan skips symlinked checkouts",
+    "- cli.py: project scan prints no summary line",
+)
+GATE_FINDINGS = "\n".join(GATE_FINDINGS_LINES)
+MERGE_REPORT = "Approved: the scan walks nested checkouts and the tests cover the symlink case."
+MERGE_PR = "https://github.com/kenmclennan/lightcycle/pull/143"
+CONTEXT_SPEC_REPORT = "Spec merged; build as written."
+CONTEXT_REFLECTION = "The spec named every file; no guessing."
+CONTEXT_FINDINGS = "One finding: scan skips symlinked checkouts."
 
 
-def _gate_presenting(size, stage, presents, findings=False):
+def _gate_presenting(size, stage, presents, findings=False, detail=None):
     store = DemoStore(now=lambda: _at(6))
     item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
     store.edit_node(item, description=GATE_DESCRIPTION)
@@ -1067,7 +1078,7 @@ def _gate_presenting(size, stage, presents, findings=False):
     session = _launch(store, size=size)
     container = session.app._container
     real = container.flow_service()
-    container.flow_service = lambda: _PresentsFlowService(real, stage, presents)
+    container.flow_service = lambda: _PresentsFlowService(real, stage, presents, detail=detail)
     return _open_hub(session, gate)
 
 
@@ -1081,6 +1092,64 @@ def _hub_gate_presents_description(size):
 
 def _hub_gate_presents_findings(size):
     return _gate_presenting(size, "review-findings", "artifact:findings", findings=True)
+
+
+def _hub_gate_declares_findings_detail(size):
+    return _gate_presenting(
+        size, "review-findings", "artifact:findings", findings=True, detail=("in:findings",))
+
+
+def _hub_gate_merge(size, detail=("pr", "in:report"), report=MERGE_REPORT):
+    store = DemoStore(now=lambda: _at(6))
+    item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
+    review = store.step("LC-143.3.5", step="code-review", role="agent", parent=item)
+    store.claim_ready("agent")
+    store.set_report(review, report)
+    store.complete_node(review, "done")
+    gate = store.step(
+        "LC-143.3.6", step="code-await-merge", role="human", parent=item, previous=review)
+    pid = store.open_pass(item)
+    store.set_step_pass(gate, pid)
+    rid = store.open_run(item, pid, "code")
+    store.set_branch(rid, "feat/LC-143-scan")
+    store.set_pr(rid, MERGE_PR)
+    fs = FakeFs(metas={"code-await-merge": {"step": "code-await-merge", "phase": "code"}})
+    session = _launch(store, size=size, fs=fs)
+    container = session.app._container
+    real = container.flow_service()
+    container.flow_service = lambda: _PresentsFlowService(
+        real, "code-await-merge", "pr", detail=detail)
+    return _open_hub(session, gate)
+
+
+def _hub_gate_merge_missing_input(size):
+    return _hub_gate_merge(size, detail=("pr", "in:report", "in:findings"))
+
+
+def _hub_step_done_context(size):
+    store = DemoStore(now=lambda: _at(30))
+    item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
+    pid = store.open_pass(item)
+    spec = store.step("LC-143.3.1", step="spec-writer", role="agent", parent=item)
+    store.set_step_pass(spec, pid)
+    store.claim_ready("agent")
+    store.set_report(spec, CONTEXT_SPEC_REPORT)
+    store.complete_node(spec, "done")
+    audit = store.step("LC-143.3.2", step="audit", role="agent", parent=item, previous=spec)
+    store.set_step_pass(audit, pid)
+    store.claim_ready("agent")
+    session = _launch(store, size=size)
+    container = session.app._container
+    real = container.flow_service()
+    flow = _PresentsFlowService(real, "audit", None, owner="agent")
+    StepInputs(store, flow, now=lambda: _at(29)).freeze(store.get_node(audit))
+    store.add_artifact(audit, "findings", CONTEXT_FINDINGS)
+    store.add_artifact(audit, "reflection", CONTEXT_REFLECTION, internal=True)
+    store.add_artifact(audit, "guidance-delivered", "git/commit-subjects\nstyle/hyphens", internal=True)
+    store.set_report(audit, "Audit found one issue.")
+    store.complete_node(audit, "done")
+    container.flow_service = lambda: flow
+    return _open_hub(session, audit)
 
 
 def _hub_escalation(size):
@@ -1609,6 +1678,10 @@ SCREENS = {
     "hub#gate-presents-pr": _hub_gate_presents_pr,
     "hub#gate-presents-description": _hub_gate_presents_description,
     "hub#gate-presents-findings": _hub_gate_presents_findings,
+    "hub#gate-declares-findings-detail": _hub_gate_declares_findings_detail,
+    "hub#gate-merge": _hub_gate_merge,
+    "hub#gate-merge-missing-input": _hub_gate_merge_missing_input,
+    "hub#step-done-context": _hub_step_done_context,
     "hub#escalation": _hub_escalation,
     "hub#escalated-long-reason": _hub_escalated_long_reason,
     "hub#step-node": _hub_step_node,

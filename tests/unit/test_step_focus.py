@@ -18,7 +18,8 @@ from tests.support.step_factory import create_owned_step
 
 
 def focus_of(**facts):
-    return str(resolve_focus(FocusFacts(**facts)))
+    focus = resolve_focus(FocusFacts(**facts))
+    return "%s:%s" % (focus.kind, focus.name) if focus.name else focus.kind
 
 
 class TestResolveFocus(unittest.TestCase):
@@ -31,78 +32,72 @@ class TestResolveFocus(unittest.TestCase):
     def test_a_running_script_is_a_queued_engine_step_with_a_log(self):
         self.assertEqual(focus_of(state=State.QUEUED, role="engine", has_log=True), "log")
 
-    def test_a_queued_engine_step_without_a_log_falls_back_to_detail(self):
-        self.assertEqual(focus_of(state=State.QUEUED, role="engine"), "detail")
+    def test_a_blocked_step_focuses_its_reason_entry(self):
+        self.assertEqual(
+            focus_of(state=State.BLOCKED, role="agent", has_reason=True), "reason:reason")
 
-    def test_a_blocked_step_focuses_its_reason(self):
-        self.assertEqual(focus_of(state=State.BLOCKED, role="agent"), "reason")
-
-    def test_a_parked_waiting_step_focuses_its_reason(self):
-        self.assertEqual(focus_of(state=State.WAITING, role="agent", parked=True), "reason")
+    def test_a_parked_step_without_a_reason_focuses_its_needs_entry(self):
+        self.assertEqual(
+            focus_of(state=State.WAITING, role="agent", parked=True), "reason:needs")
 
     def test_a_parked_waiting_gate_focuses_its_reason_over_what_it_presents(self):
         self.assertEqual(
-            focus_of(state=State.WAITING, role="human", presents="pr", parked=True), "reason")
+            focus_of(state=State.WAITING, role="human", presents_key="pr", parked=True,
+                     has_reason=True),
+            "reason:reason")
 
-    def test_a_waiting_gate_presenting_pr_focuses_the_pr(self):
-        self.assertEqual(focus_of(state=State.WAITING, role="human", presents="pr"), "pr")
-
-    def test_a_waiting_gate_presenting_description_focuses_the_description(self):
+    def test_a_waiting_gate_lands_on_the_detail_entry_it_presents(self):
         self.assertEqual(
-            focus_of(state=State.WAITING, role="human", presents="description"), "description")
+            focus_of(state=State.WAITING, role="human", presents_key="in:findings"),
+            "detail:in:findings")
 
-    def test_a_waiting_gate_presenting_an_attached_artifact_focuses_it(self):
+    def test_a_waiting_gate_presenting_description_lands_on_the_description_input(self):
         self.assertEqual(
-            focus_of(state=State.WAITING, role="human", presents="artifact:findings",
-                     artifact_types=frozenset(("findings",))),
-            "artifact:findings")
+            focus_of(state=State.WAITING, role="human", presents_key="in:description"),
+            "detail:in:description")
 
-    def test_a_done_step_producing_pr_with_a_pr_focuses_the_pr(self):
-        self.assertEqual(focus_of(state=State.DONE, role="agent", produced=("pr",), has_pr=True), "pr")
-
-    def test_a_done_step_producing_an_attached_type_focuses_the_artifact(self):
+    def test_a_gate_whose_presented_entry_is_null_falls_past_the_presents_rule(self):
         self.assertEqual(
-            focus_of(state=State.DONE, role="agent", produced=("summary",),
-                     artifact_types=frozenset(("summary",))),
-            "artifact:summary")
+            focus_of(state=State.WAITING, role="human", first_value_key="outcome"),
+            "detail:outcome")
 
-    def test_a_done_step_producing_nothing_focuses_detail(self):
-        self.assertEqual(focus_of(state=State.DONE, role="agent"), "detail")
-
-    def test_a_done_step_whose_produced_type_is_not_attached_focuses_detail(self):
-        self.assertEqual(focus_of(state=State.DONE, role="agent", produced=("summary",)), "detail")
-
-    def test_a_done_step_with_two_produced_types_resolves_to_the_attached_second(self):
+    def test_a_done_step_with_a_pr_lands_on_the_pr_entry(self):
         self.assertEqual(
-            focus_of(state=State.DONE, role="agent", produced=("pr", "summary"),
-                     artifact_types=frozenset(("summary",))),
-            "artifact:summary")
+            focus_of(state=State.DONE, role="agent", has_pr=True, produced_outputs=("summary",)),
+            "detail:pr")
 
-    def test_a_done_step_with_neither_produced_type_attached_focuses_detail(self):
+    def test_a_done_step_with_outputs_lands_on_the_first_in_context(self):
         self.assertEqual(
-            focus_of(state=State.DONE, role="agent", produced=("pr", "summary")), "detail")
+            focus_of(state=State.DONE, role="agent", produced_outputs=("summary", "notes"),
+                     first_value_key="outcome"),
+            "context:summary")
+
+    def test_a_done_step_producing_nothing_lands_on_the_first_valued_entry(self):
+        self.assertEqual(
+            focus_of(state=State.DONE, role="agent", first_value_key="outcome"), "detail:outcome")
 
     def test_a_done_gate_ignores_what_it_presented(self):
-        self.assertEqual(focus_of(state=State.DONE, role="human", presents="description"), "detail")
-
-
-class TestFallback(unittest.TestCase):
-    def test_a_gate_declaring_nothing_with_bare_detail_focuses_the_description(self):
         self.assertEqual(
-            focus_of(state=State.WAITING, role="human", bare_detail=True), "description")
+            focus_of(state=State.DONE, role="human", presents_key="in:description",
+                     first_value_key="outcome"),
+            "detail:outcome")
 
-    def test_a_gate_declaring_nothing_with_more_detail_focuses_detail(self):
-        self.assertEqual(focus_of(state=State.WAITING, role="human"), "detail")
-
-    def test_a_gate_presenting_an_unattached_artifact_takes_the_same_fallback(self):
+    def test_a_queued_engine_step_without_a_log_falls_through(self):
         self.assertEqual(
-            focus_of(state=State.WAITING, role="human", presents="artifact:X", bare_detail=True),
-            "description")
-        self.assertEqual(
-            focus_of(state=State.WAITING, role="human", presents="artifact:X"), "detail")
+            focus_of(state=State.QUEUED, role="engine", first_value_key="outcome"),
+            "detail:outcome")
 
-    def test_a_queued_agent_step_focuses_detail(self):
-        self.assertEqual(focus_of(state=State.QUEUED, role="agent"), "detail")
+    def test_a_queued_agent_step_falls_through(self):
+        self.assertEqual(
+            focus_of(state=State.QUEUED, role="agent", first_value_key="outcome"),
+            "detail:outcome")
+
+    def test_with_no_valued_entry_it_falls_to_context(self):
+        self.assertEqual(
+            focus_of(state=State.WAITING, role="human", context_rows=3), "context")
+
+    def test_with_nothing_at_all_it_falls_to_workflow(self):
+        self.assertEqual(focus_of(state=State.WAITING, role="human"), "workflow")
 
 
 class TestPresentsParsing(unittest.TestCase):
@@ -117,8 +112,8 @@ class TestPresentsParsing(unittest.TestCase):
 
 
 class FlowStub:
-    def __init__(self, presents=None, produced=None):
-        self._flow = Flow({"gate": StepDef(owner="human", presents=presents)})
+    def __init__(self, presents=None, produced=None, detail=None):
+        self._flow = Flow({"gate": StepDef(owner="human", presents=presents, detail=detail)})
         self._meta = {"produces": produced} if produced else {}
 
     def flow_for(self, node):
@@ -135,70 +130,62 @@ class FlowStub:
 
 
 def resolve(store, step, flow):
-    return ResolveStepFocusUseCase(store, flow).execute(ResolveStepFocusInput(step=step)).focus
+    focus = ResolveStepFocusUseCase(store, flow).execute(ResolveStepFocusInput(step=step)).focus
+    return "%s:%s" % (focus.kind, focus.name) if focus.name else focus.kind
 
 
 class TestResolveStepFocusUseCase(unittest.TestCase):
     def test_an_item_resolves_to_description(self):
         s = FakeStore()
         item = s.create_item("item", "a description")
-        self.assertEqual(str(resolve(s, item, FlowStub())), "description")
+        self.assertEqual(resolve(s, item, FlowStub()), "description")
 
-    def test_a_waiting_gate_presenting_description_resolves_to_it(self):
-        s = FakeStore()
-        step = create_owned_step(s, "s", step="gate", role="human")
-        self.assertEqual(str(resolve(s, step, FlowStub(presents="description"))), "description")
-
-    def test_a_gate_presenting_a_declared_output_of_a_sibling_step_resolves_to_it(self):
+    def test_a_gate_presenting_a_declared_output_of_a_sibling_step_lands_on_its_input_entry(self):
         s = FakeStore()
         step = create_owned_step(s, "s", step="gate", role="human")
         sibling = s.create_step(step="audit", role="agent", parent=s.get_node(step).item)
         s.add_artifact(sibling, "findings", "text")
         flow = FlowStub(presents="artifact:findings", produced={"findings": "optional"})
-        self.assertEqual(str(resolve(s, step, flow)), "artifact:findings")
+        self.assertEqual(resolve(s, step, flow), "detail:in:findings")
 
-    def test_a_gate_presenting_an_undeclared_attach_on_a_sibling_falls_back_to_description(self):
+    def test_a_gate_declaring_detail_lands_on_its_presents_entry(self):
         s = FakeStore()
         step = create_owned_step(s, "s", step="gate", role="human")
         sibling = s.create_step(step="audit", role="agent", parent=s.get_node(step).item)
         s.add_artifact(sibling, "findings", "text")
-        self.assertEqual(
-            str(resolve(s, step, FlowStub(presents="artifact:findings"))), "description")
+        flow = FlowStub(
+            presents="artifact:findings", produced={"findings": "optional"},
+            detail=("outcome", "in:findings"))
+        self.assertEqual(resolve(s, step, flow), "detail:in:findings")
 
-    def test_a_gate_presenting_an_artifact_not_yet_attached_falls_back_to_description(self):
+    def test_a_gate_presenting_an_artifact_not_yet_attached_falls_past_it(self):
         s = FakeStore()
         step = create_owned_step(s, "s", step="gate", role="human")
-        self.assertEqual(
-            str(resolve(s, step, FlowStub(presents="artifact:findings"))), "description")
+        self.assertNotEqual(
+            resolve(s, step, FlowStub(presents="artifact:findings")), "detail:in:findings")
 
     def test_a_running_agent_step_resolves_to_log(self):
         s = FakeStore()
         step = create_owned_step(s, "s", step="build", role="agent")
         s.claim_ready("agent")
-        self.assertEqual(str(resolve(s, step, FlowStub())), "log")
+        self.assertEqual(resolve(s, step, FlowStub()), "log")
 
     def test_a_queued_engine_step_with_a_log_path_resolves_to_log(self):
         s = FakeStore()
         step = create_owned_step(s, "s", step="script", role="engine")
         s.set_log(step, "/tmp/x.log")
-        self.assertEqual(str(resolve(s, step, FlowStub())), "log")
+        self.assertEqual(resolve(s, step, FlowStub()), "log")
 
-    def test_a_done_step_producing_an_attached_artifact_resolves_to_it(self):
+    def test_a_done_step_producing_an_attached_artifact_lands_on_it_in_context(self):
         s = FakeStore()
         step = create_owned_step(s, "s", step="build", role="agent")
         s.add_artifact(step, "summary", "text")
         s.complete_node(step, "done")
         self.assertEqual(
-            str(resolve(s, step, FlowStub(produced={"summary": "required"}))), "artifact:summary")
-
-    def test_a_done_step_producing_nothing_resolves_to_detail(self):
-        s = FakeStore()
-        step = create_owned_step(s, "s", step="build", role="agent")
-        s.complete_node(step, "done")
-        self.assertEqual(str(resolve(s, step, FlowStub())), "detail")
+            resolve(s, step, FlowStub(produced={"summary": "required"})), "context:summary")
 
     def test_a_dependency_blocked_step_resolves_to_reason(self):
         s = FakeStore()
         blocker = create_owned_step(s, "b", step="build", role="agent")
         step = create_owned_step(s, "s", step="build", role="agent", deps=[blocker])
-        self.assertEqual(str(resolve(s, step, FlowStub())), "reason")
+        self.assertEqual(resolve(s, step, FlowStub()).split(":")[0], "reason")

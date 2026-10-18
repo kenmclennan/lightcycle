@@ -7,7 +7,7 @@ from textual.widgets import Static
 from lightcycle.adapters.tui.app import BacklogTable, PriorityTable
 from lightcycle.adapters.tui.design_system import COLOURS, STATE_GLYPHS
 from lightcycle.adapters.tui.hub import (
-    DescriptionPane, EscalationPanel, HierarchyPagingTable, HubTabStrip, NodeHubScreen,
+    DescriptionPane, DetailTable, EscalationPanel, HierarchyPagingTable, HubTabStrip, NodeHubScreen,
 )
 from lightcycle.domain.work import State
 from tests.support.fake_fs import FakeFs
@@ -113,7 +113,8 @@ _HUB_TABS_BY_TYPE = {
         ("cost", "Cost"),
     ),
     "step": (
-        ("detail", "Detail"), ("workflow", "Workflow"), ("log", "Log"), ("cost", "Cost"),
+        ("detail", "Detail"), ("context", "Context"), ("workflow", "Workflow"), ("log", "Log"),
+        ("cost", "Cost"),
     ),
 }
 
@@ -194,6 +195,7 @@ def _priority_with_needs_attention_step(ctx):
     store = FakeStore()
     item = store.create_item("an item", "a description")
     step = store.create_step(step="await-merge", role="human", parent=item)
+    store.update_metadata(step, {"needs": "Resolve the conflict", "reason": "CI reported a conflict"})
     ctx["item_id"] = item
     ctx["step_id"] = step
     _launch(ctx, store)
@@ -378,6 +380,7 @@ def _step_with_status(ctx, status):
         store.claim_ready("agent")
     elif status == "needs-attention, a human step":
         step = store.create_step(step="await-merge", role="human", parent=item)
+        store.update_metadata(step, {"needs": "Resolve the conflict", "reason": "CI reported a conflict"})
     elif status == "blocked on another item's completion":
         blocker = store.create_item("Blocker", "a description")
         step = store.create_step(step="build", role="agent", parent=item)
@@ -700,6 +703,13 @@ def _step_hub_opens_landing_on_tab(ctx, tab):
     tab_id = tab.lower()
     assert screen._active_tab == tab_id
     _assert_tab_strip_rendered(ctx["session"], tab_id)
+
+
+@then(parsers.parse('the "{entry}" entry is selected'))
+def _entry_is_selected(ctx, entry):
+    screen = ctx["session"].app.screen
+    table = screen.query_one(DetailTable)
+    assert screen._selected_detail_key(table) == entry
 
 
 @then("the header's identity line shows its id, its project, and its title")

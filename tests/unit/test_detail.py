@@ -7,6 +7,7 @@ from lightcycle.domain.work.detail import (
     default_detail,
     detail_presents,
     detail_shape_problem,
+    legacy_presents_key,
     parse_detail,
     resolve_detail,
 )
@@ -34,6 +35,27 @@ class TestDefaultAndResolution(unittest.TestCase):
         self.assertEqual(default_detail(True, False), ("outcome", "report", "pr"))
         self.assertEqual(
             default_detail(True, True), ("outcome", "report", "pr", "needs", "reason"))
+
+    def test_a_legacy_presents_becomes_the_leading_default_entry(self):
+        self.assertEqual(default_detail(False, False, "pr"), ("pr", "outcome", "report"))
+        self.assertEqual(default_detail(True, False, "pr"), ("outcome", "report", "pr"))
+        self.assertEqual(
+            default_detail(False, False, "description"), ("in:description", "outcome", "report"))
+        self.assertEqual(
+            default_detail(False, False, "artifact:findings"),
+            ("in:findings", "outcome", "report"))
+        self.assertEqual(default_detail(False, False, "in:findings"), ("outcome", "report"))
+
+    def test_legacy_presents_key_translates_only_the_legacy_forms(self):
+        self.assertEqual(legacy_presents_key("pr"), "pr")
+        self.assertEqual(legacy_presents_key("description"), "in:description")
+        self.assertEqual(legacy_presents_key("artifact:findings"), "in:findings")
+        for other in (None, "report", "in:findings", "artifact:"):
+            self.assertIsNone(legacy_presents_key(other), repr(other))
+
+    def test_presents_translates_a_legacy_form_to_its_entry_key(self):
+        entries = [DetailEntry("outcome", "field"), DetailEntry("in:findings", "input", "F")]
+        self.assertEqual(detail_presents("artifact:findings", entries), "in:findings")
 
     def test_resolve_reads_each_namespace_and_keeps_absent_names_as_none(self):
         entries = resolve_detail(
