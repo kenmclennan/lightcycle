@@ -136,14 +136,30 @@ class TestInputs(unittest.TestCase):
         self.assertFalse(inputs["frozen"])
         self.assertEqual(inputs["context"]["description"], "the brief")
 
-    def test_a_closed_step_with_no_frozen_row_returns_null(self):
+    def test_a_closed_step_with_no_frozen_row_returns_reconstructed_inputs_without_storing_a_row(self):
         rig = Rig()
         step = rig.first_step()
         rig.store.claim_ready("agent")
         rig.store.add_artifact(step, "X", "v")
         rig.complete.execute(CompleteInput(step=step, outcome="done"))
         self.assertIsNone(rig.store.step_inputs(step))
-        self.assertIsNone(rig.show(step)["inputs"])
+        inputs = rig.show(step)["inputs"]
+        self.assertFalse(inputs["frozen"])
+        self.assertIsNone(inputs["frozen_at"])
+        self.assertEqual(inputs["context"]["description"], "the brief")
+        self.assertIsNone(rig.store.step_inputs(step))
+
+    def test_a_closed_step_with_a_frozen_row_returns_the_row(self):
+        rig = Rig()
+        build = rig.first_step()
+        review = rig.close_build(build)
+        rig.claim()
+        rig.complete.execute(CompleteInput(step=review, outcome="done"))
+        row = rig.store.step_inputs(review)
+        inputs = rig.show(review)["inputs"]
+        self.assertTrue(inputs["frozen"])
+        self.assertEqual(inputs["frozen_at"], row[0])
+        self.assertEqual(rig.store.step_inputs(review), row)
 
     def test_a_human_step_created_by_a_transition_has_frozen_inputs(self):
         rig = Rig()

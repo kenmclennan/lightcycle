@@ -2,7 +2,6 @@ import datetime
 import json
 
 from lightcycle.application.work.item_outputs import ItemOutputs
-from lightcycle.domain.work.state import State
 from lightcycle.ports.store import NodeNotFoundError
 from lightcycle.domain.work.outputs import OutputEntry, OutputSet
 
@@ -66,8 +65,6 @@ class StepInputs:
         if row is not None:
             frozen_at, body = row
             return dict(json.loads(body), frozen=True, frozen_at=frozen_at)
-        if step.state == State.DONE:
-            return None
         return dict(self.build(step), frozen=False, frozen_at=None)
 
     def entry_dicts_for_step(self, step):

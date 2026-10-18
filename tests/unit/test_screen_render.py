@@ -4,7 +4,7 @@ import pytest
 
 from lightcycle.adapters.log_parser import MAX_LOG_LINE_CHARS, LogLineParser
 from lightcycle.adapters.tui.app import BacklogTable, DoneTable, PriorityTable
-from lightcycle.adapters.tui.hub import detail_value_is_block
+from lightcycle.adapters.tui.hub import CONTEXT_EMPTY_MESSAGE, detail_value_is_block
 from tests.support.screen_render import (
     CONTEXT_FINDINGS, CONTEXT_REFLECTION, CONTEXT_SPEC_REPORT, DEFAULT_SIZE, GATE_DESCRIPTION,
     GATE_FINDINGS_LINES, MERGE_PR, MERGE_REPORT, SCREENS, UNRENDERABLE, _LOG_EXCERPT,
@@ -343,6 +343,22 @@ def test_a_merge_gate_listing_an_input_it_lacks_shows_it_blank_beside_the_valued
     assert any("IN:REPORT" in r and MERGE_REPORT in r for r in rows)
     findings = next(r for r in rows if "IN:FINDINGS" in r)
     assert findings.strip("│ ") == "IN:FINDINGS"
+
+
+def test_a_closed_step_without_frozen_inputs_shows_the_reconstructed_header_and_the_table():
+    frame = render("hub#step-done-context-reconstructed", size=(140, 30))
+
+    assert "Reconstructed from the item's current state" in frame
+    assert "this step closed before inputs were frozen at claim." in frame
+    assert "INPUTS" in frame
+    assert "Audit found one issue." in frame
+    assert CONTEXT_EMPTY_MESSAGE not in frame
+
+
+def test_a_frozen_closed_step_shows_no_reconstructed_header():
+    frame = render("hub#step-done-context", size=(140, 30))
+
+    assert "Reconstructed from" not in frame
 
 
 def test_a_done_agent_step_opens_on_context_with_inputs_outputs_and_records():
