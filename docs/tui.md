@@ -30,10 +30,10 @@ The hub refreshes on the same poll interval as the node hub, so `lc goal log` in
 
 A node is an item or a step, and each has its own tabs:
 
-|      | tabs, in order                         |
-| ---- | -------------------------------------- |
-| item | Description, Workflow, Artifacts, Cost |
-| step | Detail, Context, Workflow, Log, Cost   |
+|      | tabs, in order                       |
+| ---- | ------------------------------------ |
+| item | Description, Outputs, Workflow, Cost |
+| step | Detail, Context, Workflow, Log, Cost |
 
 Workflow and Cost appear on both. A step has no Description or Artifacts tab: its Detail and Context tabs read the step's own resolved `detail` list and its inputs, outputs and records. That is not a violation of the rule that no tab reaches across the item/step boundary for content: each renders **the node the hub is open for**, and the rule is about content, not about which tabs exist. It is why the redirect helpers were deleted - a tab never silently shows you a different node's data.
 
