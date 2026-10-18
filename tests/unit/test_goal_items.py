@@ -12,6 +12,7 @@ from lightcycle.application.work.status import StatusUseCase
 from lightcycle.domain.work import State
 from tests.support.fake_fs import flow_from_metas
 from tests.support.fake_store import FakeStore
+from tests.support.tui_harness import FakeLock
 
 _FLOW = flow_from_metas(
     {
@@ -53,7 +54,7 @@ class GoalItemsFixture(unittest.TestCase):
         return item, step
 
     def execute(self, text=None):
-        return GoalItemsUseCase(self.store, self.flow).execute(self.goal, text)
+        return GoalItemsUseCase(self.store, self.flow, FakeLock(running=True)).execute(self.goal, text)
 
     def selected_ids(self, result):
         rows = result.selection.attention + result.selection.active + result.selection.queued
@@ -82,7 +83,7 @@ class TestGoalItemsUseCase(GoalItemsFixture):
         self.with_step("queued")
         result = self.execute()
         lanes = StatusUseCase(self.store).execute().lanes
-        expected = select_priority_rows(self.store, lanes, self.flow)
+        expected = select_priority_rows(self.store, lanes, self.flow, True)
         self.assertEqual(result.selection, expected)
 
     def test_open_item_in_no_lane_is_current_work_without_a_step(self):
@@ -143,7 +144,7 @@ class TestGoalItemsUseCase(GoalItemsFixture):
 
     def test_unknown_goal_refuses(self):
         with self.assertRaises(UseCaseError):
-            GoalItemsUseCase(self.store, self.flow).execute("G-999")
+            GoalItemsUseCase(self.store, self.flow, FakeLock(running=True)).execute("G-999")
 
     def test_rows_agree_with_current_work_for_the_same_items(self):
         _, gate_step = self.with_step("gate", role="human")
@@ -156,7 +157,7 @@ class TestGoalItemsUseCase(GoalItemsFixture):
         lanes = StatusUseCase(self.store).execute().lanes
         lane_rows = assemble_rows(
             *build_priority_rows_from_selection(
-                self.store, select_priority_rows(self.store, lanes, self.flow)
+                self.store, select_priority_rows(self.store, lanes, self.flow, True)
             )
         )
 

@@ -2,6 +2,7 @@ from collections import namedtuple
 
 from lightcycle.application.goals._common import require_goal
 from lightcycle.application.goals.show_goal import GoalItemRef
+from lightcycle.application.pool.run_lock import PoolRunningUseCase
 from lightcycle.application.work.item_filter import text_matches
 from lightcycle.application.work.item_partition import is_backlogged_item, is_closed_item
 from lightcycle.application.work.priority_rows import PrioritySelection, select_priority_rows
@@ -11,15 +12,18 @@ GoalItems = namedtuple("GoalItems", "total selection stepless backlog done")
 
 
 class GoalItemsUseCase:
-    def __init__(self, store, flow_service):
+    def __init__(self, store, flow_service, lock):
         self._store = store
         self._flow_service = flow_service
+        self._lock = lock
 
     def execute(self, goal_id, text=None):
         require_goal(self._store, goal_id)
         item_ids = self._store.goal_items(goal_id)
         lanes = StatusUseCase(self._store).execute().lanes
-        selection = select_priority_rows(self._store, lanes, self._flow_service)
+        selection = select_priority_rows(
+            self._store, lanes, self._flow_service, PoolRunningUseCase(self._lock).execute().running
+        )
         selected_ids = {
             row.owning_node.id for row in selection.attention + selection.active + selection.queued
         }

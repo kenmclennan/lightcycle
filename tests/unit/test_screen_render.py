@@ -237,7 +237,7 @@ def test_a_narrow_header_holds_the_guard_on_the_true_first_paint():
 
         flow_service = session.app._container.flow_service()
         node = store.get_node(scan)
-        data = build_header(store, node, session.app._now().isoformat(), flow_service, False)
+        data = build_header(store, node, session.app._now().isoformat(), flow_service, False, True)
         session.run(lambda: header.update(data))
         session.pause()
 

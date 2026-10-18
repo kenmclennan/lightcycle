@@ -50,6 +50,7 @@ from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow import UnblockInput
 from lightcycle.application.pool import (
     BreakerStatusUseCase,
+    PoolRunningUseCase,
     TailLogInput,
     TailLogUseCase,
 )
@@ -342,11 +343,11 @@ class HeaderData:
     escalation_target: Optional[str]
 
 
-def build_header(store, node, now, flow_service, pool_halted=False):
+def build_header(store, node, now, flow_service, pool_halted, pool_running):
     project = project_label(store, node) or None
     if node.type == "item":
-        return _item_header(store, node, now, project, flow_service, pool_halted)
-    return _step_header(store, node, now, project, flow_service, pool_halted)
+        return _item_header(store, node, now, project, flow_service, pool_halted, pool_running)
+    return _step_header(store, node, now, project, flow_service, pool_halted, pool_running)
 
 
 def _park_escalation_text(node):
@@ -496,7 +497,7 @@ def _stat_line_step(store, node, flow_service, now, pool_halted=False):
     return " · ".join(segments)
 
 
-def _item_header(store, node, now, project, flow_service, pool_halted=False):
+def _item_header(store, node, now, project, flow_service, pool_halted, pool_running):
     glyph_node, glyph_flow = node, None
     children = store.children(node.id)
 
@@ -515,13 +516,13 @@ def _item_header(store, node, now, project, flow_service, pool_halted=False):
         id=node.id, title=node.title, project=project,
         stat_line=stat_line,
         workflow_text=_workflow_text(flow_service, node),
-        glyph=_state_glyph(glyph_node, glyph_flow),
+        glyph=_state_glyph(glyph_node, glyph_flow, pool_running),
         dependency_blocked=bool(glyph_node.blocked_by),
         escalation_text=escalation_text, escalation_target=escalation_target,
     )
 
 
-def _step_header(store, node, now, project, flow_service, pool_halted=False):
+def _step_header(store, node, now, project, flow_service, pool_halted, pool_running):
     escalation_text, escalation_target = _dependency_escalation(node)
     if escalation_text is None and getattr(node, "role", None) == "human" and getattr(node, "needs", None):
         escalation_text = _park_escalation_text(node)
@@ -533,14 +534,14 @@ def _step_header(store, node, now, project, flow_service, pool_halted=False):
         id=node.id, title=item.title, project=project,
         stat_line=stat_line,
         workflow_text=_workflow_text(flow_service, node),
-        glyph=_state_glyph(node, flow),
+        glyph=_state_glyph(node, flow, pool_running),
         dependency_blocked=bool(node.blocked_by),
         escalation_text=escalation_text, escalation_target=escalation_target,
     )
 
 
-def _state_glyph(node, flow):
-    bucket = row_bucket(node, flow)
+def _state_glyph(node, flow, pool_running):
+    bucket = row_bucket(node, flow, pool_running)
     if bucket == "done":
         return HUMAN_STEP_GLYPH if is_human_step(node) else DONE_GLYPH
     if bucket == "queued":
@@ -548,9 +549,9 @@ def _state_glyph(node, flow):
     return STATE_GLYPHS[bucket]
 
 
-def _display_glyph(node, active_frame, flow):
-    glyph = _state_glyph(node, flow)
-    if active_frame is not None and row_bucket(node, flow) == "active":
+def _display_glyph(node, active_frame, flow, pool_running):
+    glyph = _state_glyph(node, flow, pool_running)
+    if active_frame is not None and row_bucket(node, flow, pool_running) == "active":
         return glyph._replace(glyph=active_frame)
     return glyph
 
@@ -579,9 +580,10 @@ def hierarchy_time_text(store, node, now):
 
 def _hierarchy_stacked_first_line(
     row, layout, row_budget, active_frame=None, flow_service=None, store=None, now=None,
+    pool_running=False,
 ):
     node = row.node
-    glyph = _display_glyph(node, active_frame, _flow_for_bucket(node, flow_service))
+    glyph = _display_glyph(node, active_frame, _flow_for_bucket(node, flow_service), pool_running)
     icon_cell = Text(glyph.glyph, style=COLOURS[glyph.colour])
     if node.blocked_by:
         icon_cell = icon_cell + Text(
@@ -618,17 +620,17 @@ def _row_node(rows, row_id):
 
 def hierarchy_row_cells(
     row, layout=None, row_budget=None, active_frame=None, flow_service=None, multi_pass=False,
-    store=None, now=None,
+    store=None, now=None, pool_running=False,
 ):
     node = row.node
     if layout is not None and layout.stacked:
         first_line = _hierarchy_stacked_first_line(
-            row, layout, row_budget, active_frame, flow_service, store, now
+            row, layout, row_budget, active_frame, flow_service, store, now, pool_running
         )
         indent = HIERARCHY_CONTINUATION_BASE_INDENT + row.depth
         label = _hierarchy_label(node, flow_service, multi_pass)
         return (stacked_cell(first_line, indent, label, row_budget),)
-    glyph = _display_glyph(node, active_frame, _flow_for_bucket(node, flow_service))
+    glyph = _display_glyph(node, active_frame, _flow_for_bucket(node, flow_service), pool_running)
     icon_cell = Text(glyph.glyph, style=COLOURS[glyph.colour])
     if node.blocked_by:
         icon_cell = icon_cell + Text(
@@ -1441,6 +1443,7 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         self._tab_order = _tab_order(node)
         self._active_tab = self._forced_initial_tab or landing_tab(self._focus)
         self._last_hierarchy_shape = None
+        self._pool_running = False
         self._last_rows = []
         self._last_multi_pass = False
         self._hierarchy_floor = False
@@ -1723,8 +1726,10 @@ class NodeHubScreen(Screen, inherit_bindings=False):
             self._now().timestamp()
         )
         pool_halted = breaker.is_open or breaker.pool_spin_open
+        self._pool_running = PoolRunningUseCase(self._container.lock).execute().running
         header = build_header(
-            store, node, self._now().isoformat(), self._flow_service, pool_halted
+            store, node, self._now().isoformat(), self._flow_service, pool_halted,
+            self._pool_running,
         )
         self.query_one(HubHeader).update(header)
         hierarchy = HierarchyUseCase(store).execute(HierarchyInput(node=self._node_id))
@@ -1883,7 +1888,7 @@ class NodeHubScreen(Screen, inherit_bindings=False):
                 *hierarchy_row_cells(
                     row, layout, row_budget, active_frame=active_frame,
                     flow_service=self._flow_service, multi_pass=multi_pass,
-                    store=store, now=now,
+                    store=store, now=now, pool_running=self._pool_running,
                 ),
                 height=None, key=row.node.id
             )
@@ -1906,7 +1911,7 @@ class NodeHubScreen(Screen, inherit_bindings=False):
             cells = hierarchy_row_cells(
                 row, layout, row_budget, active_frame=active_frame,
                 flow_service=self._flow_service, multi_pass=multi_pass,
-                store=store, now=now,
+                store=store, now=now, pool_running=self._pool_running,
             )
             if layout.stacked:
                 table.update_cell(row.node.id, STACKED_COLUMN_KEY, cells[0])
@@ -1920,7 +1925,7 @@ class NodeHubScreen(Screen, inherit_bindings=False):
     def _active_glyph_ids(self):
         return tuple(
             r.node.id for r in self._last_rows
-            if row_bucket(r.node, _flow_for_bucket(r.node, self._flow_service)) == "active"
+            if row_bucket(r.node, _flow_for_bucket(r.node, self._flow_service), self._pool_running) == "active"
         )
 
     def _sync_active_glyph_animation(self) -> None:
@@ -1958,6 +1963,7 @@ class NodeHubScreen(Screen, inherit_bindings=False):
             cells = hierarchy_row_cells(
                 row, layout, row_budget, active_frame=frame, flow_service=self._flow_service,
                 multi_pass=self._last_multi_pass, store=store, now=now,
+                pool_running=self._pool_running,
             )
             try:
                 if layout.stacked:
@@ -2517,7 +2523,8 @@ class NodeHubScreen(Screen, inherit_bindings=False):
             banner.display = False
             return
         glyph = _display_glyph(
-            ancestor.node, self._active_glyph_char(), _flow_for_bucket(ancestor.node, self._flow_service)
+            ancestor.node, self._active_glyph_char(), _flow_for_bucket(ancestor.node, self._flow_service),
+            self._pool_running,
         )
         text = Text(glyph.glyph + "  ", style=COLOURS[glyph.colour])
         label = _hierarchy_label(ancestor.node, self._flow_service, self._last_multi_pass)

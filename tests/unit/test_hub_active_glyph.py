@@ -4,7 +4,7 @@ from lightcycle.adapters.tui.design_system import ACTIVE_GLYPH_REST_INDEX
 from lightcycle.adapters.tui.hub import HierarchyPagingTable, NodeHubScreen
 from lightcycle.domain.work import State
 from tests.support.fake_store import FakeStore
-from tests.support.tui_harness import launch, make_test_container
+from tests.support.tui_harness import FakeLock, launch, make_test_container
 
 
 def _rendered_text(widget):
@@ -98,5 +98,36 @@ def test_pinned_ancestor_banner_pulses_when_its_own_row_is_active():
         session.run(screen._tick_active_glyph)
 
         assert "◈" in _rendered_text(banner)
+    finally:
+        session.close()
+
+
+def test_queued_engine_row_does_not_animate_until_the_pool_starts():
+    store = FakeStore()
+    item = store.create_item("Item", "a description")
+    store.create_step(step="poll-ci", role="engine", parent=item)
+    lock = FakeLock(running=False)
+    session = launch(make_test_container(store=store, lock=lock))
+    try:
+        session.run(
+            lambda: session.app.push_screen(
+                NodeHubScreen(session.app.container, item, session.app._now)
+            )
+        )
+        session.pause()
+        screen = session.app.screen
+        screen._active_tab = "workflow"
+        session.run(screen._apply_tab_visibility)
+        session.pause()
+
+        assert screen._active_glyph_ids() == ()
+        assert screen._active_glyph_timer is None
+
+        lock.set_running(True)
+        session.run(screen.poll_refresh)
+        session.pause()
+
+        assert len(screen._active_glyph_ids()) == 1
+        assert screen._active_glyph_timer is not None
     finally:
         session.close()

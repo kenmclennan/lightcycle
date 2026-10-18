@@ -1686,6 +1686,7 @@ class LightcycleApp(App):
         self._upgrade_error = None
         self._config_mtime_at_load = container.config.config_mtime()
         self._last_shape = None
+        self._pool_running = False
         self._last_attention_ids = None
         self._last_priority_selection = None
         self._selected_flat_index = 0
@@ -1809,8 +1810,9 @@ class LightcycleApp(App):
 
         lanes = StatusUseCase(self._container.store).execute().lanes
 
+        self._pool_running = PoolRunningUseCase(self._container.lock).execute().running
         selection = select_priority_rows(
-            self._container.store, lanes, self._container.flow_service(),
+            self._container.store, lanes, self._container.flow_service(), self._pool_running,
         )
         shape = (
             tuple(s.owning_node.id for s in selection.attention),

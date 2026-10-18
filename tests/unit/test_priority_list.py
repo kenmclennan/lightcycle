@@ -60,8 +60,8 @@ class TestBuildPriorityRowsFromSelection(unittest.TestCase):
         }
         flow_service = FixedFlowService(_FLOW)
 
-        expected = build_priority_rows(store, lanes, flow_service)
-        selection = select_priority_rows(store, lanes, flow_service)
+        expected = build_priority_rows(store, lanes, flow_service, True)
+        selection = select_priority_rows(store, lanes, flow_service, True)
         actual = build_priority_rows_from_selection(store, selection)
 
         self.assertEqual(actual, expected)
@@ -90,7 +90,7 @@ class TestRowForStoreCalls(unittest.TestCase):
 
         store.children = counted
 
-        build_priority_rows(store, lanes, FixedFlowService(_FLOW))
+        build_priority_rows(store, lanes, FixedFlowService(_FLOW), True)
 
         self.assertEqual(calls["n"], 3)
 
@@ -318,7 +318,7 @@ class TestBuildPriorityRowsAttentionSort(unittest.TestCase):
             "active": [],
         }
 
-        attention, _, _ = build_priority_rows(store, lanes, FixedFlowService(_FLOW))
+        attention, _, _ = build_priority_rows(store, lanes, FixedFlowService(_FLOW), True)
 
         self.assertEqual(
             [row.id for row in attention],
@@ -335,7 +335,7 @@ class TestBuildPriorityRowsAttentionSort(unittest.TestCase):
             "active": [],
         }
 
-        attention, _, _ = build_priority_rows(store, lanes, FixedFlowService(_FLOW))
+        attention, _, _ = build_priority_rows(store, lanes, FixedFlowService(_FLOW), True)
 
         self.assertEqual(
             [row.id for row in attention],
@@ -350,7 +350,7 @@ class TestBuildPriorityRowsStepId(unittest.TestCase):
         step = store.create_step(step="ready-merge", role="human", parent=item)
         lanes = {"inbox": [store.get_node(step)], "queue": [], "active": []}
 
-        attention, _, _ = build_priority_rows(store, lanes, FixedFlowService(_FLOW))
+        attention, _, _ = build_priority_rows(store, lanes, FixedFlowService(_FLOW), True)
 
         self.assertEqual(attention[0].id, item)
         self.assertEqual(attention[0].step_id, step)
@@ -361,7 +361,7 @@ class TestBuildPriorityRowsStepId(unittest.TestCase):
         step = store.create_step(step="build", role="agent", parent=item)
         lanes = {"inbox": [], "queue": [], "active": [store.get_node(step)]}
 
-        _, active, _ = build_priority_rows(store, lanes, FixedFlowService(_FLOW))
+        _, active, _ = build_priority_rows(store, lanes, FixedFlowService(_FLOW), True)
 
         self.assertEqual(active[0].id, item)
         self.assertEqual(active[0].step_id, step)
@@ -372,7 +372,7 @@ class TestBuildPriorityRowsStepId(unittest.TestCase):
         step = store.create_step(step="build", role="agent", parent=item)
         lanes = {"inbox": [], "queue": [store.get_node(step)], "active": []}
 
-        _, _, queued = build_priority_rows(store, lanes, FixedFlowService(_FLOW))
+        _, _, queued = build_priority_rows(store, lanes, FixedFlowService(_FLOW), True)
 
         self.assertEqual(queued[0].id, item)
         self.assertEqual(queued[0].step_id, step)
@@ -385,7 +385,7 @@ class TestBuildPriorityRowsStepId(unittest.TestCase):
         )
         lanes = {"inbox": [], "queue": [store.get_node(step)], "active": []}
 
-        _, _, queued = build_priority_rows(store, lanes, FixedFlowService(_FLOW))
+        _, _, queued = build_priority_rows(store, lanes, FixedFlowService(_FLOW), True)
 
         self.assertEqual(queued[0].id, item)
         self.assertEqual(queued[0].step_id, step)
@@ -402,7 +402,7 @@ class TestBuildPriorityRowsCost(unittest.TestCase):
         store.record_usage(step, 100, 10, 0, 0, 1.25, "list", None)
         lanes = {"inbox": [], "queue": [], "active": [store.get_node(step)]}
 
-        _, active, _ = build_priority_rows(store, lanes, FixedFlowService(_FLOW))
+        _, active, _ = build_priority_rows(store, lanes, FixedFlowService(_FLOW), True)
 
         self.assertEqual(active[0].cost, "$3.75")
 
@@ -413,7 +413,7 @@ class TestBuildPriorityRowsCost(unittest.TestCase):
         store.record_attribution(step, 50, {})
         lanes = {"inbox": [], "queue": [], "active": [store.get_node(step)]}
 
-        _, active, _ = build_priority_rows(store, lanes, FixedFlowService(_FLOW))
+        _, active, _ = build_priority_rows(store, lanes, FixedFlowService(_FLOW), True)
 
         self.assertEqual(active[0].cost, COST_NOT_RECORDED)
 
@@ -423,7 +423,7 @@ class TestBuildPriorityRowsCost(unittest.TestCase):
         step = store.create_step(step="build", role="agent", parent=item)
         lanes = {"inbox": [], "queue": [], "active": [store.get_node(step)]}
 
-        _, active, _ = build_priority_rows(store, lanes, FixedFlowService(_FLOW))
+        _, active, _ = build_priority_rows(store, lanes, FixedFlowService(_FLOW), True)
 
         self.assertEqual(active[0].cost, "")
 
@@ -435,7 +435,7 @@ class TestBuildPriorityRowsTime(unittest.TestCase):
         step = store.create_step(step="build", role="agent", parent=item)
         lanes = {"inbox": [], "queue": [], "active": [store.get_node(step)]}
 
-        _, active, _ = build_priority_rows(store, lanes, FixedFlowService(_FLOW))
+        _, active, _ = build_priority_rows(store, lanes, FixedFlowService(_FLOW), True)
 
         self.assertEqual(active[0].time, "")
 
@@ -449,7 +449,7 @@ class TestBuildPriorityRowsTime(unittest.TestCase):
         store.accrue_active_seconds([step], 540)
         lanes = {"inbox": [], "queue": [], "active": [store.get_node(step)]}
 
-        _, active, _ = build_priority_rows(store, lanes, FixedFlowService(_FLOW))
+        _, active, _ = build_priority_rows(store, lanes, FixedFlowService(_FLOW), True)
 
         self.assertEqual(active[0].time, "14m")
 
@@ -463,7 +463,7 @@ class TestBuildPriorityRowsTime(unittest.TestCase):
         )
         lanes = {"inbox": [store.get_node(gate)], "queue": [], "active": []}
 
-        attention, _, _ = build_priority_rows(store, lanes, FixedFlowService(_FLOW))
+        attention, _, _ = build_priority_rows(store, lanes, FixedFlowService(_FLOW), True)
 
         self.assertEqual(attention[0].time, "9m")
 
@@ -476,7 +476,7 @@ class TestBuildPriorityRowsTime(unittest.TestCase):
         step = store.create_step(step="build", role="agent", parent=item)
         lanes = {"inbox": [], "queue": [store.get_node(step)], "active": []}
 
-        _, _, queued = build_priority_rows(store, lanes, FixedFlowService(_FLOW))
+        _, _, queued = build_priority_rows(store, lanes, FixedFlowService(_FLOW), True)
 
         self.assertEqual(queued[0].time, "9m")
 
@@ -488,7 +488,7 @@ class TestBuildPriorityRowsEngineStep(unittest.TestCase):
         step = store.create_step(step="build", role="engine", parent=item)
         lanes = {"inbox": [], "queue": [store.get_node(step)], "active": []}
 
-        _, active, queued = build_priority_rows(store, lanes, FixedFlowService(_FLOW))
+        _, active, queued = build_priority_rows(store, lanes, FixedFlowService(_FLOW), True)
 
         self.assertEqual(len(active), 1)
         self.assertEqual(queued, [])

@@ -319,9 +319,9 @@ class GoalHubScreen(Screen, inherit_bindings=False):
 
     def _refresh(self) -> None:
         view = ShowGoalUseCase(self._container.store).execute(self._goal_id)
-        result = GoalItemsUseCase(self._container.store, self._container.flow_service()).execute(
-            self._goal_id, self._items_filter or None
-        )
+        result = GoalItemsUseCase(
+            self._container.store, self._container.flow_service(), self._container.lock
+        ).execute(self._goal_id, self._items_filter or None)
         rows = self._current_rows(result)
         width = self._items_width()
         overview_width = pane_text_width(self.query_one("#goal-description-view", DescriptionPane))
