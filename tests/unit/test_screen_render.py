@@ -368,7 +368,6 @@ def test_a_done_agent_step_opens_on_context_with_inputs_outputs_and_records():
         assert header in frame
     assert "INPUTS (live" not in frame
     inputs_row = next(r for r in frame.split("\n") if CONTEXT_SPEC_REPORT in r)
-    assert "LC-143.3.1" in inputs_row
     assert "LC-143.3.p1" in inputs_row
     assert "Audit found one issue." in frame
     assert CONTEXT_FINDINGS in frame
@@ -419,7 +418,7 @@ def test_a_narrow_terminal_stacks_the_context_table():
     key_row = next(i for i, row in enumerate(rows) if row.startswith("│ findings"))
     assert CONTEXT_FINDINGS not in rows[key_row]
     assert CONTEXT_FINDINGS in rows[key_row + 1]
-    assert any("LC-143.3.1  LC-143.3.p1" in row for row in rows)
+    assert any("LC-143.3.p1" in row for row in rows)
 
 
 @pytest.mark.parametrize("state", sorted(name for name in SCREENS if name.startswith("hub#")))

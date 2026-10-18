@@ -276,8 +276,7 @@ def _step_composite_title_with_display(ctx):
         step="code-await-merge", role="agent", parent=item)
     ctx["item_id"] = item
     ctx["step_id"] = step
-    session = _launch(ctx, store)
-    session.press("enter")
+    _launch(ctx, store)
 
 
 @given(parsers.parse('an active item at step "{step}" claimed {minutes:d} minutes ago, its hub open'))
