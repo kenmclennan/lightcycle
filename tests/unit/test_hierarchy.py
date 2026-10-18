@@ -112,46 +112,46 @@ class TestRowBucket(unittest.TestCase):
         s = FakeStore()
         blocker = create_owned_step(s, "b", step="build", role="agent")
         step = create_owned_step(s, "s", step="build", role="agent", deps=[blocker])
-        self.assertEqual(row_bucket(s.get_node(step), FLOW), "queued")
+        self.assertEqual(row_bucket(s.get_node(step), FLOW, True), "queued")
 
     def test_human_ready_step_unknown_to_the_flow_is_a_gate(self):
         s = FakeStore()
         step = create_owned_step(s, "s", step="await-merge", role="human")
-        self.assertEqual(row_bucket(s.get_node(step), FLOW), "gate")
+        self.assertEqual(row_bucket(s.get_node(step), FLOW, True), "gate")
 
     def test_a_parked_step_the_flow_still_owns_by_an_agent_is_an_escalation(self):
         s = FakeStore()
         step = create_owned_step(s, "s", step="build", role="human")
-        self.assertEqual(row_bucket(s.get_node(step), FLOW), "escalation")
+        self.assertEqual(row_bucket(s.get_node(step), FLOW, True), "escalation")
 
     def test_queued_agent_step_is_queued(self):
         s = FakeStore()
         step = create_owned_step(s, "s", step="build", role="agent")
-        self.assertEqual(row_bucket(s.get_node(step), FLOW), "queued")
+        self.assertEqual(row_bucket(s.get_node(step), FLOW, True), "queued")
 
     def test_in_progress_step_is_active(self):
         s = FakeStore()
         step = create_owned_step(s, "s", step="build", role="agent")
         s.claim_ready("agent")
-        self.assertEqual(row_bucket(s.get_node(step), FLOW), "active")
+        self.assertEqual(row_bucket(s.get_node(step), FLOW, True), "active")
 
     def test_done_step_is_done(self):
         s = FakeStore()
         step = create_owned_step(s, "s", step="build", role="agent")
         s.complete_node(step, "done")
-        self.assertEqual(row_bucket(s.get_node(step), FLOW), "done")
+        self.assertEqual(row_bucket(s.get_node(step), FLOW, True), "done")
 
     def test_dependency_blocked_item_is_queued(self):
         s = FakeStore()
         blocker = s.create_item("blocker", "a description")
         item = s.create_item("blocked", "a description")
         s.dep_add(item, blocker)
-        self.assertEqual(row_bucket(s.get_node(item), FLOW), "queued")
+        self.assertEqual(row_bucket(s.get_node(item), FLOW, True), "queued")
 
     def test_a_ready_step_with_no_recorded_role_is_treated_as_human(self):
         s = FakeStore()
         step = create_owned_step(s, "s", step="await-merge")
-        self.assertEqual(row_bucket(s.get_node(step), FLOW), "gate")
+        self.assertEqual(row_bucket(s.get_node(step), FLOW, True), "gate")
 
     def test_item_with_a_human_step_awaiting_it_alongside_done_steps_is_a_gate(self):
         s = FakeStore()
@@ -160,21 +160,37 @@ class TestRowBucket(unittest.TestCase):
             done = s.create_step(step="build", role="agent", parent=item)
             s.complete_node(done, "done")
         s.create_step(step="await-merge", role="human", parent=item)
-        self.assertEqual(row_bucket(s.get_node(item), FLOW), "gate")
+        self.assertEqual(row_bucket(s.get_node(item), FLOW, True), "gate")
 
     def test_unblocked_engine_step_is_active(self):
         s = FakeStore()
         step = create_owned_step(s, "s", step="poll-ci", role="engine")
-        self.assertEqual(row_bucket(s.get_node(step), FLOW), "active")
+        self.assertEqual(row_bucket(s.get_node(step), FLOW, True), "active")
+
+    def test_unblocked_engine_step_is_queued_while_the_pool_is_stopped(self):
+        s = FakeStore()
+        step = create_owned_step(s, "s", step="poll-ci", role="engine")
+        self.assertEqual(row_bucket(s.get_node(step), FLOW, False), "queued")
+
+    def test_running_agent_step_is_active_while_the_pool_is_stopped(self):
+        s = FakeStore()
+        step = create_owned_step(s, "s", step="build", role="agent")
+        s.claim_ready("agent")
+        self.assertEqual(row_bucket(s.get_node(step), FLOW, False), "active")
+
+    def test_human_gate_is_unaffected_by_the_pool_being_stopped(self):
+        s = FakeStore()
+        step = create_owned_step(s, "s", step="await-merge", role="human")
+        self.assertEqual(row_bucket(s.get_node(step), FLOW, False), "gate")
 
     def test_dependency_blocked_engine_step_is_queued(self):
         s = FakeStore()
         blocker = create_owned_step(s, "b", step="build", role="agent")
         step = create_owned_step(s, "s", step="poll-ci", role="engine", deps=[blocker])
-        self.assertEqual(row_bucket(s.get_node(step), FLOW), "queued")
+        self.assertEqual(row_bucket(s.get_node(step), FLOW, True), "queued")
 
     def test_queued_item_whose_only_child_is_an_engine_step_does_not_raise(self):
         s = FakeStore()
         item = s.create_item("item", "a description")
         s.create_step(step="poll-ci", role="engine", parent=item)
-        self.assertEqual(row_bucket(s.get_node(item), FLOW), "queued")
+        self.assertEqual(row_bucket(s.get_node(item), FLOW, True), "queued")

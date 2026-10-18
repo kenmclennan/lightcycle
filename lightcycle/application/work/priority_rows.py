@@ -18,7 +18,7 @@ class PrioritySelection:
     queued: List[SelectedRow]
 
 
-def select_priority_rows(store, lanes, flow_service):
+def select_priority_rows(store, lanes, flow_service, pool_running):
     claimed = set()
     flows_by_item = {}
 
@@ -30,12 +30,12 @@ def select_priority_rows(store, lanes, flow_service):
 
     attention, active, queued = [], [], []
     unblocked = [n for n in lanes["queue"] if not n.blocked_by]
-    runnable = [n for n in unblocked if not is_engine_step(n)]
-    engine_active = [n for n in unblocked if is_engine_step(n)]
+    runnable = [n for n in unblocked if not is_engine_step(n) or not pool_running]
+    engine_active = [n for n in unblocked if is_engine_step(n) and pool_running]
     held = [n for n in lanes["queue"] if n.blocked_by]
     inbox = sorted(
         ((n, flow_for(n)) for n in lanes["inbox"]),
-        key=lambda pair: row_bucket(pair[0], pair[1]) != "escalation",
+        key=lambda pair: row_bucket(pair[0], pair[1], pool_running) != "escalation",
     )
     for group_rows, nodes_and_flow in (
         (attention, inbox),

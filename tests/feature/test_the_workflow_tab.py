@@ -16,7 +16,7 @@ from lightcycle.adapters.tui.row_grid import (
 )
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
-from tests.support.tui_harness import launch, make_test_container
+from tests.support.tui_harness import FakeLock, launch, make_test_container
 from tests.support.step_factory import create_owned_step
 
 scenarios("the-workflow-tab.feature")
@@ -31,9 +31,9 @@ def ctx():
         session.close()
 
 
-def _launch(ctx, store, node_id, size=None):
+def _launch(ctx, store, node_id, size=None, pool_running=False):
     ctx["store"] = store
-    session = launch(make_test_container(store=store, fs=ctx.get("fs")), size=size)
+    session = launch(make_test_container(store=store, fs=ctx.get("fs"), lock=FakeLock(running=pool_running)), size=size)
     ctx["session"] = session
     session.run(
         lambda: session.app.push_screen(NodeHubScreen(session.app.container, node_id, session.app._now))
@@ -228,7 +228,7 @@ def _hierarchy_open_engine_step(ctx):
     step = store.create_step(step="poll-ci", role="engine", parent=item)
     ctx["item_id"] = item
     ctx["step_id"] = step
-    _launch(ctx, store, item)
+    _launch(ctx, store, item, pool_running=True)
 
 
 @given("a human step that is done")

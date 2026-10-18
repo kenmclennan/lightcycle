@@ -30,7 +30,7 @@ class TestSelectPriorityRowsDedupe(unittest.TestCase):
             "queue": [],
         }
 
-        selection = select_priority_rows(store, lanes, _FixedFlowService())
+        selection = select_priority_rows(store, lanes, _FixedFlowService(), True)
 
         self.assertEqual(len(selection.attention), 1)
         self.assertEqual(selection.active, [])
@@ -46,7 +46,7 @@ class TestSelectPriorityRowsDedupe(unittest.TestCase):
             "queue": [],
         }
 
-        selection = select_priority_rows(store, lanes, _FixedFlowService())
+        selection = select_priority_rows(store, lanes, _FixedFlowService(), True)
 
         self.assertEqual(
             [s.node.id for s in selection.attention], [escalation, gate]
@@ -57,10 +57,20 @@ class TestSelectPriorityRowsDedupe(unittest.TestCase):
         step = create_owned_step(store, "polling", step="poll-ci", role="engine")
         lanes = {"inbox": [], "active": [], "queue": [store.get_node(step)]}
 
-        selection = select_priority_rows(store, lanes, _FixedFlowService())
+        selection = select_priority_rows(store, lanes, _FixedFlowService(), True)
 
         self.assertEqual([s.node.id for s in selection.active], [step])
         self.assertEqual(selection.queued, [])
+
+    def test_an_unblocked_engine_step_lands_in_queued_while_the_pool_is_stopped(self):
+        store = FakeStore()
+        step = create_owned_step(store, "polling", step="poll-ci", role="engine")
+        lanes = {"inbox": [], "active": [], "queue": [store.get_node(step)]}
+
+        selection = select_priority_rows(store, lanes, _FixedFlowService(), False)
+
+        self.assertEqual([s.node.id for s in selection.queued], [step])
+        self.assertEqual(selection.active, [])
 
     def test_a_dependency_blocked_engine_step_stays_in_queued(self):
         store = FakeStore()
@@ -68,7 +78,7 @@ class TestSelectPriorityRowsDedupe(unittest.TestCase):
         step = create_owned_step(store, "polling", step="poll-ci", role="engine", deps=[blocker])
         lanes = {"inbox": [], "active": [], "queue": [store.get_node(step)]}
 
-        selection = select_priority_rows(store, lanes, _FixedFlowService())
+        selection = select_priority_rows(store, lanes, _FixedFlowService(), True)
 
         self.assertEqual(selection.active, [])
         self.assertEqual([s.node.id for s in selection.queued], [step])
@@ -86,7 +96,7 @@ class TestSelectPriorityRowsDedupe(unittest.TestCase):
             "queue": [],
         }
 
-        selection = select_priority_rows(store, lanes, _FixedFlowService())
+        selection = select_priority_rows(store, lanes, _FixedFlowService(), True)
 
         self.assertEqual(
             sorted(s.owning_node.id for s in selection.active), sorted([item_a, item_b])
@@ -126,7 +136,7 @@ class TestSelectPriorityRowsItemReads(unittest.TestCase):
         }
         flow_service = FlowService(FakeFs({}), counting)
 
-        selection = select_priority_rows(counting, lanes, flow_service)
+        selection = select_priority_rows(counting, lanes, flow_service, True)
 
         self.assertEqual(len(selection.attention) + len(selection.active) + len(selection.queued), 2)
         self.assertEqual(len(counting.get_item_calls), len(set(counting.get_item_calls)))

@@ -17,12 +17,12 @@ def compose_hierarchy(root, steps_by_item):
     return rows
 
 
-def row_bucket(node, flow):
+def row_bucket(node, flow, pool_running):
     if node.state == State.DONE:
         return "done"
     if node.state == State.RUNNING:
         return "active"
-    if node.state == State.QUEUED and is_engine_step(node):
+    if node.state == State.QUEUED and is_engine_step(node) and pool_running:
         return "active"
     if node.state == State.WAITING and is_human_step(node):
         kind, _outs = node.classify_for_human(flow)

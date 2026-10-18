@@ -42,7 +42,7 @@ def _resolved_step(node, flow):
 
 
 def _attention_row(store, node, flow):
-    escalation = row_bucket(node, flow) == "escalation"
+    escalation = row_bucket(node, flow, True) == "escalation"
     glyph = STATE_GLYPHS["escalation"] if escalation else STATE_GLYPHS["gate"]
     step = _resolved_step(node, flow)
     behind = not escalation and behind_reason(store, node.id) is not None
@@ -129,8 +129,8 @@ def _row_for(store, row_builder, selected):
     )
 
 
-def build_priority_rows(store, lanes, flow_service):
-    selection = select_priority_rows(store, lanes, flow_service)
+def build_priority_rows(store, lanes, flow_service, pool_running):
+    selection = select_priority_rows(store, lanes, flow_service, pool_running)
     return build_priority_rows_from_selection(store, selection)
 
 
