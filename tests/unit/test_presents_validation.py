@@ -51,3 +51,30 @@ class TestPresentsValidation(unittest.TestCase):
         self.assertEqual(len(found), 1)
         self.assertIn("'build'", found[0])
         self.assertIn("only for human steps", found[0])
+
+
+class TestPresentsReportOnAHumanGate(unittest.TestCase):
+    def _found(self, steps):
+        bundle = SimpleNamespace(steps=steps, workflows={"flow": WORKFLOW})
+        return [m for ms in check_bundle_references(bundle).values() for m in ms if "presents" in m]
+
+    def test_presents_report_on_a_human_gate_is_refused(self):
+        gate = "---\ndetail: [report, pr]\npresents: report\n---\n# Gate\n"
+
+        found = self._found({"build": AGENT % "", "gate": gate})
+
+        self.assertEqual(len(found), 1)
+        self.assertIn("'gate'", found[0])
+        self.assertIn(
+            "presents 'report' is this gate's own closing report, null while the gate is open; "
+            "present in:report for the previous step's report", found[0])
+
+    def test_presents_in_report_on_a_human_gate_passes(self):
+        gate = "---\ndetail: [in:report, pr]\npresents: in:report\n---\n# Gate\n"
+
+        self.assertEqual(self._found({"build": AGENT % "", "gate": gate}), [])
+
+    def test_an_agent_step_with_report_in_its_detail_is_untouched(self):
+        build = "---\nmodel: sonnet\ndetail: [report, pr]\n---\n# Build\n"
+
+        self.assertEqual(self._found({"build": build, "gate": GATE % "pr"}), [])
