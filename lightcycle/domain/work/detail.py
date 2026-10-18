@@ -34,6 +34,15 @@ def parse_detail(value) -> Optional[Tuple[str, ...]]:
     return names or None
 
 
+def detail_value_is_url(value) -> bool:
+    if not value:
+        return False
+    text = str(value).strip()
+    if "\n" in text or " " in text:
+        return False
+    return text.startswith(("http://", "https://")) and len(text.split("://", 1)[1]) > 0
+
+
 def kind_of(name):
     if name.startswith(IN_PREFIX):
         return KIND_INPUT
