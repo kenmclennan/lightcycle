@@ -360,8 +360,11 @@ def _selection_cursor_glyph_cyan(ctx):
 
 def _visible_list_widget(ctx):
     screen = ctx["session"].app.screen
-    candidates = [widget for widget in screen.query(DataTable) if widget.display]
-    candidates += [widget for widget in screen.query(RichLog) if widget.display]
+    def shown(widget):
+        return all(node.display for node in widget.ancestors_with_self)
+
+    candidates = [widget for widget in screen.query(DataTable) if shown(widget)]
+    candidates += [widget for widget in screen.query(RichLog) if shown(widget)]
     assert len(candidates) == 1, (ctx["state"], candidates)
     return candidates[0]
 

@@ -5,7 +5,8 @@ from rich.text import Text
 from textual import events
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.geometry import Region
 from textual.screen import Screen
 from textual.widgets import DataTable, RichLog, Static
 from textual.widgets.data_table import CellDoesNotExist
@@ -21,6 +22,7 @@ from lightcycle.adapters.tui.design_system import (
     DONE_GLYPH,
     Glyph,
     HUB_SHORTCUTS,
+    HEADING_STYLE,
     HUMAN_STEP_GLYPH,
     LIST_ARTIFACT_SHORTCUTS,
     STATE_GLYPHS,
@@ -710,39 +712,28 @@ def context_section_title(section, inputs_live):
     return section.upper()
 
 
-def context_display_rows(rows, inputs_live):
-    display = []
-    for section in (SECTION_INPUTS, SECTION_OUTPUTS, SECTION_RECORDS):
-        display.append(("__section:%s__" % section, "header", context_section_title(section, inputs_live)))
-        members = [(i, r) for i, r in enumerate(rows) if r.section == section]
-        if not members:
-            display.append(("__none:%s__" % section, "none", CONTEXT_NONE_TEXT))
-        for index, row in members:
-            display.append((str(index), "row", row))
-    return display
+CONTEXT_SECTIONS = (SECTION_INPUTS, SECTION_OUTPUTS, SECTION_RECORDS)
 
 
-def context_row_cells(entry, layout=None, row_budget=None):
-    row_key, kind, payload = entry
-    if kind in ("header", "none"):
-        style = COLOURS["dim"]
-        text = Text(payload, style=style)
-        if layout is not None and layout.stacked:
-            return (text,)
-        return (text, Text(""), Text(""), Text(""))
-    row = payload
+def context_section_rows(rows):
+    return {
+        section: [(str(i), r) for i, r in enumerate(rows) if r.section == section]
+        for section in CONTEXT_SECTIONS
+    }
+
+
+def context_row_cells(row, layout=None, row_budget=None):
     value = _collapse(row.value)
     style = COLOURS["cyan"] if row.kind in ("url", "filepath") else COLOURS["text"]
     if layout is not None and layout.stacked:
         first = (
             pad_field(Text(row.key, style=COLOURS["dim"]), layout.atomic_widths["key"])
-            + pad_field(Text(row.source, style=COLOURS["dim"]), layout.atomic_widths["source"])
             + pad_field(Text(row.pass_id, style=COLOURS["dim"]), layout.atomic_widths["pass"])
         )
         return (stacked_cell(first, CONTEXT_CONTINUATION_INDENT, value, row_budget, prose_style=style),)
     return (
-        Text(row.key, style=COLOURS["dim"]), Text(row.source, style=COLOURS["dim"]),
-        Text(row.pass_id, style=COLOURS["dim"]), Text(value, style=style),
+        Text(row.key, style=COLOURS["dim"]), Text(row.pass_id, style=COLOURS["dim"]),
+        Text(value, style=style),
     )
 
 
@@ -1108,6 +1099,10 @@ class DetailTable(DataTable):
             screen.refresh_detail_width()
 
 
+class ContextList(VerticalScroll, can_focus=False):
+    pass
+
+
 class ContextTable(DataTable):
     _BASE = [b for b in DataTable.BINDINGS if b.key not in ("left", "right")]
 
@@ -1120,6 +1115,30 @@ class ContextTable(DataTable):
     def __init__(self, *args, **kwargs):
         kwargs.setdefault("cursor_foreground_priority", "renderable")
         super().__init__(*args, **kwargs)
+
+    def action_cursor_down(self) -> None:
+        self.screen.step_context_cursor(1)
+
+    def action_cursor_up(self) -> None:
+        self.screen.step_context_cursor(-1)
+
+    def action_page_down(self) -> None:
+        self.screen.page_context_cursor(1)
+
+    def action_page_up(self) -> None:
+        self.screen.page_context_cursor(-1)
+
+    def action_scroll_home(self) -> None:
+        self.screen.jump_context_cursor(first=True)
+
+    def action_scroll_top(self) -> None:
+        self.screen.jump_context_cursor(first=True)
+
+    def action_scroll_end(self) -> None:
+        self.screen.jump_context_cursor(first=False)
+
+    def action_scroll_bottom(self) -> None:
+        self.screen.jump_context_cursor(first=False)
 
     def on_resize(self, event: events.Resize) -> None:
         screen = self.screen
@@ -1327,8 +1346,31 @@ class NodeHubScreen(Screen, inherit_bindings=False):
     DetailTable {{
         height: 1fr;
     }}
-    ContextTable {{
+    ContextList {{
         height: 1fr;
+        scrollbar-gutter: stable;
+        display: none;
+    }}
+    ContextTable {{
+        height: auto;
+        max-height: 1000;
+        width: 100%;
+        overflow: hidden hidden;
+    }}
+    .context-header {{
+        height: auto;
+        padding: 1 0 1 1;
+    }}
+    .context-header.first-visible {{
+        padding: 0 0 1 1;
+    }}
+    .context-none {{
+        height: auto;
+        padding: 0 0 0 1;
+        color: {COLOURS["dim"]};
+    }}
+    .context-none.hidden, ContextTable.hidden {{
+        display: none;
     }}
     CostPane {{
         height: 1fr;
@@ -1436,6 +1478,8 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         self._has_context = False
         self._context_inputs_live = False
         self._context_reconstructed = False
+        self._context_active = SECTION_INPUTS
+        self._context_width = None
         self._landed = False
         self._cost_whole_empty_message = None
         self._last_cost_shape = None
@@ -1477,11 +1521,12 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         yield Static(id="detail-floor")
         yield Static(DETAIL_EMPTY_MESSAGE, id="hub-detail-empty")
         yield Static(id="hub-detail-toast")
-        context_table = ContextTable(id="hub-context-table")
-        context_table.display = self._active_tab == "context"
-        context_note = Static(CONTEXT_RECONSTRUCTED_NOTE, id="hub-context-note")
-        yield context_note
-        yield context_table
+        yield Static(CONTEXT_RECONSTRUCTED_NOTE, id="hub-context-note")
+        context_list = ContextList(id="hub-context-list")
+        context_list.display = self._active_tab == "context"
+        with context_list:
+            for section in CONTEXT_SECTIONS:
+                yield from self._compose_context_section(section)
         yield Static(id="context-floor")
         yield Static(CONTEXT_EMPTY_MESSAGE, id="hub-context-empty")
         yield Static(id="hub-context-toast")
@@ -1500,6 +1545,11 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         yield Static(id="hub-cost-empty")
         yield DashboardFooter(id="hub-footer", shortcuts=HUB_SHORTCUTS)
 
+    def _compose_context_section(self, section) -> ComposeResult:
+        yield Static("", id="hub-context-header-%s" % section, classes="context-header")
+        yield ContextTable(id="hub-context-table-%s" % section, name=section)
+        yield Static(CONTEXT_NONE_TEXT, id="hub-context-none-%s" % section, classes="context-none")
+
     def on_mount(self) -> None:
         table = self.query_one(HierarchyPagingTable)
         table.cursor_type = "row"
@@ -1510,9 +1560,9 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         detail_table = self.query_one(DetailTable)
         detail_table.cursor_type = "row"
         detail_table.show_header = False
-        context_table = self.query_one(ContextTable)
-        context_table.cursor_type = "row"
-        context_table.show_header = False
+        for context_table in self._context_tables():
+            context_table.cursor_type = "row"
+            context_table.show_header = False
         store = self._container.store
         node = store.get_node(self._node_id)
         self._hierarchy_target_id = _hierarchy_default_row_id(store, node)
@@ -2034,11 +2084,12 @@ class NodeHubScreen(Screen, inherit_bindings=False):
                     table.move_cursor(row=index)
                     return
         elif self._focus.kind == FOCUS_CONTEXT:
-            table = self.query_one(ContextTable)
+            table = self.query_one("#hub-context-table-%s" % SECTION_OUTPUTS, ContextTable)
             for index, row in enumerate(self._last_context_rows):
                 if row.section == SECTION_OUTPUTS and row.key == name:
                     for position, row_key in enumerate(table.rows):
                         if row_key.value == str(index):
+                            self._activate_context_table(table)
                             table.move_cursor(row=position)
                             return
 
@@ -2130,11 +2181,94 @@ class NodeHubScreen(Screen, inherit_bindings=False):
             for key, value in zip(columns, cells):
                 table.update_cell(row_key, key, value)
 
-    def _context_layout(self, table, display):
-        data = [payload for _key, kind, payload in display if kind == "row"]
+    def _context_tables(self):
+        return list(self.query(ContextTable))
+
+    def _visible_context_tables(self):
+        return [t for t in self._context_tables() if t.row_count]
+
+    def _context_entries(self):
+        return [(t, row) for t in self._visible_context_tables() for row in range(t.row_count)]
+
+    def _active_context_table(self):
+        for table in self._visible_context_tables():
+            if table.name == self._context_active:
+                return table
+        return None
+
+    def _context_focus_target(self):
+        return self._active_context_table() or next(iter(self._visible_context_tables()), None)
+
+    def _activate_context_table(self, table) -> None:
+        self._context_active = table.name
+        for other in self._context_tables():
+            other.show_cursor = other is table
+
+    def on_descendant_focus(self, event: events.DescendantFocus) -> None:
+        widget = event.widget
+        if isinstance(widget, ContextTable) and widget.name != self._context_active:
+            self._activate_context_table(widget)
+
+    def _context_position(self):
+        table = self._active_context_table()
+        if table is None:
+            return None
+        return self._context_entries().index((table, table.cursor_coordinate.row))
+
+    def step_context_cursor(self, delta) -> None:
+        position = self._context_position()
+        if position is not None:
+            self._goto_context(position + delta)
+
+    def jump_context_cursor(self, first) -> None:
+        self._goto_context(0 if first else len(self._context_entries()) - 1)
+
+    def page_context_cursor(self, direction) -> None:
+        position = self._context_position()
+        if position is None:
+            return
+        entries = self._context_entries()
+        viewport = max(self.query_one(ContextList).size.height, 1)
+        travelled = 0
+        target = position
+        while 0 <= target + direction < len(entries) and travelled < viewport:
+            target += direction
+            table, row = entries[target]
+            travelled += table.ordered_rows[row].height
+        self._goto_context(target)
+
+    def _goto_context(self, index) -> None:
+        entries = self._context_entries()
+        if not entries:
+            return
+        index = max(0, min(index, len(entries) - 1))
+        table, row = entries[index]
+        was_context_focus = isinstance(self.focused, ContextTable)
+        self._activate_context_table(table)
+        table.move_cursor(row=row, animate=False, scroll=False)
+        if was_context_focus and self.focused is not table:
+            self.set_focus(table, scroll_visible=False)
+        self._scroll_context_to(table, row, index)
+
+    def _scroll_context_to(self, table, row, index) -> None:
+        context_list = self.query_one(ContextList)
+        if index == 0:
+            context_list.scroll_home(animate=False, immediate=True)
+            return
+        top = table.virtual_region.y + sum(r.height for r in table.ordered_rows[:row])
+        bottom = top + table.ordered_rows[row].height
+        if row == 0:
+            top = self.query_one("#hub-context-header-%s" % table.name, Static).virtual_region.y
+        context_list.scroll_to_region(
+            Region(0, top, max(context_list.size.width, 1), bottom - top),
+            animate=False,
+            immediate=True,
+        )
+
+    def _context_layout(self, table, sections):
+        data = [r for members in sections.values() for _key, r in members]
         atomic_values = {
-            "key": [r.key for r in data] + [p for _k, kind, p in display if kind == "header"],
-            "source": [r.source + "  " for r in data],
+            "key": [r.key for r in data],
             "pass": [r.pass_id + "  " for r in data],
         }
         row_budget = screen_row_budget_for(table, len(COLUMN_GRIDS["context"]))
@@ -2149,19 +2283,33 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         self._paint_context(initial)
 
     def refresh_context_width(self) -> None:
-        if self._last_context_rows:
+        if self._last_context_rows and self.size.width != self._context_width:
             self._paint_context(True)
             self._apply_tab_visibility()
 
+    def _selected_context_key(self):
+        table = self._active_context_table()
+        return self._selected_detail_key(table) if table is not None else None
+
     def _paint_context(self, initial) -> None:
-        table = self.query_one(ContextTable)
-        display = context_display_rows(self._last_context_rows, self._context_inputs_live)
-        layout = self._context_layout(table, display)
-        row_budget = render_screen_row_budget(table, layout, len(COLUMN_GRIDS["context"]))
-        rows = [
-            (entry[0], context_row_cells(entry, layout, row_budget)) for entry in display
-        ]
-        shape = (tuple((k, tuple(c.plain for c in cells)) for k, cells in rows), layout.stacked)
+        sizing = self.query_one("#hub-context-table-%s" % SECTION_INPUTS, ContextTable)
+        sections = context_section_rows(self._last_context_rows)
+        layout = self._context_layout(sizing, sections)
+        row_budget = render_screen_row_budget(sizing, layout, len(COLUMN_GRIDS["context"]))
+        cells = {
+            section: [
+                (key, context_row_cells(row, layout, row_budget)) for key, row in members
+            ]
+            for section, members in sections.items()
+        }
+        shape = (
+            tuple(
+                (section, tuple((k, tuple(c.plain for c in cs)) for k, cs in rows))
+                for section, rows in cells.items()
+            ),
+            layout.stacked,
+            self._context_inputs_live,
+        )
         if shape == self._last_context_shape and not initial and not self._context_needs_rebuild:
             return
         self._context_floor = layout.floor
@@ -2169,27 +2317,52 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         if self._context_floor:
             self._context_needs_rebuild = True
             self.query_one("#context-floor", Static).update(
-                Text(floor_message(layout, table, len(COLUMN_GRIDS["context"])), style=COLOURS["dim"])
+                Text(floor_message(layout, sizing, len(COLUMN_GRIDS["context"])), style=COLOURS["dim"])
             )
             self._apply_tab_visibility()
             return
         self._context_needs_rebuild = False
-        selected_key = self._selected_detail_key(table)
-        table.clear(columns=True)
-        if layout.stacked:
-            table.add_column(STACKED_COLUMN_KEY, width=row_budget, key=STACKED_COLUMN_KEY)
-        else:
-            widths = {
-                "key": layout.atomic_widths["key"], "source": layout.atomic_widths["source"],
-                "pass": layout.atomic_widths["pass"], "value": layout.flexible_width,
-            }
-            for key in COLUMN_GRIDS["context"]:
-                table.add_column(key, width=widths[key], key=key)
-        for row_key, cells in rows:
-            table.add_row(*cells, height=None, key=row_key)
+        self._context_width = self.size.width
+        selected_key = self._selected_context_key()
+        for section in CONTEXT_SECTIONS:
+            table = self.query_one("#hub-context-table-%s" % section, ContextTable)
+            header = self.query_one("#hub-context-header-%s" % section, Static)
+            none = self.query_one("#hub-context-none-%s" % section, Static)
+            rows = cells[section]
+            header.update(Text(context_section_title(section, self._context_inputs_live), style=HEADING_STYLE))
+            header.set_class(section == SECTION_INPUTS, "first-visible")
+            table.set_class(not rows, "hidden")
+            none.set_class(bool(rows), "hidden")
+            table.clear(columns=True)
+            if layout.stacked:
+                table.add_column(STACKED_COLUMN_KEY, width=row_budget, key=STACKED_COLUMN_KEY)
+            else:
+                widths = {
+                    "key": layout.atomic_widths["key"], "pass": layout.atomic_widths["pass"],
+                    "value": layout.flexible_width,
+                }
+                for key in COLUMN_GRIDS["context"]:
+                    table.add_column(key, width=widths[key], key=key)
+            for row_key, row_cells in rows:
+                table.add_row(*row_cells, height=None, key=row_key)
         self._last_context_shape = shape
-        keys = [row_key for row_key, _cells in rows]
-        table.move_cursor(row=keys.index(selected_key) if selected_key in keys else 0)
+        self._restore_context_cursor(selected_key)
+
+    def _restore_context_cursor(self, selected_key) -> None:
+        tables = self._visible_context_tables()
+        if not tables:
+            return
+        target, index = tables[0], 0
+        for table in tables:
+            keys = [row.key.value for row in table.ordered_rows]
+            if selected_key in keys:
+                target, index = table, keys.index(selected_key)
+                break
+        was_context_focus = isinstance(self.focused, ContextTable)
+        self._activate_context_table(target)
+        target.move_cursor(row=index, animate=False, scroll=False)
+        if was_context_focus and self.focused is not target:
+            self.set_focus(target, scroll_visible=False)
 
     def _cost_layout(self, pane, rows):
         atomic_values = {"key": [label for _key, label, _value in rows if label]}
@@ -2381,7 +2554,7 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         showing_context_empty = (
             context_active and not self._has_context and not showing_context_toast
         )
-        self.query_one(ContextTable).display = (
+        self.query_one(ContextList).display = (
             context_active and not showing_context_toast and not showing_context_floor
             and not showing_context_empty
         )
@@ -2431,7 +2604,7 @@ class NodeHubScreen(Screen, inherit_bindings=False):
             and not (self._toast_active and self._toast_tab == "context")
             and not self._context_floor
         ):
-            self.set_focus(self.query_one(ContextTable))
+            self.set_focus(self._context_focus_target())
         elif self._active_tab == "description" and self._has_description:
             self.set_focus(self.query_one(DescriptionPane))
         elif self._active_tab == "cost" and self._cost_whole_empty_message is None and not self._cost_floor:
@@ -2489,7 +2662,7 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         if event.data_table.id == "hub-detail-table":
             self._open_selected_detail_field(event.row_key.value)
             return
-        if event.data_table.id == "hub-context-table":
+        if isinstance(event.data_table, ContextTable):
             self._open_selected_context_row(event.row_key.value)
             return
         row_id = event.row_key.value
@@ -2517,7 +2690,7 @@ class NodeHubScreen(Screen, inherit_bindings=False):
             )
 
     def _open_selected_context_row(self, key_value) -> None:
-        if key_value is None or key_value.startswith("__"):
+        if key_value is None:
             return
         rows = self._last_context_rows
         row = rows[int(key_value)]
