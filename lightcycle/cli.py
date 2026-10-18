@@ -1188,7 +1188,7 @@ def cmd_trace(argv):
         resp = TraceUseCase(
             _container.store, _container.workers, _container.fs, _container.config
         ).execute(TraceInput(item=a.item))
-    except RegistryUnreadable as e:
+    except (RegistryUnreadable, UseCaseError) as e:
         sys.stderr.write("%s\n" % e)
         return 1
     if a.json:

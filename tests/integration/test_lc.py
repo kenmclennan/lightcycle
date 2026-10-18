@@ -1794,6 +1794,16 @@ class TestTrace(unittest.TestCase):
         self.assertIn("artifact pr [spec]: https://github.com/x/y/pull/1", out2)
         self.assertIn("artifact pr [code]: https://github.com/x/y/pull/2", out2)
 
+    def test_trace_of_a_step_id_refuses_naming_the_parent_item(self):
+        rc, out, err = call(_file_compat, "specs/Z.md", "--step", "build", "--workflow", "lightcycle/spec-driven")
+        sid = out.strip()
+        step = self.store.children(sid)[0].id
+        for extra in ((), ("--json",)):
+            rc2, out2, err2 = call(_cli_mod.cmd_trace, step, *extra)
+            self.assertEqual(rc2, 1)
+            self.assertEqual(out2, "")
+            self.assertEqual(err2.strip(), "lc trace takes an item id; %s is a step of %s" % (step, sid))
+
     def test_corrupt_registry_exits_one_with_a_clean_message(self):
         rc, out, err = call(_file_compat, "specs/Z.md", "--step", "build", "--workflow", "lightcycle/spec-driven")
         sid = out.strip()
