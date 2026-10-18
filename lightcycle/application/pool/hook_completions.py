@@ -30,5 +30,5 @@ class HookCompletionsUseCase:
             if since_iso is not None and parse_timestamp(node.closed_at) <= parse_timestamp(since_iso):
                 continue
             if node.stage in self._flow_service.flow_for(node).hook_steps():
-                completed.append((node.stage, node.id, node.notes or node.outcome or ""))
+                completed.append((node.stage, node.id, node.report or node.notes or node.outcome or ""))
         return HookCompletionsResponse(completed=completed)

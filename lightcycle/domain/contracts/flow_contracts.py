@@ -5,6 +5,15 @@ from lightcycle.domain.flow.hooks import (
     PR_FEEDBACK,
     REVIEW_ROUNDS_CAP,
 )
+from lightcycle.domain.work.detail import (
+    EXECUTION_FIELDS,
+    IN_PREFIX,
+    OUT_PREFIX,
+    RESERVED_INPUT_NAMES,
+    detail_shape_problem,
+    kind_of,
+    parse_detail,
+)
 from lightcycle.domain.work.step_focus import parse_presents, presents_artifact
 
 
@@ -17,6 +26,7 @@ class FlowContracts:
             s: StepContract.from_meta(step_metas.get(graph.file_for(s))) for s in self._steps
         }
         self._provided = set(graph.requires) | set(graph.provides)
+        self._metas = {s: step_metas.get(graph.file_for(s)) or {} for s in self._steps}
 
     def _required(self):
         return {s: self._contract[s].required_inputs() for s in self._steps}
@@ -197,6 +207,15 @@ class FlowContracts:
             value = step_def.presents
             if value is None:
                 continue
+            if step_def.detail:
+                if step_def.owner != "human":
+                    problems.append(
+                        (stage, "presents is only for human steps, but this step is not one"))
+                elif str(value).strip() not in step_def.detail:
+                    problems.append((
+                        stage,
+                        "presents %r is not in the step's detail list" % str(value).strip()))
+                continue
             if step_def.owner != "human":
                 problems.append((stage, "presents is only for human steps, but this step is not one"))
             elif parse_presents(value) is None:
@@ -207,6 +226,43 @@ class FlowContracts:
                 problems.append((
                     stage,
                     "presents %r names an artifact no step in the workflow produces" % value))
+        return sorted(problems)
+
+    def detail_problems(self):
+        produced_anywhere = set()
+        for stage in self._steps:
+            produced_anywhere.update(self._contract[stage].produced_types())
+        problems = []
+        for stage in self._steps:
+            raw = self._metas[stage].get("detail")
+            if raw is None:
+                continue
+            shape = detail_shape_problem(raw)
+            if shape is not None:
+                problems.append((stage, shape))
+                continue
+            own_produces = set(self._contract[stage].produced_types())
+            own_accepts = {r.type for r in self._contract[stage].accepts}
+            for name in parse_detail(raw):
+                kind = kind_of(name)
+                if kind == "output":
+                    wanted = name[len(OUT_PREFIX):]
+                    if wanted not in own_produces:
+                        problems.append((
+                            stage, "detail %r is not in the step's own produces" % name))
+                elif kind == "input":
+                    wanted = name[len(IN_PREFIX):]
+                    if (
+                        wanted not in own_accepts
+                        and wanted not in produced_anywhere
+                        and wanted not in RESERVED_INPUT_NAMES
+                    ):
+                        problems.append((
+                            stage,
+                            "detail %r names an input the step does not accept and no step "
+                            "in the workflow produces" % name))
+                elif name not in EXECUTION_FIELDS:
+                    problems.append((stage, "detail %r is not a known name" % name))
         return sorted(problems)
 
     def ok(self):
@@ -220,6 +276,7 @@ class FlowContracts:
             and not self.unresolved_hook_targets()
             and not self.malformed_hook_occurrences()
             and not self.presents_problems()
+            and not self.detail_problems()
         )
 
     def as_dict(self):
@@ -244,5 +301,6 @@ class FlowContracts:
             "unresolved_hook_targets": self.unresolved_hook_targets(),
             "malformed_hook_occurrences": self.malformed_hook_occurrences(),
             "presents_problems": self.presents_problems(),
+            "detail_problems": self.detail_problems(),
             "ok": self.ok(),
         }

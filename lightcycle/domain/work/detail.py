@@ -1,0 +1,90 @@
+from dataclasses import dataclass
+from typing import Optional, Tuple
+
+EXECUTION_FIELDS = (
+    "pr", "branch", "worktree", "outcome", "report", "claimed_by", "model", "session",
+    "needs", "reason",
+)
+RESERVED_INPUT_NAMES = ("description", "repo", "workflow", "report")
+IN_PREFIX = "in:"
+OUT_PREFIX = "out:"
+
+KIND_FIELD = "field"
+KIND_INPUT = "input"
+KIND_OUTPUT = "output"
+
+
+@dataclass(frozen=True)
+class DetailEntry:
+    key: str
+    kind: str
+    value: Optional[str] = None
+
+    def as_dict(self) -> dict:
+        return {"key": self.key, "kind": self.kind, "value": self.value}
+
+
+def parse_detail(value) -> Optional[Tuple[str, ...]]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not (text.startswith("[") and text.endswith("]")):
+        return None
+    names = tuple(n.strip() for n in text[1:-1].split(",") if n.strip())
+    return names or None
+
+
+def kind_of(name):
+    if name.startswith(IN_PREFIX):
+        return KIND_INPUT
+    if name.startswith(OUT_PREFIX):
+        return KIND_OUTPUT
+    return KIND_FIELD
+
+
+def detail_shape_problem(value):
+    text = str(value).strip()
+    if not (text.startswith("[") and text.endswith("]")):
+        return "detail %r is not a bracketed list like [pr, report, in:findings]" % text
+    raw = [n.strip() for n in text[1:-1].split(",")]
+    names = [n for n in raw if n]
+    if not names:
+        return "detail is an empty list"
+    if len(names) != len(raw):
+        return "detail %r has an empty entry" % text
+    seen = set()
+    for name in names:
+        if name in seen:
+            return "detail lists %r twice" % name
+        seen.add(name)
+    return None
+
+
+def default_detail(has_run, parked):
+    names = ["outcome", "report"]
+    if has_run:
+        names.append("pr")
+    if parked:
+        names.extend(["needs", "reason"])
+    return tuple(names)
+
+
+def detail_presents(presents, entries):
+    keys = [e.key for e in entries]
+    if presents in keys:
+        return presents
+    return keys[0] if keys else None
+
+
+def resolve_detail(names, fields, inputs, outputs):
+    entries = []
+    for name in names:
+        kind = kind_of(name)
+        if kind == KIND_INPUT:
+            value = inputs.get(name[len(IN_PREFIX):])
+        elif kind == KIND_OUTPUT:
+            value = outputs.get(name[len(OUT_PREFIX):])
+        else:
+            value = fields.get(name)
+        entries.append(DetailEntry(key=name, kind=kind, value=value))
+    return entries

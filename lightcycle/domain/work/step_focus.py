@@ -14,8 +14,6 @@ FOCUS_ARTIFACT_PREFIX = "artifact:"
 PRESENTS_PR = "pr"
 PRESENTS_DESCRIPTION = "description"
 
-BARE_DETAIL_KEYS = frozenset(("stage", "state", "role"))
-
 
 @dataclass(frozen=True)
 class StepFocus:
@@ -101,42 +99,3 @@ def resolve_focus(facts) -> StepFocus:
     if facts.state == State.WAITING and facts.role == "human":
         return _fallback(facts)
     return StepFocus(FOCUS_DETAIL)
-
-
-def detail_field_entries(step, pr, branch, worktree_path, session_id, reflection_texts):
-    fields = []
-    if pr:
-        fields.append(("pr", pr))
-    if branch:
-        fields.append(("branch", branch))
-    if worktree_path:
-        fields.append(("worktree", worktree_path))
-    fields.append(("stage", step.stage))
-    fields.append(("state", str(step.state)))
-    fields.append(("role", step.role or "human"))
-    if step.model:
-        fields.append(("model", step.model))
-    if step.claimed_by:
-        fields.append(("claimed_by", step.claimed_by))
-    if session_id:
-        fields.append(("session_id", session_id))
-    if step.outcome:
-        fields.append(("outcome", step.outcome))
-    if step.notes:
-        fields.append(("notes", step.notes))
-    if step.park.needs:
-        fields.append(("needs", step.park.needs))
-    if step.park.reason:
-        fields.append(("reason", step.park.reason))
-    if step.park.tried:
-        fields.append(("tried", step.park.tried))
-    for index, text in enumerate(reflection_texts or ()):
-        key = "reflection" if index == 0 else "reflection:%d" % (index + 1)
-        fields.append((key, text))
-    if step.watched_step:
-        fields.append(("watched_step", step.watched_step))
-    return fields
-
-
-def is_bare_detail(fields):
-    return all(key in BARE_DETAIL_KEYS for key, _value in fields)

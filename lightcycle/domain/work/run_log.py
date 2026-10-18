@@ -1,7 +1,5 @@
 import re
 
-LOG_ARTIFACT = "log"
-
 _UNSAFE = re.compile(r"[^A-Za-z0-9._-]")
 
 
@@ -20,7 +18,3 @@ def guard_log_label(schedule_id):
 def hook_log_label(origin, name, hook):
     return "hook-%s-%s-%s" % (_safe(origin), _safe(name), _safe(hook))
 
-
-def latest_log_path(artifacts):
-    found = [a.value for a in artifacts if a.type == LOG_ARTIFACT]
-    return found[-1] if found else None

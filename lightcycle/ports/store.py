@@ -252,7 +252,28 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def create_step(self, *, step=None, role=None, parent=None, deps=None, id=None):
+    def create_step(self, *, step=None, role=None, parent=None, deps=None, id=None,
+                    previous=None):
+        pass
+
+    @abstractmethod
+    def set_report(self, step, text):
+        pass
+
+    @abstractmethod
+    def set_log(self, step, path):
+        pass
+
+    @abstractmethod
+    def save_step_inputs(self, step, frozen_at, body):
+        pass
+
+    @abstractmethod
+    def step_inputs(self, step):
+        pass
+
+    @abstractmethod
+    def artifact_log(self, item_id):
         pass
 
     @abstractmethod

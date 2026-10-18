@@ -141,6 +141,7 @@ class FakeWorkers:
         self._assigned = dict(assigned or {})
         self._raise_on_step_for = raise_on_step_for
         self._raise_on_set_step = raise_on_set_step
+        self.state = []
 
     def set_step(self, spawnid, step):
         if self._raise_on_set_step:
@@ -152,6 +153,9 @@ class FakeWorkers:
         if self._raise_on_step_for:
             raise RegistryUnreadable("boom")
         return self._assigned.get(spawnid)
+
+    def workers_state(self):
+        return list(self.state)
 
 
 class FakeConfig:
@@ -448,9 +452,9 @@ class TestCompleteStepEngineAudit(unittest.TestCase):
         findings = [c for c in s.children(batch) if c.role == "human"][0]
         self._uc(s).execute(
             CompleteInput(step=findings.id, outcome="reviewed", note="filed 2, refuted 1"))
-        notes = s.get_node(findings.id).notes or ""
-        self.assertIn("outcome: reviewed", notes)
-        self.assertIn("filed 2, refuted 1", notes)
+        closed = s.get_node(findings.id)
+        self.assertIn("outcome: reviewed", closed.notes or "")
+        self.assertEqual(closed.report, "filed 2, refuted 1")
 
     def test_clean_marks_retroed_with_no_inbox_step(self):
         s = FakeStore()
@@ -623,6 +627,26 @@ class TestEngineStepOutcomes(unittest.TestCase):
             self.assertNotEqual(s.get_node(sid).state, "done")
             self.assertNotEqual(s.get_node(item).state, "done")
             self.assertNotIn("outcome: bogus", s.get_node(sid).notes or "")
+
+    def test_each_engine_origin_path_stores_the_note_as_the_report(self):
+        for stage, label, outcome in (
+            (AUDIT_STEP, "retro-origin", "clean"),
+            (MATERIAL_AUDIT_STEP, "retro-origin", "clean"),
+            (FINDINGS_STEP, "retro-origin", "done"),
+            (DAILY_SUMMARY_STEP, "summary-origin", "abandoned"),
+            (HELD_COMMENT_STEP, "held-comment-origin", "reject"),
+            (LIFECYCLE_FAILURE_STEP, "lifecycle-origin", "done"),
+        ):
+            with self.subTest(stage):
+                s = FakeStore()
+                _, sid = self._step(s, stage, label)
+                if stage == HELD_COMMENT_STEP:
+                    s.file_hold("run-1", "inline:1", "a", "b", None, None, 1.0)
+                    s.attach_hold("run-1", "inline:1", s.get_node(sid).item, sid)
+                self._uc(s).execute(CompleteInput(step=sid, outcome=outcome, note="the why"))
+                closed = s.get_node(sid)
+                self.assertEqual(closed.report, "the why")
+                self.assertNotIn("the why", closed.notes or "")
 
     def test_each_declared_outcome_still_closes_its_step(self):
         for stage, label in (
@@ -801,7 +825,7 @@ class TestCiFailedCapRouting(unittest.TestCase):
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="done"))
         self.assertEqual(s.get_node(resp.next_step).stage, "ship")
 
-    def test_note_still_forwards_to_the_escalated_step(self):
+    def test_note_becomes_the_report_and_the_escalated_step_records_its_predecessor(self):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven", shortcode="GRID")
         self._fail_n_times(s, item, 2)
@@ -809,7 +833,8 @@ class TestCiFailedCapRouting(unittest.TestCase):
         resp = self._uc(s).execute(
             CompleteInput(step=wid, outcome="ci-failed", note="job X / test Y failed")
         )
-        self.assertIn("job X / test Y failed", s.get_node(resp.next_step).notes)
+        self.assertEqual(s.get_node(wid).report, "job X / test Y failed")
+        self.assertEqual(s.get_node(resp.next_step).previous_step, wid)
 
     def test_no_cap_declared_never_escalates(self):
         no_cap_metas = {"coder": {"model": "sonnet"}, "watcher": {"model": "sonnet"}}

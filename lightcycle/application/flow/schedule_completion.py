@@ -1,5 +1,6 @@
 import datetime
 
+from lightcycle.application.work.item_outputs import ItemOutputs
 from lightcycle.domain.feedback import RETROED_LABEL
 from lightcycle.domain.schedule.state import (
     SCHEDULE_STATE_ARTIFACT,
@@ -12,8 +13,9 @@ DONE_OUTCOME = "done"
 
 
 class ScheduleCompletion:
-    def __init__(self, store):
+    def __init__(self, store, flow):
         self._store = store
+        self._flow = flow
 
     def execute(self, step, outcome):
         artifacts = self._store.item_artifacts(step.item)
@@ -37,13 +39,12 @@ class ScheduleCompletion:
         item_level = self._summary_of(item_artifacts)
         if item_level:
             return item_level
-        others = [c for c in self._store.children(step.item) if c.id != step.id]
-        others.sort(key=lambda c: c.created_at or "", reverse=True)
-        for other in others:
-            found = self._summary_of(self._store.item_artifacts(other.id))
-            if found:
-                return found
-        return None
+        outputs = ItemOutputs(self._store, self._flow).for_reader(step)
+        return next(
+            (e.value for e in reversed(outputs.artifacts)
+             if e.name == SUMMARY_ARTIFACT and e.value),
+            None,
+        )
 
     @staticmethod
     def _summary_of(artifacts):

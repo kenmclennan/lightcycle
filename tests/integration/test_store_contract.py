@@ -1,3 +1,4 @@
+import contextlib
 import io
 import os
 import sqlite3
@@ -799,15 +800,173 @@ class TestSqliteStoreSchemaVersionFloor(unittest.TestCase):
     def test_store_stamped_below_the_floor_is_refused(self):
         root = tempfile.mkdtemp()
         store = SqliteStore(self._config(root))
-        store._conn.execute("PRAGMA user_version = 1")
+        store._conn.execute("PRAGMA user_version = %d" % _SCHEMA_VERSION)
         store._conn.commit()
         store._conn.close()
 
-        with patch("lightcycle.adapters.sqlite_store._SCHEMA_VERSION", 2):
+        with patch("lightcycle.adapters.sqlite_store._SCHEMA_VERSION", _SCHEMA_VERSION + 1):
             with self.assertRaises(SchemaVersionRefused) as cm:
                 SqliteStore(self._config(root))
 
         self.assertIn(PRE_FLOOR_INSTALL, str(cm.exception))
+
+
+class TestSqliteStoreSchema2Migration(unittest.TestCase):
+    def _config(self, root):
+        cfg_path = os.path.join(root, "config")
+        return Config(environ={"LC_HOME": root, "LC_CONFIG": cfg_path})
+
+    def _version_1_store(self, root):
+        store = SqliteStore(self._config(root))
+        db_path = store._db_path
+        store.release()
+        conn = sqlite3.connect(db_path)
+        for column in ("previous_step", "report", "log_path"):
+            conn.execute("ALTER TABLE steps DROP COLUMN %s" % column)
+        conn.execute("DROP TABLE step_inputs")
+        conn.execute("INSERT INTO items (id, title, state) VALUES ('APP-1', 't', 'ready')")
+        for sid, stage, outcome, state, created, closed, notes in (
+            ("APP-1.1", "build", "done", "done", "2026-01-01T09:00:00+00:00",
+             "2026-01-01T10:00:00+00:00", "outcome: done"),
+            ("APP-1.2", "gate", "approved", "done", "2026-01-01T11:00:00+00:00",
+             "2026-01-01T11:30:00+00:00",
+             "from build (done): fix the tests\nand the lint\noutcome: approved"),
+            ("APP-1.3", "review", "rejected", "done", "2026-01-01T09:00:00+00:00",
+             "2026-01-01T10:00:00+00:00", None),
+            ("APP-1.4", "review", "rejected", "done", "2026-01-01T09:30:00+00:00",
+             "2026-01-01T12:00:00+00:00", None),
+            ("APP-1.5", "review", "rejected", "done", "2026-01-01T09:45:00+00:00",
+             "2026-01-01T14:00:00+00:00", None),
+            ("APP-1.6", "rework", "done", "ready", "2026-01-01T13:00:00+00:00", None,
+             "from review (rejected): add tests"),
+            ("APP-1.7", "orphan", None, "ready", "2026-01-01T13:30:00+00:00", None,
+             "from ghost (done): nothing wrote this"),
+        ):
+            conn.execute(
+                "INSERT INTO steps (id, item, stage, outcome, state, created_at, closed_at, notes) "
+                "VALUES (?, 'APP-1', ?, ?, ?, ?, ?, ?)",
+                (sid, stage, outcome, state, created, closed, notes))
+        conn.execute(
+            "INSERT INTO artifacts (item_id, atype, value, internal) VALUES ('APP-1.1', 'log', '/l/old.log', 1)")
+        conn.execute(
+            "INSERT INTO artifacts (item_id, atype, value, internal) VALUES ('APP-1.1', 'log', '/l/new.log', 1)")
+        conn.execute(
+            "INSERT INTO artifacts (item_id, atype, value, internal) VALUES ('APP-1', 'log', '/l/item.log', 0)")
+        conn.execute("INSERT INTO items (id, title, state) VALUES ('APP-2', 't', 'ready')")
+        conn.execute(
+            "INSERT INTO steps (id, item, stage, state, created_at) "
+            "VALUES ('APP-2.1', 'APP-2', 'poll', 'ready', '2026-01-02T09:00:00+00:00')")
+        conn.execute(
+            "INSERT INTO artifacts (item_id, atype, value, internal) VALUES ('APP-2', 'log', '/l/guard.log', 0)")
+        conn.execute("PRAGMA user_version = 1")
+        conn.commit()
+        conn.close()
+        return db_path
+
+    def _open(self, root):
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            store = SqliteStore(self._config(root))
+        return store, err.getvalue()
+
+    def test_a_version_1_store_opens_migrates_and_is_stamped_2(self):
+        root = tempfile.mkdtemp()
+        self._version_1_store(root)
+
+        store, _err = self._open(root)
+
+        self.assertEqual(store._conn.execute("PRAGMA user_version").fetchone()[0], 2)
+        columns = {r[1] for r in store._conn.execute("PRAGMA table_info(steps)").fetchall()}
+        self.assertLessEqual({"previous_step", "report", "log_path"}, columns)
+        self.assertEqual(store.step_inputs("APP-1.1"), None)
+
+    def test_the_backfill_matches_by_stage_and_outcome_and_counts_the_unmatched(self):
+        root = tempfile.mkdtemp()
+        self._version_1_store(root)
+
+        store, err = self._open(root)
+
+        self.assertEqual(store.last_migration, {"matched": 2, "unmatched": 1, "logs": 2})
+        self.assertIn(
+            "schema 2: backfilled 2 reports (1 unmatched), copied 2 logs", err)
+        self.assertEqual(store.get_node("APP-1.1").report, "fix the tests\nand the lint")
+        self.assertEqual(store.get_node("APP-1.2").previous_step, "APP-1.1")
+        self.assertEqual(store.get_node("APP-1.4").report, "add tests")
+        self.assertIsNone(store.get_node("APP-1.3").report)
+        self.assertIsNone(store.get_node("APP-1.5").report)
+        self.assertEqual(store.get_node("APP-1.6").previous_step, "APP-1.4")
+        self.assertIsNone(store.get_node("APP-1.7").previous_step)
+
+    def test_the_backfill_leaves_the_original_notes_untouched(self):
+        root = tempfile.mkdtemp()
+        self._version_1_store(root)
+
+        store, _err = self._open(root)
+
+        self.assertEqual(
+            store.get_node("APP-1.2").notes,
+            "from build (done): fix the tests\nand the lint\noutcome: approved")
+        self.assertEqual(
+            store.get_node("APP-1.7").notes, "from ghost (done): nothing wrote this")
+
+    def test_log_rows_are_copied_onto_the_step_and_left_in_place(self):
+        root = tempfile.mkdtemp()
+        self._version_1_store(root)
+
+        store, _err = self._open(root)
+
+        self.assertEqual(store.get_node("APP-1.1").log_path, "/l/new.log")
+        self.assertEqual(
+            len([a for a in store.item_artifacts("APP-1.1") if a.type == "log"]), 2)
+        self.assertEqual(
+            len([a for a in store.item_artifacts("APP-1") if a.type == "log"]), 1)
+        self.assertEqual(store.get_node("APP-2.1").log_path, "/l/guard.log")
+        self.assertIsNone(store.get_node("APP-1.2").log_path)
+
+    def test_reopening_a_version_2_store_runs_no_backfill(self):
+        root = tempfile.mkdtemp()
+        self._version_1_store(root)
+        first, _err = self._open(root)
+        first.release()
+
+        second, err = self._open(root)
+
+        self.assertIsNone(second.last_migration)
+        self.assertEqual(err, "")
+
+    def test_a_fresh_store_is_stamped_2_with_no_backfill(self):
+        root = tempfile.mkdtemp()
+
+        store, err = self._open(root)
+
+        self.assertEqual(store._conn.execute("PRAGMA user_version").fetchone()[0], 2)
+        self.assertIsNone(store.last_migration)
+        self.assertEqual(err, "")
+
+    def test_step_inputs_round_trip_and_replace(self):
+        root = tempfile.mkdtemp()
+        store, _err = self._open(root)
+        step = create_owned_step(store, "x", role="agent")
+
+        store.save_step_inputs(step, "t1", '{"a": 1}')
+        store.save_step_inputs(step, "t2", '{"a": 2}')
+
+        self.assertEqual(store.step_inputs(step), ("t2", '{"a": 2}'))
+
+    def test_report_log_and_previous_survive_the_real_store(self):
+        root = tempfile.mkdtemp()
+        store, _err = self._open(root)
+        first = create_owned_step(store, "x", role="agent")
+        item = store.get_node(first).item
+        second = store.create_step(step="review", role="agent", parent=item, previous=first)
+
+        store.set_report(first, "the report")
+        store.set_log(second, "/l/s.log")
+
+        self.assertEqual(store.get_node(first).report, "the report")
+        self.assertEqual(store.get_node(second).previous_step, first)
+        self.assertEqual(store.get_node(second).log_path, "/l/s.log")
+        self.assertEqual([r.node_id for r in store.artifact_log(item)], [])
 
 
 _PRE_USAGE_STEPS_SCHEMA = """

@@ -61,21 +61,23 @@ from lightcycle.application.work import (
     StepRunUseCase,
 )
 from lightcycle.application.work.current_step import current_step
+from lightcycle.application.work.item_outputs import ItemOutputs
+from lightcycle.application.work.step_detail import StepDetail
+from lightcycle.application.work.step_inputs import StepInputs
 from lightcycle.application.work.step_focus import (
     ResolveStepFocusInput,
     ResolveStepFocusUseCase,
 )
 from lightcycle.application.work.project_of import project_of, short_project_label
-from lightcycle.domain.feedback import Duration, parse_reflections
+from lightcycle.domain.feedback import Duration
 from lightcycle.domain.money import Cost
 from lightcycle.domain.runs import pass_number
 from lightcycle.domain.work import (
     LogKind, State, is_human_step, item_active_seconds, item_cost, parse_timestamp,
-    row_bucket, step_cost, type_label, item_viewable_artifacts, latest_log_path,
+    row_bucket, step_cost, type_label, item_viewable_artifacts,
 )
 from lightcycle.domain.work.step_focus import (
     FOCUS_ARTIFACT, FOCUS_DESCRIPTION, FOCUS_DETAIL, FOCUS_LOG, FOCUS_PR, FOCUS_REASON,
-    detail_field_entries,
 )
 from lightcycle.domain.workflows.identity import parse_pin
 from lightcycle.render import (
@@ -153,16 +155,15 @@ HIERARCHY_CONTINUATION_BASE_INDENT = GLYPH_WIDTHS["icon"]
 ARTIFACTS_CONTINUATION_INDENT = 2
 DETAIL_CONTINUATION_INDENT = 2
 DETAIL_FIELD_LABELS = {
-    "pr": "PR", "branch": "BRANCH", "worktree": "WORKTREE", "stage": "STAGE", "state": "STATE", "role": "ROLE",
-    "model": "MODEL", "claimed_by": "CLAIMED_BY", "session_id": "SESSION_ID",
-    "outcome": "OUTCOME", "notes": "NOTES",
-    "needs": "NEEDS", "reason": "REASON", "tried": "TRIED", "reflection": "REFLECTION",
-    "watched_step": "WATCHED_STEP",
+    "pr": "PR", "branch": "BRANCH", "worktree": "WORKTREE",
+    "model": "MODEL", "claimed_by": "CLAIMED_BY", "session": "SESSION",
+    "outcome": "OUTCOME", "report": "REPORT",
+    "needs": "NEEDS", "reason": "REASON",
 }
 
 
 def _detail_field_label(key):
-    return DETAIL_FIELD_LABELS[key.split(":", 1)[0]]
+    return DETAIL_FIELD_LABELS.get(key) or key.upper()
 
 COST_CONTINUATION_INDENT = 2
 COST_COLUMN_GAP = 2
@@ -298,16 +299,15 @@ def _hierarchy_default_row_id(store, node):
     return cur.id if cur is not None else node.id
 
 
-def detail_fields(step, run, session_id, reflections, worktree_path=None):
-    return detail_field_entries(
-        step, run.pr, run.branch, worktree_path, session_id, reflections)
+def detail_fields(entries):
+    return [(e.key, e.value if e.value is not None else "") for e in entries]
 
 
-def log_tab_mode(node, artifacts=()):
+def log_tab_mode(node):
     if node is None:
         return "no-log"
     if getattr(node, "role", None) == "engine":
-        if latest_log_path(artifacts) is None:
+        if getattr(node, "log_path", None) is None:
             return "no-log"
         return "live" if node.state == State.QUEUED else "historical"
     if getattr(node, "role", None) in ("human", "engine"):
@@ -925,8 +925,7 @@ class HierarchyPagingTable(DataTable):
         node = _row_node(self.screen._last_rows, row_id)
         if node is None or node.type != "step":
             return
-        artifacts = self.screen.container.store.item_artifacts(node.id)
-        if log_tab_mode(node, artifacts) == "no-log":
+        if log_tab_mode(node) == "no-log":
             return
         self.screen.switch_at(row_id, initial_tab="log")
 
@@ -1400,8 +1399,7 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         store = self._container.store
         node = store.get_node(self._node_id)
         log_node = node if node.type == "step" else None
-        mode = log_tab_mode(
-            log_node, store.item_artifacts(log_node.id) if log_node is not None else ())
+        mode = log_tab_mode(log_node)
         self._log_mode = mode
         self._log_parser = LogLineParser()
         self._log_lines = []
@@ -1843,10 +1841,11 @@ class NodeHubScreen(Screen, inherit_bindings=False):
                 table.update_cell(str(index), key, value)
 
     def _viewable_artifacts(self, store, item, hierarchy):
+        outputs = ItemOutputs(store, self._flow_service).for_reader(item)
+        promoted = outputs.by_step()
         step_artifacts = [
-            (r.node.id, store.item_artifacts(r.node.id))
-            for r in hierarchy.rows
-            if r.node.type == "step"
+            (step_id, [e.as_artifact() for e in entries])
+            for step_id, entries in promoted.items()
         ]
         return item_viewable_artifacts(item, step_artifacts)
 
@@ -1859,11 +1858,11 @@ class NodeHubScreen(Screen, inherit_bindings=False):
 
     def _fields_for(self, store, step, flow_service):
         run = StepRunUseCase(store, flow_service).execute(StepRunInput(step=step.id))
-        artifacts = store.item_artifacts(step.id)
-        reflections, _unreadable = parse_reflections(artifacts)
-        session_id = next((a.value for a in artifacts if a.type == "session-id"), None)
-        worktree_path = self._worktree_path_for(run, flow_service)
-        return detail_fields(step, run, session_id, [r.feedback for r in reflections], worktree_path)
+        step_inputs = StepInputs(store, flow_service)
+        entries, _presents = StepDetail(store, flow_service).resolve(
+            step, step_inputs.read(step), step_inputs.entry_dicts_for_step(step), run=run,
+            worktree=self._worktree_path_for(run, flow_service))
+        return detail_fields(entries)
 
     def _render_detail(self, store, step, initial) -> None:
         self._render_detail_fields(self._fields_for(store, step, self._flow_service), initial)
@@ -2213,7 +2212,7 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         value = next(
             (v for k, v in self._last_detail_fields if k == key_value), None
         )
-        if value is None:
+        if not value:
             return
         if key_value == "pr":
             use_case = OpenArtifactUseCase(self._container.fs, self._container.launcher)

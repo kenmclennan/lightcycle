@@ -146,7 +146,7 @@ class TestBackground(CadenceFixture):
         self.assertIn("exited 1: oops", item.description)
         self.assertTrue(item.id.startswith("AUD"))
 
-    def test_a_failure_item_names_its_log_in_the_description_and_an_artifact(self):
+    def test_a_failure_item_names_its_log_in_the_description_and_on_its_step(self):
         gate = self.build(due={KEY: naive(1)})
         self.execute(gate, at(2, 3, 0, 0))
         self.runner.finish(KEY, HookResult(exit_code=1, output="oops"))
@@ -154,9 +154,9 @@ class TestBackground(CadenceFixture):
         item = self.failure_items()[0]
         self.assertEqual(self.runner.started[0][1]["log_label"], "hook-acme-build-maintain")
         self.assertIn("log: hook-acme-build-maintain.log", item.description)
-        logs = [a for a in self.h.store.item_artifacts(item.id) if a.type == "log"]
-        self.assertEqual(
-            [(a.value, a.internal) for a in logs], [("hook-acme-build-maintain.log", False)])
+        steps = self.h.store.children(item.id)
+        self.assertEqual([s.log_path for s in steps], ["hook-acme-build-maintain.log"])
+        self.assertEqual([a for a in self.h.store.item_artifacts(item.id) if a.type == "log"], [])
 
     def test_a_timeout_files_one_item(self):
         gate = self.build(due={KEY: naive(1)})

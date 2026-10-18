@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Optional
+from typing import Optional, Tuple
 
 from lightcycle.domain.flow.hooks import (
     CI_FAILED_CAP,
@@ -56,6 +56,7 @@ class StepDef:
     display: Optional[str] = None
     script: Optional[str] = None
     presents: Optional[str] = None
+    detail: Optional[Tuple[str, ...]] = None
 
     def __post_init__(self):
         object.__setattr__(self, "routes", MappingProxyType(dict(self.routes)))

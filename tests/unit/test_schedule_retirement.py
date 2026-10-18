@@ -19,6 +19,14 @@ from tests.unit.test_flow_usecases import METAS, flow_for
 
 DAY = datetime.date(2026, 10, 14)
 
+SUMMARY_METAS = dict(
+    METAS,
+    coder={
+        "model": "sonnet", "step": "build", "produces": {"summary": "optional"},
+        "routes": {"done": "review"},
+    },
+)
+
 
 class PassingGuards:
     def evaluate(self, guard, params, firings, now_local):
@@ -189,7 +197,7 @@ class TestStateParsers(unittest.TestCase):
 class TestScheduleCompletionBatch(unittest.TestCase):
     def _run(self, store, state):
         _item, step = _scheduled_item(store, state)
-        ScheduleCompletion(store).execute(store.get_node(step), "done")
+        ScheduleCompletion(store, flow_for(SUMMARY_METAS, store)).execute(store.get_node(step), "done")
         return step
 
     def test_marks_exactly_the_unretroed_ids_of_the_batch(self):
@@ -220,7 +228,7 @@ class TestScheduleCompletionBatch(unittest.TestCase):
         _closed_item(s, "APP-1")
         item = s.create_item("plain", "d", shortcode="PLN")
         step = s.create_step(step="build", role="agent", parent=item)
-        ScheduleCompletion(s).execute(s.get_node(step), "done")
+        ScheduleCompletion(s, flow_for(SUMMARY_METAS, s)).execute(s.get_node(step), "done")
         self.assertEqual([i.id for i in s.closed_unretroed_items()], ["APP-1"])
         self.assertIsNone(s.get_node(step).notes)
 
@@ -235,7 +243,7 @@ class TestScheduleCompletionBatch(unittest.TestCase):
 class TestScheduleCompletionSummary(unittest.TestCase):
     def _complete(self, store, state, outcome, summary):
         _item, step = _scheduled_item(store, state, summary)
-        ScheduleCompletion(store).execute(store.get_node(step), outcome)
+        ScheduleCompletion(store, flow_for(SUMMARY_METAS, store)).execute(store.get_node(step), outcome)
 
     def test_done_with_a_summary_artifact_records_the_day(self):
         s = FakeStore()
@@ -266,7 +274,7 @@ class TestScheduleCompletionSummary(unittest.TestCase):
         s = FakeStore()
         item, step = _scheduled_item(s, "day: 2026-10-14 count: 21")
         s.add_artifact(step, "summary", "Step-level day.")
-        ScheduleCompletion(s).execute(s.get_node(step), "done")
+        ScheduleCompletion(s, flow_for(SUMMARY_METAS, s)).execute(s.get_node(step), "done")
         row = s.day_summary(DAY)
         self.assertEqual((row.summary, row.summarized_count), ("Step-level day.", 21))
 
@@ -274,16 +282,24 @@ class TestScheduleCompletionSummary(unittest.TestCase):
         s = FakeStore()
         item, step = _scheduled_item(s, "day: 2026-10-14 count: 2", "Item-level.")
         s.add_artifact(step, "summary", "Step-level.")
-        ScheduleCompletion(s).execute(s.get_node(step), "done")
+        ScheduleCompletion(s, flow_for(SUMMARY_METAS, s)).execute(s.get_node(step), "done")
         self.assertEqual(s.day_summary(DAY).summary, "Step-level.")
 
-    def test_a_summary_on_a_sibling_step_is_the_last_fallback(self):
+    def test_a_declared_summary_on_a_sibling_step_is_the_last_fallback(self):
         s = FakeStore()
         item, step = _scheduled_item(s, "day: 2026-10-14 count: 2")
-        sibling = s.create_step(step="earlier", role="agent", parent=item)
+        sibling = s.create_step(step="build", role="agent", parent=item)
         s.add_artifact(sibling, "summary", "From a sibling.")
-        ScheduleCompletion(s).execute(s.get_node(step), "done")
+        ScheduleCompletion(s, flow_for(SUMMARY_METAS, s)).execute(s.get_node(step), "done")
         self.assertEqual(s.day_summary(DAY).summary, "From a sibling.")
+
+    def test_an_undeclared_summary_on_a_sibling_step_is_not_found(self):
+        s = FakeStore()
+        item, step = _scheduled_item(s, "day: 2026-10-14 count: 2")
+        sibling = s.create_step(step="build", role="agent", parent=item)
+        s.add_artifact(sibling, "summary", "From a sibling.")
+        ScheduleCompletion(s, flow_for(METAS, s)).execute(s.get_node(step), "done")
+        self.assertIsNone(s.day_summary(DAY))
 
     def test_a_legacy_row_with_a_higher_count_keeps_it(self):
         s = FakeStore()

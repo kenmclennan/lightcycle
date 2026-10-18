@@ -2,6 +2,8 @@ import unittest
 from types import SimpleNamespace
 
 from lightcycle.adapters.tui.hub import NodeHubScreen, _tab_order, detail_fields, display_role, landing_tab
+from lightcycle.application.work.step_detail import StepDetail
+from lightcycle.application.work.step_inputs import StepInputs
 from lightcycle.application.work.step_focus import ResolveStepFocusInput, ResolveStepFocusUseCase
 from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.step_def import StepDef
@@ -67,9 +69,13 @@ class TestLandingTab(unittest.TestCase):
     def test_waiting_human_step_with_only_stage_state_role_lands_on_description(self):
         s = FakeStore()
         step = create_owned_step(s, "s", step="triage", role="human")
-        node = s.get_node(step)
-        fields = detail_fields(node, SimpleNamespace(pr=None, branch=None), None, [])
-        self.assertEqual([key for key, _ in fields], ["stage", "state", "role"])
+        step_inputs = StepInputs(s, _FlowStub(None))
+        entries, _presents = StepDetail(s, _FlowStub(None)).resolve(
+            s.get_node(step), step_inputs.read(s.get_node(step)),
+            step_inputs.entry_dicts_for_step(s.get_node(step)),
+            run=SimpleNamespace(pr=None, branch=None))
+        fields = detail_fields(entries)
+        self.assertEqual(fields, [("outcome", ""), ("report", "")])
         self.assertEqual(landing_of(s, step), "description")
 
     def test_done_human_step_lands_on_detail(self):

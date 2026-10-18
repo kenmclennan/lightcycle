@@ -243,7 +243,7 @@ class TestPrunedScriptLog(ScriptRunnerTestCase):
         for index in range(3):
             step = create_owned_step(store, "s%d" % index, step="script", role="engine")
             log_path = runner.run(path, self.dir, self.env(), "", 30, "script-t").log_path
-            store.add_artifact(step, "log", log_path, internal=True)
+            store.set_log(step, log_path)
             store.complete_node(step, "done")
             steps.append(step)
             time.sleep(0.01)

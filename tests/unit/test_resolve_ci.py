@@ -223,7 +223,8 @@ class TestResolveCiUseCase(unittest.TestCase):
         self.assertEqual(node.state, State.DONE)
         self.assertEqual(node.outcome, "failed")
         next_step = next(c for c in store.children(item) if c.stage == "watch-ci")
-        self.assertIn("build", next_step.notes or "")
+        self.assertIn("build", node.report or "")
+        self.assertEqual(next_step.previous_step, step)
         self.assertEqual(result.ci_resolved, [item])
 
     def test_stage_with_no_ci_hooks_declared_is_skipped(self):

@@ -15,6 +15,8 @@ from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.application.work.closed_count import closed_count
 from lightcycle.application.work.has_feedback import has_feedback
+from lightcycle.application.work.item_outputs import ItemOutputs
+from lightcycle.application.work.step_inputs import StepInputs
 from lightcycle.application.work.pending_reflections import pass_reflection_count
 from lightcycle.domain.contracts import StepContract
 from lightcycle.domain.work import NodeSpec
@@ -43,6 +45,8 @@ class CompleteStepUseCase:
         self._config = config
         self._resolver = NextStepResolver(store, flow)
         self._passes = PassBook(store, flow)
+        self._inputs = StepInputs(store, flow)
+        self._outputs = ItemOutputs(store, flow)
 
     def _expected_assignee(self):
         return self._config.spawn_id() if self._config else None
@@ -82,7 +86,7 @@ class CompleteStepUseCase:
             return CompleteResponse(next_step=None)
         self._store.note(input.step, "outcome: %s" % input.outcome)
         if input.note:
-            self._store.note(input.step, input.note)
+            self._store.set_report(input.step, input.note)
         self._cascade_close(t.item)
         return CompleteResponse(next_step=None)
 
@@ -99,7 +103,7 @@ class CompleteStepUseCase:
             self._store.decide_hold(t.id, decided)
         self._store.note(input.step, "outcome: %s" % input.outcome)
         if input.note:
-            self._store.note(input.step, input.note)
+            self._store.set_report(input.step, input.note)
         self._cascade_close(t.item)
         return CompleteResponse(next_step=None)
 
@@ -139,7 +143,7 @@ class CompleteStepUseCase:
         missing = StepContract.from_meta(
             self._flow.meta_for_step(t.stage, name)
         ).missing_outputs(
-            self._store.present_types(t), target
+            self._outputs.present_types(t), target
         )
         if missing:
             raise UseCaseError(
@@ -156,12 +160,11 @@ class CompleteStepUseCase:
         if new and transition:
             self._passes.enrol(t.item, new, transition.to_stage, name)
         self._store.note(input.step, "outcome: %s" % input.outcome)
-        ScheduleCompletion(self._store).execute(t, input.outcome)
+        ScheduleCompletion(self._store, self._flow).execute(t, input.outcome)
         if input.note:
-            if transition:
-                self._store.note(new if new else input.step, transition.forward_note(input.note))
-            else:
-                self._store.note(input.step, input.note)
+            self._store.set_report(input.step, input.note)
+        if new and transition and transition.to_role == "human":
+            self._inputs.freeze(self._store.get_node(new))
         self._cascade_close(t.item)
         return CompleteResponse(next_step=new)
 
@@ -170,12 +173,14 @@ class CompleteStepUseCase:
     ) -> CompleteResponse:
         spec = None
         if input.outcome == "findings" and input.note:
-            spec = NodeSpec(step=FINDINGS_STEP, role="human", parent=t.item)
+            spec = NodeSpec(step=FINDINGS_STEP, role="human", parent=t.item, previous=t.id)
         won, fid = self._store.complete_step_atomic(
             input.step, input.outcome, self._expected_assignee(), spec)
         if not won:
             return CompleteResponse(next_step=None)
         self._store.note(input.step, "outcome: %s" % input.outcome)
+        if input.note:
+            self._store.set_report(input.step, input.note)
         if mark_retroed:
             self._mark_retroed()
         if fid is not None:
@@ -191,7 +196,7 @@ class CompleteStepUseCase:
             return CompleteResponse(next_step=None)
         self._store.note(input.step, "outcome: %s" % input.outcome)
         if input.note:
-            self._store.note(input.step, input.note)
+            self._store.set_report(input.step, input.note)
         self._cascade_close(t.item)
         return CompleteResponse(next_step=None)
 
@@ -201,6 +206,8 @@ class CompleteStepUseCase:
         if not won:
             return CompleteResponse(next_step=None)
         self._store.note(input.step, "outcome: %s" % input.outcome)
+        if input.note:
+            self._store.set_report(input.step, input.note)
         day = self._store.summary_day_for_step(t.id)
         if day is not None:
             row = self._store.day_summary(day)

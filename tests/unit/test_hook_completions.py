@@ -46,6 +46,18 @@ class TestHookCompletionsDetection(unittest.TestCase):
         result = HookCompletionsUseCase(s, flow_svc).execute(None)
         self.assertEqual(result.completed, [("audit", tid, "no finding")])
 
+    def test_report_preferred_over_notes_as_detail(self):
+        s = FakeStore()
+        flow_svc = FlowService(FakeFs({"auditor": {"model": "sonnet", "step": "audit",
+                                                     "on_deploy_green": True}}), s)
+        tid = s.create_step(step="audit", role="agent", parent=s.create_item("i", "a description", workflow="wf"))
+        s.note(tid, "outcome: done")
+        s.set_report(tid, "all clear")
+        s.complete_node(tid, "done")
+        _set_closed_at(s, tid, "2026-01-01T12:00:00")
+        result = HookCompletionsUseCase(s, flow_svc).execute(None)
+        self.assertEqual(result.completed, [("audit", tid, "all clear")])
+
     def test_non_hook_step_task_not_reported(self):
         s = FakeStore()
         flow_svc = FlowService(FakeFs({"coder": {"model": "sonnet", "step": "build"}}), s)

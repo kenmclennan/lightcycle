@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from lightcycle.application.pool.resolve_log import ResolveLogInput, ResolveLogUseCase
-from lightcycle.domain.work import State, latest_log_path
+from lightcycle.domain.work import State
 
 
 @dataclass(frozen=True)
@@ -49,5 +49,5 @@ class TailLogUseCase:
         except KeyError:
             return False
         return (
-            node.type == "step" and latest_log_path(self._store.item_artifacts(node.id)) is not None
+            node.type == "step" and node.log_path is not None
             and node.state == State.QUEUED)

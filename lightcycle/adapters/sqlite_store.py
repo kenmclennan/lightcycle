@@ -2,6 +2,7 @@ import datetime
 import json
 import os
 import sqlite3
+import sys
 from contextlib import contextmanager
 from dataclasses import asdict
 
@@ -20,6 +21,8 @@ from lightcycle.domain.goals import GOAL_DEFAULT_STATUS, Goal, GoalLogEntry
 from lightcycle.domain.money import Cost
 from lightcycle.domain.pool import ToolUsage, UsageResume
 from lightcycle.domain.runs import Pass, PhaseRun, RunState, run_id
+from lightcycle.domain.work.forwarded_note import parse_forwarded
+from lightcycle.domain.work.outputs import ArtifactRecord
 from lightcycle.domain.work import (
     Artifact, DailySummary, Item, NodeView, Park, State, Step, default_kind_for, derive_state,
     format_facets, format_step_id, merge_condition_note, role_state, unformat_facets,
@@ -51,7 +54,8 @@ class SchemaVersionRefused(Exception):
     pass
 
 
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
+_LEGACY_LOG_TYPE = "log"
 _LAST_VERSION_ABLE_TO_MIGRATE_PRE_FLOOR_STORES = "0.2.27"
 _LAST_VERSION_ABLE_TO_MIGRATE_NODES_STORES = "0.6.263"
 
@@ -103,7 +107,16 @@ CREATE TABLE IF NOT EXISTS steps (
     usage_cost_basis TEXT,
     usage_rates_used TEXT,
     usage_thinking_tokens INTEGER,
-    turn_count INTEGER NOT NULL DEFAULT 0
+    turn_count INTEGER NOT NULL DEFAULT 0,
+    previous_step TEXT,
+    report TEXT,
+    log_path TEXT
+);
+
+CREATE TABLE IF NOT EXISTS step_inputs (
+    step TEXT PRIMARY KEY,
+    frozen_at TEXT,
+    body TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_steps_item ON steps(item);
@@ -286,7 +299,7 @@ _STEP_COLUMNS = (
     "created_at", "fired_at", "closed_at", "active_seconds",
     "usage_input_tokens", "usage_output_tokens", "usage_cache_read_tokens",
     "usage_cache_creation_tokens", "usage_cost_usd", "usage_cost_basis", "usage_rates_used",
-    "usage_thinking_tokens", "turn_count",
+    "usage_thinking_tokens", "turn_count", "previous_step", "report", "log_path",
 )
 
 _PARK_COLUMNS = {"needs": "park_needs", "reason": "park_reason", "tried": "park_tried"}
@@ -343,7 +356,8 @@ class SqliteStore(StorePort):
         self._conn.execute("PRAGMA synchronous=NORMAL")
         self._conn.execute("PRAGMA busy_timeout=5000")
         self._conn.executescript(_SCHEMA)
-        self._apply_schema_version_floor()
+        self.last_migration = None
+        version = self._apply_schema_version_floor()
         self._migrate_add_missing_columns()
         self._migrate_drop_step_reflection_column()
         self._migrate_drop_step_title_column()
@@ -351,6 +365,8 @@ class SqliteStore(StorePort):
         self._migrate_goals_description_and_project()
         self._migrate_drop_goal_state_of_play_columns()
         self._migrate_rename_knowledge_project()
+        if version == 1:
+            self._migrate_schema_1_to_2()
         self._commit()
 
     def _commit(self):
@@ -399,15 +415,91 @@ class SqliteStore(StorePort):
                 % _install_command(_LAST_VERSION_ABLE_TO_MIGRATE_NODES_STORES)
             )
         if version >= _SCHEMA_VERSION:
-            return
+            return version
         if version == 0:
             self._conn.execute("PRAGMA user_version = %d" % _SCHEMA_VERSION)
-            return
+            return version
+        if version == 1:
+            return version
         raise SchemaVersionRefused(
             "store is stamped at schema version %d, below this engine's floor of "
             "%d; migrate it with `%s` first, then reopen."
             % (version, _SCHEMA_VERSION, _install_command(_LAST_VERSION_ABLE_TO_MIGRATE_PRE_FLOOR_STORES))
         )
+
+    def _migrate_schema_1_to_2(self):
+        matched = 0
+        unmatched = 0
+        rows = self._conn.execute(
+            "SELECT id, item, notes, created_at FROM steps WHERE notes LIKE '%from %'"
+        ).fetchall()
+        for step_id, item, notes, created_at in rows:
+            forwarded = parse_forwarded(notes)
+            if forwarded is None:
+                continue
+            writer = self._forwarded_writer(item, forwarded, created_at)
+            if writer is None:
+                unmatched += 1
+                continue
+            matched += 1
+            self._conn.execute(
+                "UPDATE steps SET report = ? WHERE id = ? AND (report IS NULL OR report = '')",
+                (forwarded.text, writer),
+            )
+            self._conn.execute(
+                "UPDATE steps SET previous_step = ? WHERE id = ? AND previous_step IS NULL",
+                (writer, step_id),
+            )
+        logs = self._backfill_log_paths()
+        self.last_migration = {"matched": matched, "unmatched": unmatched, "logs": logs}
+        self._conn.execute("PRAGMA user_version = %d" % _SCHEMA_VERSION)
+        sys.stderr.write(
+            "schema 2: backfilled %d reports (%d unmatched), copied %d logs\n"
+            % (matched, unmatched, logs)
+        )
+
+    def _forwarded_writer(self, item, forwarded, receiver_created_at):
+        candidates = self._conn.execute(
+            "SELECT id, closed_at FROM steps WHERE item = ? AND stage = ? AND outcome = ? "
+            "AND state = 'done'",
+            (item, forwarded.stage, forwarded.outcome),
+        ).fetchall()
+        eligible = [
+            (closed_at or "", sid) for sid, closed_at in candidates
+            if closed_at and (not receiver_created_at or closed_at <= receiver_created_at)
+        ]
+        if not eligible:
+            return None
+        return max(eligible)[1]
+
+    def _backfill_log_paths(self):
+        copied = 0
+        step_ids = {r[0] for r in self._conn.execute("SELECT id FROM steps").fetchall()}
+        latest = {}
+        for node_id, value in self._conn.execute(
+            "SELECT item_id, value FROM artifacts WHERE atype = ? ORDER BY rowid",
+            (_LEGACY_LOG_TYPE,),
+        ).fetchall():
+            latest[node_id] = value
+        for node_id, value in latest.items():
+            if node_id in step_ids:
+                copied += self._conn.execute(
+                    "UPDATE steps SET log_path = ? WHERE id = ?", (value, node_id)
+                ).rowcount
+        for node_id, value in latest.items():
+            if node_id in step_ids:
+                continue
+            oldest = self._conn.execute(
+                "SELECT id FROM steps WHERE item = ? ORDER BY created_at, rowid LIMIT 1",
+                (node_id,),
+            ).fetchone()
+            if oldest is None:
+                continue
+            copied += self._conn.execute(
+                "UPDATE steps SET log_path = ? WHERE id = ? AND log_path IS NULL",
+                (value, oldest[0]),
+            ).rowcount
+        return copied
 
     def _is_legacy_store(self):
         if not self._has_table("nodes"):
@@ -441,6 +533,9 @@ class SqliteStore(StorePort):
             ("usage_thinking_tokens", "INTEGER"),
             ("turn_count", "INTEGER NOT NULL DEFAULT 0"),
             ("claim_epoch", "INTEGER NOT NULL DEFAULT 0"),
+            ("previous_step", "TEXT"),
+            ("report", "TEXT"),
+            ("log_path", "TEXT"),
         ),
         "goal_log": (
             ("title", "TEXT NOT NULL DEFAULT ''"),
@@ -571,6 +666,9 @@ class SqliteStore(StorePort):
             usage_rates_used=d["usage_rates_used"],
             usage_thinking_tokens=d["usage_thinking_tokens"],
             turn_count=d["turn_count"],
+            previous_step=d["previous_step"],
+            report=d["report"],
+            log_path=d["log_path"],
         )
 
     def _row_to_item(self, row, artifacts, blocked_by, child_states):
@@ -1324,14 +1422,14 @@ class SqliteStore(StorePort):
         self._commit()
 
     def _insert_step_nocommit(self, *, step=None, role=None, parent=None, deps=None,
-                              id=None):
+                              id=None, previous=None):
         if parent is None:
             raise ValueError("create_step requires a parent")
         tid = self._mint_or_adopt(id, parent)
         self._conn.execute(
-            "INSERT INTO steps (id, item, stage, role, state, created_at) "
-            "VALUES (?, ?, ?, ?, 'ready', ?)",
-            (tid, parent, step, role, self._now()),
+            "INSERT INTO steps (id, item, stage, role, state, created_at, previous_step) "
+            "VALUES (?, ?, ?, ?, 'ready', ?, ?)",
+            (tid, parent, step, role, self._now(), previous),
         )
         if deps:
             for dep in deps:
@@ -1339,11 +1437,55 @@ class SqliteStore(StorePort):
         return tid
 
     def create_step(self, *, step=None, role=None, parent=None, deps=None,
-                    id=None):
+                    id=None, previous=None):
         tid = self._insert_step_nocommit(
-            step=step, role=role, parent=parent, deps=deps, id=id)
+            step=step, role=role, parent=parent, deps=deps, id=id, previous=previous)
         self._commit()
         return tid
+
+    def set_report(self, step, text):
+        if self._conn.execute(
+            "UPDATE steps SET report = ? WHERE id = ?", (text or None, step)
+        ).rowcount == 0:
+            raise NodeNotFoundError("unknown step '%s'" % step)
+        self._commit()
+
+    def set_log(self, step, path):
+        if self._conn.execute(
+            "UPDATE steps SET log_path = ? WHERE id = ?", (path or None, step)
+        ).rowcount == 0:
+            raise NodeNotFoundError("unknown step '%s'" % step)
+        self._commit()
+
+    def save_step_inputs(self, step, frozen_at, body):
+        self._conn.execute(
+            "INSERT INTO step_inputs (step, frozen_at, body) VALUES (?, ?, ?) "
+            "ON CONFLICT(step) DO UPDATE SET frozen_at = excluded.frozen_at, body = excluded.body",
+            (step, frozen_at, body),
+        )
+        self._commit()
+
+    def step_inputs(self, step):
+        row = self._conn.execute(
+            "SELECT frozen_at, body FROM step_inputs WHERE step = ?", (step,)
+        ).fetchone()
+        return None if row is None else (row[0], row[1])
+
+    def artifact_log(self, item_id):
+        rows = self._conn.execute(
+            "SELECT a.item_id, a.rowid, a.atype, a.value, a.label, a.internal, a.kind "
+            "FROM artifacts a WHERE a.item_id = ? "
+            "OR a.item_id IN (SELECT id FROM steps WHERE item = ?) ORDER BY a.rowid",
+            (item_id, item_id),
+        ).fetchall()
+        return [
+            ArtifactRecord(
+                node_id=r[0], seq=r[1],
+                artifact=Artifact(
+                    type=r[2], value=r[3], label=r[4], internal=bool(r[5]), kind=r[6]),
+            )
+            for r in rows
+        ]
 
     def edit_node(self, tid, *, title=None, description=None, project=None,
                   workflow=None):

@@ -1,11 +1,12 @@
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.passes import PassBook
+from lightcycle.application.work.item_outputs import ItemOutputs
 from lightcycle.domain.contracts import StepContract
 
 
 def check_step_filing(store, flow, item_id, workflow, step):
     graph = flow.load_graph(workflow)
-    present = store.present_types(store.get_item(item_id))
+    present = ItemOutputs(store, flow).present_types(store.get_item(item_id))
     missing_inputs = graph.requires - present
     if missing_inputs:
         raise UseCaseError(

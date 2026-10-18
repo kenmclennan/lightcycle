@@ -2,7 +2,7 @@ import os
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-from lightcycle.domain.work import Artifact, Item, latest_log_path, worker_log_filename
+from lightcycle.domain.work import Artifact, Item, worker_log_filename
 
 
 @dataclass(frozen=True)
@@ -57,7 +57,9 @@ class TraceUseCase:
             )
             if self._fs.exists(candidate):
                 return candidate
-        return latest_log_path(self._store.item_artifacts(node.id))
+        if node.log_path and self._fs.exists(node.log_path):
+            return node.log_path
+        return None
 
     def execute(self, input: TraceInput) -> TraceResponse:
         item = self._store.get_node(input.item)

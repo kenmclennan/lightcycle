@@ -1,14 +1,13 @@
 from dataclasses import dataclass
 
+from lightcycle.application.work.item_outputs import ItemOutputs
+from lightcycle.application.work.step_detail import StepDetail
+from lightcycle.application.work.step_inputs import StepInputs
 from lightcycle.application.work.step_run import StepRunInput, StepRunUseCase
 from lightcycle.domain.contracts import StepContract
-from lightcycle.domain.feedback import parse_reflections
-from lightcycle.domain.work import latest_log_path
 from lightcycle.domain.work.step_focus import (
     FocusFacts,
     StepFocus,
-    detail_field_entries,
-    is_bare_detail,
     resolve_focus,
 )
 
@@ -34,19 +33,18 @@ class ResolveStepFocusUseCase:
             return ResolveStepFocusResponse(focus=resolve_focus(FocusFacts(is_item=True)))
         artifacts = self._store.item_artifacts(node.id)
         run = StepRunUseCase(self._store, self._flow).execute(StepRunInput(step=node.id))
-        reflections, _unreadable = parse_reflections(artifacts)
-        session_id = next((a.value for a in artifacts if a.type == "session-id"), None)
-        fields = detail_field_entries(
-            node, run.pr, run.branch, None, session_id, [r.feedback for r in reflections])
+        step_inputs = StepInputs(self._store, self._flow)
+        entries, _presents = StepDetail(self._store, self._flow).resolve(
+            node, step_inputs.read(node), step_inputs.entry_dicts_for_step(node), run=run)
         facts = FocusFacts(
             state=node.state,
             role=node.role or "human",
             presents=self._flow.flow_for(node).step_def(node.stage).presents,
             produced=self._produced(node),
-            has_log=latest_log_path(artifacts) is not None,
+            has_log=node.log_path is not None,
             artifact_types=self._artifact_types(node, artifacts),
             has_pr=bool(run.pr),
-            bare_detail=is_bare_detail(fields),
+            bare_detail=all(e.value is None for e in entries),
             parked=bool(node.park.reason or node.park.needs),
         )
         return ResolveStepFocusResponse(focus=resolve_focus(facts))
@@ -60,7 +58,5 @@ class ResolveStepFocusUseCase:
 
     def _artifact_types(self, node, own):
         types = {a.type for a in own}
-        types.update(a.type for a in self._store.item_artifacts(node.item))
-        for sibling in self._store.children(node.item):
-            types.update(a.type for a in self._store.item_artifacts(sibling.id))
+        types.update(ItemOutputs(self._store, self._flow).for_reader(node).types)
         return frozenset(types)
