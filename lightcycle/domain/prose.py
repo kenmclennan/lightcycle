@@ -4,21 +4,31 @@ from collections import namedtuple
 ProseLine = namedtuple("ProseLine", "kind segments")
 Literal = namedtuple("Literal", "text")
 Reference = namedtuple("Reference", "id")
+Link = namedtuple("Link", "text url")
 
 HEADING = "heading"
 BODY = "body"
 
 _HEADING_RE = re.compile(r"^#{1,6}[ \t]+(?=\S)")
-_REFERENCE_RE = re.compile(r"\[\[([A-Za-z][A-Za-z0-9]*-\d+(?:\.\d+)*)\]\]")
+_TOKEN_RE = re.compile(
+    r"\[\[(?P<ref>[A-Za-z][A-Za-z0-9]*-\d+(?:\.\d+)*)\]\]"
+    r"|\[(?P<label>[^\[\]]+)\]\((?P<md>https?://[^\s)]+)\)"
+    r"|(?P<bare>https?://[^\s<>)\]]*[^\s<>)\].,;:!?'\"])"
+)
 
 
 def _segments(text):
     segments = []
     position = 0
-    for match in _REFERENCE_RE.finditer(text):
+    for match in _TOKEN_RE.finditer(text):
         if match.start() > position:
             segments.append(Literal(text[position:match.start()]))
-        segments.append(Reference(match.group(1)))
+        if match.group("ref"):
+            segments.append(Reference(match.group("ref")))
+        elif match.group("md"):
+            segments.append(Link(match.group("label"), match.group("md")))
+        else:
+            segments.append(Link(match.group("bare"), match.group("bare")))
         position = match.end()
     if position < len(text) or not segments:
         segments.append(Literal(text[position:]))

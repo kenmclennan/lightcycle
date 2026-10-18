@@ -1,12 +1,12 @@
 import unittest
 
-from lightcycle.adapters.tui.design_system import HEADING_STYLE
+from lightcycle.adapters.tui.design_system import COLUMN_GRIDS, HEADING_STYLE
 from lightcycle.adapters.tui.hub import (
     ContextTable,
-    ListArtifactViewerScreen,
     NodeHubScreen,
-    TextArtifactViewerScreen,
+    context_row_cells,
 )
+from lightcycle.domain.runs import pass_number
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 from tests.support.screen_render import NOW, _launch
@@ -20,6 +20,9 @@ def _store():
     store.add_artifact(item, "notes-file", "/tmp/notes.md", kind="filepath")
     store.add_artifact(item, "checks", "one\ntwo", kind="list")
     store.add_artifact(item, "summary", "a summary", kind="text")
+    store.add_artifact(
+        item, "plan", "## Problem\nfirst para\n\n- item one\nsee [the spec](https://example.test/s)", kind="text"
+    )
     step = store.create_step(step="triage", role="human", parent=item, id="LC-1.1")
     store.set_report(step, "ship it")
     return store, step
@@ -59,15 +62,20 @@ class TestOpeningContextRows(unittest.TestCase):
         editor = self.session.app.container.config.editor()
         self.assertEqual(self.launcher.edited_detached, (editor, "/tmp/notes.md"))
 
-    def test_a_text_row_opens_inline(self):
+    def test_a_text_row_pushes_no_screen(self):
         self._open_row("summary")
 
-        self.assertIsInstance(self.session.app.screen, TextArtifactViewerScreen)
+        self.assertIs(self.session.app.screen, self.screen)
 
-    def test_a_list_row_opens_inline(self):
+    def test_a_list_row_pushes_no_screen(self):
         self._open_row("checks")
 
-        self.assertIsInstance(self.session.app.screen, ListArtifactViewerScreen)
+        self.assertIs(self.session.app.screen, self.screen)
+
+    def test_a_url_row_pushes_no_screen(self):
+        self._open_row("spec-link")
+
+        self.assertIs(self.session.app.screen, self.screen)
 
     def _rendered_rows(self):
         strips = self.session.run(lambda: self.screen._compositor.render_strips())
@@ -114,7 +122,7 @@ class TestOpeningContextRows(unittest.TestCase):
 
     def test_no_source_column_is_rendered(self):
         for table in self._section_tables().values():
-            self.assertEqual([c.key.value for c in table.columns.values()], ["key", "pass", "value"])
+            self.assertEqual([c.key.value for c in table.columns.values()], ["key", "value"])
 
     def test_an_empty_section_shows_its_heading_and_none_and_neither_is_selectable(self):
         tables = self._section_tables()
@@ -130,3 +138,33 @@ class TestOpeningContextRows(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+    def test_a_pass_scoped_row_key_carries_the_pass_number_and_no_pass_column_exists(self):
+        rows = self.screen._last_context_rows
+        scoped = next(r for r in rows if r.pass_id)
+
+        self.assertEqual(context_row_cells(scoped)[0].plain, "%s (p%d)" % (scoped.key, pass_number(scoped.pass_id)))
+        self.assertNotIn("pass", COLUMN_GRIDS["context"])
+
+    def test_a_row_without_a_pass_shows_the_bare_key(self):
+        row = next(r for r in self.screen._last_context_rows if not r.pass_id)
+
+        self.assertEqual(context_row_cells(row)[0].plain, row.key)
+
+    def test_a_multi_paragraph_value_renders_with_line_breaks_and_heading_style(self):
+        rows = self._rendered_rows()
+        start = next(i for i, r in enumerate(rows) if "Problem" in r)
+
+        self.assertIn("first para", rows[start + 1])
+        self.assertEqual(rows[start + 2].strip(), "")
+        self.assertIn("- item one", rows[start + 3])
+        heading = context_row_cells(
+            next(r for r in self.screen._last_context_rows if r.key == "plan")
+        )[1]
+        self.assertEqual(heading.spans[0].style, HEADING_STYLE)
+
+    def test_a_link_cell_carries_the_link_style(self):
+        cell = context_row_cells(next(r for r in self.screen._last_context_rows if r.key == "plan"))[1]
+
+        self.assertTrue(any(getattr(span.style, "link", None) == "https://example.test/s" for span in cell.spans))

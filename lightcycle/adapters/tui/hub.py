@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional
 
+from rich.console import Console
 from rich.text import Text
 from textual import events
 from textual.app import ComposeResult
@@ -702,10 +703,6 @@ def detail_row_cells(field, layout=None, row_budget=None, titles=None):
     return [(key, (Text(label, style=COLOURS["dim"]), Text(value, style=style)))]
 
 
-def _collapse(value):
-    return " ".join((value or "").split())
-
-
 def context_section_title(section, inputs_live):
     if section == SECTION_INPUTS and inputs_live:
         return CONTEXT_INPUTS_LIVE_TITLE
@@ -722,19 +719,30 @@ def context_section_rows(rows):
     }
 
 
-def context_row_cells(row, layout=None, row_budget=None):
-    value = _collapse(row.value)
+def context_row_key(row):
+    if row.pass_id:
+        return "%s (p%d)" % (row.key, pass_number(row.pass_id))
+    return row.key
+
+
+def _stacked_prose_cell(first, indent, prose, row_budget):
+    cell = Text() + first
+    console = Console(width=max(row_budget - indent, 1))
+    for line in prose.split("\n"):
+        for wrapped in line.wrap(console, max(row_budget - indent, 1)):
+            wrapped.rstrip_end(max(row_budget - indent, 1))
+            cell = cell + Text("\n" + " " * indent) + wrapped
+    return cell
+
+
+def context_row_cells(row, layout=None, row_budget=None, titles=None):
     style = COLOURS["cyan"] if row.kind in ("url", "filepath") else COLOURS["text"]
+    prose = prose_text(row.value or "", titles or {}, style)
+    key = context_row_key(row)
     if layout is not None and layout.stacked:
-        first = (
-            pad_field(Text(row.key, style=COLOURS["dim"]), layout.atomic_widths["key"])
-            + pad_field(Text(row.pass_id, style=COLOURS["dim"]), layout.atomic_widths["pass"])
-        )
-        return (stacked_cell(first, CONTEXT_CONTINUATION_INDENT, value, row_budget, prose_style=style),)
-    return (
-        Text(row.key, style=COLOURS["dim"]), Text(row.pass_id, style=COLOURS["dim"]),
-        Text(value, style=style),
-    )
+        first = pad_field(Text(key, style=COLOURS["dim"]), layout.atomic_widths["key"])
+        return (_stacked_prose_cell(first, CONTEXT_CONTINUATION_INDENT, prose, row_budget),)
+    return (Text(key, style=COLOURS["dim"]), prose)
 
 
 def _cost_pane_screen_row_budget(pane, columns):
@@ -1146,14 +1154,6 @@ class ContextTable(DataTable):
             screen.refresh_context_width()
 
 
-@dataclass(frozen=True)
-class ViewedValue:
-    type: str
-    value: str
-    kind: str = "text"
-    label: Optional[str] = None
-
-
 class CostPane(RichLog):
     BINDINGS = [
         Binding("up", "scroll_up", "Scroll up", show=False),
@@ -1348,6 +1348,13 @@ class NodeHubScreen(Screen, inherit_bindings=False):
     }}
     ContextList {{
         height: 1fr;
+        scrollbar-background: {COLOURS["bg"]};
+        scrollbar-background-hover: {COLOURS["bg"]};
+        scrollbar-background-active: {COLOURS["bg"]};
+        scrollbar-color: {COLOURS["dim"]};
+        scrollbar-color-hover: {COLOURS["dim"]};
+        scrollbar-color-active: {COLOURS["dim"]};
+        scrollbar-corner-color: {COLOURS["bg"]};
         scrollbar-gutter: stable;
         display: none;
     }}
@@ -2268,8 +2275,7 @@ class NodeHubScreen(Screen, inherit_bindings=False):
     def _context_layout(self, table, sections):
         data = [r for members in sections.values() for _key, r in members]
         atomic_values = {
-            "key": [r.key for r in data],
-            "pass": [r.pass_id + "  " for r in data],
+            "key": [context_row_key(r) for r in data],
         }
         row_budget = screen_row_budget_for(table, len(COLUMN_GRIDS["context"]))
         return compute_layout(row_budget, [], atomic_values, indent=CONTEXT_CONTINUATION_INDENT)
@@ -2296,9 +2302,12 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         sections = context_section_rows(self._last_context_rows)
         layout = self._context_layout(sizing, sections)
         row_budget = render_screen_row_budget(sizing, layout, len(COLUMN_GRIDS["context"]))
+        titles = resolve_titles(
+            self._container.store, "\n".join(r.value or "" for r in self._last_context_rows)
+        )
         cells = {
             section: [
-                (key, context_row_cells(row, layout, row_budget)) for key, row in members
+                (key, context_row_cells(row, layout, row_budget, titles)) for key, row in members
             ]
             for section, members in sections.items()
         }
@@ -2338,7 +2347,7 @@ class NodeHubScreen(Screen, inherit_bindings=False):
                 table.add_column(STACKED_COLUMN_KEY, width=row_budget, key=STACKED_COLUMN_KEY)
             else:
                 widths = {
-                    "key": layout.atomic_widths["key"], "pass": layout.atomic_widths["pass"],
+                    "key": layout.atomic_widths["key"],
                     "value": layout.flexible_width,
                 }
                 for key in COLUMN_GRIDS["context"]:
@@ -2702,16 +2711,6 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         if row.kind == "filepath":
             self._open_worktree(row.value, tab="context")
             return
-        viewed = ViewedValue(row.key, row.value, row.kind)
-        if row.kind == "list":
-            self.app.push_screen(ListArtifactViewerScreen(viewed, self._node_id))
-            return
-        openable = [r for r in rows if r.value]
-        self.app.push_screen(
-            TextArtifactViewerScreen(
-                viewed, self._node_id, openable.index(row) + 1, len(openable)
-            )
-        )
 
     def _open_selected_detail_field(self, key_value) -> None:
         if key_value.endswith(DETAIL_BODY_SUFFIX):

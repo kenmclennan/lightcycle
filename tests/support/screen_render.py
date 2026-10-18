@@ -1064,7 +1064,12 @@ MERGE_REPORT = "Approved: the scan walks nested checkouts and the tests cover th
 MERGE_PR = "https://github.com/kenmclennan/lightcycle/pull/143"
 CONTEXT_SPEC_REPORT = "Spec merged; build as written."
 CONTEXT_REFLECTION = "The spec named every file; no guessing."
-CONTEXT_FINDINGS = "One finding: scan skips symlinked checkouts."
+CONTEXT_FINDINGS = (
+    "## Finding\nThe scan skips symlinked checkouts.\n\n"
+    "- cli.py: project scan prints no summary line\n"
+    "- tests: no symlink case\n\n"
+    "See [the scan spec](https://example.test/scan-spec) or https://example.test/scan."
+)
 
 
 def _gate_presenting(size, stage, presents, findings=False, detail=None):
