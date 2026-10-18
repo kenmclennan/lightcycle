@@ -4,8 +4,11 @@ import pytest
 
 from lightcycle.adapters.log_parser import MAX_LOG_LINE_CHARS, LogLineParser
 from lightcycle.adapters.tui.app import BacklogTable, DoneTable, PriorityTable
+from lightcycle.adapters.tui.hub import detail_value_is_block
 from tests.support.screen_render import (
-    DEFAULT_SIZE, GATE_DESCRIPTION, GATE_FINDINGS, SCREENS, UNRENDERABLE, _LOG_EXCERPT, render,
+    CONTEXT_FINDINGS, CONTEXT_REFLECTION, CONTEXT_SPEC_REPORT, DEFAULT_SIZE, GATE_DESCRIPTION,
+    GATE_FINDINGS_LINES, MERGE_PR, MERGE_REPORT, SCREENS, UNRENDERABLE, _LOG_EXCERPT,
+    _hub_gate_merge, _plain_row, render,
 )
 
 
@@ -284,25 +287,132 @@ def test_the_stacked_named_states_show_a_readable_gap_before_the_project(state, 
     assert before.endswith("  ")
 
 
-def test_a_gate_presenting_pr_opens_on_detail_not_the_description():
+def test_a_gate_presenting_pr_with_no_pr_yet_opens_on_the_context_not_the_description():
     frame = render("hub#gate-presents-pr", size=(100, 30))
 
-    assert "OUTCOME" in frame
-    assert "REPORT" in frame
-    assert GATE_DESCRIPTION not in frame
-
-
-def test_a_gate_presenting_description_opens_on_the_description():
-    frame = render("hub#gate-presents-description", size=(100, 30))
-
+    assert "INPUTS" in frame
+    assert "OUTPUTS" in frame
+    assert "RECORDS" in frame
     assert GATE_DESCRIPTION in frame
 
 
-def test_a_gate_presenting_findings_opens_on_the_artifacts_with_findings_selected():
+def test_a_gate_presenting_description_opens_on_the_detail_entry_for_it():
+    frame = render("hub#gate-presents-description", size=(100, 30))
+
+    assert "IN:DESCRIPTION" in frame
+    assert GATE_DESCRIPTION in frame
+
+
+def test_a_gate_presenting_findings_shows_the_findings_block_under_its_key():
     frame = render("hub#gate-presents-findings", size=(100, 30))
 
-    assert GATE_FINDINGS in frame
+    assert "IN:FINDINGS" in frame
+    for line in GATE_FINDINGS_LINES:
+        assert line in frame
     assert GATE_DESCRIPTION not in frame
+
+
+def test_a_gate_declaring_detail_for_findings_shows_the_same_block():
+    frame = render("hub#gate-declares-findings-detail", size=(100, 30))
+
+    assert "IN:FINDINGS" in frame
+    for line in GATE_FINDINGS_LINES:
+        assert line in frame
+
+
+def test_a_findings_block_sits_on_the_rows_under_its_key():
+    rows = render("hub#gate-presents-findings", size=(100, 30)).split("\n")
+    key_row = next(i for i, row in enumerate(rows) if "IN:FINDINGS" in row)
+
+    assert GATE_FINDINGS_LINES[0] not in rows[key_row]
+    assert GATE_FINDINGS_LINES[0] in rows[key_row + 1]
+
+
+def test_a_merge_gate_detail_shows_the_pr_and_the_reviews_report():
+    frame = render("hub#gate-merge", size=(100, 30))
+
+    assert MERGE_PR in frame
+    assert MERGE_REPORT in frame
+    assert "IN:REPORT" in frame
+
+
+def test_a_merge_gate_listing_an_input_it_lacks_shows_it_blank_beside_the_valued_ones():
+    rows = render("hub#gate-merge-missing-input", size=(100, 30)).split("\n")
+
+    assert any("PR" in r and MERGE_PR in r for r in rows)
+    assert any("IN:REPORT" in r and MERGE_REPORT in r for r in rows)
+    findings = next(r for r in rows if "IN:FINDINGS" in r)
+    assert findings.strip("│ ") == "IN:FINDINGS"
+
+
+def test_a_done_agent_step_opens_on_context_with_inputs_outputs_and_records():
+    frame = render("hub#step-done-context", size=(100, 30))
+
+    for header in ("INPUTS", "OUTPUTS", "RECORDS"):
+        assert header in frame
+    assert "INPUTS (live" not in frame
+    inputs_row = next(r for r in frame.split("\n") if CONTEXT_SPEC_REPORT in r)
+    assert "LC-143.3.1" in inputs_row
+    assert "LC-143.3.p1" in inputs_row
+    assert "Audit found one issue." in frame
+    assert CONTEXT_FINDINGS in frame
+    assert CONTEXT_REFLECTION in frame
+    assert "guidance-delivered" in frame
+
+
+def test_a_value_of_80_characters_is_a_line_and_81_is_a_block():
+    assert not detail_value_is_block("x" * 80)
+    assert detail_value_is_block("x" * 81)
+    assert detail_value_is_block("one\ntwo")
+    assert not detail_value_is_block("")
+
+
+def test_an_80_character_report_renders_on_its_keys_row_and_81_under_it():
+    for length, same_row in ((80, True), (81, False)):
+        report = "r" * length
+        session = _hub_gate_merge((100, 30), report=report)
+        try:
+            strips = session.run(lambda: session.app.screen._compositor.render_strips())
+            rows = [_plain_row(strip) for strip in strips]
+        finally:
+            session.close()
+        key_row = next(i for i, row in enumerate(rows) if "IN:REPORT" in row)
+        assert (report in rows[key_row]) is same_row, length
+
+
+def test_a_block_body_wraps_wider_on_a_wider_terminal():
+    report = " ".join("word%d" % n for n in range(60))
+    widths = {}
+    for width in (100, 140):
+        session = _hub_gate_merge((width, 30), report=report)
+        try:
+            strips = session.run(lambda: session.app.screen._compositor.render_strips())
+            rows = [_plain_row(strip) for strip in strips]
+        finally:
+            session.close()
+        body = next(row for row in rows if "word0" in row)
+        widths[width] = len(body.strip("│ "))
+    assert widths[140] > widths[100]
+
+
+def test_a_narrow_terminal_stacks_the_context_table():
+    frame = render("hub#step-done-context", size=(56, 40))
+    rows = frame.split("\n")
+
+    assert any("INPUTS" in row for row in rows)
+    key_row = next(i for i, row in enumerate(rows) if row.startswith("│ findings"))
+    assert CONTEXT_FINDINGS not in rows[key_row]
+    assert CONTEXT_FINDINGS in rows[key_row + 1]
+    assert any("LC-143.3.1  LC-143.3.p1" in row for row in rows)
+
+
+@pytest.mark.parametrize("state", sorted(name for name in SCREENS if name.startswith("hub#")))
+def test_no_step_tab_is_blank_on_first_open(state):
+    rows = render(state, size=(100, 30)).split("\n")
+    separators = [i for i, row in enumerate(rows) if row.startswith("│─")]
+    body = rows[separators[1] + 1:separators[2]]
+
+    assert any(row.strip("│ ") for row in body), state
 
 
 def test_a_running_agent_opens_on_its_log():

@@ -8,6 +8,8 @@ FOCUS_REASON = "reason"
 FOCUS_PR = "pr"
 FOCUS_DESCRIPTION = "description"
 FOCUS_DETAIL = "detail"
+FOCUS_CONTEXT = "context"
+FOCUS_WORKFLOW = "workflow"
 FOCUS_ARTIFACT = "artifact"
 FOCUS_ARTIFACT_PREFIX = "artifact:"
 
@@ -31,13 +33,18 @@ class FocusFacts:
     is_item: bool = False
     state: Optional[str] = None
     role: Optional[str] = None
-    presents: Optional[str] = None
-    produced: Tuple[str, ...] = ()
+    presents_key: Optional[str] = None
+    first_value_key: Optional[str] = None
     has_log: bool = False
-    artifact_types: frozenset = frozenset()
     has_pr: bool = False
-    bare_detail: bool = False
+    has_reason: bool = False
+    produced_outputs: Tuple[str, ...] = ()
+    context_rows: int = 0
     parked: bool = False
+
+    @property
+    def detail_has_value(self):
+        return self.first_value_key is not None
 
 
 def parse_presents(value):
@@ -56,46 +63,39 @@ def presents_artifact(value):
     return focus.name if focus is not None and focus.kind == FOCUS_ARTIFACT else None
 
 
-def _fallback(facts):
-    if facts.role == "human" and facts.bare_detail:
-        return StepFocus(FOCUS_DESCRIPTION)
-    return StepFocus(FOCUS_DETAIL)
+def _parked_entry(facts):
+    return "reason" if facts.has_reason else "needs"
 
 
-def _presented(facts):
-    focus = parse_presents(facts.presents)
-    if focus is None:
-        return None
-    if focus.kind == FOCUS_ARTIFACT and focus.name not in facts.artifact_types:
-        return None
-    return focus
-
-
-def _produced(facts):
-    for atype in facts.produced:
-        if atype == "pr":
-            if facts.has_pr:
-                return StepFocus(FOCUS_PR)
-        elif atype in facts.artifact_types:
-            return StepFocus(FOCUS_ARTIFACT, atype)
+def _done(facts):
+    if facts.has_pr:
+        return StepFocus(FOCUS_DETAIL, "pr")
+    if facts.produced_outputs:
+        return StepFocus(FOCUS_CONTEXT, facts.produced_outputs[0])
     return None
+
+
+def _fall_through(facts):
+    if facts.detail_has_value:
+        return StepFocus(FOCUS_DETAIL, facts.first_value_key)
+    if facts.context_rows:
+        return StepFocus(FOCUS_CONTEXT)
+    return StepFocus(FOCUS_WORKFLOW)
 
 
 def resolve_focus(facts) -> StepFocus:
     if facts.is_item:
         return StepFocus(FOCUS_DESCRIPTION)
     if facts.state == State.BLOCKED or (facts.state != State.DONE and facts.parked):
-        return StepFocus(FOCUS_REASON)
-    if facts.role == "human" and facts.state == State.WAITING:
-        presented = _presented(facts)
-        if presented is not None:
-            return presented
+        return StepFocus(FOCUS_REASON, _parked_entry(facts))
+    if facts.role == "human" and facts.state == State.WAITING and facts.presents_key:
+        return StepFocus(FOCUS_DETAIL, facts.presents_key)
     if facts.state == State.RUNNING and facts.role != "engine":
         return StepFocus(FOCUS_LOG)
     if facts.role == "engine" and facts.state == State.QUEUED and facts.has_log:
         return StepFocus(FOCUS_LOG)
     if facts.state == State.DONE:
-        return _produced(facts) or StepFocus(FOCUS_DETAIL)
-    if facts.state == State.WAITING and facts.role == "human":
-        return _fallback(facts)
-    return StepFocus(FOCUS_DETAIL)
+        done = _done(facts)
+        if done is not None:
+            return done
+    return _fall_through(facts)

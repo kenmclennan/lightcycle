@@ -1,16 +1,12 @@
 import unittest
-from types import SimpleNamespace
 
-from lightcycle.adapters.tui.hub import NodeHubScreen, _tab_order, detail_fields, display_role, landing_tab
-from lightcycle.application.work.step_detail import StepDetail
-from lightcycle.application.work.step_inputs import StepInputs
+from lightcycle.adapters.tui.hub import _tab_order, display_role, landing_tab
 from lightcycle.application.work.step_focus import ResolveStepFocusInput, ResolveStepFocusUseCase
 from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.step_def import StepDef
-from lightcycle.domain.work.step_focus import FOCUS_ARTIFACT, StepFocus
+from lightcycle.domain.work.step_focus import StepFocus
 from tests.support.fake_store import FakeStore
 from tests.support.step_factory import create_owned_step
-from tests.support.tui_harness import launch, make_test_container
 
 
 class _FlowStub:
@@ -43,12 +39,11 @@ def landing_of(store, node_id, presents=None):
 class TestLandingTab(unittest.TestCase):
     def test_each_focus_maps_to_its_tab(self):
         expected = {
-            "log": "log", "reason": "detail", "pr": "detail", "detail": "detail",
-            "description": "description",
+            "log": "log", "reason": "detail", "detail": "detail", "context": "context",
+            "workflow": "workflow", "description": "description",
         }
         for kind, tab in expected.items():
             self.assertEqual(landing_tab(StepFocus(kind)), tab, kind)
-        self.assertEqual(landing_tab(StepFocus(FOCUS_ARTIFACT, "findings")), "outputs")
 
     def test_item_lands_on_description(self):
         s = FakeStore()
@@ -61,28 +56,15 @@ class TestLandingTab(unittest.TestCase):
         s.claim_ready("agent")
         self.assertEqual(landing_of(s, step), "log")
 
-    def test_waiting_await_merge_step_declaring_pr_lands_on_detail(self):
+    def test_waiting_await_merge_step_with_no_pr_yet_falls_to_context(self):
         s = FakeStore()
         step = create_owned_step(s, "s", step="await-merge", role="human")
-        self.assertEqual(landing_of(s, step, presents="pr"), "detail")
+        self.assertEqual(landing_of(s, step, presents="pr"), "context")
 
-    def test_waiting_human_step_with_only_stage_state_role_lands_on_description(self):
+    def test_waiting_human_step_presenting_description_lands_on_detail_description(self):
         s = FakeStore()
         step = create_owned_step(s, "s", step="triage", role="human")
-        step_inputs = StepInputs(s, _FlowStub(None))
-        entries, _presents = StepDetail(s, _FlowStub(None)).resolve(
-            s.get_node(step), step_inputs.read(s.get_node(step)),
-            step_inputs.entry_dicts_for_step(s.get_node(step)),
-            run=SimpleNamespace(pr=None, branch=None))
-        fields = detail_fields(entries)
-        self.assertEqual(fields, [("outcome", ""), ("report", "")])
-        self.assertEqual(landing_of(s, step), "description")
-
-    def test_done_human_step_lands_on_detail(self):
-        s = FakeStore()
-        step = create_owned_step(s, "s", step="await-merge", role="human")
-        s.complete_node(step, "done")
-        self.assertEqual(landing_of(s, step, presents="pr"), "detail")
+        self.assertEqual(landing_of(s, step, presents="description"), "detail")
 
     def test_dependency_blocked_step_lands_on_detail(self):
         s = FakeStore()
@@ -90,64 +72,40 @@ class TestLandingTab(unittest.TestCase):
         step = create_owned_step(s, "s", step="build", role="agent", deps=[blocker])
         self.assertEqual(landing_of(s, step), "detail")
 
-    def test_queued_step_lands_on_detail(self):
+    def test_queued_step_with_a_report_lands_on_detail(self):
         s = FakeStore()
         step = create_owned_step(s, "s", step="build", role="agent")
+        s.set_report(step, "a report")
         self.assertEqual(landing_of(s, step), "detail")
 
-    def test_done_step_lands_on_detail(self):
+    def test_done_step_with_a_report_lands_on_detail(self):
         s = FakeStore()
         step = create_owned_step(s, "s", step="build", role="agent")
+        s.set_report(step, "a report")
         s.complete_node(step, "done")
         self.assertEqual(landing_of(s, step), "detail")
 
-    def test_waiting_gate_presenting_a_findings_artifact_lands_on_artifacts(self):
+    def test_waiting_gate_presenting_findings_it_does_not_have_falls_to_context(self):
         s = FakeStore()
         step = create_owned_step(s, "s", step="review-findings", role="human")
         s.add_artifact(step, "findings", "text")
-        self.assertEqual(landing_of(s, step, presents="artifact:findings"), "outputs")
+        self.assertEqual(landing_of(s, step, presents="artifact:findings"), "context")
 
 
 class TestStepTabOrder(unittest.TestCase):
-    def test_human_step_tabs_start_with_description(self):
+    def test_every_step_shows_the_same_five_tabs(self):
         s = FakeStore()
-        step = create_owned_step(s, "s", step="await-merge", role="human")
-        self.assertEqual(
-            _tab_order(s.get_node(step)), ("description", "detail", "workflow", "log", "cost")
-        )
-
-    def test_agent_step_tabs_are_unchanged(self):
-        s = FakeStore()
-        step = create_owned_step(s, "s", step="build", role="agent")
-        self.assertEqual(_tab_order(s.get_node(step)), ("detail", "workflow", "log", "cost"))
-
-
-class TestHumanStepDescriptionTab(unittest.TestCase):
-    def _hub(self, store, step):
-        session = launch(make_test_container(store=store))
-        self.addCleanup(session.close)
-        session.run(
-            lambda: session.app.push_screen(
-                NodeHubScreen(session.app.container, step, session.app._now)
+        for role, stage in (("human", "await-merge"), ("agent", "build"), ("engine", "script")):
+            step = create_owned_step(s, "s-" + role, step=stage, role=role)
+            self.assertEqual(
+                _tab_order(s.get_node(step)), ("detail", "context", "workflow", "log", "cost"), role
             )
-        )
-        session.pause()
-        return session.app.screen
 
-    def test_waiting_human_step_shows_parent_item_description(self):
+    def test_item_tabs_are_unchanged(self):
         s = FakeStore()
-        item = s.create_item("item", "triage these issues", shortcode="OWN")
-        step = s.create_step(step="triage", role="human", parent=item)
-        screen = self._hub(s, step)
-        self.assertEqual(screen._active_tab, "description")
-        self.assertEqual(screen._description_item.description, "triage these issues")
-
-    def test_empty_item_description_shows_empty_message(self):
-        s = FakeStore()
-        item = s.create_item("item", "", shortcode="OWN")
-        step = s.create_step(step="triage", role="human", parent=item)
-        screen = self._hub(s, step)
-        self.assertFalse(screen._has_description)
+        item = s.create_item("item", "a description")
+        self.assertEqual(
+            _tab_order(s.get_node(item)), ("description", "outputs", "workflow", "cost"))
 
 
 class TestDisplayRole(unittest.TestCase):

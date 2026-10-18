@@ -33,9 +33,9 @@ A node is an item or a step, and each has its own tabs:
 |      | tabs, in order                         |
 | ---- | -------------------------------------- |
 | item | Description, Workflow, Artifacts, Cost |
-| step | Detail, Workflow, Log, Cost            |
+| step | Detail, Context, Workflow, Log, Cost   |
 
-Workflow and Cost appear on both. That is not a violation of the rule that no tab reaches across the item/step boundary for content: each renders **the node the hub is open for**, and the rule is about content, not about which tabs exist. It is why the redirect helpers were deleted - a tab never silently shows you a different node's data.
+Workflow and Cost appear on both. A step has no Description or Artifacts tab: its Detail and Context tabs read the step's own resolved `detail` list and its inputs, outputs and records. That is not a violation of the rule that no tab reaches across the item/step boundary for content: each renders **the node the hub is open for**, and the rule is about content, not about which tabs exist. It is why the redirect helpers were deleted - a tab never silently shows you a different node's data.
 
 There is no Hierarchy tab. The tree view is the Workflow tab.
 
@@ -44,21 +44,19 @@ There is no Hierarchy tab. The tree view is the Workflow tab.
 Three lines, and worth stating because it is the one piece of hub behaviour that is not visible from the screen itself:
 
 - An **item** lands on Description.
-- A **step** lands on **Log** while its worker is running, and on **Detail** otherwise.
+- A **step** lands on **Log** while its worker is running, on the Detail entry a waiting gate `presents`, on its parked `reason`, and otherwise on the first Detail entry with a value; a done step with a PR lands on `pr`, and one with outputs lands on the first output in Context. When no Detail entry has a value it falls to Context, and when Context is empty to Workflow, so a landing never targets an empty tab.
 
-A running step's log is the only thing changing, so that is where the hub puts you. Once it stops, Detail is what you want.
+A running step's log is the only thing changing, so that is where the hub puts you. Once it stops, the entry the step exists to show is what you want.
 
 ## What Detail carries
 
-Detail is a field list, in a fixed order, showing only fields that have a value. PR and branch lead it.
+Detail renders the engine's resolved `detail` list for the step, in order, and the TUI keeps no field list of its own. A step that declares `detail:` shows exactly those entries; one that does not gets the default list (`outcome`, `report`, plus `pr` when it has a run and `needs`/`reason` when parked), led by the entry a legacy `presents` names (`pr`, `in:description` or `in:<name>`). A value that contains a newline or is longer than 80 characters is a **block**: its key on one row and the body beneath it, rendered with headings and `[[ID]]` references. Any other value is a **line**, key and value on one row. A declared entry with no value stays listed, blank; when every entry is blank the tab says so instead of showing an empty table.
 
-They lead it because they are what you reach for when a step is in trouble, and they are unambiguous from where the reader stands: a step belongs to exactly one phase run, and that run owns exactly one branch and one PR. The store normalises that - the PR lives on the phase run, not the step - and the view denormalises it back. The reader never has to know the difference.
+Selecting `pr` opens it in the browser and `worktree` in the configured editor (`lc config`'s `editor` key); no other Detail entry opens anything.
 
-Right after branch comes worktree, when its repo can be resolved: the local checkout that branch actually lives in, derived rather than stored. Selecting it opens it in the configured editor (`lc config`'s `editor` key) rather than a browser - reviewing a build means being in that checkout, not just looking at its PR.
+## What Context carries
 
-After PR, branch and worktree: stage, state, role, model, claimed_by, outcome, notes, then a parked step's needs, reason and tried, then its reflections.
-
-A step can carry **more than one reflection** - they are artifacts, not a column, and a step that ran several times accumulates several. The first renders as `REFLECTION`; subsequent ones as `REFLECTION` under keys `reflection:2`, `reflection:3` and so on, so each is shown rather than the rest being silently dropped.
+Context is one table with three sections. **Inputs** are the step's frozen inputs (key, source step or item, pass, value; titled `INPUTS (live, not yet frozen)` while the step is still open). **Outputs** are what this step produced, led by its `report`. **Records** are what it left behind that is not an output: its reflection and the guidance it was delivered, skipped and cited. Selecting a row opens a `url` in the browser, a `filepath` in the editor, and text or a list inline.
 
 ## The Workflow tab
 

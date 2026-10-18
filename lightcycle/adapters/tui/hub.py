@@ -63,6 +63,9 @@ from lightcycle.application.work import (
 from lightcycle.application.work.current_step import current_step
 from lightcycle.application.work.item_context import ItemContextReader
 from lightcycle.application.work.item_output_rows import ItemOutputRows
+from lightcycle.application.work.step_context import (
+    SECTION_INPUTS, SECTION_OUTPUTS, SECTION_RECORDS, StepContext,
+)
 from lightcycle.application.work.step_detail import StepDetail
 from lightcycle.application.work.step_inputs import StepInputs
 from lightcycle.application.work.step_focus import (
@@ -79,7 +82,7 @@ from lightcycle.domain.work import (
 )
 from lightcycle.domain.work.output_rows import output_lines
 from lightcycle.domain.work.step_focus import (
-    FOCUS_ARTIFACT, FOCUS_DESCRIPTION, FOCUS_DETAIL, FOCUS_LOG, FOCUS_PR, FOCUS_REASON,
+    FOCUS_CONTEXT, FOCUS_DESCRIPTION, FOCUS_DETAIL, FOCUS_LOG, FOCUS_REASON, FOCUS_WORKFLOW,
 )
 from lightcycle.domain.workflows.identity import parse_pin
 from lightcycle.render import (
@@ -97,12 +100,16 @@ LOG_FINISHED_MESSAGE = "✓ step finished"
 LOG_CURSOR_GLYPH = "▌"
 OUTPUTS_EMPTY_MESSAGE = "This item has no outputs yet."
 DESCRIPTION_EMPTY_MESSAGE = "This item has no description to show."
+DETAIL_EMPTY_MESSAGE = "This step has nothing to show here yet."
+CONTEXT_EMPTY_MESSAGE = "This step has no context to show."
+DETAIL_BLOCK_THRESHOLD = 80
 TOAST_DURATION_SECONDS = 2.0
 TOAST_SUCCESS_PREFIX = "↗ "
 TOAST_FAILURE_PREFIX = "⚠ "
 TOAST_SUB_CAPTION_BY_TAB = {
     "outputs": "back to the outputs list automatically",
     "detail": "back to the step's detail automatically",
+    "context": "back to the step's context automatically",
 }
 TOAST_URL_SUB_SUFFIX = "nothing more to show here"
 TOAST_FILEPATH_DESTINATION = "in its default application"
@@ -110,37 +117,27 @@ TOAST_EDITOR_DESTINATION = "in your editor"
 WORKFLOW_UNRESOLVED = "workflow unresolved"
 
 _ITEM_TAB_ORDER = ("description", "outputs", "workflow", "cost")
-_STEP_TAB_ORDER = ("detail", "workflow", "log", "cost")
-_HUMAN_STEP_TAB_ORDER = ("description",) + _STEP_TAB_ORDER
-_HUMAN_STEP_OUTPUTS_TAB_ORDER = ("description", "detail", "outputs", "workflow", "log", "cost")
+_STEP_TAB_ORDER = ("detail", "context", "workflow", "log", "cost")
 _TAB_LABELS = {
     "description": "Description", "workflow": "Workflow", "outputs": "Outputs",
-    "detail": "Detail", "log": "Log", "cost": "Cost",
+    "detail": "Detail", "context": "Context", "log": "Log", "cost": "Cost",
     "overview": "Overview", "items": "Items",
 }
 
 
-def _is_human_step(node):
-    return node.type == "step" and display_role(node.role) == "human"
-
-
-def _tab_order(node, focus=None):
+def _tab_order(node):
     if node.type == "item":
         return _ITEM_TAB_ORDER
-    if not _is_human_step(node):
-        return _STEP_TAB_ORDER
-    if focus is not None and focus.kind == FOCUS_ARTIFACT:
-        return _HUMAN_STEP_OUTPUTS_TAB_ORDER
-    return _HUMAN_STEP_TAB_ORDER
+    return _STEP_TAB_ORDER
 
 
 _TAB_BY_FOCUS = {
     FOCUS_LOG: "log",
     FOCUS_REASON: "detail",
-    FOCUS_PR: "detail",
     FOCUS_DETAIL: "detail",
+    FOCUS_CONTEXT: "context",
+    FOCUS_WORKFLOW: "workflow",
     FOCUS_DESCRIPTION: "description",
-    FOCUS_ARTIFACT: "outputs",
 }
 
 
@@ -156,6 +153,10 @@ STACKED_COLUMN_KEY = "row"
 HIERARCHY_CONTINUATION_BASE_INDENT = GLYPH_WIDTHS["icon"]
 OUTPUTS_CONTINUATION_INDENT = 2
 DETAIL_CONTINUATION_INDENT = 2
+DETAIL_BODY_SUFFIX = "#body"
+CONTEXT_CONTINUATION_INDENT = 2
+CONTEXT_INPUTS_LIVE_TITLE = "INPUTS (live, not yet frozen)"
+CONTEXT_NONE_TEXT = "none"
 DETAIL_FIELD_LABELS = {
     "pr": "PR", "branch": "BRANCH", "worktree": "WORKTREE",
     "model": "MODEL", "claimed_by": "CLAIMED_BY", "session": "SESSION",
@@ -663,18 +664,82 @@ def output_row_cells(line, layout=None, row_budget=None):
     return (name, Text(line.value, style=_output_value_style(line)), step, pass_cell)
 
 
-def detail_row_cells(field, layout=None, row_budget=None):
+def detail_value_is_block(value):
+    return bool(value) and ("\n" in value or len(value) > DETAIL_BLOCK_THRESHOLD)
+
+
+def _stacked_block_cell(key_field, indent, body, row_budget, style):
+    cell = Text() + key_field
+    for paragraph in body.splitlines() or [""]:
+        for line in wrap_continuation(paragraph, row_budget - indent):
+            cell = cell + Text("\n" + " " * indent) + Text(line, style=style)
+    return cell
+
+
+def detail_row_cells(field, layout=None, row_budget=None, titles=None):
     key, value = field
     label = _detail_field_label(key)
     style = COLOURS["cyan"] if key in ("pr", "worktree") else COLOURS["text"]
+    block = detail_value_is_block(value)
     if layout is not None and layout.stacked:
         key_field = pad_field(Text(label, style=COLOURS["dim"]), layout.atomic_widths["key"])
-        return (
-            stacked_cell(key_field, DETAIL_CONTINUATION_INDENT, value, row_budget, prose_style=style),
+        if block:
+            return [(key, (_stacked_block_cell(key_field, DETAIL_CONTINUATION_INDENT, value, row_budget, style),))]
+        return [(
+            key,
+            (stacked_cell(key_field, DETAIL_CONTINUATION_INDENT, value, row_budget, prose_style=style),),
+        )]
+    if block:
+        return [
+            (key, (Text(label, style=COLOURS["dim"]), Text(""))),
+            (key + DETAIL_BODY_SUFFIX, (Text(""), prose_text(value, titles or {}, style))),
+        ]
+    return [(key, (Text(label, style=COLOURS["dim"]), Text(value, style=style)))]
+
+
+def _collapse(value):
+    return " ".join((value or "").split())
+
+
+def context_section_title(section, inputs_live):
+    if section == SECTION_INPUTS and inputs_live:
+        return CONTEXT_INPUTS_LIVE_TITLE
+    return section.upper()
+
+
+def context_display_rows(rows, inputs_live):
+    display = []
+    for section in (SECTION_INPUTS, SECTION_OUTPUTS, SECTION_RECORDS):
+        display.append(("__section:%s__" % section, "header", context_section_title(section, inputs_live)))
+        members = [(i, r) for i, r in enumerate(rows) if r.section == section]
+        if not members:
+            display.append(("__none:%s__" % section, "none", CONTEXT_NONE_TEXT))
+        for index, row in members:
+            display.append((str(index), "row", row))
+    return display
+
+
+def context_row_cells(entry, layout=None, row_budget=None):
+    row_key, kind, payload = entry
+    if kind in ("header", "none"):
+        style = COLOURS["dim"]
+        text = Text(payload, style=style)
+        if layout is not None and layout.stacked:
+            return (text,)
+        return (text, Text(""), Text(""), Text(""))
+    row = payload
+    value = _collapse(row.value)
+    style = COLOURS["cyan"] if row.kind in ("url", "filepath") else COLOURS["text"]
+    if layout is not None and layout.stacked:
+        first = (
+            pad_field(Text(row.key, style=COLOURS["dim"]), layout.atomic_widths["key"])
+            + pad_field(Text(row.source, style=COLOURS["dim"]), layout.atomic_widths["source"])
+            + pad_field(Text(row.pass_id, style=COLOURS["dim"]), layout.atomic_widths["pass"])
         )
+        return (stacked_cell(first, CONTEXT_CONTINUATION_INDENT, value, row_budget, prose_style=style),)
     return (
-        Text(label, style=COLOURS["dim"]),
-        Text(value, style=style),
+        Text(row.key, style=COLOURS["dim"]), Text(row.source, style=COLOURS["dim"]),
+        Text(row.pass_id, style=COLOURS["dim"]), Text(value, style=style),
     )
 
 
@@ -1040,6 +1105,33 @@ class DetailTable(DataTable):
             screen.refresh_detail_width()
 
 
+class ContextTable(DataTable):
+    _BASE = [b for b in DataTable.BINDINGS if b.key not in ("left", "right")]
+
+    BINDINGS = _BASE + [
+        Binding("ctrl+u", "page_up", "Page up", show=False),
+        Binding("ctrl+d", "page_down", "Page down", show=False),
+        Binding("right", "select_cursor", "Open", show=False),
+    ]
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("cursor_foreground_priority", "renderable")
+        super().__init__(*args, **kwargs)
+
+    def on_resize(self, event: events.Resize) -> None:
+        screen = self.screen
+        if isinstance(screen, NodeHubScreen):
+            screen.refresh_context_width()
+
+
+@dataclass(frozen=True)
+class ViewedValue:
+    type: str
+    value: str
+    kind: str = "text"
+    label: Optional[str] = None
+
+
 class CostPane(RichLog):
     BINDINGS = [
         Binding("up", "scroll_up", "Scroll up", show=False),
@@ -1232,6 +1324,9 @@ class NodeHubScreen(Screen, inherit_bindings=False):
     DetailTable {{
         height: 1fr;
     }}
+    ContextTable {{
+        height: 1fr;
+    }}
     CostPane {{
         height: 1fr;
     }}
@@ -1243,19 +1338,20 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         height: auto;
         display: none;
     }}
-    #hub-log-empty, #hub-outputs-empty, #hub-description-empty, #hub-cost-empty {{
+    #hub-log-empty, #hub-outputs-empty, #hub-description-empty, #hub-cost-empty,
+    #hub-detail-empty, #hub-context-empty {{
         content-align: center middle;
         height: 1fr;
         display: none;
         color: {COLOURS["dim"]};
     }}
-    #hierarchy-floor, #outputs-floor, #detail-floor, #cost-floor {{
+    #hierarchy-floor, #outputs-floor, #detail-floor, #context-floor, #cost-floor {{
         content-align: center middle;
         height: 1fr;
         color: {COLOURS["dim"]};
         display: none;
     }}
-    #hub-outputs-toast, #hub-detail-toast {{
+    #hub-outputs-toast, #hub-detail-toast, #hub-context-toast {{
         content-align: center middle;
         height: 1fr;
         display: none;
@@ -1284,7 +1380,7 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         self._focus = ResolveStepFocusUseCase(
             container.store, container.flow_service()
         ).execute(ResolveStepFocusInput(step=node_id)).focus
-        self._tab_order = _tab_order(node, self._focus)
+        self._tab_order = _tab_order(node)
         self._active_tab = self._forced_initial_tab or landing_tab(self._focus)
         self._last_hierarchy_shape = None
         self._last_rows = []
@@ -1323,6 +1419,15 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         self._detail_floor = False
         self._detail_stacked = False
         self._detail_needs_rebuild = False
+        self._detail_empty = False
+        self._last_context_shape = None
+        self._last_context_rows = []
+        self._context_floor = False
+        self._context_stacked = False
+        self._context_needs_rebuild = False
+        self._has_context = False
+        self._context_inputs_live = False
+        self._landed = False
         self._cost_whole_empty_message = None
         self._last_cost_shape = None
         self._last_cost_rows = []
@@ -1361,7 +1466,14 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         detail_table.display = self._active_tab == "detail"
         yield detail_table
         yield Static(id="detail-floor")
+        yield Static(DETAIL_EMPTY_MESSAGE, id="hub-detail-empty")
         yield Static(id="hub-detail-toast")
+        context_table = ContextTable(id="hub-context-table")
+        context_table.display = self._active_tab == "context"
+        yield context_table
+        yield Static(id="context-floor")
+        yield Static(CONTEXT_EMPTY_MESSAGE, id="hub-context-empty")
+        yield Static(id="hub-context-toast")
         description_pane = DescriptionPane(
             id="hub-description-view", highlight=False, markup=False, wrap=True, auto_scroll=False
         )
@@ -1387,6 +1499,9 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         detail_table = self.query_one(DetailTable)
         detail_table.cursor_type = "row"
         detail_table.show_header = False
+        context_table = self.query_one(ContextTable)
+        context_table.cursor_type = "row"
+        context_table.show_header = False
         store = self._container.store
         node = store.get_node(self._node_id)
         self._hierarchy_target_id = _hierarchy_default_row_id(store, node)
@@ -1402,6 +1517,7 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         self.refresh_hierarchy_width()
         self.refresh_outputs_width()
         self.refresh_detail_width()
+        self.refresh_context_width()
         self.refresh_cost_width()
         self._last_description = None
         self._render_description(self._description_item)
@@ -1549,13 +1665,8 @@ class NodeHubScreen(Screen, inherit_bindings=False):
             self._render_description(node)
         else:
             self._render_detail(store, node, initial)
-            if _is_human_step(node):
-                item = store.get_node(node.item)
-                self._render_description(item)
-                if "outputs" in self._tab_order:
-                    self._render_outputs(self._item_output_rows(store, item), initial)
-                    if initial:
-                        self._select_focused_output()
+            self._render_context(store, node, initial)
+            self._land_cursor()
         self._render_cost(store, node, initial)
         self.query_one(HubTabStrip).set_active(self._active_tab)
         self._apply_tab_visibility()
@@ -1898,12 +2009,27 @@ class NodeHubScreen(Screen, inherit_bindings=False):
     def _item_output_rows(self, store, item):
         return ItemOutputRows(store, self._flow_service).for_item(item)
 
-    def _select_focused_output(self):
+    def _land_cursor(self) -> None:
+        if self._landed:
+            return
+        self._landed = True
         name = self._focus.name
-        for index, line in enumerate(self._last_outputs):
-            if line.name == name and not line.is_history:
-                self.query_one(OutputsTable).move_cursor(row=index)
-                return
+        if not name:
+            return
+        if self._focus.kind in (FOCUS_DETAIL, FOCUS_REASON):
+            table = self.query_one(DetailTable)
+            for index, row_key in enumerate(table.rows):
+                if row_key.value == name:
+                    table.move_cursor(row=index)
+                    return
+        elif self._focus.kind == FOCUS_CONTEXT:
+            table = self.query_one(ContextTable)
+            for index, row in enumerate(self._last_context_rows):
+                if row.section == SECTION_OUTPUTS and row.key == name:
+                    for position, row_key in enumerate(table.rows):
+                        if row_key.value == str(index):
+                            table.move_cursor(row=position)
+                            return
 
     def _fields_for(self, store, step, flow_service):
         run = StepRunUseCase(store, flow_service).execute(StepRunInput(step=step.id))
@@ -1914,7 +2040,9 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         return detail_fields(entries)
 
     def _render_detail(self, store, step, initial) -> None:
-        self._render_detail_fields(self._fields_for(store, step, self._flow_service), initial)
+        fields = self._fields_for(store, step, self._flow_service)
+        self._detail_empty = not any(value for _key, value in fields)
+        self._render_detail_fields(fields, initial)
 
     def _worktree_path_for(self, run, flow_service):
         if not run.branch:
@@ -1924,19 +2052,28 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         except UseCaseError:
             return None
 
+    def _detail_rows(self, fields, layout, row_budget):
+        blocks = "\n".join(value for _key, value in fields if detail_value_is_block(value))
+        titles = resolve_titles(self._container.store, blocks)
+        rows = []
+        for field in fields:
+            rows.extend(detail_row_cells(field, layout, row_budget, titles))
+        return rows
+
     def _render_detail_fields(self, fields, initial) -> None:
         self._last_detail_fields = fields
         table = self.query_one(DetailTable)
-        shape = tuple(fields)
         layout = self._detail_layout(table, fields)
+        row_budget = render_screen_row_budget(table, layout, len(COLUMN_GRIDS["detail"]))
+        rows = self._detail_rows(fields, layout, row_budget)
+        shape = tuple(k for k, _cells in rows)
         if (
             shape == self._last_detail_shape
             and not initial
             and not self._detail_needs_rebuild
             and layout.stacked == self._detail_stacked
         ):
-            self._last_detail_shape = shape
-            self._update_detail_cells(table, fields)
+            self._update_detail_cells(table, rows)
             return
 
         self._detail_floor = bool(fields) and layout.floor
@@ -1951,7 +2088,6 @@ class NodeHubScreen(Screen, inherit_bindings=False):
 
         selected_key = self._selected_detail_key(table)
         table.clear(columns=True)
-        row_budget = render_screen_row_budget(table, layout, len(COLUMN_GRIDS["detail"]))
         if layout.stacked:
             table.add_column(STACKED_COLUMN_KEY, width=row_budget, key=STACKED_COLUMN_KEY)
         else:
@@ -1959,14 +2095,12 @@ class NodeHubScreen(Screen, inherit_bindings=False):
             for key in COLUMN_GRIDS["detail"]:
                 table.add_column(key, width=widths[key], key=key)
 
-        for field in fields:
-            table.add_row(
-                *detail_row_cells(field, layout, row_budget), height=None, key=field[0]
-            )
+        for row_key, cells in rows:
+            table.add_row(*cells, height=None, key=row_key)
 
         self._last_detail_shape = shape
-        if fields:
-            keys = [key for key, _value in fields]
+        if rows:
+            keys = [row_key for row_key, _cells in rows]
             index = keys.index(selected_key) if selected_key in keys else 0
             table.move_cursor(row=index)
 
@@ -1979,16 +2113,71 @@ class NodeHubScreen(Screen, inherit_bindings=False):
             return None
         return cell_key.row_key.value
 
-    def _update_detail_cells(self, table, fields) -> None:
-        layout = self._detail_layout(table, fields)
-        row_budget = render_screen_row_budget(table, layout, len(COLUMN_GRIDS["detail"]))
-        for field in fields:
-            cells = detail_row_cells(field, layout, row_budget)
-            if layout.stacked:
-                table.update_cell(field[0], STACKED_COLUMN_KEY, cells[0])
-                continue
-            for key, value in zip(COLUMN_GRIDS["detail"], cells):
-                table.update_cell(field[0], key, value)
+    def _update_detail_cells(self, table, rows) -> None:
+        columns = (STACKED_COLUMN_KEY,) if self._detail_stacked else COLUMN_GRIDS["detail"]
+        for row_key, cells in rows:
+            for key, value in zip(columns, cells):
+                table.update_cell(row_key, key, value)
+
+    def _context_layout(self, table, display):
+        data = [payload for _key, kind, payload in display if kind == "row"]
+        atomic_values = {
+            "key": [r.key for r in data] + [p for _k, kind, p in display if kind == "header"],
+            "source": [r.source + "  " for r in data],
+            "pass": [r.pass_id + "  " for r in data],
+        }
+        row_budget = screen_row_budget_for(table, len(COLUMN_GRIDS["context"]))
+        return compute_layout(row_budget, [], atomic_values, indent=CONTEXT_CONTINUATION_INDENT)
+
+    def _render_context(self, store, step, initial) -> None:
+        view = StepContext(store, self._flow_service).read(step)
+        self._last_context_rows = list(view.rows)
+        self._has_context = any(r.value is not None or r.section != SECTION_INPUTS for r in view.rows)
+        self._context_inputs_live = view.inputs_live
+        self._paint_context(initial)
+
+    def refresh_context_width(self) -> None:
+        if self._last_context_rows:
+            self._paint_context(True)
+            self._apply_tab_visibility()
+
+    def _paint_context(self, initial) -> None:
+        table = self.query_one(ContextTable)
+        display = context_display_rows(self._last_context_rows, self._context_inputs_live)
+        layout = self._context_layout(table, display)
+        row_budget = render_screen_row_budget(table, layout, len(COLUMN_GRIDS["context"]))
+        rows = [
+            (entry[0], context_row_cells(entry, layout, row_budget)) for entry in display
+        ]
+        shape = (tuple((k, tuple(c.plain for c in cells)) for k, cells in rows), layout.stacked)
+        if shape == self._last_context_shape and not initial and not self._context_needs_rebuild:
+            return
+        self._context_floor = layout.floor
+        self._context_stacked = layout.stacked
+        if self._context_floor:
+            self._context_needs_rebuild = True
+            self.query_one("#context-floor", Static).update(
+                Text(floor_message(layout, table, len(COLUMN_GRIDS["context"])), style=COLOURS["dim"])
+            )
+            self._apply_tab_visibility()
+            return
+        self._context_needs_rebuild = False
+        selected_key = self._selected_detail_key(table)
+        table.clear(columns=True)
+        if layout.stacked:
+            table.add_column(STACKED_COLUMN_KEY, width=row_budget, key=STACKED_COLUMN_KEY)
+        else:
+            widths = {
+                "key": layout.atomic_widths["key"], "source": layout.atomic_widths["source"],
+                "pass": layout.atomic_widths["pass"], "value": layout.flexible_width,
+            }
+            for key in COLUMN_GRIDS["context"]:
+                table.add_column(key, width=widths[key], key=key)
+        for row_key, cells in rows:
+            table.add_row(*cells, height=None, key=row_key)
+        self._last_context_shape = shape
+        keys = [row_key for row_key, _cells in rows]
+        table.move_cursor(row=keys.index(selected_key) if selected_key in keys else 0)
 
     def _cost_layout(self, pane, rows):
         atomic_values = {"key": [label for _key, label, _value in rows if label]}
@@ -2166,11 +2355,27 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         detail_active = self._active_tab == "detail"
         showing_detail_toast = detail_active and self._toast_active and self._toast_tab == "detail"
         showing_detail_floor = detail_active and self._detail_floor and not showing_detail_toast
+        showing_detail_empty = detail_active and self._detail_empty and not showing_detail_toast
         self.query_one(DetailTable).display = (
             detail_active and not showing_detail_toast and not showing_detail_floor
+            and not showing_detail_empty
         )
         self.query_one("#detail-floor", Static).display = showing_detail_floor
+        self.query_one("#hub-detail-empty", Static).display = showing_detail_empty
         self.query_one("#hub-detail-toast", Static).display = showing_detail_toast
+        context_active = self._active_tab == "context"
+        showing_context_toast = context_active and self._toast_active and self._toast_tab == "context"
+        showing_context_floor = context_active and self._context_floor and not showing_context_toast
+        showing_context_empty = (
+            context_active and not self._has_context and not showing_context_toast
+        )
+        self.query_one(ContextTable).display = (
+            context_active and not showing_context_toast and not showing_context_floor
+            and not showing_context_empty
+        )
+        self.query_one("#context-floor", Static).display = showing_context_floor
+        self.query_one("#hub-context-empty", Static).display = showing_context_empty
+        self.query_one("#hub-context-toast", Static).display = showing_context_toast
         description_active = self._active_tab == "description"
         self.query_one(DescriptionPane).display = description_active and self._has_description
         self.query_one("#hub-description-empty", Static).display = (
@@ -2199,10 +2404,18 @@ class NodeHubScreen(Screen, inherit_bindings=False):
             self.set_focus(self.query_one(OutputsTable))
         elif (
             self._active_tab == "detail"
+            and not self._detail_empty
             and not (self._toast_active and self._toast_tab == "detail")
             and not self._detail_floor
         ):
             self.set_focus(self.query_one(DetailTable))
+        elif (
+            self._active_tab == "context"
+            and self._has_context
+            and not (self._toast_active and self._toast_tab == "context")
+            and not self._context_floor
+        ):
+            self.set_focus(self.query_one(ContextTable))
         elif self._active_tab == "description" and self._has_description:
             self.set_focus(self.query_one(DescriptionPane))
         elif self._active_tab == "cost" and self._cost_whole_empty_message is None and not self._cost_floor:
@@ -2260,6 +2473,9 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         if event.data_table.id == "hub-detail-table":
             self._open_selected_detail_field(event.row_key.value)
             return
+        if event.data_table.id == "hub-context-table":
+            self._open_selected_context_row(event.row_key.value)
+            return
         row_id = event.row_key.value
         if row_id is None or row_id == self._node_id:
             return
@@ -2284,7 +2500,33 @@ class NodeHubScreen(Screen, inherit_bindings=False):
                 )
             )
 
+    def _open_selected_context_row(self, key_value) -> None:
+        if key_value is None or key_value.startswith("__"):
+            return
+        rows = self._last_context_rows
+        row = rows[int(key_value)]
+        if not row.value:
+            return
+        if row.kind == "url":
+            self._open_external_output("url", row.value, tab="context")
+            return
+        if row.kind == "filepath":
+            self._open_worktree(row.value, tab="context")
+            return
+        viewed = ViewedValue(row.key, row.value, row.kind)
+        if row.kind == "list":
+            self.app.push_screen(ListArtifactViewerScreen(viewed, self._node_id))
+            return
+        openable = [r for r in rows if r.value]
+        self.app.push_screen(
+            TextArtifactViewerScreen(
+                viewed, self._node_id, openable.index(row) + 1, len(openable)
+            )
+        )
+
     def _open_selected_detail_field(self, key_value) -> None:
+        if key_value.endswith(DETAIL_BODY_SUFFIX):
+            key_value = key_value[: -len(DETAIL_BODY_SUFFIX)]
         if key_value not in ("pr", "worktree"):
             return
         value = next(
@@ -2299,19 +2541,19 @@ class NodeHubScreen(Screen, inherit_bindings=False):
             return
         self._open_worktree(value)
 
-    def _open_worktree(self, path) -> None:
+    def _open_worktree(self, path, tab="detail") -> None:
         use_case = OpenArtifactUseCase(self._container.fs, self._container.launcher)
         editor_input = OpenArtifactInput(kind="editor", value=path, editor=self._container.config.editor())
         result = use_case.execute(editor_input)
-        self._show_toast(result.success, result.message, "editor", path, tab="detail")
+        self._show_toast(result.success, result.message, "editor", path, tab=tab)
 
-    def _open_external_output(self, kind, value) -> None:
+    def _open_external_output(self, kind, value, tab="outputs") -> None:
         use_case = OpenArtifactUseCase(self._container.fs, self._container.launcher)
         result = use_case.execute(OpenArtifactInput(kind=kind, value=value))
-        self._show_toast(result.success, result.message, kind, value, tab="outputs")
+        self._show_toast(result.success, result.message, kind, value, tab=tab)
 
     def _toast_widget(self):
-        return self.query_one("#hub-detail-toast" if self._toast_tab == "detail" else "#hub-outputs-toast", Static)
+        return self.query_one("#hub-%s-toast" % self._toast_tab, Static)
 
     def _show_toast(self, success, message, kind, value, tab="outputs") -> None:
         self._toast_tab = tab
@@ -2336,5 +2578,5 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         self._toast_tab = None
         self._toast_timer = None
         self._apply_tab_visibility()
-        if self._active_tab in ("outputs", "detail"):
+        if self._active_tab in ("outputs", "detail", "context"):
             self._focus_active_tab()

@@ -67,6 +67,7 @@ COLUMN_GRIDS = {
     "workflow": ("icon", "id", "title", "turns", "time", "cost"),
     "outputs": ("name", "value", "step", "pass"),
     "detail": ("key", "value"),
+    "context": ("key", "source", "pass", "value"),
     "report": ("key", "value"),
     "goal-items": ("cursor", "icon", "id", "title", "step"),
 }

@@ -2,10 +2,11 @@ Feature: The node hub
   Opening any node - item or step - lands on the hub: a fixed header above a
   tab strip that is type-aware, since an item and a step share no tabs. An
   item's strip is Description, Outputs, Workflow, and Cost; a step's is
-  Detail, Workflow, Log, and Cost, with a human step's strip also opening with Description. Landing follows what the node is: an item
+  Detail, Context, Workflow, Log, and Cost. Landing follows what the node is: an item
   always lands on Description, whatever its status; a step lands on Log while
-  its worker is running, and on Detail otherwise, except a human step not yet done, which lands on Description - the Workflow tab is never a
-  landing tab for either type, and neither is Cost. The header stays fixed
+  its worker is running, on Detail with the reason entry selected when it needs attention,
+  and otherwise on the first tab with something to show, Detail then Context - the Workflow tab is
+  only ever the last resort for a step, never for an item, and Cost is never a landing tab. The header stays fixed
   while ] and [ cycle the tabs within whichever strip the type has; Tab leaves
   the hub exactly as Esc does, from any tab, and never cycles anything.
   Selecting a row inside the Workflow tab replaces the current hub screen in
@@ -30,17 +31,18 @@ Feature: The node hub
       | Enter |
       | →     |
 
-  Scenario: Confirming a needs-attention row opens the step's Description tab, not the item
+  Scenario: Confirming a needs-attention row opens the step's Detail tab with the reason entry selected, not the item
     Given the priority list is showing with a needs-attention step
     When I select that step's row
     And Enter is pressed
-    Then the step's own hub opens, landing on the "Description" tab
+    Then the step's own hub opens, landing on the "Detail" tab
+    And the "reason" entry is selected
 
-  Scenario: Confirming a queued row opens the step's Detail tab, not the item
+  Scenario: Confirming a queued row opens the step's Context tab, not the item
     Given the priority list is showing with a queued step
     When I select that step's row
     And Enter is pressed
-    Then the step's own hub opens, landing on the "Detail" tab
+    Then the step's own hub opens, landing on the "Context" tab
 
   Scenario: The header's identity line shows the item's id, project, and title
     Given an item with a project and a workflow, its hub open
@@ -89,9 +91,9 @@ Feature: The node hub
     Then its tab strip shows exactly "Description", "Outputs", "Workflow", and "Cost", in that order
     And no "Detail" tab and no "Log" tab is shown
 
-  Scenario: A step's tab strip is Detail, Workflow, Log, and Cost, never Description or Outputs
+  Scenario: A step's tab strip is Detail, Context, Workflow, Log, and Cost, never Description or Outputs
     Given a step, its hub open
-    Then its tab strip shows exactly "Detail", "Workflow", "Log", and "Cost", in that order
+    Then its tab strip shows exactly "Detail", "Context", "Workflow", "Log", and "Cost", in that order
     And no "Description" tab and no "Outputs" tab is shown
 
   Scenario Outline: An item's hub lands on the Description tab, whatever its status
@@ -106,16 +108,16 @@ Feature: The node hub
       | queued, not yet run                   |
       | done                                  |
 
-  Scenario Outline: A step's hub lands on Log while its worker runs, and on Detail otherwise
+  Scenario Outline: A step's hub lands on Log while its worker runs, on Detail when it needs attention, and on Context otherwise
     Given a step with the status "<status>", its hub open
     Then it lands on the "<tab>" tab
 
     Examples:
       | status                                | tab         |
       | active                                | Log         |
-      | needs-attention, a human step         | Description |
+      | needs-attention, a human step         | Detail      |
       | blocked on another item's completion  | Detail      |
-      | queued, not yet run                   | Detail      |
+      | queued, not yet run                   | Context     |
       | done                                  | Detail      |
 
   Scenario Outline: ] cycles forward through an item's four tabs, wrapping back to Description
@@ -142,19 +144,20 @@ Feature: The node hub
       | Workflow    | Outputs     |
       | Outputs     | Description |
 
-  Scenario Outline: ] cycles forward through a step's four tabs, wrapping back to Detail
+  Scenario Outline: ] cycles forward through a step's five tabs, wrapping back to Detail
     Given a step's hub is open, on the "<from>" tab
     When ] is pressed
     Then the "<to>" tab becomes active
 
     Examples:
       | from     | to       |
-      | Detail   | Workflow |
+      | Detail   | Context  |
+      | Context  | Workflow |
       | Workflow | Log      |
       | Log      | Cost     |
       | Cost     | Detail   |
 
-  Scenario Outline: [ cycles backward through a step's four tabs, in reverse
+  Scenario Outline: [ cycles backward through a step's five tabs, in reverse
     Given a step's hub is open, on the "<from>" tab
     When [ is pressed
     Then the "<to>" tab becomes active
@@ -164,7 +167,8 @@ Feature: The node hub
       | Detail   | Cost     |
       | Cost     | Log      |
       | Log      | Workflow |
-      | Workflow | Detail   |
+      | Workflow | Context  |
+      | Context  | Detail   |
 
   Scenario Outline: Tab closes an open item's hub from any tab, like Esc, without cycling tabs
     Given an item, its hub open
