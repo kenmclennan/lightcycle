@@ -215,6 +215,11 @@ class FlowContracts:
                     problems.append((
                         stage,
                         "presents %r is not in the step's detail list" % str(value).strip()))
+                elif str(value).strip() == "report":
+                    problems.append((
+                        stage,
+                        "presents 'report' is this gate's own closing report, null while the "
+                        "gate is open; present in:report for the previous step's report"))
                 continue
             if step_def.owner != "human":
                 problems.append((stage, "presents is only for human steps, but this step is not one"))
