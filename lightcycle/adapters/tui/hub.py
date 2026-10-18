@@ -61,7 +61,8 @@ from lightcycle.application.work import (
     StepRunUseCase,
 )
 from lightcycle.application.work.current_step import current_step
-from lightcycle.application.work.item_outputs import ItemOutputs
+from lightcycle.application.work.item_context import ItemContextReader
+from lightcycle.application.work.item_output_rows import ItemOutputRows
 from lightcycle.application.work.step_detail import StepDetail
 from lightcycle.application.work.step_inputs import StepInputs
 from lightcycle.application.work.step_focus import (
@@ -74,8 +75,9 @@ from lightcycle.domain.money import Cost
 from lightcycle.domain.runs import pass_number
 from lightcycle.domain.work import (
     LogKind, State, is_human_step, item_active_seconds, item_cost, parse_timestamp,
-    row_bucket, step_cost, type_label, item_viewable_artifacts,
+    row_bucket, step_cost,
 )
+from lightcycle.domain.work.output_rows import output_lines
 from lightcycle.domain.work.step_focus import (
     FOCUS_ARTIFACT, FOCUS_DESCRIPTION, FOCUS_DETAIL, FOCUS_LOG, FOCUS_PR, FOCUS_REASON,
 )
@@ -93,13 +95,13 @@ LOG_PANE_MAX_LINES = 20000
 LOG_NO_STREAM_MESSAGE = "Nothing live to stream."
 LOG_FINISHED_MESSAGE = "✓ step finished"
 LOG_CURSOR_GLYPH = "▌"
-ARTIFACTS_EMPTY_MESSAGE = "This item has no artifacts to view yet."
+OUTPUTS_EMPTY_MESSAGE = "This item has no outputs yet."
 DESCRIPTION_EMPTY_MESSAGE = "This item has no description to show."
 TOAST_DURATION_SECONDS = 2.0
 TOAST_SUCCESS_PREFIX = "↗ "
 TOAST_FAILURE_PREFIX = "⚠ "
 TOAST_SUB_CAPTION_BY_TAB = {
-    "artifacts": "back to the artifact list automatically",
+    "outputs": "back to the outputs list automatically",
     "detail": "back to the step's detail automatically",
 }
 TOAST_URL_SUB_SUFFIX = "nothing more to show here"
@@ -107,12 +109,12 @@ TOAST_FILEPATH_DESTINATION = "in its default application"
 TOAST_EDITOR_DESTINATION = "in your editor"
 WORKFLOW_UNRESOLVED = "workflow unresolved"
 
-_ITEM_TAB_ORDER = ("description", "workflow", "artifacts", "cost")
+_ITEM_TAB_ORDER = ("description", "outputs", "workflow", "cost")
 _STEP_TAB_ORDER = ("detail", "workflow", "log", "cost")
 _HUMAN_STEP_TAB_ORDER = ("description",) + _STEP_TAB_ORDER
-_HUMAN_STEP_ARTIFACT_TAB_ORDER = ("description", "detail", "artifacts", "workflow", "log", "cost")
+_HUMAN_STEP_OUTPUTS_TAB_ORDER = ("description", "detail", "outputs", "workflow", "log", "cost")
 _TAB_LABELS = {
-    "description": "Description", "workflow": "Workflow", "artifacts": "Artifacts",
+    "description": "Description", "workflow": "Workflow", "outputs": "Outputs",
     "detail": "Detail", "log": "Log", "cost": "Cost",
     "overview": "Overview", "items": "Items",
 }
@@ -128,7 +130,7 @@ def _tab_order(node, focus=None):
     if not _is_human_step(node):
         return _STEP_TAB_ORDER
     if focus is not None and focus.kind == FOCUS_ARTIFACT:
-        return _HUMAN_STEP_ARTIFACT_TAB_ORDER
+        return _HUMAN_STEP_OUTPUTS_TAB_ORDER
     return _HUMAN_STEP_TAB_ORDER
 
 
@@ -138,7 +140,7 @@ _TAB_BY_FOCUS = {
     FOCUS_PR: "detail",
     FOCUS_DETAIL: "detail",
     FOCUS_DESCRIPTION: "description",
-    FOCUS_ARTIFACT: "artifacts",
+    FOCUS_ARTIFACT: "outputs",
 }
 
 
@@ -152,7 +154,7 @@ def display_role(role):
 
 STACKED_COLUMN_KEY = "row"
 HIERARCHY_CONTINUATION_BASE_INDENT = GLYPH_WIDTHS["icon"]
-ARTIFACTS_CONTINUATION_INDENT = 2
+OUTPUTS_CONTINUATION_INDENT = 2
 DETAIL_CONTINUATION_INDENT = 2
 DETAIL_FIELD_LABELS = {
     "pr": "PR", "branch": "BRANCH", "worktree": "WORKTREE",
@@ -633,19 +635,32 @@ def hierarchy_row_cells(
     return (icon_cell, node.id, title_cell, turns_cell, time_cell, cost_cell)
 
 
-def artifact_row_cells(artifact, layout=None, row_budget=None):
+def _output_name_text(line):
+    suffix = " +%d" % line.older if line.older else ""
+    return ("  " if line.is_history else "") + line.title + suffix
+
+
+def _output_value_style(line):
+    return COLOURS["dim"] if line.is_history else COLOURS["cyan"]
+
+
+def output_row_cells(line, layout=None, row_budget=None):
+    name = Text(_output_name_text(line), style=COLOURS["dim"] if line.is_history else COLOURS["text"])
+    step = Text(line.step or "", style=COLOURS["dim"])
+    pass_cell = Text(line.pass_text, style=COLOURS["dim"])
     if layout is not None and layout.stacked:
-        type_field = pad_field(Text(type_label(artifact), style=COLOURS["dim"]), layout.atomic_widths["type"])
+        first_line = (
+            pad_field(name, layout.atomic_widths["name"])
+            + pad_field(step, layout.atomic_widths["step"])
+            + pass_cell
+        )
         return (
             stacked_cell(
-                type_field, ARTIFACTS_CONTINUATION_INDENT, artifact.value, row_budget,
-                prose_style=COLOURS["cyan"],
+                first_line, OUTPUTS_CONTINUATION_INDENT, line.value, row_budget,
+                prose_style=_output_value_style(line),
             ),
         )
-    return (
-        Text(type_label(artifact), style=COLOURS["dim"]),
-        Text(artifact.value, style=COLOURS["cyan"]),
-    )
+    return (name, Text(line.value, style=_output_value_style(line)), step, pass_cell)
 
 
 def detail_row_cells(field, layout=None, row_budget=None):
@@ -676,7 +691,7 @@ def _cost_row_text(label, value, layout, row_budget):
     return key_field + Text("  ") + Text(value, style=COLOURS["text"])
 
 
-def toast_text(success, message, kind, value, tab="artifacts"):
+def toast_text(success, message, kind, value, tab="outputs"):
     base_caption = TOAST_SUB_CAPTION_BY_TAB[tab]
     prefix = TOAST_SUCCESS_PREFIX if success else TOAST_FAILURE_PREFIX
     colour = COLOURS["cyan"] if success else COLOURS["red"]
@@ -882,7 +897,7 @@ class HierarchyPagingTable(DataTable):
         Binding("ctrl+u", "page_up", "Page up", show=False),
         Binding("ctrl+d", "page_down", "Page down", show=False),
         Binding("right", "select_cursor", "Open", show=False),
-        Binding("a", "jump_artifacts", "Artifacts", show=False),
+        Binding("o", "jump_outputs", "Outputs", show=False),
         Binding("l", "jump_log", "Log", show=False),
     ]
 
@@ -909,14 +924,14 @@ class HierarchyPagingTable(DataTable):
             return None
         return cell_key.row_key.value
 
-    def action_jump_artifacts(self) -> None:
+    def action_jump_outputs(self) -> None:
         row_id = self._highlighted_id()
         if row_id is None or not isinstance(self.screen, NodeHubScreen):
             return
         node = _row_node(self.screen._last_rows, row_id)
         if node is None or node.type != "item":
             return
-        self.screen.switch_at(row_id, initial_tab="artifacts")
+        self.screen.switch_at(row_id, initial_tab="outputs")
 
     def action_jump_log(self) -> None:
         row_id = self._highlighted_id()
@@ -981,23 +996,29 @@ class HierarchyPagingTable(DataTable):
             super().action_page_up()
 
 
-class ArtifactsTable(DataTable):
+class OutputsTable(DataTable):
     _BASE = [b for b in DataTable.BINDINGS if b.key not in ("left", "right")]
 
     BINDINGS = _BASE + [
         Binding("ctrl+u", "page_up", "Page up", show=False),
         Binding("ctrl+d", "page_down", "Page down", show=False),
         Binding("right", "select_cursor", "Open", show=False),
+        Binding("space", "toggle_history", "History", show=False),
     ]
 
     def __init__(self, *args, **kwargs):
         kwargs.setdefault("cursor_foreground_priority", "renderable")
         super().__init__(*args, **kwargs)
 
+    def action_toggle_history(self) -> None:
+        screen = self.screen
+        if isinstance(screen, NodeHubScreen):
+            screen.toggle_output_history()
+
     def on_resize(self, event: events.Resize) -> None:
         screen = self.screen
         if isinstance(screen, NodeHubScreen):
-            screen.refresh_artifacts_width()
+            screen.refresh_outputs_width()
 
 
 class DetailTable(DataTable):
@@ -1205,7 +1226,7 @@ class NodeHubScreen(Screen, inherit_bindings=False):
     HierarchyPagingTable {{
         height: 1fr;
     }}
-    ArtifactsTable {{
+    OutputsTable {{
         height: 1fr;
     }}
     DetailTable {{
@@ -1222,19 +1243,19 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         height: auto;
         display: none;
     }}
-    #hub-log-empty, #hub-artifacts-empty, #hub-description-empty, #hub-cost-empty {{
+    #hub-log-empty, #hub-outputs-empty, #hub-description-empty, #hub-cost-empty {{
         content-align: center middle;
         height: 1fr;
         display: none;
         color: {COLOURS["dim"]};
     }}
-    #hierarchy-floor, #artifacts-floor, #detail-floor, #cost-floor {{
+    #hierarchy-floor, #outputs-floor, #detail-floor, #cost-floor {{
         content-align: center middle;
         height: 1fr;
         color: {COLOURS["dim"]};
         display: none;
     }}
-    #hub-artifacts-toast, #hub-detail-toast {{
+    #hub-outputs-toast, #hub-detail-toast {{
         content-align: center middle;
         height: 1fr;
         display: none;
@@ -1289,12 +1310,14 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         self._log_cursor_active = False
         self._log_cursor_text = None
         self._log_cursor_row_count = 0
-        self._last_artifacts_shape = None
-        self._last_artifacts = []
-        self._has_artifacts = False
-        self._artifacts_floor = False
-        self._artifacts_stacked = False
-        self._artifacts_needs_rebuild = False
+        self._last_outputs_shape = None
+        self._output_rows = []
+        self._expanded_outputs = set()
+        self._last_outputs = []
+        self._has_outputs = False
+        self._outputs_floor = False
+        self._outputs_stacked = False
+        self._outputs_needs_rebuild = False
         self._last_detail_shape = None
         self._last_detail_fields = []
         self._detail_floor = False
@@ -1310,7 +1333,7 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         self._toast_timer = None
         self._has_description = False
         self._last_description = None
-        self._description_text = None
+        self._description_item = None
 
     @property
     def container(self):
@@ -1328,12 +1351,12 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         log_pane.display = self._active_tab == "log"
         yield log_pane
         yield Static(LOG_NO_STREAM_MESSAGE, id="hub-log-empty")
-        artifacts_table = ArtifactsTable(id="hub-artifacts-table")
-        artifacts_table.display = self._active_tab == "artifacts"
-        yield artifacts_table
-        yield Static(id="artifacts-floor")
-        yield Static(ARTIFACTS_EMPTY_MESSAGE, id="hub-artifacts-empty")
-        yield Static(id="hub-artifacts-toast")
+        outputs_table = OutputsTable(id="hub-outputs-table")
+        outputs_table.display = self._active_tab == "outputs"
+        yield outputs_table
+        yield Static(id="outputs-floor")
+        yield Static(OUTPUTS_EMPTY_MESSAGE, id="hub-outputs-empty")
+        yield Static(id="hub-outputs-toast")
         detail_table = DetailTable(id="hub-detail-table")
         detail_table.display = self._active_tab == "detail"
         yield detail_table
@@ -1358,9 +1381,9 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         table = self.query_one(HierarchyPagingTable)
         table.cursor_type = "row"
         table.show_header = False
-        artifacts_table = self.query_one(ArtifactsTable)
-        artifacts_table.cursor_type = "row"
-        artifacts_table.show_header = False
+        outputs_table = self.query_one(OutputsTable)
+        outputs_table.cursor_type = "row"
+        outputs_table.show_header = False
         detail_table = self.query_one(DetailTable)
         detail_table.cursor_type = "row"
         detail_table.show_header = False
@@ -1377,11 +1400,11 @@ class NodeHubScreen(Screen, inherit_bindings=False):
 
     def _on_terminal_resized(self) -> None:
         self.refresh_hierarchy_width()
-        self.refresh_artifacts_width()
+        self.refresh_outputs_width()
         self.refresh_detail_width()
         self.refresh_cost_width()
         self._last_description = None
-        self._render_description(self._description_text)
+        self._render_description(self._description_item)
 
     def on_screen_suspend(self) -> None:
         if self._poll_timer is not None:
@@ -1522,18 +1545,17 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         hierarchy = HierarchyUseCase(store).execute(HierarchyInput(node=self._node_id))
         self._render_hierarchy(hierarchy.rows, hierarchy.multi_pass, initial)
         if node.type == "item":
-            self._render_artifacts(self._viewable_artifacts(store, node, hierarchy), initial)
-            self._render_description(node.description)
+            self._render_outputs(self._item_output_rows(store, node), initial)
+            self._render_description(node)
         else:
             self._render_detail(store, node, initial)
             if _is_human_step(node):
                 item = store.get_node(node.item)
-                self._render_description(item.description)
-                if "artifacts" in self._tab_order:
-                    artifacts = self._viewable_artifacts(store, item, hierarchy)
-                    self._render_artifacts(artifacts, initial)
+                self._render_description(item)
+                if "outputs" in self._tab_order:
+                    self._render_outputs(self._item_output_rows(store, item), initial)
                     if initial:
-                        self._select_focused_artifact(artifacts)
+                        self._select_focused_output()
         self._render_cost(store, node, initial)
         self.query_one(HubTabStrip).set_active(self._active_tab)
         self._apply_tab_visibility()
@@ -1582,21 +1604,24 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         }
         apply_widths(table, widths)
 
-    def refresh_artifacts_width(self) -> None:
-        table = self.query_one(ArtifactsTable)
-        if not self._last_artifacts:
+    def refresh_outputs_width(self) -> None:
+        table = self.query_one(OutputsTable)
+        if not self._last_outputs:
             return
-        layout = self._artifacts_layout(table, self._last_artifacts)
-        if layout.floor != self._artifacts_floor or layout.stacked != self._artifacts_stacked or layout.stacked:
-            self._render_artifacts(self._last_artifacts, initial=True)
+        layout = self._outputs_layout(table, self._last_outputs)
+        if layout.floor != self._outputs_floor or layout.stacked != self._outputs_stacked or layout.stacked:
+            self._render_output_lines(self._last_outputs, initial=True)
             self._apply_tab_visibility()
             return
         if layout.floor:
-            self.query_one("#artifacts-floor", Static).update(
-                Text(floor_message(layout, table, len(COLUMN_GRIDS["artifacts"])), style=COLOURS["dim"])
+            self.query_one("#outputs-floor", Static).update(
+                Text(floor_message(layout, table, len(COLUMN_GRIDS["outputs"])), style=COLOURS["dim"])
             )
             return
-        apply_widths(table, {"type": layout.atomic_widths["type"], "value": layout.flexible_width})
+        apply_widths(table, {
+            "name": layout.atomic_widths["name"], "value": layout.flexible_width,
+            "step": layout.atomic_widths["step"], "pass": layout.atomic_widths["pass"],
+        })
 
     def refresh_detail_width(self) -> None:
         table = self.query_one(DetailTable)
@@ -1763,17 +1788,22 @@ class NodeHubScreen(Screen, inherit_bindings=False):
                 pass
         self.update_pinned_ancestor()
 
-    def _artifacts_layout(self, table, artifacts):
-        atomic_values = {"type": [type_label(a) for a in artifacts]}
-        row_budget = screen_row_budget_for(table, len(COLUMN_GRIDS["artifacts"]))
-        return compute_layout(row_budget, [], atomic_values, indent=ARTIFACTS_CONTINUATION_INDENT)
+    def _outputs_layout(self, table, lines):
+        gap = "  "
+        atomic_values = {
+            "name": [_output_name_text(line) + gap for line in lines],
+            "step": [(line.step or "") + gap for line in lines],
+            "pass": [line.pass_text for line in lines],
+        }
+        row_budget = screen_row_budget_for(table, len(COLUMN_GRIDS["outputs"]))
+        return compute_layout(row_budget, [], atomic_values, indent=OUTPUTS_CONTINUATION_INDENT)
 
     def _detail_layout(self, table, fields):
         atomic_values = {"key": [_detail_field_label(key) for key, _value in fields]}
         row_budget = screen_row_budget_for(table, len(COLUMN_GRIDS["detail"]))
         return compute_layout(row_budget, [], atomic_values, indent=DETAIL_CONTINUATION_INDENT)
 
-    def _selected_artifact_index(self, table):
+    def _selected_output_index(self, table):
         if table.row_count == 0:
             return None
         try:
@@ -1783,77 +1813,96 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         value = cell_key.row_key.value
         return int(value) if value is not None else None
 
-    def _render_artifacts(self, artifacts, initial) -> None:
-        self._last_artifacts = artifacts
-        self._has_artifacts = bool(artifacts)
-        table = self.query_one(ArtifactsTable)
-        shape = tuple((a.type, a.value, a.label, a.kind) for a in artifacts)
-        layout = self._artifacts_layout(table, artifacts)
+    def _render_outputs(self, rows, initial) -> None:
+        self._output_rows = rows
+        self._render_output_lines(
+            output_lines(rows, self._expanded_outputs), initial
+        )
+
+    def _render_output_lines(self, lines, initial, select_key=None) -> None:
+        self._last_outputs = lines
+        self._has_outputs = bool(lines)
+        table = self.query_one(OutputsTable)
+        layout = self._outputs_layout(table, lines)
         if (
-            shape == self._last_artifacts_shape
+            tuple(lines) == self._last_outputs_shape
             and not initial
-            and not self._artifacts_needs_rebuild
-            and layout.stacked == self._artifacts_stacked
+            and not self._outputs_needs_rebuild
+            and layout.stacked == self._outputs_stacked
         ):
-            self._last_artifacts_shape = shape
-            self._update_artifact_cells(table, artifacts)
+            self._last_outputs_shape = tuple(lines)
+            self._update_output_cells(table, lines)
             return
 
-        self._artifacts_floor = bool(artifacts) and layout.floor
-        self._artifacts_stacked = layout.stacked
-        if self._artifacts_floor:
-            self._artifacts_needs_rebuild = True
-            self.query_one("#artifacts-floor", Static).update(
-                Text(floor_message(layout, table, len(COLUMN_GRIDS["artifacts"])), style=COLOURS["dim"])
+        self._outputs_floor = bool(lines) and layout.floor
+        self._outputs_stacked = layout.stacked
+        if self._outputs_floor:
+            self._outputs_needs_rebuild = True
+            self.query_one("#outputs-floor", Static).update(
+                Text(floor_message(layout, table, len(COLUMN_GRIDS["outputs"])), style=COLOURS["dim"])
             )
             return
-        self._artifacts_needs_rebuild = False
+        self._outputs_needs_rebuild = False
 
-        selected_index = self._selected_artifact_index(table)
+        selected_index = self._selected_output_index(table)
         table.clear(columns=True)
-        row_budget = render_screen_row_budget(table, layout, len(COLUMN_GRIDS["artifacts"]))
+        row_budget = render_screen_row_budget(table, layout, len(COLUMN_GRIDS["outputs"]))
         if layout.stacked:
             table.add_column(STACKED_COLUMN_KEY, width=row_budget, key=STACKED_COLUMN_KEY)
         else:
-            widths = {"type": layout.atomic_widths["type"], "value": layout.flexible_width}
-            for key in COLUMN_GRIDS["artifacts"]:
+            widths = {
+                "name": layout.atomic_widths["name"], "value": layout.flexible_width,
+                "step": layout.atomic_widths["step"], "pass": layout.atomic_widths["pass"],
+            }
+            for key in COLUMN_GRIDS["outputs"]:
                 table.add_column(key, width=widths[key], key=key)
 
-        for index, artifact in enumerate(artifacts):
-            table.add_row(
-                *artifact_row_cells(artifact, layout, row_budget), height=None, key=str(index)
-            )
+        for index, line in enumerate(lines):
+            table.add_row(*output_row_cells(line, layout, row_budget), height=None, key=str(index))
 
-        self._last_artifacts_shape = shape
-        if artifacts:
-            has_selection = selected_index is not None and selected_index < len(artifacts)
+        self._last_outputs_shape = tuple(lines)
+        if lines:
+            if select_key is not None:
+                selected_index = next(
+                    (i for i, line in enumerate(lines) if line.row_key == select_key), None
+                )
+            has_selection = selected_index is not None and selected_index < len(lines)
             table.move_cursor(row=selected_index if has_selection else 0)
 
-    def _update_artifact_cells(self, table, artifacts) -> None:
-        layout = self._artifacts_layout(table, artifacts)
-        row_budget = render_screen_row_budget(table, layout, len(COLUMN_GRIDS["artifacts"]))
-        for index, artifact in enumerate(artifacts):
-            cells = artifact_row_cells(artifact, layout, row_budget)
+    def toggle_output_history(self) -> None:
+        table = self.query_one(OutputsTable)
+        index = self._selected_output_index(table)
+        if index is None or index >= len(self._last_outputs):
+            return
+        line = self._last_outputs[index]
+        owner = next((r for r in self._output_rows if r.key == line.row_key), None)
+        if owner is None or not owner.history:
+            return
+        self._expanded_outputs.symmetric_difference_update({line.row_key})
+        self._render_output_lines(
+            output_lines(self._output_rows, self._expanded_outputs), initial=True,
+            select_key=line.row_key,
+        )
+
+    def _update_output_cells(self, table, lines) -> None:
+        layout = self._outputs_layout(table, lines)
+        row_budget = render_screen_row_budget(table, layout, len(COLUMN_GRIDS["outputs"]))
+        for index, line in enumerate(lines):
+            cells = output_row_cells(line, layout, row_budget)
             if layout.stacked:
                 table.update_cell(str(index), STACKED_COLUMN_KEY, cells[0])
                 continue
-            for key, value in zip(COLUMN_GRIDS["artifacts"], cells):
+            for key, value in zip(COLUMN_GRIDS["outputs"], cells):
                 table.update_cell(str(index), key, value)
 
-    def _viewable_artifacts(self, store, item, hierarchy):
-        outputs = ItemOutputs(store, self._flow_service).for_reader(item)
-        promoted = outputs.by_step()
-        step_artifacts = [
-            (step_id, [e.as_artifact() for e in entries])
-            for step_id, entries in promoted.items()
-        ]
-        return item_viewable_artifacts(item, step_artifacts)
+    def _item_output_rows(self, store, item):
+        return ItemOutputRows(store, self._flow_service).for_item(item)
 
-    def _select_focused_artifact(self, artifacts):
+    def _select_focused_output(self):
         name = self._focus.name
-        for index, artifact in enumerate(artifacts):
-            if artifact.type == name or artifact.type.endswith("\u00b7 %s" % name):
-                self.query_one(ArtifactsTable).move_cursor(row=index)
+        for index, line in enumerate(self._last_outputs):
+            if line.name == name and not line.is_history:
+                self.query_one(OutputsTable).move_cursor(row=index)
                 return
 
     def _fields_for(self, store, step, flow_service):
@@ -2016,19 +2065,48 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         self._render_cost_pane(rows, initial=True)
         self._apply_tab_visibility()
 
-    def _render_description(self, description) -> None:
-        self._description_text = description
+    def _description_block(self, item):
+        context = ItemContextReader(self._container.store).read(item)
+        rows = []
+        if context.repo:
+            rows.append(("repo", context.repo))
+        if context.workflow:
+            rows.append(("workflow", context.workflow))
+        for goal_id, title in context.goals:
+            rows.append(("goal", "%s (%s)" % (title, goal_id)))
+        for ref_id, title in context.resolves:
+            rows.append(("resolves", "%s (%s)" % (title, ref_id) if title else "%s (not found)" % ref_id))
+        if context.note:
+            rows.append(("note", context.note))
+        return tuple(rows)
+
+    def _render_description(self, item) -> None:
+        self._description_item = item
+        if item is None:
+            return
+        description = item.description
+        block = self._description_block(item)
         titles = resolve_titles(self._container.store, description)
-        self._has_description = bool(description)
+        self._has_description = bool(description) or bool(block)
         pane = self.query_one(DescriptionPane)
         width = pane_text_width(pane)
         if not width:
             return
-        key = (description, tuple(sorted(titles.items())), width)
+        key = (description, block, tuple(sorted(titles.items())), width)
         if key == self._last_description:
             return
         self._last_description = key
         pane.clear()
+        if block:
+            label_width = max(len(label) for label, _value in block)
+            for label, value in block:
+                pane.write(
+                    Text("%s  %s" % (label.ljust(label_width), value), style=COLOURS["dim"]),
+                    width=width,
+                )
+            if description:
+                pane.write(Text(""), width=width)
+                pane.write(Text("─" * width, style=COLOURS["dim"]), width=width)
         if description:
             pane.write(prose_text(description, titles), width=width)
 
@@ -2071,20 +2149,20 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         log_active = self._active_tab == "log"
         self.query_one(LogPane).display = log_active and self._log_mode != "no-log"
         self.query_one("#hub-log-empty", Static).display = log_active and self._log_mode == "no-log"
-        artifacts_active = self._active_tab == "artifacts"
-        showing_artifacts_toast = artifacts_active and self._toast_active and self._toast_tab == "artifacts"
-        showing_artifacts_floor = (
-            artifacts_active and self._artifacts_floor and not showing_artifacts_toast
+        outputs_active = self._active_tab == "outputs"
+        showing_outputs_toast = outputs_active and self._toast_active and self._toast_tab == "outputs"
+        showing_outputs_floor = (
+            outputs_active and self._outputs_floor and not showing_outputs_toast
         )
-        self.query_one(ArtifactsTable).display = (
-            artifacts_active and self._has_artifacts
-            and not showing_artifacts_toast and not showing_artifacts_floor
+        self.query_one(OutputsTable).display = (
+            outputs_active and self._has_outputs
+            and not showing_outputs_toast and not showing_outputs_floor
         )
-        self.query_one("#artifacts-floor", Static).display = showing_artifacts_floor
-        self.query_one("#hub-artifacts-empty", Static).display = (
-            artifacts_active and not self._has_artifacts and not showing_artifacts_toast
+        self.query_one("#outputs-floor", Static).display = showing_outputs_floor
+        self.query_one("#hub-outputs-empty", Static).display = (
+            outputs_active and not self._has_outputs and not showing_outputs_toast
         )
-        self.query_one("#hub-artifacts-toast", Static).display = showing_artifacts_toast
+        self.query_one("#hub-outputs-toast", Static).display = showing_outputs_toast
         detail_active = self._active_tab == "detail"
         showing_detail_toast = detail_active and self._toast_active and self._toast_tab == "detail"
         showing_detail_floor = detail_active and self._detail_floor and not showing_detail_toast
@@ -2113,12 +2191,12 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         elif self._active_tab == "log" and self._log_mode != "no-log":
             self.set_focus(self.query_one(LogPane))
         elif (
-            self._active_tab == "artifacts"
-            and self._has_artifacts
-            and not (self._toast_active and self._toast_tab == "artifacts")
-            and not self._artifacts_floor
+            self._active_tab == "outputs"
+            and self._has_outputs
+            and not (self._toast_active and self._toast_tab == "outputs")
+            and not self._outputs_floor
         ):
-            self.set_focus(self.query_one(ArtifactsTable))
+            self.set_focus(self.query_one(OutputsTable))
         elif (
             self._active_tab == "detail"
             and not (self._toast_active and self._toast_tab == "detail")
@@ -2176,8 +2254,8 @@ class NodeHubScreen(Screen, inherit_bindings=False):
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         event.stop()
-        if event.data_table.id == "hub-artifacts-table":
-            self._open_selected_artifact(event.row_key.value)
+        if event.data_table.id == "hub-outputs-table":
+            self._open_selected_output(event.row_key.value)
             return
         if event.data_table.id == "hub-detail-table":
             self._open_selected_detail_field(event.row_key.value)
@@ -2187,22 +2265,22 @@ class NodeHubScreen(Screen, inherit_bindings=False):
             return
         self.switch_at(row_id)
 
-    def _open_selected_artifact(self, key_value) -> None:
+    def _open_selected_output(self, key_value) -> None:
         if key_value is None:
             return
         index = int(key_value)
-        if index >= len(self._last_artifacts):
+        if index >= len(self._last_outputs):
             return
-        artifact = self._last_artifacts[index]
+        artifact = self._last_outputs[index].as_artifact()
         kind = artifact.kind or "text"
         if kind in ("url", "filepath"):
-            self._open_external_artifact(kind, artifact.value)
+            self._open_external_output(kind, artifact.value)
         elif kind == "list":
             self.app.push_screen(ListArtifactViewerScreen(artifact, self._node_id))
         else:
             self.app.push_screen(
                 TextArtifactViewerScreen(
-                    artifact, self._node_id, index + 1, len(self._last_artifacts)
+                    artifact, self._node_id, index + 1, len(self._last_outputs)
                 )
             )
 
@@ -2227,15 +2305,15 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         result = use_case.execute(editor_input)
         self._show_toast(result.success, result.message, "editor", path, tab="detail")
 
-    def _open_external_artifact(self, kind, value) -> None:
+    def _open_external_output(self, kind, value) -> None:
         use_case = OpenArtifactUseCase(self._container.fs, self._container.launcher)
         result = use_case.execute(OpenArtifactInput(kind=kind, value=value))
-        self._show_toast(result.success, result.message, kind, value, tab="artifacts")
+        self._show_toast(result.success, result.message, kind, value, tab="outputs")
 
     def _toast_widget(self):
-        return self.query_one("#hub-detail-toast" if self._toast_tab == "detail" else "#hub-artifacts-toast", Static)
+        return self.query_one("#hub-detail-toast" if self._toast_tab == "detail" else "#hub-outputs-toast", Static)
 
-    def _show_toast(self, success, message, kind, value, tab="artifacts") -> None:
+    def _show_toast(self, success, message, kind, value, tab="outputs") -> None:
         self._toast_tab = tab
         self._toast_widget().update(toast_text(success, message, kind, value, tab=tab))
         self._toast_active = True
@@ -2258,5 +2336,5 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         self._toast_tab = None
         self._toast_timer = None
         self._apply_tab_visibility()
-        if self._active_tab in ("artifacts", "detail"):
+        if self._active_tab in ("outputs", "detail"):
             self._focus_active_tab()

@@ -2,7 +2,7 @@ import unittest
 
 from lightcycle.application.work.hierarchy import HierarchyInput, HierarchyUseCase
 from lightcycle.domain.runs import pass_number
-from lightcycle.domain.work import item_viewable_artifacts, row_bucket, viewable_artifacts
+from lightcycle.domain.work import row_bucket
 from lightcycle.domain.work.item import Item
 from lightcycle.domain.work.step import Step
 from tests.support.fake_fs import flow_from_metas
@@ -178,41 +178,3 @@ class TestRowBucket(unittest.TestCase):
         item = s.create_item("item", "a description")
         s.create_step(step="poll-ci", role="engine", parent=item)
         self.assertEqual(row_bucket(s.get_node(item), FLOW), "queued")
-
-
-class TestViewableArtifacts(unittest.TestCase):
-    def test_internal_artifacts_are_excluded(self):
-        s = FakeStore()
-        item = s.create_item("item", "a description")
-        s.add_artifact(item, "spec", "specs/x.md")
-        s.add_artifact(item, "reflection", "text", internal=True)
-        result = viewable_artifacts(s.get_node(item))
-        self.assertEqual([a.type for a in result], ["spec"])
-
-    def test_no_artifacts_is_an_empty_list(self):
-        s = FakeStore()
-        item = s.create_item("item", "a description")
-        self.assertEqual(viewable_artifacts(s.get_node(item)), [])
-
-
-class TestItemViewableArtifacts(unittest.TestCase):
-    def test_step_artifacts_follow_the_items_own_labelled_by_step_id(self):
-        s = FakeStore()
-        item = s.create_item("item", "a description")
-        s.add_artifact(item, "spec", "specs/x.md")
-        step = s.create_step(step="audit", role="agent", parent=item)
-        s.add_artifact(step, "findings", "the digest")
-        s.add_artifact(step, "reflection", "text", internal=True)
-        result = item_viewable_artifacts(s.get_node(item), [(step, s.item_artifacts(step))])
-        self.assertEqual(
-            [(a.type, a.value) for a in result],
-            [("spec", "specs/x.md"), ("%s · findings" % step, "the digest")],
-        )
-
-    def test_no_step_artifacts_matches_the_items_own(self):
-        s = FakeStore()
-        item = s.create_item("item", "a description")
-        s.add_artifact(item, "spec", "specs/x.md")
-        step = s.create_step(step="audit", role="agent", parent=item)
-        result = item_viewable_artifacts(s.get_node(item), [(step, s.item_artifacts(step))])
-        self.assertEqual(result, viewable_artifacts(s.get_node(item)))

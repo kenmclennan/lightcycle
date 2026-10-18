@@ -733,9 +733,9 @@ def _scroll_back_to_ancestor(ctx):
         ctx["session"].press("up")
 
 
-@when("a is pressed")
-def _a_pressed(ctx):
-    ctx["session"].press("a")
+@when("o is pressed")
+def _o_pressed(ctx):
+    ctx["session"].press("o")
 
 
 @when("l is pressed")
@@ -1044,15 +1044,15 @@ def _pinned_ancestor_shows_state_icon(ctx):
     assert found.style.color.get_truecolor().hex.lower() == COLOURS[glyph.colour].lower()
 
 
-@then("its Artifacts tab opens directly, skipping its own contextual default")
-def _artifacts_tab_opens_directly(ctx):
+@then("its Outputs tab opens directly, skipping its own contextual default")
+def _outputs_tab_opens_directly(ctx):
     screen = ctx["session"].app.screen
     assert isinstance(screen, NodeHubScreen)
-    assert screen._active_tab == "artifacts"
+    assert screen._active_tab == "outputs"
 
 
-@then("nothing happens, since there is no Artifacts tab to open")
-def _nothing_happens_no_artifacts_tab(ctx):
+@then("nothing happens, since there is no Outputs tab to open")
+def _nothing_happens_no_outputs_tab(ctx):
     assert ctx["session"].app.screen is ctx["hub_screen"]
 
 

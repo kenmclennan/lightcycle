@@ -36,7 +36,7 @@ class TestNodeHubFooterPoolTransition(unittest.TestCase):
         item = store.create_item("Item", "a description")
         session = launch(make_test_container(store=store, **kwargs), now=now)
         self.addCleanup(session.close)
-        screen = NodeHubScreen(session.app.container, item, session.app._now, initial_tab="artifacts")
+        screen = NodeHubScreen(session.app.container, item, session.app._now, initial_tab="outputs")
         session.run(lambda: session.app.push_screen(screen))
         session.pause()
         session.pause()
@@ -91,7 +91,7 @@ class TestNodeHubFooterPoolTransition(unittest.TestCase):
 
         session.press("p")
 
-        screen = NodeHubScreen(session.app.container, item, session.app._now, initial_tab="artifacts")
+        screen = NodeHubScreen(session.app.container, item, session.app._now, initial_tab="outputs")
         session.run(lambda: session.app.push_screen(screen))
         session.pause()
         session.pause()
@@ -147,7 +147,7 @@ class TestRefreshStatusBarReadsOnce(unittest.TestCase):
         session = launch(make_test_container(store=store, lock=FakeLock(running=True)))
         self.addCleanup(session.close)
 
-        hub = NodeHubScreen(session.app.container, item, session.app._now, initial_tab="artifacts")
+        hub = NodeHubScreen(session.app.container, item, session.app._now, initial_tab="outputs")
         session.run(lambda: session.app.push_screen(hub))
         session.pause()
         session.pause()

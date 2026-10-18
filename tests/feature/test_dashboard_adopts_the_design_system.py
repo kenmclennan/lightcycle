@@ -125,7 +125,7 @@ def _open_hierarchy_tab(ctx):
     ctx["floor_widget_id"] = "#hierarchy-floor"
 
 
-def _open_artifacts_tab(ctx):
+def _open_outputs_tab(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
     long_type = "A" * 69
@@ -135,19 +135,19 @@ def _open_artifacts_tab(ctx):
     ctx["session"] = session
     session.run(
         lambda: session.app.push_screen(
-            NodeHubScreen(session.app.container, item, session.app._now, initial_tab="artifacts")
+            NodeHubScreen(session.app.container, item, session.app._now, initial_tab="outputs")
         )
     )
     session.pause()
     session.pause()
-    ctx["floor_widget_id"] = "#artifacts-floor"
+    ctx["floor_widget_id"] = "#outputs-floor"
 
 
 _FLOOR_SCREEN_SETUP = {
     "Priority List": _open_priority_list,
     "Backlog": _open_backlog,
     "Workflow tab": _open_hierarchy_tab,
-    "Artifacts tab": _open_artifacts_tab,
+    "Outputs tab": _open_outputs_tab,
 }
 
 

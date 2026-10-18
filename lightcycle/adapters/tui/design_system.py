@@ -65,7 +65,7 @@ COLUMN_GRIDS = {
     "backlog": ("cursor", "id", "project", "title"),
     "done": ("cursor", "id", "project", "title", "cost", "time"),
     "workflow": ("icon", "id", "title", "turns", "time", "cost"),
-    "artifacts": ("type", "value"),
+    "outputs": ("name", "value", "step", "pass"),
     "detail": ("key", "value"),
     "report": ("key", "value"),
     "goal-items": ("cursor", "icon", "id", "title", "step"),

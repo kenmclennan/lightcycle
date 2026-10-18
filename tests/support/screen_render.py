@@ -218,7 +218,7 @@ def _stacked_hierarchy_store():
     return store, item, step
 
 
-def _stacked_artifacts_store():
+def _stacked_outputs_store():
     store = DemoStore()
     item = store.item("LC-45", "Lightcycle trend audit", project="lightcycle")
     store.add_artifact(
@@ -921,14 +921,14 @@ def _hub_log_finished(size):
     return _open_hub(_launch(store, size=size, fs=fs, workers=workers), coding, tab="log")
 
 
-def _hub_artifacts(size):
+def _hub_outputs(size):
     store, scan, _coding = _populated_store()
-    return _open_hub(_launch(store, size=size), scan, tab="artifacts")
+    return _open_hub(_launch(store, size=size), scan, tab="outputs")
 
 
-def _hub_artifacts_stacked(size):
-    store, item = _stacked_artifacts_store()
-    return _open_hub(_launch(store, size=size), item, tab="artifacts")
+def _hub_outputs_stacked(size):
+    store, item = _stacked_outputs_store()
+    return _open_hub(_launch(store, size=size), item, tab="outputs")
 
 
 FINDINGS_TEXT = (
@@ -956,10 +956,10 @@ def _artifact_viewer_store():
 
 
 def _open_artifact_at(session, item, tab_row):
-    from lightcycle.adapters.tui.hub import ArtifactsTable
+    from lightcycle.adapters.tui.hub import OutputsTable
 
-    session = _open_hub(session, item, tab="artifacts")
-    table = session.app.screen.query_one(ArtifactsTable)
+    session = _open_hub(session, item, tab="outputs")
+    table = session.app.screen.query_one(OutputsTable)
     session.run(lambda: table.move_cursor(row=tab_row))
     session.press("enter")
     session.pause()
@@ -1217,6 +1217,46 @@ def _hub_hierarchy_scrolled(size):
 def _hub_claude_unavailable(size):
     store, scan, _coding = _populated_store()
     return _open_hub(_launch(store, breaker_open=True, size=size), scan)
+
+
+def _reworked_outputs_store():
+    from tests.support.fake_fs import FakeFs
+
+    store = DemoStore(now=lambda: _at(2))
+    item = store.item("LC-45", "Lightcycle trend audit", project="lightcycle", workflow=WORKFLOW)
+    first_pass = store.open_pass(item)
+    spec_1 = store.step("LC-45.1", step="spec-writer", role="agent", parent=item)
+    store.set_step_pass(spec_1, first_pass)
+    store.add_artifact(spec_1, "spec", "lightcycle/LC-45-trend-audit.md")
+    store.set_pr(store.open_run(item, first_pass, "spec"), "https://github.com/kenmclennan/lightcycle-specs/pull/61")
+    second_pass = store.open_pass(item)
+    spec_2 = store.step("LC-45.2", step="spec-writer", role="agent", parent=item)
+    store.set_step_pass(spec_2, second_pass)
+    store.add_artifact(spec_2, "spec", "lightcycle/LC-45-trend-audit-v2.md")
+    store.set_pr(store.open_run(item, second_pass, "code"), "https://github.com/kenmclennan/lightcycle/pull/277")
+    fs = FakeFs(metas={"spec-writer": {"model": "sonnet", "step": "spec-writer", "produces": {"spec": "optional"}}})
+    return store, item, fs
+
+
+def _hub_outputs_history(size):
+    store, item, fs = _reworked_outputs_store()
+    session = _open_hub(_launch(store, size=size, fs=fs), item, tab="outputs")
+    session.press("space")
+    session.pause()
+    return session
+
+
+def _hub_description_context(size):
+    store = DemoStore(now=lambda: _at(2))
+    backlog = store.item("LC-12", "Header grows without bound")
+    item = store.item("LC-45", "Lightcycle trend audit", project="lightcycle", workflow=WORKFLOW)
+    store.edit_node(item, description="Audit the closed items for recurring friction.")
+    store.add_artifact(item, "repo", "kenmclennan/lightcycle")
+    store.add_artifact(item, "resolves", backlog, internal=True)
+    goal = store.create_goal("Cut review rework")
+    store.link_goal_item(goal, item)
+    store.complete_node(item, "merged", disposition="completed", note="Shipped in lightcycle#277.")
+    return _open_hub(_launch(store, size=size), item, tab="description")
 
 
 def _hub_long_description(size):
@@ -1553,8 +1593,10 @@ SCREENS = {
     "hub#workflow-stacked-time": _hub_hierarchy_stacked_time,
     "hub#active-log": _hub_active_log,
     "hub#log-finished": _hub_log_finished,
-    "hub#artifacts": _hub_artifacts,
-    "hub#artifacts-stacked": _hub_artifacts_stacked,
+    "hub#outputs": _hub_outputs,
+    "hub#outputs-stacked": _hub_outputs_stacked,
+    "hub#outputs-history": _hub_outputs_history,
+    "hub#description-context": _hub_description_context,
     "artifact-viewer#text": _artifact_viewer_text,
     "artifact-viewer#list": _artifact_viewer_list,
     "artifact-viewer#url-toast": _artifact_viewer_url_toast,

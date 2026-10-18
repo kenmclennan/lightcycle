@@ -73,7 +73,7 @@ class TestPriorityListScreenScrolling(unittest.TestCase):
 
     def _open_list_artifact(self, store, item_id, size=(80, 24)):
         session = self._launch(store, size=size)
-        screen = NodeHubScreen(session.app.container, item_id, session.app._now, initial_tab="artifacts")
+        screen = NodeHubScreen(session.app.container, item_id, session.app._now, initial_tab="outputs")
         session.run(lambda: session.app.push_screen(screen))
         session.pause()
         session.pause()

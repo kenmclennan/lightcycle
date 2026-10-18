@@ -1,7 +1,7 @@
 Feature: The node hub
   Opening any node - item or step - lands on the hub: a fixed header above a
   tab strip that is type-aware, since an item and a step share no tabs. An
-  item's strip is Description, Workflow, Artifacts, and Cost; a step's is
+  item's strip is Description, Outputs, Workflow, and Cost; a step's is
   Detail, Workflow, Log, and Cost, with a human step's strip also opening with Description. Landing follows what the node is: an item
   always lands on Description, whatever its status; a step lands on Log while
   its worker is running, and on Detail otherwise, except a human step not yet done, which lands on Description - the Workflow tab is never a
@@ -15,7 +15,7 @@ Feature: The node hub
   always returns to wherever it was opened from - the priority list or the
   backlog - at the same position, since tree navigation never grows the
   screen stack. Each tab's own content beyond this shared shell is specified
-  in its own feature file - Description, Workflow, Detail, Log, Artifacts, and
+  in its own feature file - Description, Outputs, Workflow, Detail, Log, and
   Cost alike.
 
   Scenario Outline: Confirming a selected row opens the step it reports, not the item
@@ -84,15 +84,15 @@ Feature: The node hub
       | given                                                                |
       | an active item at step "build" claimed 14 minutes ago, its hub open |
 
-  Scenario: An item's tab strip is Description, Workflow, Artifacts, and Cost, never Detail or Log
+  Scenario: An item's tab strip is Description, Outputs, Workflow, and Cost, never Detail or Log
     Given an item, its hub open
-    Then its tab strip shows exactly "Description", "Workflow", "Artifacts", and "Cost", in that order
+    Then its tab strip shows exactly "Description", "Outputs", "Workflow", and "Cost", in that order
     And no "Detail" tab and no "Log" tab is shown
 
-  Scenario: A step's tab strip is Detail, Workflow, Log, and Cost, never Description or Artifacts
+  Scenario: A step's tab strip is Detail, Workflow, Log, and Cost, never Description or Outputs
     Given a step, its hub open
     Then its tab strip shows exactly "Detail", "Workflow", "Log", and "Cost", in that order
-    And no "Description" tab and no "Artifacts" tab is shown
+    And no "Description" tab and no "Outputs" tab is shown
 
   Scenario Outline: An item's hub lands on the Description tab, whatever its status
     Given an item with the status "<status>", its hub open
@@ -125,9 +125,9 @@ Feature: The node hub
 
     Examples:
       | from        | to          |
-      | Description | Workflow    |
-      | Workflow    | Artifacts   |
-      | Artifacts   | Cost        |
+      | Description | Outputs     |
+      | Outputs     | Workflow    |
+      | Workflow    | Cost        |
       | Cost        | Description |
 
   Scenario Outline: [ cycles backward through an item's four tabs, in reverse
@@ -138,9 +138,9 @@ Feature: The node hub
     Examples:
       | from        | to          |
       | Description | Cost        |
-      | Cost        | Artifacts   |
-      | Artifacts   | Workflow    |
-      | Workflow    | Description |
+      | Cost        | Workflow    |
+      | Workflow    | Outputs     |
+      | Outputs     | Description |
 
   Scenario Outline: ] cycles forward through a step's four tabs, wrapping back to Detail
     Given a step's hub is open, on the "<from>" tab
@@ -175,7 +175,7 @@ Feature: The node hub
     Examples:
       | tab         |
       | Workflow    |
-      | Artifacts   |
+      | Outputs     |
       | Description |
       | Cost        |
 
@@ -203,8 +203,8 @@ Feature: The node hub
       | tab         | key   |
       | Workflow    | Enter |
       | Workflow    | →     |
-      | Artifacts   | Enter |
-      | Artifacts   | →     |
+      | Outputs     | Enter |
+      | Outputs     | →     |
       | Description | Enter |
       | Description | →     |
       | Cost        | Enter |
@@ -261,6 +261,7 @@ Feature: The node hub
   Scenario: Cycling into the Workflow tab still focuses the table, not the escalation panel
     Given an item whose current step is escalated, needing rework, its hub open
     When ] is pressed
+    And ] is pressed
     Then the hierarchy table has focus, not the escalation panel
 
   Scenario: Down moves the hierarchy selection when the escalation panel is shown
@@ -350,8 +351,8 @@ Feature: The node hub
       | tab         | key |
       | Workflow    | Esc |
       | Workflow    | ←   |
-      | Artifacts   | Esc |
-      | Artifacts   | ←   |
+      | Outputs     | Esc |
+      | Outputs     | ←   |
       | Description | Esc |
       | Description | ←   |
       | Cost        | Esc |

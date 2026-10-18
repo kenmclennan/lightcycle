@@ -546,7 +546,7 @@ class TestActiveGroup(unittest.TestCase):
         session.press("]")
 
         self.assertIs(session.app.screen, hub)
-        self.assertEqual(hub._active_tab, "workflow")
+        self.assertEqual(hub._active_tab, "outputs")
 
         session.press("[")
 
