@@ -102,6 +102,9 @@ OUTPUTS_EMPTY_MESSAGE = "This item has no outputs yet."
 DESCRIPTION_EMPTY_MESSAGE = "This item has no description to show."
 DETAIL_EMPTY_MESSAGE = "This step has nothing to show here yet."
 CONTEXT_EMPTY_MESSAGE = "This step has no context to show."
+CONTEXT_RECONSTRUCTED_NOTE = (
+    "Reconstructed from the item's current state; this step closed before inputs were frozen at claim."
+)
 DETAIL_BLOCK_THRESHOLD = 80
 TOAST_DURATION_SECONDS = 2.0
 TOAST_SUCCESS_PREFIX = "↗ "
@@ -1334,6 +1337,11 @@ class NodeHubScreen(Screen, inherit_bindings=False):
     #hub-context {{
         display: none;
     }}
+    #hub-context-note {{
+        height: auto;
+        display: none;
+        color: {COLOURS["dim"]};
+    }}
     #hub-escalation {{
         height: auto;
         display: none;
@@ -1427,6 +1435,7 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         self._context_needs_rebuild = False
         self._has_context = False
         self._context_inputs_live = False
+        self._context_reconstructed = False
         self._landed = False
         self._cost_whole_empty_message = None
         self._last_cost_shape = None
@@ -1470,6 +1479,8 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         yield Static(id="hub-detail-toast")
         context_table = ContextTable(id="hub-context-table")
         context_table.display = self._active_tab == "context"
+        context_note = Static(CONTEXT_RECONSTRUCTED_NOTE, id="hub-context-note")
+        yield context_note
         yield context_table
         yield Static(id="context-floor")
         yield Static(CONTEXT_EMPTY_MESSAGE, id="hub-context-empty")
@@ -2134,6 +2145,7 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         self._last_context_rows = list(view.rows)
         self._has_context = any(r.value is not None or r.section != SECTION_INPUTS for r in view.rows)
         self._context_inputs_live = view.inputs_live
+        self._context_reconstructed = view.reconstructed
         self._paint_context(initial)
 
     def refresh_context_width(self) -> None:
@@ -2372,6 +2384,10 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         self.query_one(ContextTable).display = (
             context_active and not showing_context_toast and not showing_context_floor
             and not showing_context_empty
+        )
+        self.query_one("#hub-context-note", Static).display = (
+            context_active and self._context_reconstructed and not showing_context_toast
+            and not showing_context_floor and not showing_context_empty
         )
         self.query_one("#context-floor", Static).display = showing_context_floor
         self.query_one("#hub-context-empty", Static).display = showing_context_empty

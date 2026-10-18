@@ -1152,6 +1152,23 @@ def _hub_step_done_context(size):
     return _open_hub(session, audit)
 
 
+def _hub_step_done_context_reconstructed(size):
+    store = DemoStore(now=lambda: _at(30))
+    item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
+    pid = store.open_pass(item)
+    audit = store.step("LC-143.3.2", step="audit", role="agent", parent=item)
+    store.set_step_pass(audit, pid)
+    store.claim_ready("agent")
+    store.add_artifact(audit, "findings", CONTEXT_FINDINGS)
+    store.set_report(audit, "Audit found one issue.")
+    store.complete_node(audit, "done")
+    session = _launch(store, size=size)
+    container = session.app._container
+    flow = _PresentsFlowService(container.flow_service(), "audit", None, owner="agent")
+    container.flow_service = lambda: flow
+    return _open_hub(session, audit)
+
+
 def _hub_escalation(size):
     store, item, fs = _escalated_step_store()
     return _open_hub(_launch(store, size=size, fs=fs), item)
@@ -1682,6 +1699,7 @@ SCREENS = {
     "hub#gate-merge": _hub_gate_merge,
     "hub#gate-merge-missing-input": _hub_gate_merge_missing_input,
     "hub#step-done-context": _hub_step_done_context,
+    "hub#step-done-context-reconstructed": _hub_step_done_context_reconstructed,
     "hub#escalation": _hub_escalation,
     "hub#escalated-long-reason": _hub_escalated_long_reason,
     "hub#step-node": _hub_step_node,

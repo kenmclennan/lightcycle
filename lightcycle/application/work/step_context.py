@@ -3,6 +3,7 @@ from typing import Optional, Tuple
 
 from lightcycle.application.work.item_outputs import ItemOutputs
 from lightcycle.application.work.step_inputs import StepInputs
+from lightcycle.domain.work.state import State
 from lightcycle.ports.store import NodeNotFoundError
 
 SECTION_INPUTS = "inputs"
@@ -27,6 +28,7 @@ class ContextRow:
 class StepContextView:
     rows: Tuple[ContextRow, ...]
     inputs_live: bool = False
+    reconstructed: bool = False
 
 
 def _entry_key(entry):
@@ -51,7 +53,11 @@ class StepContext:
         rows = list(self._input_rows(body))
         rows.extend(self._output_rows(step))
         rows.extend(self._record_rows(step))
-        return StepContextView(rows=tuple(rows), inputs_live=bool(body) and body.get("frozen") is False)
+        unfrozen = bool(body) and body.get("frozen") is False
+        closed = step.state == State.DONE
+        return StepContextView(
+            rows=tuple(rows), inputs_live=unfrozen and not closed, reconstructed=unfrozen and closed,
+        )
 
     def _input_rows(self, body):
         if body is None:
