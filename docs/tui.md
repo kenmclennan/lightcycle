@@ -56,7 +56,7 @@ Selecting `pr` opens it in the browser and `worktree` in the configured editor (
 
 ## What Context carries
 
-Context is one table with three sections. **Inputs** are the step's frozen inputs (key, source step or item, pass, value; titled `INPUTS (live, not yet frozen)` while the step is still open). **Outputs** are what this step produced, led by its `report`. **Records** are what it left behind that is not an output: its reflection and the guidance it was delivered, skipped and cited. Selecting a row opens a `url` in the browser, a `filepath` in the editor, and text or a list inline.
+Context is one table with three sections. **Inputs** are the step's frozen inputs (titled `INPUTS (live, not yet frozen)` while the step is still open). **Outputs** are what this step produced, led by its `report`. **Records** are what it left behind that is not an output: its reflection and the guidance it was delivered, skipped and cited. Context has two columns, key and value. A pass-scoped row shows its pass in the key, as `report (p1)`. Values render as prose, the way the Detail tab renders a block field: paragraphs, lists and headings are kept, `[[ID]]` references resolve to titles, and a bare URL or `[label](url)` is a clickable link. Selecting a row opens a `url` in the browser and a `filepath` in the editor; text and list rows have nothing to open because their value is already readable in place.
 
 ## The Workflow tab
 

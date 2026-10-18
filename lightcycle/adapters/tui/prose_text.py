@@ -1,8 +1,9 @@
+from rich.style import Style
 from rich.text import Text
 
 from lightcycle.adapters.tui.design_system import COLOURS, HEADING_STYLE
 from lightcycle.application.inspect.resolve_references import ResolveReferencesUseCase
-from lightcycle.domain.prose import HEADING, Reference, parse_prose, reference_ids
+from lightcycle.domain.prose import HEADING, Link, Reference, parse_prose, reference_ids
 
 
 def resolve_titles(store, text):
@@ -22,6 +23,9 @@ def prose_text(text, titles, style=COLOURS["text"]):
         heading = line.kind == HEADING
         line_style = HEADING_STYLE if heading else style
         for segment in line.segments:
+            if isinstance(segment, Link):
+                result.append(segment.text, style=Style(color=COLOURS["cyan"], link=segment.url))
+                continue
             if not isinstance(segment, Reference):
                 result.append(segment.text, style=line_style)
                 continue

@@ -6,7 +6,7 @@ from lightcycle.adapters.log_parser import MAX_LOG_LINE_CHARS, LogLineParser
 from lightcycle.adapters.tui.app import BacklogTable, DoneTable, PriorityTable
 from lightcycle.adapters.tui.hub import CONTEXT_EMPTY_MESSAGE, detail_value_is_block
 from tests.support.screen_render import (
-    CONTEXT_FINDINGS, CONTEXT_REFLECTION, CONTEXT_SPEC_REPORT, DEFAULT_SIZE, GATE_DESCRIPTION,
+    CONTEXT_REFLECTION, CONTEXT_SPEC_REPORT, DEFAULT_SIZE, GATE_DESCRIPTION,
     GATE_FINDINGS_LINES, MERGE_PR, MERGE_REPORT, SCREENS, UNRENDERABLE, _LOG_EXCERPT,
     _hub_gate_merge, _plain_row, render,
 )
@@ -362,15 +362,17 @@ def test_a_frozen_closed_step_shows_no_reconstructed_header():
 
 
 def test_a_done_agent_step_opens_on_context_with_inputs_outputs_and_records():
-    frame = render("hub#step-done-context", size=(100, 30))
+    frame = render("hub#step-done-context", size=(100, 45))
 
     for header in ("INPUTS", "OUTPUTS", "RECORDS"):
         assert header in frame
     assert "INPUTS (live" not in frame
     inputs_row = next(r for r in frame.split("\n") if CONTEXT_SPEC_REPORT in r)
-    assert "LC-143.3.p1" in inputs_row
+    assert "report (p1)" in inputs_row
     assert "Audit found one issue." in frame
-    assert CONTEXT_FINDINGS in frame
+    assert "The scan skips symlinked checkouts." in frame
+    assert "- tests: no symlink case" in frame
+    assert "See the scan spec or https://example.test/scan." in frame
     assert CONTEXT_REFLECTION in frame
     assert "guidance-delivered" in frame
 
@@ -416,9 +418,9 @@ def test_a_narrow_terminal_stacks_the_context_table():
 
     assert any("INPUTS" in row for row in rows)
     key_row = next(i for i, row in enumerate(rows) if row.startswith("│ findings"))
-    assert CONTEXT_FINDINGS not in rows[key_row]
-    assert CONTEXT_FINDINGS in rows[key_row + 1]
-    assert any("LC-143.3.p1" in row for row in rows)
+    assert "The scan skips" not in rows[key_row]
+    assert any("The scan skips" in row for row in rows[key_row + 1:key_row + 4])
+    assert any("report (p1)" in row for row in rows)
 
 
 @pytest.mark.parametrize("state", sorted(name for name in SCREENS if name.startswith("hub#")))

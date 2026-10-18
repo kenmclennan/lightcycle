@@ -10,6 +10,7 @@ from lightcycle.application.inspect.resolve_references import ResolveReferencesU
 from lightcycle.domain.prose import (
     BODY,
     HEADING,
+    Link,
     Literal,
     Reference,
     parse_prose,
@@ -59,6 +60,47 @@ class TestParseProse(unittest.TestCase):
     def test_reference_ids_are_distinct_in_order(self):
         lines = parse_prose("[[LC-2]] [[LC-1]]\n## [[LC-2]]")
         self.assertEqual(reference_ids(lines), ["LC-2", "LC-1"])
+
+
+class TestProseLinksAndLists(unittest.TestCase):
+    def test_list_lines_keep_marker_and_indent(self):
+        lines = parse_prose("- one\n  * two\n    1. three")
+
+        self.assertEqual(
+            [(l.kind, l.segments) for l in lines],
+            [
+                (BODY, (Literal("- one"),)),
+                (BODY, (Literal("  * two"),)),
+                (BODY, (Literal("    1. three"),)),
+            ],
+        )
+
+    def test_a_bare_url_parses_to_a_link(self):
+        (line,) = parse_prose("see https://example.test/a?b=1, then go")
+
+        self.assertEqual(
+            line.segments,
+            (Literal("see "), Link("https://example.test/a?b=1", "https://example.test/a?b=1"), Literal(", then go")),
+        )
+
+    def test_a_markdown_link_parses_to_label_and_url(self):
+        (line,) = parse_prose("read [the spec](https://example.test/spec) now")
+
+        self.assertEqual(
+            line.segments,
+            (Literal("read "), Link("the spec", "https://example.test/spec"), Literal(" now")),
+        )
+
+    def test_a_url_inside_a_fence_stays_literal(self):
+        lines = parse_prose("```\nhttps://example.test/x\n```")
+
+        self.assertEqual(lines[1].segments, (Literal("https://example.test/x"),))
+
+    def test_a_heading_containing_a_link_yields_both_kinds(self):
+        (line,) = parse_prose("## See [docs](https://example.test/d)")
+
+        self.assertEqual(line.kind, HEADING)
+        self.assertEqual(line.segments, (Literal("See "), Link("docs", "https://example.test/d")))
 
 
 class TestResolveReferences(unittest.TestCase):
