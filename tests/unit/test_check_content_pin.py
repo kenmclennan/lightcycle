@@ -136,6 +136,22 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         self.assertIsNone(store.get_node(step).notes)
         self.assertEqual(store.get_node(step).role, "agent")
 
+    def test_null_pin_on_an_attached_pr_pins_head_without_comparing_against_none(self):
+        compared = []
+
+        class _Recording(FakeGitHub):
+            def changed_files(self, pr, sha):
+                compared.append(sha)
+                return super().changed_files(pr, sha)
+
+        gh = _Recording(head_shas={self._URL: "sha1"})
+        store, item, step, uc = self._setup(gh)
+
+        uc.execute()
+
+        self.assertEqual(self._pin(store, item), "sha1")
+        self.assertEqual(compared, [])
+
     def test_head_sha_failure_never_pins_content_on_first_observation(self):
         gh = FakeGitHub(failing_calls={"head_sha"})
         store, item, step, uc = self._setup(gh)
