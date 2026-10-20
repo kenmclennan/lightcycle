@@ -54,9 +54,14 @@ class ResolveCiUseCase:
                 ))
                 ci_resolved.append(step.item)
             elif outcome == "failure" and sd.ci_failure:
+                if self._git.remote_head_sha(root, run.branch) != sha:
+                    continue
                 self._store.add_artifact(step.id, "ci-judged-sha", sha, internal=True)
                 fc = failing_check(checks)
-                note = "CI failed: run %s, check '%s'." % (pr_value, fc.name if fc else "unknown")
+                url = " %s" % fc.url if fc and fc.url else ""
+                note = "CI failed on %s: check '%s'%s, PR %s." % (
+                    sha, fc.name if fc else "unknown", url, pr_value,
+                )
                 self._complete.execute(CompleteInput(step=step.id, outcome=sd.ci_failure, note=note))
                 ci_resolved.append(step.item)
         return ResolveCiResponse(ci_resolved=ci_resolved)

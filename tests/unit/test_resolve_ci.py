@@ -159,6 +159,107 @@ class TestResolveCiJudgedSha(unittest.TestCase):
         self.assertEqual(self._judged(("in_progress", None)), [])
 
 
+class _SequencedGit(FakeGit):
+    def __init__(self, shas):
+        super().__init__()
+        self._sequence = list(shas)
+
+    def remote_head_sha(self, root, branch):
+        return self._sequence.pop(0) if self._sequence else None
+
+
+_FAIL_URL = "https://github.com/x/y/actions/runs/7/job/8"
+
+
+def _failing(sha, url=_FAIL_URL):
+    return {(_URL, sha): (CheckRun(name="build", status="completed", conclusion="failure", url=url),)}
+
+
+class TestResolveCiConfirmsHeadBeforeFailed(unittest.TestCase):
+    def _setup(self, github, git):
+        store = FakeStore()
+        item = store.create_item("building a thing", "a description")
+        plant_pr(store, item, _URL, branch=_BRANCH)
+        step = store.create_step(step="poll-ci", role="engine", parent=item)
+
+        class _Worktrees:
+            def worktree_path(self, node):
+                return _ROOT
+
+        flow = _FlowAdapter(_FLOW)
+        uc = ResolveCiUseCase(store, github, git, _Worktrees(), flow, CompleteStepUseCase(store, flow))
+        return store, item, step, uc
+
+    def _judged(self, store, step):
+        return [a.value for a in store.item_artifacts(step) if a.type == "ci-judged-sha"]
+
+    def test_unchanged_head_completes_failed_and_names_sha_check_url_and_pr(self):
+        store, item, step, uc = self._setup(FakeGitHub(check_runs_by_sha=_failing("sha1")), _SequencedGit(["sha1", "sha1"]))
+
+        uc.execute()
+
+        node = store.get_node(step)
+        self.assertEqual(node.outcome, "failed")
+        self.assertEqual(self._judged(store, step), ["sha1"])
+        self.assertEqual(node.report, "CI failed on sha1: check 'build' %s, PR %s." % (_FAIL_URL, _URL))
+
+    def test_moved_head_routes_nothing_then_repoll_reaches_the_new_head(self):
+        passing = {(_URL, "sha2"): (CheckRun(name="build", status="completed", conclusion="success"),)}
+        gh = FakeGitHub(check_runs_by_sha={**_failing("sha1"), **passing})
+        store, item, step, uc = self._setup(gh, _SequencedGit(["sha1", "sha2", "sha2", "sha2"]))
+
+        first = uc.execute()
+
+        self.assertEqual(store.get_node(step).state, State.QUEUED)
+        self.assertEqual(first.ci_resolved, [])
+        self.assertEqual(self._judged(store, step), [])
+        self.assertEqual([c for c in store.children(item) if c.stage == "watch-ci"], [])
+
+        uc.execute()
+
+        self.assertEqual(store.get_node(step).outcome, "succeeded")
+
+    def test_unreadable_confirm_read_routes_nothing(self):
+        store, item, step, uc = self._setup(FakeGitHub(check_runs_by_sha=_failing("sha1")), _SequencedGit(["sha1", None]))
+
+        result = uc.execute()
+
+        self.assertEqual(store.get_node(step).state, State.QUEUED)
+        self.assertEqual(result.ci_resolved, [])
+        self.assertEqual(self._judged(store, step), [])
+
+    def test_moved_then_settled_head_fails_naming_the_new_sha(self):
+        store, item, step, uc = self._setup(
+            FakeGitHub(check_runs_by_sha={**_failing("sha1"), **_failing("sha2")}),
+            _SequencedGit(["sha1", "sha2", "sha2", "sha2"]),
+        )
+
+        uc.execute()
+        self.assertEqual(store.get_node(step).state, State.QUEUED)
+
+        uc.execute()
+
+        node = store.get_node(step)
+        self.assertEqual(node.outcome, "failed")
+        self.assertIn("sha2", node.report)
+        self.assertNotIn("sha1", node.report)
+
+    def test_empty_url_leaves_no_stray_space(self):
+        store, item, step, uc = self._setup(FakeGitHub(check_runs_by_sha=_failing("sha1", url="")), _SequencedGit(["sha1", "sha1"]))
+
+        uc.execute()
+
+        self.assertEqual(store.get_node(step).report, "CI failed on sha1: check 'build', PR %s." % _URL)
+
+    def test_success_on_a_moved_head_is_unchanged(self):
+        gh = FakeGitHub(check_runs_by_sha={(_URL, "sha1"): (CheckRun(name="build", status="completed", conclusion="success"),)})
+        store, item, step, uc = self._setup(gh, _SequencedGit(["sha1", "sha2"]))
+
+        uc.execute()
+
+        self.assertEqual(store.get_node(step).outcome, "succeeded")
+
+
 class TestResolveCiUseCase(unittest.TestCase):
     def _setup(self, github, git, flow=_FLOW, worktree_path=_ROOT):
         store = FakeStore()

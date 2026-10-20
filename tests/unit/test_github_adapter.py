@@ -519,6 +519,16 @@ class TestCheckRuns(unittest.TestCase):
             ),
         )
 
+    def test_check_run_url_lands_on_the_check_run(self):
+        mock_run = self._run([
+            {"name": "test", "status": "completed", "conclusion": "failure",
+             "url": "https://github.com/x/y/actions/runs/1/job/2"},
+        ])
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            runs = self.adapter.check_runs(_PR, "sha1")
+
+        self.assertEqual(runs[0].url, "https://github.com/x/y/actions/runs/1/job/2")
+
     def test_empty_check_runs_list(self):
         mock_run = self._run([])
         with patch("lightcycle.adapters.github.subprocess.run", mock_run):

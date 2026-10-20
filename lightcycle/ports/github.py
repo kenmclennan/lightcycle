@@ -35,6 +35,7 @@ class CheckRun:
     name: str
     status: str
     conclusion: Optional[str]
+    url: str = ""
 
 
 @dataclass(frozen=True)

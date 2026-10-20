@@ -260,7 +260,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
             result = subprocess.run(
                 [
                     "gh", "api", "/repos/%s/%s/commits/%s/check-runs" % (owner, repo, sha),
-                    "--jq", "[.check_runs[]|{name,status,conclusion}]",
+                    "--jq", "[.check_runs[]|{name,status,conclusion,url:.html_url}]",
                 ],
                 capture_output=True, text=True,
                 timeout=_GH_TIMEOUT_SECONDS,
@@ -274,7 +274,12 @@ class GitHubEventsAdapter(GitHubEventsPort):
         except (json.JSONDecodeError, ValueError):
             return ReadFailure(-1, "could not parse gh api check-runs JSON")
         return tuple(
-            CheckRun(name=c.get("name") or "", status=c.get("status") or "", conclusion=c.get("conclusion"))
+            CheckRun(
+                name=c.get("name") or "",
+                status=c.get("status") or "",
+                conclusion=c.get("conclusion"),
+                url=c.get("url") or "",
+            )
             for c in data
         )
 
