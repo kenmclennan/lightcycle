@@ -68,3 +68,21 @@ class TestDescriptionContextBlock(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestDescriptionPaintsOnFirstLayout(unittest.TestCase):
+    def test_description_is_painted_when_tabbed_into_before_any_poll(self):
+        s = FakeStore()
+        item = s.create_item("item", "The description text")
+        session = launch(make_test_container(store=s))
+        self.addCleanup(session.close)
+        screen = NodeHubScreen(session.app.container, item, session.app._now, initial_tab="outputs")
+        session.run(lambda: session.app.push_screen(screen))
+        session.pause()
+        session.pause()
+        session.run(screen._poll_timer.pause)
+        while screen._active_tab != "description":
+            session.run(screen.action_next_tab)
+        session.pause()
+        session.pause()
+        self.assertEqual(_pane_lines(screen), ["The description text"])
