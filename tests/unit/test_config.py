@@ -134,6 +134,21 @@ class TestTunables(unittest.TestCase):
         self.assertEqual(c.editor(), "vi")
         self.assertEqual(c.spin_cap(), 3)
 
+    def test_github_poll_seconds_is_required_and_named_when_missing(self):
+        self.assertEqual(_cfg(github_poll_seconds="60").github_poll_seconds(), 60)
+        with self.assertRaises(ConfigError) as ctx:
+            _cfg().github_poll_seconds()
+        self.assertIn("github-poll-seconds", str(ctx.exception))
+        self.assertNotIsInstance(ctx.exception, ConfigValueError)
+
+    def test_github_poll_seconds_rejects_a_non_integer(self):
+        with self.assertRaises(ConfigValueError):
+            _cfg(github_poll_seconds="soon").github_poll_seconds()
+
+    def test_github_poll_seconds_env_override(self):
+        c = _cfg({"LC_GITHUB_POLL_SECONDS": "30"})
+        self.assertEqual(c.github_poll_seconds(), 30)
+
     def test_missing_tunable_raises(self):
         with self.assertRaises(ConfigError):
             _cfg().worktree_retries()

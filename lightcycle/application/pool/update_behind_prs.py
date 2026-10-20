@@ -6,7 +6,7 @@ from lightcycle.application.pool.pr_sync_reads import PrSyncReads
 from lightcycle.application.work.behind_reason import behind_reason
 from lightcycle.domain.work import State
 from lightcycle.domain.work.behind_marker import BEHIND_NOT_UPDATED
-from lightcycle.ports.github import ReadFailure
+from lightcycle.ports.github import NotYetRead, ReadFailure
 
 UPDATE_CAP = 3
 RULE_TTL_SECONDS = 300
@@ -35,6 +35,8 @@ class UpdateBehindPrsUseCase:
         self._cap_noted = set()
 
     def _note_failure(self, step_id, what, failure):
+        if isinstance(failure, NotYetRead):
+            return
         self._store.note_condition(
             step_id, "%s (exit %d): %s" % (what, failure.returncode, _first_line(failure.stderr))
         )

@@ -8,6 +8,7 @@ WIRED_BY_THE_CONTAINER = (
     "TickUseCase",
     "SweepUseCase",
     "MonitorPrsUseCase",
+    "GithubPollUseCase",
     "BreakerGateUseCase",
     "HookCompletionsUseCase",
     "BackupUseCase",

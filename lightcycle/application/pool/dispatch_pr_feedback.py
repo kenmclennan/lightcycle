@@ -17,7 +17,7 @@ from lightcycle.domain.feedback import (
 )
 from lightcycle.domain.flow import total_outcome_count
 from lightcycle.domain.work import State
-from lightcycle.ports.github import ReadFailure
+from lightcycle.ports.github import NotYetRead, ReadFailure
 
 
 @dataclass(frozen=True)
@@ -63,6 +63,8 @@ class DispatchPrFeedbackUseCase:
         self._hold = HoldCommentUseCase(store, held_shortcode)
 
     def _note_gh_read_failure(self, step_id, failure):
+        if isinstance(failure, NotYetRead):
+            return
         self._store.note_condition(
             step_id,
             "gh read failed while checking outstanding feedback (exit %d): %s"

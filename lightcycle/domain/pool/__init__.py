@@ -4,6 +4,7 @@ from lightcycle.domain.pool.ci_result import ci_outcome, failing_check
 from lightcycle.domain.pool.machine_headroom import MachineHeadroom
 from lightcycle.domain.pool.memory_admission import admission_cap
 from lightcycle.domain.pool.plan import PoolPlan
+from lightcycle.domain.pool.pr_repo import pr_repo
 from lightcycle.domain.pool.rate_limit import RateLimitEvent
 from lightcycle.domain.pool.ready_queue import ReadyQueue
 from lightcycle.domain.pool.spin_ledger import SpinLedger, StepSpin
@@ -17,6 +18,6 @@ __all__ = [
     "AttributionEvent", "Breaker", "MachineHeadroom", "ModelRates", "PoolPlan", "RateLimitEvent",
     "ReadyQueue", "SpinLedger", "StepSpin", "ToolUsage", "UsageEvent", "UsageResume", "Worker",
     "WorkerPool", "admission_cap", "ci_outcome",
-    "failing_check", "price_tokens", "resolve_usage", "sum_attribution_events",
+    "failing_check", "pr_repo", "price_tokens", "resolve_usage", "sum_attribution_events",
     "sum_usage_events",
 ]

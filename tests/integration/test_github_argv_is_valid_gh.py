@@ -30,6 +30,11 @@ def _captured_argvs():
         adapter.pr_sync_state(_PR)
         adapter.requires_up_to_date("acme/widget@main")
         adapter.update_branch(_PR, "deadbeef")
+        adapter.list_prs("acme/widget", 0.0)
+        adapter.repo_inline_comments("acme/widget", 0.0)
+        adapter.branch_tip("acme/widget", "main")
+        adapter.pr_view(_PR)
+        adapter.changed_files(_PR, "deadbeef", "main")
 
     return [c for c in calls if c and c[0] == "gh"]
 

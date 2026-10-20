@@ -231,8 +231,20 @@ class ScriptedGitHub(GitHubEventsPort):
     def head_sha(self, pr):
         return ""
 
-    def changed_files(self, pr, sha):
+    def changed_files(self, pr, sha, base=None):
         return frozenset()
+
+    def list_prs(self, repo, cutoff):
+        return ()
+
+    def repo_inline_comments(self, repo, since):
+        return frozenset()
+
+    def branch_tip(self, repo, base):
+        return ReadFailure(-1, "branch tips are not simulated")
+
+    def pr_view(self, pr):
+        return ReadFailure(-1, "pr views are not simulated")
 
     def check_runs(self, pr, sha):
         return self._check_runs.get(pr, ())

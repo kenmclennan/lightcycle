@@ -37,6 +37,14 @@ class NoOpLifecycleGate:
         return []
 
 
+class NoOpGithubPollGate:
+    def settle(self):
+        pass
+
+    def execute(self, now):
+        return False
+
+
 class NoOpScriptGate:
     def execute(self, now):
         return ScriptStagesResponse()

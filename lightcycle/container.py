@@ -9,6 +9,9 @@ from lightcycle.adapters.github import GitHubEventsAdapter
 from lightcycle.adapters.gitio import GitAdapter
 from lightcycle.adapters.launcher import LauncherAdapter
 from lightcycle.adapters.lifecycle_runner import LifecycleRunnerAdapter
+from lightcycle.application.pool.github_poll import GithubPollUseCase
+from lightcycle.application.pool.pr_snapshot import PrSnapshot
+from lightcycle.adapters.github_poll_runner import GithubPollRunnerAdapter
 from lightcycle.adapters.script_runner import ScriptRunnerAdapter
 from lightcycle.adapters.lock import RunLockAdapter
 from lightcycle.adapters.machine import MachineAdapter
@@ -42,7 +45,7 @@ class Container:
         spin=None, now=None, workflow_bundle=None, worker_log=None, scaffold=None, upgrade=None,
         claude_stream=None, machine=None, memory_gate_status=None,
         drain=None, guidance_sync_status=None, config_reload_status=None,
-        lifecycle_runner=None, script_runner=None,
+        lifecycle_runner=None, script_runner=None, github_poll_runner=None,
     ):
         self.config = config if config is not None else Config()
         self.store = store if store is not None else SqliteStore(self.config, now=now)
@@ -71,6 +74,9 @@ class Container:
         )
         self.script_runner = (
             script_runner if script_runner is not None else ScriptRunnerAdapter(self.config)
+        )
+        self.github_poll_runner = (
+            github_poll_runner if github_poll_runner is not None else GithubPollRunnerAdapter()
         )
         self.launcher = launcher if launcher is not None else LauncherAdapter()
         self.upgrade = upgrade if upgrade is not None else UpgradeAdapter(self.config)
@@ -112,13 +118,14 @@ class Container:
         flow = flow if flow is not None else self.flow_service()
         worktrees = worktrees_for(self, flow=flow)
         complete = CompleteStepUseCase(self.store, flow, worktrees, self.config)
+        snapshot = PrSnapshot(self.github)
         return TickUseCase(
             self.store,
             self.workers,
             self.spawner,
             self.config,
             monitor=MonitorPrsUseCase(
-                self.store, self.github, worktrees, flow, complete, git=self.git,
+                self.store, snapshot, worktrees, flow, complete, git=self.git,
                 trusted_authors=self.config.trusted_authors,
                 held_shortcode=self.config.held_comment_shortcode,
             ),
@@ -140,6 +147,8 @@ class Container:
                 self.workers, self.worker_log, self.breaker, self.config, self.claude_stream,
                 spin_port=self.spin, store=self.store,
             ),
+            github_poll_gate=GithubPollUseCase(
+                snapshot, self.github, self.github_poll_runner, self.config),
             hook_completions=HookCompletionsUseCase(self.store, flow),
             worktrees=worktrees,
             git=self.git,

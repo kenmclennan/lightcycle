@@ -21,6 +21,7 @@ _ENV_OVERRIDE_VARS = {
     "probe-cooldown-seconds": "LC_PROBE_COOLDOWN_SECONDS",
     "spin-cap": "LC_SPIN_CAP",
     "poll-seconds": "LC_POLL_SECONDS",
+    "github-poll-seconds": "LC_GITHUB_POLL_SECONDS",
     "worker-history": "LC_WORKER_HISTORY",
     "editor": "EDITOR",
     "tui-autostart-pool": "LC_TUI_AUTOSTART_POOL",
@@ -87,6 +88,7 @@ _SEED_KEYS = [
     ("probe-cooldown-seconds", "1800"),
     ("spin-cap", "3"),
     ("poll-seconds", "5"),
+    ("github-poll-seconds", "60"),
     ("worker-history", "20"),
     ("editor", "vi"),
     ("backups-dir", "~/.lightcycle-backups"),
@@ -157,6 +159,7 @@ schedule-daily-summary:
 """
 
 _NUMERIC_RANGES = {
+    "github-poll-seconds": (1, None),
     "memory-reserve-fraction": (0.0, 1.0),
     "max-agents": (0, None),
     "guidance-budget-bytes": (0, None),
@@ -574,6 +577,12 @@ class Config:
         if env is not None:
             return env
         return self._required_int("poll-seconds")
+
+    def github_poll_seconds(self):
+        env = self._env_int("LC_GITHUB_POLL_SECONDS", None)
+        if env is not None:
+            return env
+        return self._required_int("github-poll-seconds")
 
     def tui_autostart_pool(self):
         env = self._env_bool("LC_TUI_AUTOSTART_POOL", None)

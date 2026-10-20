@@ -2,14 +2,16 @@ import datetime
 import json
 import re
 import subprocess
-from typing import Tuple, Union
+from typing import Optional, Tuple, Union
 
 from lightcycle.ports.github import (
-    CheckRun, Comment, GitHubEventsPort, PrSync, ReadFailure, Review,
+    CheckRun, Comment, GitHubEventsPort, ListedPr, PrSync, PrView, ReadFailure, Review,
 )
 
 _PR_URL_RE = re.compile(r"https://github\.com/([^/]+)/([^/]+)/pull/(\d+)")
 _GH_TIMEOUT_SECONDS = 30
+_LISTING_PAGE_SIZE = 100
+_PULL_API_URL_RE = re.compile(r"/repos/([^/]+)/([^/]+)/pulls/(\d+)$")
 
 
 def _timeout_read_failure():
@@ -18,6 +20,10 @@ def _timeout_read_failure():
 
 def _parse_iso(s):
     return datetime.datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp()
+
+
+def _iso(ts):
+    return datetime.datetime.fromtimestamp(ts, datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _repo_parts(pr):
@@ -216,24 +222,27 @@ class GitHubEventsAdapter(GitHubEventsPort):
             return ReadFailure(-1, "could not parse gh pr view JSON for headRefOid")
         return data.get("headRefOid", "")
 
-    def changed_files(self, pr: str, sha: str) -> Union[frozenset, ReadFailure]:
+    def changed_files(
+        self, pr: str, sha: str, base: Optional[str] = None
+    ) -> Union[frozenset, ReadFailure]:
         parts = _repo_parts(pr)
         if not parts:
             return ReadFailure(-1, "pr is not a parseable GitHub PR URL: %r" % pr)
         owner, repo, number = parts
-        try:
-            result = subprocess.run(
-                ["gh", "pr", "view", pr, "--json", "baseRefName"], capture_output=True, text=True,
-                timeout=_GH_TIMEOUT_SECONDS,
-            )
-        except subprocess.TimeoutExpired:
-            return _timeout_read_failure()
-        if result.returncode != 0:
-            return ReadFailure(result.returncode, result.stderr)
-        try:
-            base = json.loads(result.stdout).get("baseRefName", "")
-        except (json.JSONDecodeError, ValueError):
-            return ReadFailure(-1, "could not parse gh pr view JSON for baseRefName")
+        if base is None:
+            try:
+                result = subprocess.run(
+                    ["gh", "pr", "view", pr, "--json", "baseRefName"],
+                    capture_output=True, text=True, timeout=_GH_TIMEOUT_SECONDS,
+                )
+            except subprocess.TimeoutExpired:
+                return _timeout_read_failure()
+            if result.returncode != 0:
+                return ReadFailure(result.returncode, result.stderr)
+            try:
+                base = json.loads(result.stdout).get("baseRefName", "")
+            except (json.JSONDecodeError, ValueError):
+                return ReadFailure(-1, "could not parse gh pr view JSON for baseRefName")
         if not base:
             return ReadFailure(-1, "gh pr view returned an empty baseRefName for %r" % pr)
         try:
@@ -431,3 +440,112 @@ class GitHubEventsAdapter(GitHubEventsPort):
         if result.returncode != 0:
             return ReadFailure(result.returncode, result.stderr)
         return None
+
+    def _gh_api_lines(self, path, jq, paginate=False):
+        argv = ["gh", "api"] + (["--paginate"] if paginate else []) + [path, "--jq", jq]
+        try:
+            result = subprocess.run(
+                argv, capture_output=True, text=True, timeout=_GH_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            return _timeout_read_failure()
+        if result.returncode != 0:
+            return ReadFailure(result.returncode, result.stderr)
+        rows = []
+        for line in result.stdout.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rows.append(json.loads(line))
+            except (json.JSONDecodeError, ValueError):
+                return ReadFailure(-1, "could not parse gh api JSON line for %s" % path)
+        return rows
+
+    def list_prs(self, repo: str, cutoff: float) -> Union[Tuple[ListedPr, ...], ReadFailure]:
+        listed = []
+        page = 1
+        while True:
+            rows = self._gh_api_lines(
+                "repos/%s/pulls?state=all&sort=updated&direction=desc&per_page=%d&page=%d"
+                % (repo, _LISTING_PAGE_SIZE, page),
+                ".[] | {url: .html_url, updated_at, state, merged_at}",
+            )
+            if isinstance(rows, ReadFailure):
+                return rows
+            last = None
+            for row in rows:
+                try:
+                    updated = _parse_iso(row["updated_at"])
+                except (KeyError, ValueError, TypeError, AttributeError):
+                    return ReadFailure(-1, "could not parse updated_at in the pulls listing")
+                last = updated
+                if updated >= cutoff:
+                    listed.append(ListedPr(
+                        url=row.get("url") or "", updated_at=updated,
+                        state=row.get("state") or "", merged=bool(row.get("merged_at")),
+                    ))
+            if last is None or last < cutoff or len(rows) < _LISTING_PAGE_SIZE:
+                return tuple(listed)
+            page += 1
+
+    def repo_inline_comments(self, repo: str, since: float) -> Union[frozenset, ReadFailure]:
+        rows = self._gh_api_lines(
+            "repos/%s/pulls/comments?since=%s&sort=updated&direction=desc&per_page=%d"
+            % (repo, _iso(since), _LISTING_PAGE_SIZE),
+            ".[] | .pull_request_url",
+            paginate=True,
+        )
+        if isinstance(rows, ReadFailure):
+            return rows
+        urls = set()
+        for api_url in rows:
+            m = _PULL_API_URL_RE.search(api_url or "")
+            if m:
+                urls.add("https://github.com/%s/%s/pull/%s" % m.groups())
+        return frozenset(urls)
+
+    def branch_tip(self, repo: str, base: str) -> Union[str, ReadFailure]:
+        try:
+            result = subprocess.run(
+                ["gh", "api", "repos/%s/branches/%s" % (repo, base), "--jq", ".commit.sha"],
+                capture_output=True, text=True, timeout=_GH_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            return _timeout_read_failure()
+        if result.returncode != 0:
+            return ReadFailure(result.returncode, result.stderr)
+        tip = result.stdout.strip()
+        if not tip:
+            return ReadFailure(-1, "gh returned no tip sha for %s@%s" % (repo, base))
+        return tip
+
+    def pr_view(self, pr: str) -> Union[PrView, ReadFailure]:
+        parts = _repo_parts(pr)
+        if not parts:
+            return ReadFailure(-1, "pr is not a parseable GitHub PR URL: %r" % pr)
+        owner, repo, _ = parts
+        try:
+            result = subprocess.run(
+                [
+                    "gh", "pr", "view", pr, "--json",
+                    "state,headRefOid,baseRefName,mergeable,mergeStateStatus,updatedAt",
+                ],
+                capture_output=True, text=True, timeout=_GH_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            return _timeout_read_failure()
+        if result.returncode != 0:
+            return ReadFailure(result.returncode, result.stderr)
+        try:
+            data = json.loads(result.stdout)
+            updated = _parse_iso(data["updatedAt"])
+        except (json.JSONDecodeError, ValueError, KeyError, TypeError, AttributeError):
+            return ReadFailure(-1, "could not parse gh pr view JSON for the shared view")
+        base = data.get("baseRefName") or ""
+        return PrView(
+            state=data.get("state") or "",
+            head_sha=data.get("headRefOid") or "",
+            base_ref=base,
+            base_key="%s/%s@%s" % (owner, repo, base),
+            mergeable=data.get("mergeable") or "",
+            merge_state_status=data.get("mergeStateStatus") or "",
+            updated_at=updated,
+        )

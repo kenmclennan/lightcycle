@@ -32,6 +32,12 @@ class ReadFailure:
 
 
 @dataclass(frozen=True)
+class NotYetRead(ReadFailure):
+    returncode: int = -2
+    stderr: str = "no snapshot yet"
+
+
+@dataclass(frozen=True)
 class CheckRun:
     name: str
     status: str
@@ -45,6 +51,25 @@ class PrSync:
     conflicted: bool
     head_sha: str
     base_key: str
+
+
+@dataclass(frozen=True)
+class ListedPr:
+    url: str
+    updated_at: float
+    state: str
+    merged: bool
+
+
+@dataclass(frozen=True)
+class PrView:
+    state: str
+    head_sha: str
+    base_ref: str
+    base_key: str
+    mergeable: str
+    merge_state_status: str
+    updated_at: float
 
 
 class GitHubEventsPort(ABC):
@@ -81,7 +106,9 @@ class GitHubEventsPort(ABC):
         pass
 
     @abstractmethod
-    def changed_files(self, pr: str, sha: str) -> Union[frozenset, ReadFailure]:
+    def changed_files(
+        self, pr: str, sha: str, base: Optional[str] = None
+    ) -> Union[frozenset, ReadFailure]:
         pass
 
     @abstractmethod
@@ -102,4 +129,20 @@ class GitHubEventsPort(ABC):
 
     @abstractmethod
     def update_branch(self, pr: str, expected_head_sha: str) -> Union[None, ReadFailure]:
+        pass
+
+    @abstractmethod
+    def list_prs(self, repo: str, cutoff: float) -> Union[Tuple[ListedPr, ...], ReadFailure]:
+        pass
+
+    @abstractmethod
+    def repo_inline_comments(self, repo: str, since: float) -> Union[frozenset, ReadFailure]:
+        pass
+
+    @abstractmethod
+    def branch_tip(self, repo: str, base: str) -> Union[str, ReadFailure]:
+        pass
+
+    @abstractmethod
+    def pr_view(self, pr: str) -> Union[PrView, ReadFailure]:
         pass
