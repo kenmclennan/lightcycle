@@ -874,3 +874,133 @@ class TestIssueState(unittest.TestCase):
             result = self.adapter.issue_state(_ISSUE)
 
         self.assertIsInstance(result, ReadFailure)
+
+
+def _listing_page(rows):
+    return _proc("\n".join(json.dumps(r) for r in rows))
+
+
+def _row(n, updated, state="open", merged_at=None):
+    return {
+        "url": "https://github.com/x/y/pull/%d" % n, "updated_at": updated,
+        "state": state, "merged_at": merged_at,
+    }
+
+
+class TestListPrs(unittest.TestCase):
+    def setUp(self):
+        self.adapter = GitHubEventsAdapter()
+
+    def test_returns_rows_at_or_after_the_cutoff_with_state_and_merge(self):
+        page = [
+            _row(3, "2026-01-03T00:00:00Z", "closed", "2026-01-03T00:00:00Z"),
+            _row(2, "2026-01-02T00:00:00Z"),
+            _row(1, "2026-01-01T00:00:00Z"),
+        ]
+        cutoff = 1767312000.0
+
+        with patch("lightcycle.adapters.github.subprocess.run",
+                   return_value=_listing_page(page)) as run:
+            listed = self.adapter.list_prs("x/y", cutoff)
+
+        self.assertEqual([p.url[-1] for p in listed], ["3", "2"])
+        self.assertTrue(listed[0].merged)
+        self.assertEqual(listed[0].state, "closed")
+        self.assertFalse(listed[1].merged)
+        self.assertEqual(run.call_count, 1)
+        argv = run.call_args.args[0]
+        self.assertIn("repos/x/y/pulls?state=all&sort=updated&direction=desc&per_page=100&page=1",
+                      argv)
+
+    def test_pages_only_until_a_row_older_than_the_cutoff(self):
+        full = [_row(n, "2026-02-01T00:00:00Z") for n in range(100)]
+        tail = [_row(200, "2026-01-01T00:00:00Z")]
+
+        with patch("lightcycle.adapters.github.subprocess.run",
+                   side_effect=[_listing_page(full), _listing_page(tail)]) as run:
+            listed = self.adapter.list_prs("x/y", 1769904000.0)
+
+        self.assertEqual(len(listed), 100)
+        self.assertEqual(run.call_count, 2)
+
+    def test_stops_after_a_short_page_even_when_every_row_is_newer(self):
+        with patch("lightcycle.adapters.github.subprocess.run",
+                   return_value=_listing_page([_row(1, "2026-02-01T00:00:00Z")])) as run:
+            self.adapter.list_prs("x/y", 0.0)
+
+        self.assertEqual(run.call_count, 1)
+
+    def test_a_failing_call_is_a_read_failure(self):
+        with patch("lightcycle.adapters.github.subprocess.run",
+                   return_value=_proc(returncode=1, stderr="boom")):
+            self.assertIsInstance(self.adapter.list_prs("x/y", 0.0), ReadFailure)
+
+
+class TestRepoInlineComments(unittest.TestCase):
+    def test_maps_api_urls_to_pr_urls(self):
+        out = "\n".join(
+            json.dumps(u) for u in [
+                "https://api.github.com/repos/x/y/pulls/7",
+                "https://api.github.com/repos/x/y/pulls/7",
+                "https://api.github.com/repos/x/y/pulls/9",
+            ])
+
+        with patch("lightcycle.adapters.github.subprocess.run",
+                   return_value=_proc(out)) as run:
+            urls = GitHubEventsAdapter().repo_inline_comments("x/y", 1767225600.0)
+
+        self.assertEqual(urls, frozenset([
+            "https://github.com/x/y/pull/7", "https://github.com/x/y/pull/9"]))
+        self.assertIn(
+            "repos/x/y/pulls/comments?since=2026-01-01T00:00:00Z&sort=updated"
+            "&direction=desc&per_page=100", run.call_args.args[0])
+
+
+class TestBranchTipAndPrView(unittest.TestCase):
+    def setUp(self):
+        self.adapter = GitHubEventsAdapter()
+
+    def test_branch_tip_returns_the_sha(self):
+        with patch("lightcycle.adapters.github.subprocess.run", return_value=_proc("abc123\n")):
+            self.assertEqual(self.adapter.branch_tip("x/y", "main"), "abc123")
+
+    def test_branch_tip_failure_is_a_read_failure(self):
+        with patch("lightcycle.adapters.github.subprocess.run",
+                   return_value=_proc(returncode=1, stderr="404")):
+            self.assertIsInstance(self.adapter.branch_tip("x/y", "main"), ReadFailure)
+
+    def test_pr_view_parses_every_field_of_the_shared_view(self):
+        payload = json.dumps({
+            "state": "OPEN", "headRefOid": "h1", "baseRefName": "main",
+            "mergeable": "CONFLICTING", "mergeStateStatus": "DIRTY",
+            "updatedAt": "2026-01-01T00:00:00Z",
+        })
+
+        with patch("lightcycle.adapters.github.subprocess.run",
+                   return_value=_proc(payload)) as run:
+            view = self.adapter.pr_view(_PR)
+
+        self.assertEqual(view.state, "OPEN")
+        self.assertEqual(view.head_sha, "h1")
+        self.assertEqual(view.base_ref, "main")
+        self.assertEqual(view.base_key, "x/y@main")
+        self.assertEqual(view.mergeable, "CONFLICTING")
+        self.assertEqual(view.merge_state_status, "DIRTY")
+        self.assertEqual(view.updated_at, 1767225600.0)
+        self.assertEqual(run.call_count, 1)
+        self.assertIn(
+            "state,headRefOid,baseRefName,mergeable,mergeStateStatus,updatedAt",
+            run.call_args.args[0])
+
+    def test_pr_view_with_bad_json_is_a_read_failure(self):
+        with patch("lightcycle.adapters.github.subprocess.run", return_value=_proc("{}")):
+            self.assertIsInstance(self.adapter.pr_view(_PR), ReadFailure)
+
+    def test_changed_files_with_a_base_makes_only_the_compare_call(self):
+        with patch("lightcycle.adapters.github.subprocess.run",
+                   return_value=_proc('["a.py"]')) as run:
+            files = self.adapter.changed_files(_PR, "sha1", "main")
+
+        self.assertEqual(files, frozenset(["a.py"]))
+        self.assertEqual(run.call_count, 1)
+        self.assertIn("/repos/x/y/compare/main...sha1", run.call_args.args[0])

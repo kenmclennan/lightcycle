@@ -81,7 +81,7 @@ class SmokeTest(unittest.TestCase):
             "projects: %s\nspecs: %s\n"
             "branch-prefix: feat\ndefault-origin: lightcycle\nmax-agents: 5\n"
             "worktree-retries: 6\n"
-            "worktree-retry-sleep: 0.25\nmax-boot-seconds: 120\npoll-seconds: 5\n"
+            "worktree-retry-sleep: 0.25\nmax-boot-seconds: 120\npoll-seconds: 5\ngithub-poll-seconds: 60\n"
             "worker-history: 20\neditor: vi\n" % (ws, ws)
         )
         r = _tg("init", root=cls.root)

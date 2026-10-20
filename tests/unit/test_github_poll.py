@@ -1,0 +1,286 @@
+import unittest
+
+from lightcycle.application.pool.github_poll import GithubPollUseCase
+from lightcycle.application.pool.pr_snapshot import PrSnapshot
+from lightcycle.config import ConfigError
+from lightcycle.ports.github import Comment, NotYetRead
+from tests.support.fake_github import FakeGitHub
+from tests.support.fake_github_poll_runner import BlockingGithubPollRunner, InlineGithubPollRunner
+
+_A = ["https://github.com/acme/widget/pull/%d" % n for n in range(1, 9)]
+_B = ["https://github.com/acme/gadget/pull/%d" % n for n in range(1, 9)]
+_ALL = _A + _B
+_PER_PR_CALLS = (
+    "pr_view", "last_push_time", "comments_since", "pull_comments", "reviews",
+    "changed_files", "check_runs",
+)
+
+
+class _Config:
+    def __init__(self, seconds=60):
+        self.seconds = seconds
+
+    def github_poll_seconds(self):
+        return self.seconds
+
+
+class _Unset:
+    def github_poll_seconds(self):
+        raise ConfigError("required config value 'github-poll-seconds' is not set")
+
+
+def _github(**kw):
+    base_keys = {pr: "acme/gadget@main" for pr in _B}
+    return FakeGitHub(
+        updated_ats={pr: 100.0 for pr in _ALL}, base_keys=base_keys,
+        head_shas={pr: "h-" + pr[-8:] for pr in _ALL}, **kw)
+
+
+class _Pool:
+    def __init__(self, github=None, runner=None):
+        self.github = github or _github()
+        self.snapshot = PrSnapshot(self.github)
+        self.runner = runner or InlineGithubPollRunner()
+        self.gate = GithubPollUseCase(self.snapshot, self.github, self.runner, _Config())
+
+    def tick(self, now, prs=_ALL, files=(), checks=()):
+        for pr in prs:
+            self.snapshot.pr_sync_state(pr)
+        for pr, sha in files:
+            self.snapshot.changed_files(pr, sha)
+        for pr, sha in checks:
+            self.snapshot.check_runs(pr, sha)
+        return self.gate.execute(now)
+
+    def names(self):
+        return [c[0] for c in self.github.calls]
+
+    def reset(self):
+        self.github.calls.clear()
+
+
+class TestCallCounts(unittest.TestCase):
+    def setUp(self):
+        self.pool = _Pool()
+        self.pool.tick(0)
+        self.pool.reset()
+
+    def test_nothing_moved_costs_three_calls_per_repo_and_none_per_pr(self):
+        self.assertTrue(self.pool.tick(60))
+
+        self.assertEqual(len(self.pool.github.calls), 6)
+        self.assertEqual(sorted(self.pool.names()), sorted(
+            ["list_prs", "repo_inline_comments", "branch_tip"] * 2))
+        self.assertFalse(set(self.pool.names()) & set(_PER_PR_CALLS))
+
+    def test_one_push_costs_five_reads_and_one_compare(self):
+        pr = _A[0]
+        self.pool.github.touch(pr, 200.0)
+        self.pool.github._head_shas[pr] = "h-new"
+
+        self.pool.tick(60, files=[(pr, "h-new")])
+
+        self.assertEqual(len(self.pool.github.calls), 12)
+        self.assertEqual(self.pool.names().count("pr_view"), 1)
+        self.assertEqual(self.pool.names().count("changed_files"), 1)
+        self.assertEqual(self.pool.snapshot.head_sha(pr), "h-new")
+
+    def test_one_merge_is_classified_by_the_listing_and_the_base_move_rereads_the_rest(self):
+        pr = _A[0]
+        self.pool.github._merged.add(pr)
+        self.pool.github.touch(pr, 200.0)
+        self.pool.github.advance_base("acme/widget", "main")
+
+        self.pool.tick(60)
+
+        self.assertEqual(len(self.pool.github.calls), 13)
+        self.assertEqual(self.pool.names().count("pr_view"), 7)
+        self.assertNotIn(("pr_view", pr), self.pool.github.calls)
+        self.assertTrue(self.pool.snapshot.is_merged(pr))
+
+    def test_a_closed_unmerged_pr_is_classified_without_a_view(self):
+        pr = _B[0]
+        self.pool.github._closed.add(pr)
+        self.pool.github.touch(pr, 200.0)
+
+        self.pool.tick(60)
+
+        self.assertNotIn(("pr_view", pr), self.pool.github.calls)
+        self.assertTrue(self.pool.snapshot.is_closed_unmerged(pr))
+        self.assertFalse(self.pool.snapshot.is_merged(pr))
+
+    def test_an_unchanged_pr_older_than_the_cutoff_is_never_classified_closed(self):
+        self.pool.github.touch(_A[0], 200.0)
+
+        self.pool.tick(60)
+
+        self.assertFalse(self.pool.snapshot.is_closed_unmerged(_A[1]))
+        self.assertFalse(self.pool.snapshot.is_merged(_A[1]))
+
+    def test_a_pr_landing_on_the_cutoff_second_is_read_once_and_not_again(self):
+        pool = _Pool(_github())
+        pool.github.touch(_A[0], 90.0)
+        pool.tick(0)
+        pool.reset()
+        pool.github.touch(_A[0], 100.0)
+
+        pool.tick(60)
+
+        self.assertIn(("pr_view", _A[0]), pool.github.calls)
+        self.assertEqual(pool.names().count("pr_view"), 1)
+        pool.reset()
+
+        pool.tick(120)
+
+        self.assertNotIn("pr_view", pool.names())
+
+    def test_a_base_move_alone_rereads_each_pr_on_that_base_and_surfaces_behind(self):
+        self.pool.github._behind.add(_B[0])
+        self.pool.github.advance_base("acme/gadget", "main")
+
+        self.pool.tick(60)
+
+        self.assertEqual(self.pool.names().count("pr_view"), 8)
+        self.assertTrue(self.pool.snapshot.pr_sync_state(_B[0]).behind)
+        self.assertFalse(self.pool.snapshot.pr_sync_state(_B[1]).behind)
+
+    def test_an_inline_comment_marks_the_pr_moved_without_an_updated_at_change(self):
+        pr = _A[2]
+        comment = Comment(author="r", body="fix", is_top_level=False, id="9", created_at=150.0)
+        self.pool.github._timed_comments.append((150.0, comment))
+        self.pool.github.inline_comment_on(pr, 150.0)
+
+        self.pool.tick(60)
+
+        self.assertIn(("pr_view", pr), self.pool.github.calls)
+        self.assertEqual(self.pool.names().count("pr_view"), 1)
+        self.assertEqual(self.pool.snapshot.pull_comments(pr, 0.0), [comment])
+
+    def test_a_pending_ci_step_rereads_check_runs_every_poll_until_it_stops_asking(self):
+        pr = _A[0]
+        self.pool.tick(60, checks=[(pr, "h1")])
+        self.assertEqual(self.pool.names().count("check_runs"), 1)
+        self.pool.reset()
+
+        self.pool.tick(120, checks=[(pr, "h1")])
+        self.assertEqual(self.pool.names().count("check_runs"), 1)
+        self.pool.reset()
+
+        self.pool.tick(180)
+        self.assertNotIn("check_runs", self.pool.names())
+
+
+class TestFailures(unittest.TestCase):
+    def test_a_failed_read_keeps_the_old_entry_marks_it_stale_and_retries(self):
+        pool = _Pool()
+        pool.tick(0)
+        pr = _A[0]
+        pool.github.touch(pr, 200.0)
+        pool.github._failing_calls.add("pr_view")
+
+        pool.tick(60)
+
+        self.assertTrue(pool.snapshot.is_stale(pr))
+        self.assertEqual(pool.snapshot.head_sha(pr), "h-" + pr[-8:])
+        pool.github._failing_calls.discard("pr_view")
+        pool.reset()
+
+        pool.tick(120)
+
+        self.assertIn(("pr_view", pr), pool.github.calls)
+        self.assertFalse(pool.snapshot.is_stale(pr))
+
+    def test_the_cutoff_does_not_advance_past_a_failed_pr(self):
+        pool = _Pool()
+        pool.tick(0)
+        pr = _A[0]
+        pool.github.touch(pr, 200.0)
+        pool.github._failing_calls.add("pr_view")
+        pool.tick(60)
+        pool.reset()
+
+        pool.tick(120)
+
+        self.assertIn(("list_prs", "acme/widget", 100.0), pool.github.calls)
+
+    def test_a_failed_listing_marks_the_repos_prs_stale(self):
+        pool = _Pool()
+        pool.tick(0)
+        pool.github._failing_calls.add("list_prs")
+
+        pool.tick(60)
+
+        self.assertTrue(all(pool.snapshot.is_stale(pr) for pr in _ALL))
+
+
+class TestColdStart(unittest.TestCase):
+    def test_the_first_poll_reads_each_pr_in_full_with_no_listing(self):
+        pool = _Pool()
+
+        pool.tick(0)
+
+        names = pool.names()
+        self.assertNotIn("list_prs", names)
+        self.assertNotIn("repo_inline_comments", names)
+        self.assertEqual(names.count("pr_view"), 16)
+        self.assertEqual(pool.snapshot.head_sha(_A[0]), "h-" + _A[0][-8:])
+        pool.reset()
+
+        pool.tick(60)
+
+        self.assertEqual(pool.names().count("list_prs"), 2)
+
+    def test_no_gated_prs_starts_no_poll_and_a_later_pr_starts_one_at_once(self):
+        pool = _Pool()
+
+        self.assertFalse(pool.tick(0, prs=[]))
+        self.assertEqual(pool.runner.starts, 0)
+        self.assertTrue(pool.tick(5, prs=[_A[0]]))
+        self.assertEqual(pool.runner.starts, 1)
+
+    def test_the_poll_does_not_restart_before_it_is_due(self):
+        pool = _Pool()
+        pool.tick(0)
+
+        self.assertFalse(pool.tick(59))
+        self.assertTrue(pool.tick(60))
+
+
+class TestRunnerAndConfig(unittest.TestCase):
+    def test_a_poll_still_running_is_not_restarted(self):
+        pool = _Pool(runner=BlockingGithubPollRunner())
+
+        self.assertTrue(pool.tick(0))
+        self.assertFalse(pool.tick(60))
+        self.assertFalse(pool.tick(600))
+        self.assertEqual(pool.runner.starts, 1)
+        self.assertEqual(pool.github.calls, [])
+
+    def test_an_unset_key_fails_at_construction_naming_it(self):
+        github = _github()
+        with self.assertRaises(ConfigError) as ctx:
+            GithubPollUseCase(PrSnapshot(github), github, InlineGithubPollRunner(), _Unset())
+
+        self.assertIn("github-poll-seconds", str(ctx.exception))
+
+    def test_a_live_edit_of_the_interval_takes_effect(self):
+        config = _Config(60)
+        github = _github()
+        snapshot = PrSnapshot(github)
+        gate = GithubPollUseCase(snapshot, github, InlineGithubPollRunner(), config)
+        snapshot.pr_sync_state(_A[0])
+        gate.execute(0)
+        config.seconds = 10
+        snapshot.pr_sync_state(_A[0])
+
+        self.assertTrue(gate.execute(10))
+
+    def test_before_the_first_poll_finishes_readers_see_not_yet_read(self):
+        pool = _Pool(runner=BlockingGithubPollRunner())
+        pool.tick(0)
+
+        self.assertIsInstance(pool.snapshot.pr_sync_state(_A[0]), NotYetRead)
+
+
+if __name__ == "__main__":
+    unittest.main()

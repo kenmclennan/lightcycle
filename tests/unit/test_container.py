@@ -85,3 +85,38 @@ class TestContainerConfigReloadStatusDefault(unittest.TestCase):
         sentinel = object()
         c = Container(store=object(), config_reload_status=sentinel)
         self.assertIs(c.config_reload_status, sentinel)
+
+
+class TestContainerTickGithubPoll(unittest.TestCase):
+    def _config(self, **filevals):
+        import os
+        import tempfile
+        from pathlib import Path
+
+        from lightcycle.config import Config
+
+        path = os.path.join(tempfile.mkdtemp(), "config")
+        Path(path).write_text(
+            "".join("%s: %s\n" % (k.replace("_", "-"), v) for k, v in filevals.items()))
+        return Config(environ={"LC_CONFIG": path})
+
+    def test_tick_without_github_poll_seconds_fails_naming_the_key(self):
+        from lightcycle.config import ConfigError
+
+        container = Container(store=object(), config=self._config(spin_cap="3"))
+
+        with self.assertRaises(ConfigError) as ctx:
+            container.tick(flow=object())
+
+        self.assertIn("github-poll-seconds", str(ctx.exception))
+
+    def test_tick_wires_the_monitor_over_a_snapshot_not_the_real_port(self):
+        from lightcycle.application.pool.pr_snapshot import PrSnapshot
+
+        container = Container(
+            store=object(), github=object(),
+            config=self._config(spin_cap="3", github_poll_seconds="60"))
+
+        tick = container.tick(flow=object())
+
+        self.assertIsInstance(tick._monitor._github, PrSnapshot)

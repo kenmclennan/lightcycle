@@ -70,7 +70,7 @@ class TickUseCase:
         self, store, workers, spawner, config, monitor, breaker_gate,
         hook_completions, worktrees, git, backup_gate, worker_log, flow_service, spin_port, usage_gate,
         stream, memory_gate, guidance_gate,
-        schedule_gate, config_reload, lifecycle_gate, script_gate,
+        schedule_gate, config_reload, lifecycle_gate, script_gate, github_poll_gate,
     ):
         self._store = store
         self._workers = workers
@@ -81,6 +81,7 @@ class TickUseCase:
             spin_port=spin_port, spin_cap=config.spin_cap(), stream=stream,
         )
         self._monitor = monitor
+        self._github_poll_gate = github_poll_gate
         self._schedule_gate = schedule_gate
         self._lifecycle_gate = lifecycle_gate
         self._script_gate = script_gate
@@ -133,11 +134,17 @@ class TickUseCase:
                 % result.reason)
         return result
 
+    def prime(self, now):
+        self._monitor.execute()
+        if self._github_poll_gate.execute(now):
+            self._github_poll_gate.settle()
+
     def execute(self, input: TickInput) -> TickResponse:
         config_result = self._reload_config()
         self._flow_service.clear_cache()
         self._workers.reap()
         monitor_result = self._monitor.execute()
+        self._github_poll_gate.execute(input.now)
         schedules_result = self._schedules(input.now)
         lifecycle_result = self._lifecycle(input.now)
         scripts_result = self._scripts(input.now)

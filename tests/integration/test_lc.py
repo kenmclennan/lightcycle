@@ -127,6 +127,7 @@ def write_config(projects=None, specs=None):
         "stall-seconds: 1800",
         "spin-cap: 3",
         "poll-seconds: 5",
+        "github-poll-seconds: 60",
         "worker-history: 20",
         "editor: vi",
         "audit-shortcode: AUD",

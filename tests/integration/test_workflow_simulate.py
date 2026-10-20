@@ -128,6 +128,7 @@ def _seed_config(home):
         "worktree-retry-sleep: 0.01",
         "max-boot-seconds: 120",
         "poll-seconds: 5",
+        "github-poll-seconds: 60",
         "worker-history: 20",
         "editor: vi",
         "audit-shortcode: AUD",

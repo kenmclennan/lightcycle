@@ -1994,6 +1994,7 @@ def cmd_start(argv):
         tick = _container.tick(flow=_flow())
         if a.once:
             now = time.time()
+            tick.prime(now)
             result = _run_tick(tick, _container.worker_log, TickInput(now=now), now)
             lines, _ = _format_tick(result, None, now)
             for line in lines:

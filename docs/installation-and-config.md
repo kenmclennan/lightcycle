@@ -59,6 +59,7 @@ This table documents every `_SEED_KEYS` entry - `tests/unit/test_docs_reference_
 | `workflow-retention` | pulled bundles kept per origin, minimum 1 (the current version and any a live item pins are always kept) |
 | `max-agents` | worker cap the pool fills to each tick; must be `>= 0` (`0` pauses admission for the tick) |
 | `poll-seconds` | pool tick interval |
+| `github-poll-seconds` | how often the background github poll reads GitHub, minimum 1 and required (seeded `60`); separate from `poll-seconds` so a tick never waits on GitHub. Takes effect on the next config reload |
 | `branch-prefix` | prefix for worktree branches |
 | `max-boot-seconds` / `max-session-seconds` | worker boot and session caps; both must be `>= 0` |
 | `stall-seconds` | how long a claimed worker's log can go without growing before the pool kills it and reclaims its step; must be `>= 0` |
