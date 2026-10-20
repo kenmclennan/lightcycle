@@ -1851,6 +1851,12 @@ def _format_tick(result, prev_snapshot, now):
     return lines, cur
 
 
+def _tick_duration_lines(duration, interval):
+    if duration > interval:
+        return ["tick overran: took %.1fs against poll-seconds %s" % (duration, interval)]
+    return []
+
+
 def _run_log_lines(result, now):
     ts = time.strftime("%H:%M:%S", time.localtime(now))
     lines = _tick_event_lines(result, ts) + [_state_line(result, ts, reason=_idle_reason(result))]
@@ -1996,6 +2002,7 @@ def cmd_start(argv):
             now = time.time()
             result = _run_tick(tick, _container.worker_log, TickInput(now=now), now)
             lines, _ = _format_tick(result, None, now)
+            lines.append("tick took %.1fs" % (time.time() - now))
             for line in lines:
                 print(line)
             return 0
@@ -2032,6 +2039,7 @@ def cmd_start(argv):
             prev_now, consecutive_failures, _ = _advance_tick_state(
                 prev_now, consecutive_failures, now, True, tick_failure_cap)
             lines, prev_snapshot = _format_tick(result, prev_snapshot, now)
+            lines += _tick_duration_lines(time.time() - now, interval)
             for line in lines:
                 print(line)
             if result.pool.draining:
