@@ -205,6 +205,29 @@ class TestPullComments(unittest.TestCase):
         self.assertEqual(comments[0].id, "100")
         self.assertIsNone(comments[0].in_reply_to_id)
 
+    def test_pull_request_review_id_is_parsed_as_a_string(self):
+        payload = json.dumps(
+            {"id": 100, "author": "reviewer", "body": "nit", "created_at": 1704153600.0,
+             "pull_request_review_id": 555}
+        )
+        with patch(
+            "lightcycle.adapters.github.subprocess.run", return_value=_proc(payload)
+        ):
+            comments = self.adapter.pull_comments(_PR, since=0.0)
+
+        self.assertEqual(comments[0].review_id, "555")
+
+    def test_missing_pull_request_review_id_yields_none(self):
+        payload = json.dumps(
+            {"id": 100, "author": "reviewer", "body": "nit", "created_at": 1704153600.0}
+        )
+        with patch(
+            "lightcycle.adapters.github.subprocess.run", return_value=_proc(payload)
+        ):
+            comments = self.adapter.pull_comments(_PR, since=0.0)
+
+        self.assertIsNone(comments[0].review_id)
+
     def test_multiple_comments_parsed_from_ndjson_lines(self):
         payload = "\n".join(
             json.dumps(

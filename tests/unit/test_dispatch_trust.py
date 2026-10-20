@@ -33,7 +33,7 @@ def _mention(ts, author, cid, body="@lc please fix"):
     return (ts, Comment(author=author, body=body, is_top_level=True, id=cid, created_at=ts))
 
 
-def _review(ts, author, rid, body="needs work"):
+def _review(ts, author, rid, body="@lc needs work"):
     return (ts, Review(
         author=author, body=body, created_at=ts, state="CHANGES_REQUESTED", id=rid))
 
