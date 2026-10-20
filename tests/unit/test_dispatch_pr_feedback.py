@@ -824,6 +824,31 @@ class TestMonitorPrsConflict(unittest.TestCase):
         self.assertEqual(steps[0].role, "human")
         self.assertEqual(steps[0].stage, "escalate-step")
 
+    def test_escalated_task_carries_cap_note_with_count_stage_and_resolve_command(self):
+        url = "https://github.com/x/y/pull/58"
+        store, item, step, _, uc = self._setup(
+            url, FakeGitHub(conflicted_prs={url}), prior_conflicts=2)
+
+        uc.execute()
+
+        opened = [t for t in store.all_nodes() if t.id != step and t.type == "step"
+                  and t.state != "done"][0]
+        notes = store.get_node(opened.id).notes
+        self.assertIn("pr_conflict_cap reached: 2 conflicts at", notes)
+        self.assertIn(store.get_node(step).stage, notes)
+        self.assertIn("`lc done %s resolved`" % opened.id, notes)
+
+    def test_under_cap_conflict_step_carries_no_cap_note(self):
+        url = "https://github.com/x/y/pull/60"
+        store, item, step, _, uc = self._setup(
+            url, FakeGitHub(conflicted_prs={url}), prior_conflicts=1)
+
+        uc.execute()
+
+        for t in store.all_nodes():
+            if t.id != step and t.type == "step":
+                self.assertNotIn("pr_conflict_cap", store.get_node(t.id).notes or "")
+
     def test_conflict_fires_when_step_also_declares_feedback(self):
         url = "https://github.com/x/y/pull/59"
         store = FakeStore()
