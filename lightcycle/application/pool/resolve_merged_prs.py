@@ -9,6 +9,7 @@ from lightcycle.application.pool.pr_lookups import (
     false_on_failure,
     flow_for,
     latest_step,
+    skip_unpinned,
 )
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.domain.runs import RunState
@@ -92,6 +93,8 @@ class ResolveMergedPrsUseCase:
             if not any(r.pr for r in self._store.open_runs_of(item.id)):
                 continue
             if active_step_any(self._store, item.id) is None:
+                continue
+            if skip_unpinned(self._store, self._flow_service, item):
                 continue
             flow = flow_for(self._flow_service, item)
             resolved = False

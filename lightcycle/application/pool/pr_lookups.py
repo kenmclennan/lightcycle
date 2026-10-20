@@ -14,6 +14,20 @@ def flow_for(flow_service, node):
     return flow_service.flow_for(node)
 
 
+def skip_unpinned(store, flow_service, node):
+    value = flow_service.unpinned_workflow(node)
+    if value is None:
+        return False
+    target = node if node.type == "step" else active_step_any(store, node.id)
+    if target is not None:
+        store.note_condition(
+            target.id,
+            "workflow %s is not a pin; set it with lc set %s --workflow %s"
+            % (value, node.item if node.type == "step" else node.id, value),
+        )
+    return True
+
+
 def run_of(store, flow_service, node):
     phase = flow_for(flow_service, node).step_def(getattr(node, "stage", None)).phase
     return store.current_run(node.item, phase)

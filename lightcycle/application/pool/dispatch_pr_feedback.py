@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import List
 
 from lightcycle.application.flow.complete_step import CompleteInput
-from lightcycle.application.pool.pr_lookups import flow_for, run_of
+from lightcycle.application.pool.pr_lookups import flow_for, run_of, skip_unpinned
 from lightcycle.application.pool.pr_sync_reads import PrSyncReads
 from lightcycle.application.feedback.hold_comment import HoldCommentUseCase
 from lightcycle.config import ConfigError
@@ -160,6 +160,8 @@ class DispatchPrFeedbackUseCase:
             if step.type != "step" or step.state == State.DONE:
                 continue
             if not step.item:
+                continue
+            if skip_unpinned(self._store, self._flow_service, step):
                 continue
             flow = flow_for(self._flow_service, step)
             feedback_step = flow.step_def(step.stage).pr_feedback

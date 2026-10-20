@@ -137,6 +137,12 @@ class FlowService:
         item = self._owning_item(step)
         return item.workflow if item is not None else None
 
+    def unpinned_workflow(self, node):
+        if self._workflow_source is None:
+            return None
+        value = self.workflow_for(node)
+        return value if value and parse_pin(value) is None else None
+
     def workflow_owner(self, node):
         item = self._owning_item(node)
         if item is not None and item.workflow:
