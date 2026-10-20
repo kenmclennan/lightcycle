@@ -10,6 +10,7 @@ from lightcycle.application.pool.pr_writes import PrWrites
 from lightcycle.application.pool.resolve_ci import ResolveCiUseCase
 from lightcycle.application.pool.tick import TickInput
 from lightcycle.ports.github import CheckRun, Comment, NotYetRead, ReadFailure, Review
+from tests.support.fake_fs import FakeFs
 from tests.support.fake_git import FakeGit
 from tests.support.fake_github import FakeGitHub
 from tests.support.fake_github_budget_status import FakeGithubBudgetStatus
@@ -62,7 +63,7 @@ def _tick(monitor, gate):
 
 
 def _gate(snapshot, github, runner):
-    return GithubPollUseCase(snapshot, github, runner, _Config(), PrWrites(time.monotonic), FakeGithubBudgetStatus(), time.time)
+    return GithubPollUseCase(snapshot, github, runner, _Config(), PrWrites(time.monotonic), FakeGithubBudgetStatus(), time.time, FakeFs())
 
 
 class TestTickIndependence(unittest.TestCase):
@@ -345,7 +346,7 @@ class _Rig:
             self.store, self.snapshot, FakeWorktrees(), flow, CompleteStepUseCase(self.store, flow),
             trusted_authors=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
             writes=self.writes)
-        self.poll = GithubPollUseCase(self.snapshot, self.github, runner, _Config(), self.writes, FakeGithubBudgetStatus(), time.time)
+        self.poll = GithubPollUseCase(self.snapshot, self.github, runner, _Config(), self.writes, FakeGithubBudgetStatus(), time.time, FakeFs())
 
     def notes(self):
         return self.store.get_node(self.step).notes or ""

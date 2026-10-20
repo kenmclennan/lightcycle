@@ -83,7 +83,8 @@ class Container:
             script_runner if script_runner is not None else ScriptRunnerAdapter(self.config)
         )
         self.github_poll_runner = (
-            github_poll_runner if github_poll_runner is not None else GithubPollRunnerAdapter()
+            github_poll_runner if github_poll_runner is not None
+            else GithubPollRunnerAdapter(self.worker_log)
         )
         self.launcher = launcher if launcher is not None else LauncherAdapter()
         self.upgrade = upgrade if upgrade is not None else UpgradeAdapter(self.config)
@@ -167,7 +168,7 @@ class Container:
             ),
             github_poll_gate=GithubPollUseCase(
                 snapshot, self.github, self.github_poll_runner, self.config, writes,
-                self.github_budget_status, time.time),
+                self.github_budget_status, time.time, self.worker_log),
             hook_completions=HookCompletionsUseCase(self.store, flow),
             worktrees=worktrees,
             git=self.git,

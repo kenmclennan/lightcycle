@@ -1,3 +1,4 @@
+import time
 from dataclasses import replace
 
 from lightcycle.application.pool.pr_snapshot import PrEntry
@@ -11,14 +12,25 @@ def _listed_state(listed):
 
 
 class PrPoll:
-    def __init__(self, github, snapshot, writes):
+    def __init__(self, github, snapshot, writes, worker_log):
         self._github = github
         self._snapshot = snapshot
         self._writes = writes
+        self._worker_log = worker_log
+        self._now = 0.0
         self._cutoffs = {}
         self._tips = {}
 
-    def run(self, wanted):
+    def _log_failure(self, read, target, failure):
+        detail = failure.stderr.strip().splitlines()[0] if failure.stderr.strip() else ""
+        message = "%s %s failed (exit %s)" % (read, target, failure.returncode)
+        if detail:
+            message += ": " + detail
+        self._worker_log.append_run_log("%s  %-7s  %s\n" % (
+            time.strftime("%H:%M:%S", time.localtime(self._now)), "github", message))
+
+    def run(self, wanted, now):
+        self._now = now
         self._writes.perform(self._github)
         by_repo = {}
         for pr in sorted(wanted.prs):
@@ -41,6 +53,10 @@ class PrPoll:
         if cutoff is not None:
             rows = self._github.list_prs(repo, cutoff)
             comments = self._github.repo_inline_comments(repo, cutoff)
+            if isinstance(rows, ReadFailure):
+                self._log_failure("list_prs", repo, rows)
+            if isinstance(comments, ReadFailure):
+                self._log_failure("repo_inline_comments", repo, comments)
             if isinstance(rows, ReadFailure) or isinstance(comments, ReadFailure):
                 for pr in prs:
                     self._snapshot.mark_stale(pr)
@@ -54,7 +70,8 @@ class PrPoll:
             entry = self._snapshot.entry_of(pr)
             row = listed.get(pr)
             if (entry is None or entry.stale or cutoff is None or pr in inline
-                    or (row is not None and row.updated_at != entry.updated_at)):
+                    or (row is not None and (row.updated_at != entry.updated_at
+                                             or _listed_state(row) != entry.state))):
                 moved.append(pr)
             else:
                 unmoved.append(pr)
@@ -96,6 +113,7 @@ class PrPoll:
         for base, prs in bases.items():
             tip = self._github.branch_tip(repo, base)
             if isinstance(tip, ReadFailure):
+                self._log_failure("branch_tip", "%s@%s" % (repo, base), tip)
                 continue
             previous = self._tips.get((repo, base))
             self._tips[(repo, base)] = tip
@@ -111,12 +129,15 @@ class PrPoll:
                 bases.add(entry.view.base_ref)
         for base in bases:
             tip = self._github.branch_tip(repo, base)
-            if not isinstance(tip, ReadFailure):
+            if isinstance(tip, ReadFailure):
+                self._log_failure("branch_tip", "%s@%s" % (repo, base), tip)
+            else:
                 self._tips[(repo, base)] = tip
 
     def _refresh_view(self, pr):
         view = self._github.pr_view(pr)
         if isinstance(view, ReadFailure):
+            self._log_failure("pr_view", pr, view)
             self._snapshot.mark_stale(pr)
             return False
         entry = self._snapshot.entry_of(pr) or PrEntry()
@@ -128,6 +149,7 @@ class PrPoll:
     def _read_in_full(self, pr):
         view = self._github.pr_view(pr)
         if isinstance(view, ReadFailure):
+            self._log_failure("pr_view", pr, view)
             self._snapshot.mark_stale(pr)
             return None
         previous = self._snapshot.entry_of(pr) or PrEntry()
@@ -137,8 +159,14 @@ class PrPoll:
         comments = self._github.comments_since(pr, 0.0)
         pulls = self._github.pull_comments(pr, 0.0)
         reviews = self._github.reviews(pr, 0.0)
-        reads = (push_time, comments, pulls, reviews)
-        if any(isinstance(r, ReadFailure) for r in reads):
+        reads = (
+            ("last_push_time", push_time), ("comments_since", comments),
+            ("pull_comments", pulls), ("reviews", reviews),
+        )
+        failures = [(name, r) for name, r in reads if isinstance(r, ReadFailure)]
+        for name, failure in failures:
+            self._log_failure(name, pr, failure)
+        if failures:
             self._snapshot.mark_stale(pr)
             return None
         self._snapshot.publish(
@@ -159,6 +187,7 @@ class PrPoll:
                 continue
             files = self._github.changed_files(pr, sha, entry.view.base_ref)
             if isinstance(files, ReadFailure):
+                self._log_failure("changed_files", pr, files)
                 continue
             self._snapshot.publish_files(pr, sha, files)
 
@@ -170,9 +199,11 @@ class PrPoll:
             sha = entry.view.head_sha
             runs = self._github.check_runs(pr, sha)
             if isinstance(runs, ReadFailure):
+                self._log_failure("check_runs", pr, runs)
                 continue
             view = self._github.pr_view(pr)
             if isinstance(view, ReadFailure):
+                self._log_failure("pr_view", pr, view)
                 continue
             current = self._snapshot.entry_of(pr) or entry
             self._snapshot.publish(pr, replace(current, state=view.state, view=view))
