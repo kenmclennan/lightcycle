@@ -51,7 +51,7 @@ class CheckContentPinUseCase:
         head = self._github.head_sha(pr_value)
         if isinstance(head, ReadFailure):
             return
-        if run.pr != pr_value:
+        if run.pr != pr_value or run.content_pin is None:
             self._store.record_pr_pin(run.id, pr_value, head)
             return
         pin = run.content_pin
