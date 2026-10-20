@@ -1188,6 +1188,11 @@ class DescriptionPane(RichLog):
         Binding("ctrl+d", "page_down", "Page down", show=False),
     ]
 
+    def on_resize(self, event: events.Resize) -> None:
+        screen = self.screen
+        if isinstance(screen, NodeHubScreen):
+            screen.refresh_description_width()
+
 
 def pane_text_width(pane) -> int:
     if not pane.size.width:
@@ -2469,6 +2474,9 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         if context.note:
             rows.append(("note", context.note))
         return tuple(rows)
+
+    def refresh_description_width(self) -> None:
+        self._render_description(self._description_item)
 
     def _render_description(self, item) -> None:
         self._description_item = item
