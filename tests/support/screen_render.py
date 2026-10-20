@@ -1202,6 +1202,28 @@ def _hub_escalation(size):
 SCRIPT_PARK_REASON = "check exited 1: 2 source files failed validation"
 
 
+WRITE_CODE_PARK_PR = "https://github.com/kenmclennan/lightcycle/pull/143"
+
+
+def _hub_write_code_parked_with_pr(size):
+    store = DemoStore(now=lambda: _at(6))
+    item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
+    pid = store.open_pass(item)
+    store.set_pr(store.open_run(item, pid, "code"), WRITE_CODE_PARK_PR)
+    step = store.step("LC-143.3.7", step="write-code", role="agent", parent=item)
+    store.set_step_pass(step, pid)
+    store.update_metadata(
+        step, {"needs": "Which review comment wins", "reason": "two comments on the PR disagree"})
+    route_to_human(store, step, "BLOCKED: Which review comment wins")
+    session = _launch(store, size=size)
+    container = session.app._container
+    flow = _PresentsFlowService(
+        container.flow_service(), "write-code", None, detail=("outcome",), owner="agent")
+    flow.phase_for = lambda node: "code"
+    container.flow_service = lambda: flow
+    return _open_hub(session, step)
+
+
 def _hub_script_parked(size):
     store = DemoStore(now=lambda: _at(6))
     item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
@@ -1748,6 +1770,7 @@ SCREENS = {
     "hub#step-done-context-reconstructed": _hub_step_done_context_reconstructed,
     "hub#escalation": _hub_escalation,
     "hub#script-parked": _hub_script_parked,
+    "hub#write-code-parked-with-pr": _hub_write_code_parked_with_pr,
     "hub#escalated-long-reason": _hub_escalated_long_reason,
     "hub#step-node": _hub_step_node,
     "hub#step-composite-title": _hub_step_composite_title,

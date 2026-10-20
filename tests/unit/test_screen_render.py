@@ -356,6 +356,14 @@ def test_a_parked_script_stage_with_declared_detail_shows_its_reason_not_the_emp
     assert DETAIL_EMPTY_MESSAGE not in frame
 
 
+def test_a_parked_write_code_step_lists_reason_needs_and_the_code_pr():
+    frame = render("hub#write-code-parked-with-pr", size=(140, 30))
+
+    assert "two comments on the PR disagree" in frame
+    assert "Which review comment wins" in frame
+    assert "https://github.com/kenmclennan/lightcycle/pull/143" in frame
+
+
 def test_a_closed_step_without_frozen_inputs_shows_the_reconstructed_header_and_the_table():
     frame = render("hub#step-done-context-reconstructed", size=(140, 30))
 
