@@ -85,11 +85,13 @@ class PrSnapshot(GitHubEventsPort):
         with self._lock:
             return (pr, sha) in self._files
 
-    def retain(self, prs):
+    def retain(self, prs, check_prs):
         with self._lock:
             self._entries = {pr: e for pr, e in self._entries.items() if pr in prs}
             self._files = {k: v for k, v in self._files.items() if k[0] in prs}
-            self._checks = {k: v for k, v in self._checks.items() if k[0] in prs}
+            self._checks = {
+                k: v for k, v in self._checks.items() if k[0] in prs and k[0] in check_prs
+            }
 
     def authenticated_login(self):
         return self._github.authenticated_login()

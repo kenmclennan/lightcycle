@@ -83,9 +83,23 @@ class TestReadPr(unittest.TestCase):
         self.assertFalse(self.snap.is_stale("https://github.com/acme/widget/pull/9"))
 
     def test_retain_drops_entries_for_prs_no_longer_wanted(self):
-        self.snap.retain(frozenset())
+        self.snap.retain(frozenset(), frozenset())
 
         self.assertIsInstance(self.snap.head_sha(_PR), NotYetRead)
+
+    def test_retain_drops_check_runs_no_ci_step_asked_for(self):
+        self.snap.publish_checks(_PR, "h1", ["run"])
+
+        self.snap.retain(frozenset([_PR]), frozenset())
+
+        self.assertIsInstance(self.snap.check_runs(_PR, "h1"), NotYetRead)
+
+    def test_retain_keeps_check_runs_a_ci_step_still_asks_for(self):
+        self.snap.publish_checks(_PR, "h1", ["run"])
+
+        self.snap.retain(frozenset([_PR]), frozenset([_PR]))
+
+        self.assertEqual(self.snap.check_runs(_PR, "h1"), ["run"])
 
     def test_writes_and_login_reach_the_real_port(self):
         self.github._head_shas[_PR] = "h1"
