@@ -52,6 +52,7 @@ class UpdateBehindPrsUseCase:
     def execute(self, reads=None) -> UpdateBehindPrsResponse:
         reads = reads or PrSyncReads(self._github)
         updated, update_failed = [], []
+        gated_prs, gated_steps = set(), set()
         for step in self._store.all_nodes():
             if step.type != "step" or step.state == State.DONE or not step.item:
                 continue
@@ -62,7 +63,12 @@ class UpdateBehindPrsUseCase:
             pr = run.pr if run else None
             if pr is None:
                 continue
+            gated_prs.add(pr)
+            gated_steps.add(step.id)
             self._update(step, pr, reads, updated, update_failed)
+        self._attempted = {key for key in self._attempted if key[0] in gated_prs}
+        self._streaks = {pr: v for pr, v in self._streaks.items() if pr in gated_prs}
+        self._cap_noted &= gated_steps
         return UpdateBehindPrsResponse(updated=updated, update_failed=update_failed)
 
     def _update(self, step, pr, reads, updated, update_failed):
