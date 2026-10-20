@@ -1,3 +1,5 @@
+import contextlib
+import io
 import json
 import unittest
 
@@ -191,6 +193,38 @@ class TestLiveUsageAccrualUseCase(unittest.TestCase):
         recorded_tid, turn_count, _ = store.record_attribution_calls[0]
         self.assertEqual(turn_count, 1)
         self.assertEqual(store.usage_accrual_state("sp-1").offset, len(full_line.encode()))
+
+    def test_a_worker_whose_parse_raises_is_warned_about_and_the_other_is_still_recorded(self):
+        class RaisingOnBadLog(ClaudeStreamAdapter):
+            def parse_attribution_chunk(self, lines, seen, pending):
+                if any("BAD" in line for line in lines):
+                    raise AttributeError("'str' object has no attribute 'get'")
+                return super().parse_attribution_chunk(lines, seen, pending)
+
+        store = RecordingFakeStore()
+        bad = create_owned_step(store, "build: bad", step="build", role="agent")
+        good = create_owned_step(store, "build: good", step="build", role="agent")
+        store.set_model(good, "sonnet")
+        good_lines = [_assistant("msg-1", usage={"input_tokens": 7, "output_tokens": 3,
+                                                  "cache_read_input_tokens": 0,
+                                                  "cache_creation_input_tokens": 0})]
+        fs = FakeFs(files={"/l/bad.log": b"BAD\n",
+                           "/l/good.log": ("\n".join(good_lines) + "\n").encode()})
+        workers = FakeWorkers(
+            workers=[
+                {"spawnid": "sp-bad", "role": "agent", "pid": 1, "step": bad, "log": "/l/bad.log", "started": 0},
+                {"spawnid": "sp-good", "role": "agent", "pid": 2, "step": good, "log": "/l/good.log", "started": 0},
+            ],
+            alive_pids={1, 2},
+        )
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            LiveUsageAccrualUseCase(store, fs, workers, FakeConfig(), stream=RaisingOnBadLog()).execute(now=100)
+
+        self.assertIn("warning", err.getvalue())
+        self.assertIn("sp-bad", err.getvalue())
+        self.assertEqual([c[0] for c in store.record_usage_calls], [good])
+        self.assertEqual(store.record_usage_calls[0][1:3], (7, 3))
 
 
 if __name__ == "__main__":

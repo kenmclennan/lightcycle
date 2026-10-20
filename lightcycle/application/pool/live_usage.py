@@ -1,9 +1,12 @@
+import sys
+
 from lightcycle.domain.money import Cost
 from lightcycle.domain.pool import UsageResume, WorkerPool, price_tokens
 from lightcycle.ports.store import NodeNotFoundError
 from lightcycle.ports.workers import RegistryUnreadable
 
 MAX_ACCRUAL_READ_BYTES = 5_000_000
+_PARSE_ERRORS = (AttributeError, KeyError, TypeError, ValueError)
 
 
 class LiveUsageAccrualUseCase:
@@ -23,7 +26,13 @@ class LiveUsageAccrualUseCase:
         for w in pool.alive(self._workers.pid_alive):
             if not w.step or not w.spawnid:
                 continue
-            self._accrue(w, rates)
+            try:
+                self._accrue(w, rates)
+            except _PARSE_ERRORS as e:
+                sys.stderr.write(
+                    "warning: usage accrual for worker %s skipped: %s: %s\n"
+                    % (w.spawnid, type(e).__name__, e)
+                )
 
     def _accrue(self, w, rates):
         resume = self._store.usage_accrual_state(w.spawnid) or UsageResume()

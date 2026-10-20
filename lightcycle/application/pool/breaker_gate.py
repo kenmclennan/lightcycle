@@ -1,3 +1,4 @@
+import sys
 from dataclasses import dataclass, field
 from typing import List
 
@@ -5,6 +6,9 @@ from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.domain.pool import Breaker, WorkerPool, resolve_usage
 from lightcycle.ports.store import NodeNotFoundError
 from lightcycle.ports.workers import RegistryUnreadable
+
+
+_PARSE_ERRORS = (AttributeError, KeyError, TypeError, ValueError)
 
 
 @dataclass(frozen=True)
@@ -92,24 +96,30 @@ class BreakerGateUseCase:
             event = self._stream.parse_rate_limit_event(self._worker_log.iter_lines(w.log))
             no_work = not self._stream.saw_session_activity(self._worker_log.iter_lines(w.log))
             if self._store is not None and w.step is not None:
-                usage = self._stream.parse_usage_event(self._worker_log.iter_lines(w.log))
-                attribution = self._stream.parse_attribution_event(self._worker_log.iter_lines(w.log))
-                if not usage.has_result_line and (
-                    attribution.recovered_input_tokens or attribution.recovered_output_tokens
-                    or attribution.recovered_cache_read_tokens
-                    or attribution.recovered_cache_creation_tokens
-                ):
-                    try:
-                        model = self._store.get_node(w.step).model
-                    except NodeNotFoundError:
-                        model = None
-                    usage = resolve_usage(usage, attribution, model, rates)
-                resume = self._store.usage_accrual_state(w.spawnid)
-                if resume is not None:
-                    usage = resume.subtract_from(usage)
-                    attribution = resume.subtract_attribution_from(attribution)
-                self._store.record_backfilled_usage(w.log, w.step, usage, attribution)
-                self._store.clear_usage_accrual_state(w.spawnid)
+                try:
+                    usage = self._stream.parse_usage_event(self._worker_log.iter_lines(w.log))
+                    attribution = self._stream.parse_attribution_event(self._worker_log.iter_lines(w.log))
+                    if not usage.has_result_line and (
+                        attribution.recovered_input_tokens or attribution.recovered_output_tokens
+                        or attribution.recovered_cache_read_tokens
+                        or attribution.recovered_cache_creation_tokens
+                    ):
+                        try:
+                            model = self._store.get_node(w.step).model
+                        except NodeNotFoundError:
+                            model = None
+                        usage = resolve_usage(usage, attribution, model, rates)
+                    resume = self._store.usage_accrual_state(w.spawnid)
+                    if resume is not None:
+                        usage = resume.subtract_from(usage)
+                        attribution = resume.subtract_attribution_from(attribution)
+                    self._store.record_backfilled_usage(w.log, w.step, usage, attribution)
+                    self._store.clear_usage_accrual_state(w.spawnid)
+                except _PARSE_ERRORS as e:
+                    sys.stderr.write(
+                        "warning: usage backfill for worker %s skipped: %s: %s\n"
+                        % (w.spawnid, type(e).__name__, e)
+                    )
             self._workers.mark_checked(w.spawnid)
             if event and event.is_rejected:
                 rejected_reset_ats.append(event.reset_at)
