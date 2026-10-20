@@ -70,6 +70,7 @@ class UpdateBehindPrsUseCase:
             self._update(step, pr, reads, updated, update_failed)
         self._attempted = {key for key in self._attempted if key[0] in gated_prs}
         self._streaks = {pr: v for pr, v in self._streaks.items() if pr in gated_prs}
+        self._pending = {pr: v for pr, v in self._pending.items() if pr in gated_prs}
         self._cap_noted &= gated_steps
         return UpdateBehindPrsResponse(updated=updated, update_failed=update_failed)
 
