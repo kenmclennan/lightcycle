@@ -365,6 +365,7 @@ class SqliteStore(StorePort):
         self._migrate_goals_description_and_project()
         self._migrate_drop_goal_state_of_play_columns()
         self._migrate_rename_knowledge_project()
+        self._migrate_drop_legacy_artifact_types()
         if version == 1:
             self._migrate_schema_1_to_2()
         self._commit()
@@ -583,6 +584,11 @@ class SqliteStore(StorePort):
             "UPDATE projects SET identity = ? WHERE identity = ? "
             "AND NOT EXISTS (SELECT 1 FROM projects WHERE identity = ?)",
             (GUIDANCE_WORKSPACE, LEGACY_KNOWLEDGE_WORKSPACE, GUIDANCE_WORKSPACE),
+        )
+
+    def _migrate_drop_legacy_artifact_types(self):
+        self._conn.execute(
+            "DELETE FROM artifacts WHERE atype IN ('brief', 'design', 'backlog')"
         )
 
     def _migrate_abandoned_disposition_value(self):

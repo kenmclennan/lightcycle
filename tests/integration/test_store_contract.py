@@ -290,6 +290,31 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
         )
 
 
+class TestSqliteStoreLegacyArtifactTypeMigration(unittest.TestCase):
+    def _count(self, store, atype):
+        return store._conn.execute(
+            "SELECT count(*) FROM artifacts WHERE atype = ?", (atype,)
+        ).fetchone()[0]
+
+    def test_reopening_deletes_brief_design_and_backlog_artifacts_only(self):
+        s = make_sqlite_store()
+        config = s._config
+        item = s.create_item("an item", "a description", shortcode="GRID")
+        for atype in ("brief", "design", "backlog", "pr"):
+            s._conn.execute(
+                "INSERT INTO artifacts (item_id, atype, value) VALUES (?, ?, ?)",
+                (item, atype, "v"),
+            )
+        s._conn.commit()
+        s.release()
+
+        reopened = SqliteStore(config)
+
+        for atype in ("brief", "design", "backlog"):
+            self.assertEqual(self._count(reopened, atype), 0)
+        self.assertEqual(self._count(reopened, "pr"), 1)
+
+
 class TestSqliteStoreAbandonedDispositionMigration(unittest.TestCase):
     def _reopen(self, config):
         return SqliteStore(config)
