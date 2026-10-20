@@ -1415,6 +1415,28 @@ class TestTick(unittest.TestCase):
         lines = _tick_event_lines(result, "12:00:00")
         self.assertTrue(any("preserve" in l and step in l for l in lines))
 
+    def test_a_ci_unread_step_renders_one_ci_unread_line_with_its_reason_and_detail(self):
+        from lightcycle.application.pool.monitor_prs import MonitorPrsResponse
+        from lightcycle.application.pool.resolve_ci import CiUnread
+
+        monitor = MonitorPrsResponse(
+            merged=[], ci_unread=[CiUnread("LC-1.2", "checks-read-failed", "boom")])
+        result = make_tick(
+            FakeStore(), FakeWorkers(), FakeSpawner(), FakeConfig(max_agents=4), monitor=_Monitor(monitor),
+        ).execute(TickInput(now=1000.0))
+
+        lines = [l for l in _tick_event_lines(result, "12:00:00") if "ci-unread" in l]
+
+        self.assertEqual(lines, ["12:00:00  ci-unread  LC-1.2 checks-read-failed: boom"])
+
+
+class _Monitor:
+    def __init__(self, response):
+        self._response = response
+
+    def execute(self):
+        return self._response
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,3 +1,4 @@
+import time
 import unittest
 
 from lightcycle.application.flow.complete_step import CompleteStepUseCase
@@ -80,7 +81,7 @@ class TestUnpinnedWorkflowOnOneItem(unittest.TestCase):
 
     def test_ci_monitor_notes_the_bad_item_and_does_not_raise(self):
         engine_step = self.store.create_step(step="await-merge", role="engine", parent=self.bad)
-        uc = ResolveCiUseCase(self.store, FakeGitHub(), self.flow, self._complete())
+        uc = ResolveCiUseCase(self.store, FakeGitHub(), self.flow, self._complete(), clock=time.monotonic, poll_seconds=lambda: 60)
 
         uc.execute()
 
