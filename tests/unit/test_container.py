@@ -112,6 +112,19 @@ class TestContainerTickGithubPoll(unittest.TestCase):
 
         self.assertIn("github-poll-seconds", str(ctx.exception))
 
+    def test_tick_without_github_view_refresh_polls_fails_naming_the_key(self):
+        from lightcycle.config import ConfigError
+
+        container = Container(
+            store=object(), config=self._config(
+                spin_cap="3", github_poll_seconds="60", github_reserve_calls="750",
+                ci_check_ceiling_seconds="3600"))
+
+        with self.assertRaises(ConfigError) as ctx:
+            container.tick(flow=object())
+
+        self.assertIn("github-view-refresh-polls", str(ctx.exception))
+
     def test_tick_wires_the_monitor_over_a_snapshot_not_the_real_port(self):
         from lightcycle.application.pool.pr_snapshot import PrSnapshot
 
@@ -119,7 +132,7 @@ class TestContainerTickGithubPoll(unittest.TestCase):
             store=object(), github=object(),
             config=self._config(
                 spin_cap="3", github_poll_seconds="60", github_reserve_calls="750",
-                ci_check_ceiling_seconds="3600"))
+                ci_check_ceiling_seconds="3600", github_view_refresh_polls="10"))
 
         tick = container.tick(flow=object())
 
@@ -143,7 +156,8 @@ class TestContainerTickGithubPoll(unittest.TestCase):
 
         container = Container(
             store=object(), config=self._config(
-                spin_cap="3", github_poll_seconds="60", ci_check_ceiling_seconds="3600"))
+                spin_cap="3", github_poll_seconds="60", ci_check_ceiling_seconds="3600",
+                github_view_refresh_polls="10"))
 
         with self.assertRaises(ConfigError) as ctx:
             container.tick(flow=object())

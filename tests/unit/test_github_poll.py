@@ -1,4 +1,5 @@
 import unittest
+import zlib
 import time
 
 from lightcycle.application.pool.github_poll import GithubPollUseCase
@@ -21,16 +22,23 @@ _PER_PR_CALLS = (
 
 
 class _Config:
-    def __init__(self, seconds=60):
+    def __init__(self, seconds=60, refresh=1000):
         self.seconds = seconds
+        self.refresh = refresh
 
     def github_poll_seconds(self):
         return self.seconds
+
+    def github_view_refresh_polls(self):
+        return self.refresh
 
 
 class _Unset:
     def github_poll_seconds(self):
         raise ConfigError("required config value 'github-poll-seconds' is not set")
+
+    def github_view_refresh_polls(self):
+        return 10
 
 
 def _github(**kw):
@@ -41,14 +49,14 @@ def _github(**kw):
 
 
 class _Pool:
-    def __init__(self, github=None, runner=None):
+    def __init__(self, github=None, runner=None, refresh=1000):
         self.github = github or _github()
         self.snapshot = PrSnapshot(self.github)
         self.runner = runner or InlineGithubPollRunner()
         self.status = FakeGithubBudgetStatus()
         self.fs = FakeFs()
         self.gate = GithubPollUseCase(
-            self.snapshot, self.github, self.runner, _Config(), PrWrites(time.monotonic),
+            self.snapshot, self.github, self.runner, _Config(refresh=refresh), PrWrites(time.monotonic),
             self.status, lambda: 1000.0, self.fs)
 
     def log_lines(self):
@@ -550,6 +558,168 @@ class TestRunLogFailures(unittest.TestCase):
         lines = pool.log_lines()
         self.assertEqual(len(lines), 2)
         self.assertTrue(all("branch_tip" in line for line in lines))
+
+
+_FAILING = ("list_prs", "repo_inline_comments", "branch_tip", "pr_view")
+
+
+def _views(pool, pr):
+    return pool.github.calls.count(("pr_view", pr))
+
+
+def _conflicted(pool, pr):
+    return pool.snapshot.pr_sync_state(pr).conflicted
+
+
+class TestUnsettledViews(unittest.TestCase):
+    def test_a_base_move_during_a_blackout_followed_by_an_unknown_first_read_is_caught(self):
+        pr = _A[0]
+        pool = _Pool()
+        pool.tick(0)
+        pool.github._failing_calls = set(_FAILING)
+        pool.tick(60)
+        pool.tick(120)
+        pool.github.advance_base("acme/widget", "main")
+        pool.github._conflicted.add(pr)
+        pool.github.leave_unsettled(pr)
+        pool.tick(130 + 50)
+        pool.github._failing_calls = set()
+        pool.reset()
+
+        pool.tick(240)
+        self.assertFalse(_conflicted(pool, pr))
+        self.assertEqual(_views(pool, pr), 1)
+
+        pool.tick(300)
+        self.assertTrue(_conflicted(pool, pr))
+
+        pool.reset()
+        pool.tick(360)
+        self.assertEqual(_views(pool, pr), 0)
+
+    def test_an_unknown_first_read_after_a_base_move_without_a_blackout_is_caught(self):
+        pr = _B[0]
+        pool = _Pool()
+        pool.tick(0)
+        pool.github.advance_base("acme/gadget", "main")
+        pool.github._conflicted.add(pr)
+        pool.github.leave_unsettled(pr)
+
+        pool.tick(60)
+        self.assertFalse(_conflicted(pool, pr))
+
+        pool.tick(120)
+        self.assertTrue(_conflicted(pool, pr))
+
+    def test_a_pr_stuck_unknown_is_reread_every_poll_and_settled_ones_are_not(self):
+        pool = _Pool()
+        pool.tick(0)
+        pool.github.advance_base("acme/widget", "main")
+        pool.github.leave_unsettled(_A[0], reads=4)
+        pool.github.leave_unsettled(_A[1], reads=1)
+        pool.tick(60)
+        pool.tick(120)
+        pool.reset()
+
+        pool.tick(180)
+
+        self.assertEqual(_views(pool, _A[0]), 1)
+        self.assertEqual(_views(pool, _A[1]), 0)
+
+    def test_a_failed_reread_of_an_unsettled_pr_marks_it_stale_and_it_is_retried(self):
+        pr = _A[0]
+        pool = _Pool()
+        pool.tick(0)
+        pool.github.advance_base("acme/widget", "main")
+        pool.github.leave_unsettled(pr)
+        pool.tick(60)
+        pool.github._failing_calls = {"pr_view"}
+        pool.tick(120)
+        self.assertTrue(pool.snapshot.entry_of(pr).stale)
+        pool.github._failing_calls = set()
+        pool.reset()
+
+        pool.tick(180)
+
+        self.assertEqual(_views(pool, pr), 1)
+        self.assertFalse(pool.snapshot.entry_of(pr).stale)
+
+    def test_a_merged_pr_with_unknown_is_never_reread_for_it(self):
+        pr = _A[0]
+        pool = _Pool()
+        pool.tick(0)
+        pool.github._merged.add(pr)
+        pool.github.touch(pr, 200.0)
+        pool.github.leave_unsettled(pr)
+        pool.tick(60)
+        pool.reset()
+
+        pool.tick(120)
+
+        self.assertEqual(_views(pool, pr), 0)
+
+
+class TestViewRefresh(unittest.TestCase):
+    def test_a_conflict_no_trigger_sees_is_read_within_the_refresh_window(self):
+        pr = _A[0]
+        pool = _Pool(refresh=10)
+        pool.tick(0)
+        pool.github._conflicted.add(pr)
+
+        seen_at = None
+        for n in range(1, 11):
+            pool.tick(60 * n)
+            if _conflicted(pool, pr) and seen_at is None:
+                seen_at = n
+
+        self.assertIsNotNone(seen_at)
+
+    def test_a_pr_is_read_on_exactly_its_slot_poll_and_on_none_of_the_nine_between(self):
+        pr = next(p for p in _ALL if zlib.crc32(p.encode()) % 10 == 6)
+        pool = _Pool(refresh=10)
+        pool.tick(0)
+        reads = []
+        for n in range(1, 31):
+            pool.reset()
+            pool.tick(60 * n)
+            if _views(pool, pr):
+                reads.append(n)
+
+        self.assertEqual([r % 10 for r in reads], [4, 4, 4])
+        self.assertEqual(reads[1] - reads[0], 10)
+
+    def test_ten_quiet_polls_make_eighty_six_calls_each_between_seven_and_ten(self):
+        pool = _Pool(refresh=10)
+        pool.tick(0)
+        total = 0
+        for n in range(1, 11):
+            pool.reset()
+            pool.tick(60 * n)
+            self.assertTrue(7 <= len(pool.github.calls) <= 10)
+            self.assertFalse(set(pool.names()) & (set(_PER_PR_CALLS) - {"pr_view"}))
+            total += len(pool.github.calls)
+
+        self.assertEqual(total, 86)
+
+    def test_refreshing_every_poll_reads_every_pr_once_per_poll(self):
+        pool = _Pool(refresh=1)
+        pool.tick(0)
+        pool.reset()
+
+        pool.tick(60)
+
+        self.assertEqual(len(pool.github.calls), 23)
+
+    def test_a_pr_both_base_moved_and_due_is_read_once(self):
+        pool = _Pool(refresh=1)
+        pool.tick(0)
+        pool.github.advance_base("acme/widget", "main")
+        pool.reset()
+
+        pool.tick(60)
+
+        for pr in _ALL:
+            self.assertEqual(_views(pool, pr), 1)
 
 
 class TestRunnerAndConfig(unittest.TestCase):

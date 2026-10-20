@@ -1,9 +1,14 @@
 import time
+import zlib
 from dataclasses import replace
 
 from lightcycle.application.pool.pr_snapshot import PrEntry
 from lightcycle.domain.pool import pr_repo
 from lightcycle.ports.github import ReadFailure
+
+def _unsettled(view):
+    return view.state == "OPEN" and "UNKNOWN" in (view.mergeable, view.merge_state_status)
+
 
 def _listed_state(listed):
     if listed.state == "closed":
@@ -20,6 +25,7 @@ class PrPoll:
         self._now = 0.0
         self._cutoffs = {}
         self._tips = {}
+        self._runs = 0
 
     def _log_failure(self, read, target, failure):
         detail = failure.stderr.strip().splitlines()[0] if failure.stderr.strip() else ""
@@ -29,7 +35,7 @@ class PrPoll:
         self._worker_log.append_run_log("%s  %-7s  %s\n" % (
             time.strftime("%H:%M:%S", time.localtime(self._now)), "github", message))
 
-    def run(self, wanted, now):
+    def run(self, wanted, now, refresh_polls):
         self._now = now
         self._writes.perform(self._github)
         by_repo = {}
@@ -39,15 +45,16 @@ class PrPoll:
                 by_repo.setdefault(repo, []).append(pr)
         failed = set()
         for repo, prs in by_repo.items():
-            repo_failed = self._poll_repo(repo, prs)
+            repo_failed = self._poll_repo(repo, prs, refresh_polls)
             failed |= repo_failed
             self._snapshot.confirm([pr for pr in prs if pr not in repo_failed], wanted.epoch)
         self._compare_files(wanted.files)
         self._read_checks(wanted.checks)
         self._snapshot.retain(wanted.prs, wanted.checks)
         self._writes.retain(wanted.prs)
+        self._runs += 1
 
-    def _poll_repo(self, repo, prs):
+    def _poll_repo(self, repo, prs, refresh_polls):
         cutoff = self._cutoffs.get(repo)
         listed = {}
         inline = frozenset()
@@ -78,6 +85,9 @@ class PrPoll:
             else:
                 unmoved.append(pr)
         base_moved = self._base_moved(repo, unmoved)
+        for pr in unmoved:
+            if pr not in base_moved and self._needs_reread(pr, refresh_polls):
+                base_moved.append(pr)
         for pr in moved:
             row = listed.get(pr)
             if row is not None and row.state == "closed":
@@ -98,6 +108,12 @@ class PrPoll:
         elif cutoff is not None and not failed:
             self._cutoffs[repo] = newest
         return failed
+
+    def _needs_reread(self, pr, refresh_polls):
+        entry = self._snapshot.entry_of(pr)
+        if entry is not None and entry.view is not None and _unsettled(entry.view):
+            return True
+        return (self._runs + zlib.crc32(pr.encode())) % refresh_polls == 0
 
     def _classify_closed(self, pr, row):
         entry = self._snapshot.entry_of(pr) or PrEntry()

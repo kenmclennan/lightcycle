@@ -36,6 +36,9 @@ class _Config(_BaseConfig):
     def github_poll_seconds(self):
         return _POLL
 
+    def github_view_refresh_polls(self):
+        return 10
+
 
 class _Exploding(FakeGitHub):
     def pr_view(self, pr):
@@ -388,6 +391,12 @@ def _base_advance_only(github):
     github.advance_base("acme/widget", "main")
 
 
+def _conflict_after_unsettled_read(github):
+    github._conflicted.add(_PR)
+    github.leave_unsettled(_PR)
+    github.advance_base("acme/widget", "main")
+
+
 def _ci(github):
     github._check_runs_by_sha[(_PR, "h0")] = (CheckRun("ci", "completed", "success"),)
 
@@ -418,30 +427,43 @@ def _ci_done(runs):
     return not isinstance(runs, ReadFailure) and any(r.conclusion == "success" for r in runs)
 
 
+def _noticed_after(event, seen, polls=40):
+    github = FakeGitHub(
+        updated_ats={_PR: 100.0, _OTHER: 100.0}, head_shas={_PR: "h0", _OTHER: "h0"})
+    snapshot = PrSnapshot(github)
+    monitor = _ProbeMonitor(snapshot, seen)
+    tick = _tick(monitor, _gate(snapshot, github, InlineGithubPollRunner()))
+
+    happened_at = 7.0
+    noticed_at = None
+    fired = False
+    for n in range(0, polls):
+        now = float(n * _TICK)
+        if not fired and now >= happened_at:
+            event(github)
+            fired = True
+        snapshot.pr_sync_state(_OTHER)
+        tick.execute(TickInput(now=now))
+        if fired and monitor.reads[-1] is True and noticed_at is None:
+            noticed_at = now
+    return None if noticed_at is None else noticed_at - happened_at
+
+
 class TestLatency(unittest.TestCase):
     def test_each_event_on_a_watched_pr_is_seen_within_one_poll_interval_plus_a_tick(self):
         for name, (event, seen) in _EVENTS.items():
             with self.subTest(event=name):
-                github = FakeGitHub(
-                    updated_ats={_PR: 100.0, _OTHER: 100.0}, head_shas={_PR: "h0", _OTHER: "h0"})
-                snapshot = PrSnapshot(github)
-                monitor = _ProbeMonitor(snapshot, seen)
-                tick = _tick(monitor, _gate(snapshot, github, InlineGithubPollRunner()))
+                latency = _noticed_after(event, seen)
 
-                happened_at = 7.0
-                noticed_at = None
-                fired = False
-                for n in range(0, 40):
-                    now = float(n * _TICK)
-                    if not fired and now >= happened_at:
-                        event(github)
-                        fired = True
-                    snapshot.pr_sync_state(_OTHER)
-                    tick.execute(TickInput(now=now))
-                    if fired and monitor.reads[-1] is True and noticed_at is None:
-                        noticed_at = now
-                self.assertIsNotNone(noticed_at)
-                self.assertLessEqual(noticed_at - happened_at, _POLL + _TICK)
+                self.assertIsNotNone(latency)
+                self.assertLessEqual(latency, _POLL + _TICK)
+
+    def test_conflict_after_unsettled_first_read_is_seen_within_two_polls_plus_a_tick(self):
+        latency = _noticed_after(
+            _conflict_after_unsettled_read, lambda s: _flag(s.pr_sync_state(_PR), "conflicted"))
+
+        self.assertIsNotNone(latency)
+        self.assertLessEqual(latency, 2 * _POLL + _TICK)
 
 
 if __name__ == "__main__":

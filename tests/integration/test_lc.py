@@ -130,6 +130,7 @@ def write_config(projects=None, specs=None):
         "poll-seconds: 5",
         "github-poll-seconds: 60",
         "github-reserve-calls: 750",
+        "github-view-refresh-polls: 10",
         "worker-history: 20",
         "editor: vi",
         "audit-shortcode: AUD",

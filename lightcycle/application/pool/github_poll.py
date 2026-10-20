@@ -15,6 +15,7 @@ class GithubPollUseCase:
         self._last_started = None
         self._last_was_budget_only = False
         config.github_poll_seconds()
+        config.github_view_refresh_polls()
 
     def settle(self):
         self._runner.join()
@@ -35,6 +36,7 @@ class GithubPollUseCase:
         due = self._last_started is None or now - self._last_started >= interval
         if not due and not self._last_was_budget_only:
             return False
+        refresh_polls = self._config.github_view_refresh_polls()
         wanted = self._snapshot.take_wanted()
         if not due and not wanted.prs:
             return False
@@ -42,7 +44,7 @@ class GithubPollUseCase:
         def cycle():
             self._publish_budget()
             if wanted.prs:
-                self._poll.run(wanted, now)
+                self._poll.run(wanted, now, refresh_polls)
 
         if not self._runner.start(cycle):
             return False

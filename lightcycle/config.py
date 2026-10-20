@@ -24,6 +24,7 @@ _ENV_OVERRIDE_VARS = {
     "poll-seconds": "LC_POLL_SECONDS",
     "github-poll-seconds": "LC_GITHUB_POLL_SECONDS",
     "github-reserve-calls": "LC_GITHUB_RESERVE_CALLS",
+    "github-view-refresh-polls": "LC_GITHUB_VIEW_REFRESH_POLLS",
     "worker-history": "LC_WORKER_HISTORY",
     "editor": "EDITOR",
     "tui-autostart-pool": "LC_TUI_AUTOSTART_POOL",
@@ -93,6 +94,7 @@ _SEED_KEYS = [
     ("poll-seconds", "5"),
     ("github-poll-seconds", "60"),
     ("github-reserve-calls", "750"),
+    ("github-view-refresh-polls", "10"),
     ("worker-history", "20"),
     ("editor", "vi"),
     ("backups-dir", "~/.lightcycle-backups"),
@@ -165,6 +167,7 @@ schedule-daily-summary:
 _NUMERIC_RANGES = {
     "github-poll-seconds": (1, None),
     "github-reserve-calls": (0, None),
+    "github-view-refresh-polls": (1, None),
     "memory-reserve-fraction": (0.0, 1.0),
     "max-agents": (0, None),
     "guidance-budget-bytes": (0, None),
@@ -606,6 +609,11 @@ class Config:
         env = self._env_int("LC_GITHUB_RESERVE_CALLS", None)
         value = env if env is not None else self._required_int("github-reserve-calls")
         return self._check_range("github-reserve-calls", value)
+
+    def github_view_refresh_polls(self):
+        env = self._env_int("LC_GITHUB_VIEW_REFRESH_POLLS", None)
+        value = env if env is not None else self._required_int("github-view-refresh-polls")
+        return self._check_range("github-view-refresh-polls", value)
 
     def tui_autostart_pool(self):
         env = self._env_bool("LC_TUI_AUTOSTART_POOL", None)
