@@ -130,6 +130,7 @@ def _seed_config(home):
         "max-boot-seconds: 120",
         "poll-seconds: 5",
         "github-poll-seconds: 60",
+        "ci-check-ceiling-seconds: 3600",
         "github-reserve-calls: 750",
         "worker-history: 20",
         "editor: vi",

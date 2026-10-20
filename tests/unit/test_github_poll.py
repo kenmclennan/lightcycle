@@ -303,6 +303,34 @@ class TestChecksPublishedOnlyForAConfirmedHead(unittest.TestCase):
         self.assertIsInstance(pool.snapshot.check_runs(second, second_sha), NotYetRead)
 
 
+class TestRequiredChecksPublished(unittest.TestCase):
+    def _published(self, github):
+        pool = _pool_after_first_poll(github)
+        pr = _A[0]
+        sha = pool.snapshot.head_sha(pr)
+        return pool, pr, sha
+
+    def test_poll_publishes_the_required_set_once_per_ttl(self):
+        github = _github(check_runs_by_sha=_failing_runs(), required_by_base={"acme/widget@main": ["build"]})
+        pool, pr, sha = self._published(github)
+
+        pool.tick(120, checks=[(pr, sha)])
+        pool.tick(121, checks=[(pr, sha)])
+
+        self.assertEqual(pool.snapshot.required_checks("acme/widget@main"), frozenset({"build"}))
+        self.assertEqual(pool.names().count("required_checks"), 1)
+
+    def test_a_failed_read_publishes_nothing_and_is_retried(self):
+        github = _github(check_runs_by_sha=_failing_runs(), failing_calls={"required_checks"})
+        pool, pr, sha = self._published(github)
+
+        pool.tick(120, checks=[(pr, sha)])
+        pool.tick(300, checks=[(pr, sha)])
+
+        self.assertIsInstance(pool.snapshot.required_checks("acme/widget@main"), NotYetRead)
+        self.assertEqual(pool.names().count("required_checks"), 2)
+
+
 class TestFailures(unittest.TestCase):
     def test_a_failed_read_keeps_the_old_entry_marks_it_stale_and_retries(self):
         pool = _Pool()

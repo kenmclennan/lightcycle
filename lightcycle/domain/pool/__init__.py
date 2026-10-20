@@ -1,6 +1,6 @@
 from lightcycle.domain.pool.attribution import AttributionEvent, ToolUsage, sum_attribution_events
 from lightcycle.domain.pool.breaker import Breaker
-from lightcycle.domain.pool.ci_result import ci_outcome, failing_check
+from lightcycle.domain.pool.ci_result import ci_outcome, failing_check, judged_checks, timed_out_check
 from lightcycle.domain.pool.github_budget import (
     GithubBudget, github_budget_from_state, github_budget_low,
 )
@@ -21,6 +21,6 @@ __all__ = [
     "AttributionEvent", "Breaker", "GithubBudget", "MachineHeadroom", "ModelRates", "PoolPlan", "RateLimitEvent",
     "ReadyQueue", "SpinLedger", "StepSpin", "ToolUsage", "UsageEvent", "UsageResume", "Worker",
     "WorkerPool", "admission_cap", "ci_outcome",
-    "failing_check", "github_budget_from_state", "github_budget_low", "pr_repo", "price_tokens", "resolve_usage", "sum_attribution_events",
+    "failing_check", "judged_checks", "timed_out_check", "github_budget_from_state", "github_budget_low", "pr_repo", "price_tokens", "resolve_usage", "sum_attribution_events",
     "sum_usage_events",
 ]

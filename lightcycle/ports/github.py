@@ -50,6 +50,7 @@ class CheckRun:
     status: str
     conclusion: Optional[str]
     url: str = ""
+    started_at: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -132,6 +133,10 @@ class GitHubEventsPort(ABC):
 
     @abstractmethod
     def requires_up_to_date(self, base_key: str) -> Union[bool, ReadFailure]:
+        pass
+
+    @abstractmethod
+    def required_checks(self, base_key: str) -> Union[Optional[frozenset], ReadFailure]:
         pass
 
     @abstractmethod

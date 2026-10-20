@@ -205,6 +205,9 @@ class PrPoll:
             if isinstance(view, ReadFailure):
                 self._log_failure("pr_view", pr, view)
                 continue
+            required = self._writes.required_checks(self._github, view.base_key)
+            if not isinstance(required, ReadFailure):
+                self._snapshot.publish_required(view.base_key, required)
             current = self._snapshot.entry_of(pr) or entry
             self._snapshot.publish(pr, replace(current, state=view.state, view=view))
             if view.head_sha == sha:

@@ -125,6 +125,7 @@ def write_config(projects=None, specs=None):
         "worktree-retry-sleep: 0.25",
         "max-boot-seconds: 120",
         "stall-seconds: 1800",
+        "ci-check-ceiling-seconds: 3600",
         "spin-cap: 3",
         "poll-seconds: 5",
         "github-poll-seconds: 60",

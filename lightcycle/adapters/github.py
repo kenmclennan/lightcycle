@@ -273,7 +273,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
             result = subprocess.run(
                 [
                     "gh", "api", "/repos/%s/%s/commits/%s/check-runs" % (owner, repo, sha),
-                    "--jq", "[.check_runs[]|{name,status,conclusion,url:.html_url}]",
+                    "--jq", "[.check_runs[]|{name,status,conclusion,started_at,url:.html_url}]",
                 ],
                 capture_output=True, text=True,
                 timeout=_GH_TIMEOUT_SECONDS,
@@ -292,6 +292,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
                 status=c.get("status") or "",
                 conclusion=c.get("conclusion"),
                 url=c.get("url") or "",
+                started_at=_parse_iso(c["started_at"]) if c.get("started_at") else 0.0,
             )
             for c in data
         )
@@ -434,6 +435,41 @@ class GitHubEventsAdapter(GitHubEventsPort):
         except (json.JSONDecodeError, ValueError):
             return ReadFailure(-1, "could not parse gh api JSON for required status checks")
         return isinstance(data, dict) and data.get("strict") is True
+
+    def required_checks(self, base_key: str) -> Union[Optional[frozenset], ReadFailure]:
+        repo_path, _, base = base_key.partition("@")
+        rules = self._gh_api_json("repos/%s/rules/branches/%s" % (repo_path, base))
+        if isinstance(rules, ReadFailure):
+            return rules
+        names = set()
+        for rule in rules if isinstance(rules, list) else []:
+            if not isinstance(rule, dict) or rule.get("type") != "required_status_checks":
+                continue
+            for entry in (rule.get("parameters") or {}).get("required_status_checks") or []:
+                if isinstance(entry, dict) and entry.get("context"):
+                    names.add(entry["context"])
+        try:
+            result = subprocess.run(
+                ["gh", "api",
+                 "repos/%s/branches/%s/protection/required_status_checks" % (repo_path, base)],
+                capture_output=True, text=True, timeout=_GH_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            return _timeout_read_failure()
+        if result.returncode != 0:
+            if "404" in result.stderr or "Not Found" in result.stderr \
+                    or "not protected" in result.stderr.lower():
+                return frozenset(names) or None
+            return ReadFailure(result.returncode, result.stderr)
+        try:
+            data = json.loads(result.stdout)
+        except (json.JSONDecodeError, ValueError):
+            return ReadFailure(-1, "could not parse gh api JSON for required status checks")
+        if isinstance(data, dict):
+            names.update(c for c in data.get("contexts") or [] if c)
+            for entry in data.get("checks") or []:
+                if isinstance(entry, dict) and entry.get("context"):
+                    names.add(entry["context"])
+        return frozenset(names) or None
 
     def update_branch(self, pr: str, expected_head_sha: str) -> Union[None, ReadFailure]:
         parts = _repo_parts(pr)

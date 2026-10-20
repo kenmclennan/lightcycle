@@ -29,6 +29,7 @@ def _captured_argvs():
         adapter.check_runs(_PR, "deadbeef")
         adapter.pr_sync_state(_PR)
         adapter.requires_up_to_date("acme/widget@main")
+        adapter.required_checks("acme/widget@main")
         adapter.update_branch(_PR, "deadbeef")
         adapter.list_prs("acme/widget", 0.0)
         adapter.repo_inline_comments("acme/widget", 0.0)
