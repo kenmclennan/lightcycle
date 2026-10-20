@@ -1,3 +1,4 @@
+import time
 import os
 from dataclasses import dataclass, field
 from typing import List
@@ -6,6 +7,7 @@ from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.claim_step import ClaimInput
 from lightcycle.application.flow.complete_step import CompleteInput
 from lightcycle.application.flow.script_result import apply_stage_result
+from lightcycle.application.pool.pr_writes import InlinePrWrites
 from lightcycle.application.pool.monitor_prs import MonitorPrsUseCase
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.domain.contracts import FlowContracts, StepContract
@@ -185,6 +187,7 @@ class WorkflowSimulateUseCase:
                 self._store, github, self._worktrees, self._flow, self._complete,
                 trusted_authors=lambda: frozenset({"reviewer"}),
                 held_shortcode=lambda: "HLD",
+                writes=InlinePrWrites(github, time.monotonic),
             )
             violations += self._drive(item_id, pin, graph, walk, github, monitor, trace, index)
         violations += self._run_script_guards(pin, guards, trace)

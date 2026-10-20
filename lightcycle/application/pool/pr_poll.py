@@ -11,13 +11,15 @@ def _listed_state(listed):
 
 
 class PrPoll:
-    def __init__(self, github, snapshot):
+    def __init__(self, github, snapshot, writes):
         self._github = github
         self._snapshot = snapshot
+        self._writes = writes
         self._cutoffs = {}
         self._tips = {}
 
     def run(self, wanted):
+        self._writes.perform(self._github)
         by_repo = {}
         for pr in sorted(wanted.prs):
             repo = pr_repo(pr)
@@ -29,6 +31,7 @@ class PrPoll:
         self._compare_files(wanted.files)
         self._read_checks(wanted.checks)
         self._snapshot.retain(wanted.prs)
+        self._writes.retain(wanted.prs)
 
     def _poll_repo(self, repo, prs):
         cutoff = self._cutoffs.get(repo)

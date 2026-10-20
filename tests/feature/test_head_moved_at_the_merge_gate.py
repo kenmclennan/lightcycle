@@ -1,7 +1,9 @@
+import time
 import pytest
 from pytest_bdd import given, scenarios, then, when
 
 from lightcycle.application.flow import CompleteStepUseCase
+from lightcycle.application.pool.pr_writes import InlinePrWrites
 from lightcycle.application.pool import MonitorPrsUseCase
 from tests.support.fake_fs import flow_from_metas
 from tests.support.fake_github import FakeGitHub
@@ -56,6 +58,7 @@ class _World:
         self.monitor = MonitorPrsUseCase(
             self.store, self.github, FakeWorktrees(), flow, CompleteStepUseCase(self.store, flow),
             trusted_authors=lambda: frozenset(), held_shortcode=lambda: "HLD",
+            writes=InlinePrWrites(self.github, time.monotonic),
         )
 
 

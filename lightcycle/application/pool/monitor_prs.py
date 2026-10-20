@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-import time
 from typing import List
 
 from lightcycle.application.pool.check_content_pin import CheckContentPinUseCase
@@ -26,7 +25,7 @@ class MonitorPrsResponse:
 class MonitorPrsUseCase:
     def __init__(
         self, store, github, worktrees, flow_service, complete=None, *,
-        trusted_authors, held_shortcode,
+        trusted_authors, held_shortcode, writes,
     ):
         check_content_pin = CheckContentPinUseCase(
             store, github, flow_service, trusted_authors=trusted_authors
@@ -40,7 +39,7 @@ class MonitorPrsUseCase:
             trusted_authors=trusted_authors, held_shortcode=held_shortcode,
         )
         self._detect_head_moved = DetectHeadMovedUseCase(store, flow_service, complete)
-        self._update_behind = UpdateBehindPrsUseCase(store, github, flow_service, time.monotonic)
+        self._update_behind = UpdateBehindPrsUseCase(store, github, flow_service, writes)
         self._resolve_ci = ResolveCiUseCase(store, github, flow_service, complete)
 
     def execute(self) -> MonitorPrsResponse:

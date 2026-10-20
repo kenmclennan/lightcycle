@@ -1,7 +1,9 @@
 import unittest
+import time
 
 from lightcycle.application.pool.github_poll import GithubPollUseCase
 from lightcycle.application.pool.pr_snapshot import PrSnapshot
+from lightcycle.application.pool.pr_writes import PrWrites
 from lightcycle.config import ConfigError
 from lightcycle.ports.github import CheckRun, Comment, NotYetRead
 from tests.support.fake_github import FakeGitHub
@@ -41,7 +43,7 @@ class _Pool:
         self.github = github or _github()
         self.snapshot = PrSnapshot(self.github)
         self.runner = runner or InlineGithubPollRunner()
-        self.gate = GithubPollUseCase(self.snapshot, self.github, self.runner, _Config())
+        self.gate = GithubPollUseCase(self.snapshot, self.github, self.runner, _Config(), PrWrites(time.monotonic))
 
     def tick(self, now, prs=_ALL, files=(), checks=()):
         for pr in prs:
@@ -345,7 +347,7 @@ class TestRunnerAndConfig(unittest.TestCase):
     def test_an_unset_key_fails_at_construction_naming_it(self):
         github = _github()
         with self.assertRaises(ConfigError) as ctx:
-            GithubPollUseCase(PrSnapshot(github), github, InlineGithubPollRunner(), _Unset())
+            GithubPollUseCase(PrSnapshot(github), github, InlineGithubPollRunner(), _Unset(), PrWrites(time.monotonic))
 
         self.assertIn("github-poll-seconds", str(ctx.exception))
 
@@ -353,7 +355,7 @@ class TestRunnerAndConfig(unittest.TestCase):
         config = _Config(60)
         github = _github()
         snapshot = PrSnapshot(github)
-        gate = GithubPollUseCase(snapshot, github, InlineGithubPollRunner(), config)
+        gate = GithubPollUseCase(snapshot, github, InlineGithubPollRunner(), config, PrWrites(time.monotonic))
         snapshot.pr_sync_state(_A[0])
         gate.execute(0)
         config.seconds = 10
