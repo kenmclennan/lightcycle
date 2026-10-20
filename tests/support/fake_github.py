@@ -7,7 +7,7 @@ class FakeGitHub(GitHubEventsPort):
                  timed_comments=None, timed_reviews=None, head_shas=None, files_by_sha=None,
                  check_runs_by_sha=None, failing_calls=(), issue_states=None,
                  behind_prs=(), strict_bases=(), base_keys=None, login="operator",
-                 updated_ats=None):
+                 updated_ats=None, failing_prs=()):
         self._login = login
         self._merged = set(merged_prs)
         self._closed = set(closed_prs)
@@ -19,6 +19,7 @@ class FakeGitHub(GitHubEventsPort):
         self._files_by_sha = files_by_sha or {}
         self._check_runs_by_sha = check_runs_by_sha or {}
         self._failing_calls = set(failing_calls)
+        self._failing_prs = set(failing_prs)
         self._issue_states = issue_states or {}
         self.issue_state_calls = []
         self._behind = set(behind_prs)
@@ -86,7 +87,7 @@ class FakeGitHub(GitHubEventsPort):
 
     def pr_view(self, pr):
         self._record("pr_view", pr)
-        if "pr_view" in self._failing_calls:
+        if "pr_view" in self._failing_calls or pr in self._failing_prs:
             return ReadFailure(1, "boom")
         base_key = self._base_keys.get(pr, "acme/widget@main")
         state = "MERGED" if pr in self._merged else "CLOSED" if pr in self._closed else "OPEN"

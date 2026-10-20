@@ -3,12 +3,13 @@ from lightcycle.ports.github import RateLimit
 
 
 class GithubPollUseCase:
-    def __init__(self, snapshot, github, runner, config, writes, github_budget_status, clock):
+    def __init__(self, snapshot, github, runner, config, writes, github_budget_status, clock,
+                 worker_log):
         self._snapshot = snapshot
         self._github = github
         self._runner = runner
         self._config = config
-        self._poll = PrPoll(github, snapshot, writes)
+        self._poll = PrPoll(github, snapshot, writes, worker_log)
         self._github_budget_status = github_budget_status
         self._clock = clock
         self._last_started = None
@@ -41,7 +42,7 @@ class GithubPollUseCase:
         def cycle():
             self._publish_budget()
             if wanted.prs:
-                self._poll.run(wanted)
+                self._poll.run(wanted, now)
 
         if not self._runner.start(cycle):
             return False
