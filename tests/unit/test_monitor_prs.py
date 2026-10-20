@@ -1,5 +1,7 @@
+import time
 import unittest
 
+from lightcycle.application.pool.pr_writes import InlinePrWrites
 from lightcycle.application.flow.complete_step import CompleteStepUseCase
 from lightcycle.application.pool import MonitorPrsUseCase, TickInput, TickUseCase
 from lightcycle.application.pool.no_op_gates import (
@@ -207,6 +209,7 @@ class TestTickWithMonitor(unittest.TestCase):
         monitor = MonitorPrsUseCase(
             store, FakeGitHub(merged_prs={url}), worktrees, _FlowAdapter(_FLOW),
             trusted_authors=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
+            writes=InlinePrWrites(FakeGitHub(), time.monotonic),
         )
 
         result = make_tick(
@@ -227,6 +230,7 @@ class TestTickWithMonitor(unittest.TestCase):
         monitor = MonitorPrsUseCase(
             store, FakeGitHub(closed_prs={url}), worktrees, _FlowAdapter(_FLOW),
             trusted_authors=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
+            writes=InlinePrWrites(FakeGitHub(), time.monotonic),
         )
 
         result = make_tick(
@@ -320,6 +324,7 @@ class TestMonitorPrsUseCaseComposesAllThreeJobs(unittest.TestCase):
         uc = MonitorPrsUseCase(
             store, gh, worktrees, _FlowAdapter(flow), complete,
             trusted_authors=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
+            writes=InlinePrWrites(gh, time.monotonic),
         )
 
         result = uc.execute()

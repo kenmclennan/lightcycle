@@ -1,13 +1,15 @@
+import time
 import unittest
 
 from lightcycle.application.flow import CompleteStepUseCase
 from lightcycle.application.pool import MonitorPrsUseCase
 from lightcycle.application.work.behind_reason import behind_reason
+from lightcycle.application.pool.pr_writes import RULE_TTL_SECONDS, InlinePrWrites, PrWrites
 from lightcycle.application.pool.update_behind_prs import (
-    RULE_TTL_SECONDS,
     UPDATE_CAP,
     UpdateBehindPrsUseCase,
 )
+from lightcycle.ports.github import PrSync, ReadFailure
 from tests.support.fake_fs import flow_from_metas
 from tests.support.fake_github import FakeGitHub
 from tests.support.fake_store import FakeStore
@@ -56,7 +58,7 @@ class _Harness:
         self.github = github
         self.clock = _Clock()
         self.uc = UpdateBehindPrsUseCase(
-            self.store, github, _FlowAdapter(_FLOW), self.clock
+            self.store, github, _FlowAdapter(_FLOW), InlinePrWrites(github, self.clock)
         )
 
     def gate(self, url, title="feature"):
@@ -393,6 +395,7 @@ class TestConflictFallThrough(unittest.TestCase):
         monitor = MonitorPrsUseCase(
             store, github, FakeWorktrees(), flow, CompleteStepUseCase(store, flow),
             trusted_authors=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
+            writes=InlinePrWrites(github, time.monotonic),
         )
 
         first = monitor.execute()
@@ -416,6 +419,7 @@ class TestOneReadPerPrPerTick(unittest.TestCase):
         return MonitorPrsUseCase(
             store, github, FakeWorktrees(), flow, CompleteStepUseCase(store, flow),
             trusted_authors=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
+            writes=InlinePrWrites(github, time.monotonic),
         )
 
     def test_behind_pr_is_read_once_per_tick(self):
@@ -445,6 +449,194 @@ class TestOneReadPerPrPerTick(unittest.TestCase):
 
         self.assertEqual(github.sync_calls, [url, url])
 
+
+
+class TestQueuedWrites(unittest.TestCase):
+    def _queued(self, github, clock=None):
+        h = _Harness(github)
+        h.clock = clock or h.clock
+        h.writes = PrWrites(h.clock)
+        h.uc = UpdateBehindPrsUseCase(h.store, github, _FlowAdapter(_FLOW), h.writes)
+        return h
+
+    def test_tick_never_calls_the_port_and_applies_the_outcome_after_perform(self):
+        github, url = _behind(60, head="abcdef1234")
+        h = self._queued(github)
+        item, step = h.gate(url)
+
+        first = h.uc.execute()
+
+        self.assertEqual((github.update_calls, github.requires_calls), ([], []))
+        self.assertEqual(first.updated, [])
+        h.writes.perform(github)
+        self.assertEqual(github.update_calls, [(url, "abcdef1234")])
+        self.assertEqual(github.requires_calls, [_BASE])
+        second = h.uc.execute()
+        self.assertEqual(second.updated, [item])
+        self.assertIn("Branch updated onto main", h.notes(step))
+
+    def test_same_pr_and_head_queued_twice_updates_once(self):
+        github, url = _behind(61, head="h1")
+        writes = PrWrites(_Clock())
+
+        writes.request_update(url, "h1", _BASE)
+        writes.request_update(url, "h1", _BASE)
+        writes.perform(github)
+
+        self.assertEqual(github.update_calls, [(url, "h1")])
+        self.assertIsNotNone(writes.take_outcome(url))
+        self.assertIsNone(writes.take_outcome(url))
+
+    def test_outcome_is_applied_even_when_the_reread_shows_not_behind(self):
+        github, url = _behind(62, head="h1")
+        h = self._queued(github)
+        item, step = h.gate(url)
+        h.uc.execute()
+        h.writes.perform(github)
+
+        result = h.uc.execute(reads=_NotBehind(url))
+
+        self.assertEqual(result.updated, [item])
+        self.assertIn("Branch updated onto main", h.notes(step))
+
+    def test_stale_head_is_refused_and_the_next_head_is_requested(self):
+        github, url = _behind(63, head="h1")
+        h = self._queued(github)
+        item, step = h.gate(url)
+        h.uc.execute()
+        github._head_shas[url] = "h2"
+        h.writes.perform(github)
+
+        refused = h.uc.execute()
+        h.uc.execute()
+        h.writes.perform(github)
+
+        self.assertEqual(refused.update_failed, [item])
+        self.assertEqual(github.update_calls, [(url, "h1"), (url, "h2")])
+
+    def test_not_required_is_not_attempted_and_retries_after_the_ttl(self):
+        github, url = _behind(64, head="h1", strict=False)
+        clock = _Clock()
+        h = self._queued(github, clock)
+        item, step = h.gate(url)
+        h.uc.execute()
+        h.writes.perform(github)
+        h.uc.execute()
+        self.assertEqual(github.update_calls, [])
+
+        github._strict_bases.add(_BASE)
+        h.uc.execute()
+        h.writes.perform(github)
+        self.assertEqual(github.requires_calls, [_BASE])
+        self.assertEqual(github.update_calls, [])
+        h.uc.execute()
+        clock.now += RULE_TTL_SECONDS
+        h.uc.execute()
+        h.writes.perform(github)
+
+        self.assertEqual(github.requires_calls, [_BASE, _BASE])
+        self.assertEqual(github.update_calls, [(url, "h1")])
+
+    def test_rule_cadence_is_measured_from_when_the_check_was_performed(self):
+        github, url = _behind(65, head="h1", strict=False)
+        clock = _Clock()
+        writes = PrWrites(clock)
+        writes.request_update(url, "h1", _BASE)
+        clock.now += 200
+        writes.perform(github)
+        clock.now += RULE_TTL_SECONDS - 1
+        writes.request_update(url, "h1", _BASE)
+        writes.perform(github)
+        self.assertEqual(len(github.requires_calls), 1)
+
+        clock.now += 1
+        writes.request_update(url, "h1", _BASE)
+        writes.perform(github)
+        self.assertEqual(len(github.requires_calls), 2)
+
+    def test_mixed_outcomes_are_each_published(self):
+        urls = [_pr(70), _pr(71), _pr(72)]
+        bases = ["acme/widget@a", "acme/widget@b", "acme/widget@c"]
+        github = _RuleFailsFor(
+            "acme/widget@c",
+            behind_prs=set(urls),
+            head_shas={urls[0]: "h", urls[1]: "other", urls[2]: "h"},
+            strict_bases=set(bases),
+        )
+        writes = PrWrites(_Clock())
+        for url, base in zip(urls, bases):
+            writes.request_update(url, "h", base)
+
+        writes.perform(github)
+
+        kinds = [writes.take_outcome(url).kind for url in urls]
+        self.assertEqual(kinds, ["updated", "update-failed", "rule-failed"])
+
+    def test_the_tick_reports_each_mixed_outcome_and_notes_the_rule_failure(self):
+        urls = [_pr(73), _pr(74), _pr(75)]
+        bases = ["acme/widget@a", "acme/widget@b", "acme/widget@c"]
+        github = _RuleFailsFor(
+            "acme/widget@c",
+            behind_prs=set(urls),
+            head_shas={urls[0]: "h0", urls[1]: "h1", urls[2]: "h2"},
+            base_keys=dict(zip(urls, bases)),
+            strict_bases=set(bases),
+        )
+        h = self._queued(github)
+        gates = [h.gate(url) for url in urls]
+        h.uc.execute()
+        github._head_shas[urls[1]] = "moved"
+        h.writes.perform(github)
+
+        result = h.uc.execute()
+
+        self.assertEqual(result.updated, [gates[0][0]])
+        self.assertEqual(result.update_failed, [gates[1][0]])
+        self.assertIn("Branch updated onto", h.notes(gates[0][1]))
+        self.assertIn("update-branch refused", h.notes(gates[1][1]))
+        self.assertIn("up-to-date rule", h.notes(gates[2][1]))
+
+    def test_a_rule_read_failure_is_cached_for_the_ttl_and_retried_after(self):
+        github, url = _behind(66, head="h1", failing_calls={"requires_up_to_date"})
+        clock = _Clock()
+        writes = PrWrites(clock)
+        writes.request_update(url, "h1", _BASE)
+        writes.perform(github)
+        first = writes.take_outcome(url)
+        self.assertEqual(first.kind, "rule-failed")
+        self.assertIsInstance(first.failure, ReadFailure)
+
+        clock.now += RULE_TTL_SECONDS - 1
+        writes.request_update(url, "h1", _BASE)
+        writes.perform(github)
+        self.assertEqual(writes.take_outcome(url).kind, "rule-failed")
+        self.assertEqual(len(github.requires_calls), 1)
+
+        clock.now += 1
+        writes.request_update(url, "h1", _BASE)
+        writes.perform(github)
+        self.assertEqual(len(github.requires_calls), 2)
+        self.assertEqual(github.update_calls, [])
+
+
+class _RuleFailsFor(FakeGitHub):
+    def __init__(self, bad_base, **kw):
+        super().__init__(**kw)
+        self._bad_base = bad_base
+
+    def requires_up_to_date(self, base_key):
+        if base_key == self._bad_base:
+            self.requires_calls.append(base_key)
+            return ReadFailure(1, "boom")
+        return super().requires_up_to_date(base_key)
+
+
+class _NotBehind:
+    def __init__(self, url):
+        self._url = url
+
+    def read(self, pr):
+        return PrSync(behind=False, conflicted=False, head_sha="h1-updated", base_key=_BASE)
 
 if __name__ == "__main__":
     unittest.main()

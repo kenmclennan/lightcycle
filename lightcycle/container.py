@@ -1,4 +1,5 @@
 import os
+import time
 
 from lightcycle.adapters.backup import SqliteBackupAdapter
 from lightcycle.adapters.breaker import BreakerAdapter
@@ -11,6 +12,7 @@ from lightcycle.adapters.launcher import LauncherAdapter
 from lightcycle.adapters.lifecycle_runner import LifecycleRunnerAdapter
 from lightcycle.application.pool.github_poll import GithubPollUseCase
 from lightcycle.application.pool.pr_snapshot import PrSnapshot
+from lightcycle.application.pool.pr_writes import PrWrites
 from lightcycle.adapters.github_poll_runner import GithubPollRunnerAdapter
 from lightcycle.adapters.script_runner import ScriptRunnerAdapter
 from lightcycle.adapters.lock import RunLockAdapter
@@ -119,6 +121,7 @@ class Container:
         worktrees = worktrees_for(self, flow=flow)
         complete = CompleteStepUseCase(self.store, flow, worktrees, self.config)
         snapshot = PrSnapshot(self.github)
+        writes = PrWrites(time.monotonic)
         return TickUseCase(
             self.store,
             self.workers,
@@ -127,7 +130,7 @@ class Container:
             monitor=MonitorPrsUseCase(
                 self.store, snapshot, worktrees, flow, complete,
                 trusted_authors=self.config.trusted_authors,
-                held_shortcode=self.config.held_comment_shortcode,
+                held_shortcode=self.config.held_comment_shortcode, writes=writes,
             ),
             schedule_gate=ScheduleCadenceUseCase(
                 self.store, self.config, flow, self.workflow_source, self.git,
@@ -148,7 +151,7 @@ class Container:
                 spin_port=self.spin, store=self.store,
             ),
             github_poll_gate=GithubPollUseCase(
-                snapshot, self.github, self.github_poll_runner, self.config),
+                snapshot, self.github, self.github_poll_runner, self.config, writes),
             hook_completions=HookCompletionsUseCase(self.store, flow),
             worktrees=worktrees,
             git=self.git,

@@ -1,7 +1,9 @@
+import time
 import unittest
 
 from lightcycle.application.flow import CompleteStepUseCase
 from lightcycle.application.flow.complete_step import CompleteInput
+from lightcycle.application.pool.pr_writes import InlinePrWrites
 from lightcycle.application.pool import MonitorPrsUseCase
 from lightcycle.application.pool.detect_head_moved import (
     CI_JUDGED_SHA,
@@ -259,6 +261,7 @@ class TestMonitorWiring(unittest.TestCase):
         monitor = MonitorPrsUseCase(
             store, github, FakeWorktrees(), flow, CompleteStepUseCase(store, flow),
             trusted_authors=lambda: frozenset(), held_shortcode=lambda: "HLD",
+            writes=InlinePrWrites(github, time.monotonic),
         )
 
         first = monitor.execute()

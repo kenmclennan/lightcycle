@@ -2,11 +2,11 @@ from lightcycle.application.pool.pr_poll import PrPoll
 
 
 class GithubPollUseCase:
-    def __init__(self, snapshot, github, runner, config):
+    def __init__(self, snapshot, github, runner, config, writes):
         self._snapshot = snapshot
         self._runner = runner
         self._config = config
-        self._poll = PrPoll(github, snapshot)
+        self._poll = PrPoll(github, snapshot, writes)
         self._last_started = None
         config.github_poll_seconds()
 

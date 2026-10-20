@@ -1,9 +1,12 @@
+import time
 import unittest
 
 from lightcycle.application.flow.complete_step import CompleteStepUseCase
+from lightcycle.application.pool import MonitorPrsUseCase
 from lightcycle.application.pool.github_poll import GithubPollUseCase
 from lightcycle.application.pool.no_op_gates import NoOpMonitor
 from lightcycle.application.pool.pr_snapshot import PrSnapshot
+from lightcycle.application.pool.pr_writes import PrWrites
 from lightcycle.application.pool.resolve_ci import ResolveCiUseCase
 from lightcycle.application.pool.tick import TickInput
 from lightcycle.ports.github import CheckRun, Comment, NotYetRead, ReadFailure, Review
@@ -12,8 +15,10 @@ from tests.support.fake_github import FakeGitHub
 from tests.support.fake_github_poll_runner import BlockingGithubPollRunner, InlineGithubPollRunner
 from tests.support.fake_store import FakeStore
 from tests.support.fake_workers import FakeWorkers
+from tests.unit.test_monitor_prs import FakeWorktrees
 from tests.unit.test_pool import FakeSpawner, make_tick
 from tests.unit.test_resolve_ci import _FLOW, _FlowAdapter, plant_pr
+from tests.unit.test_update_behind_prs import _BASE, _FLOW as _BEHIND_FLOW
 from tests.unit.test_tick_lifecycle_gate import _Config as _BaseConfig, _Reload
 
 _PR = "https://github.com/acme/widget/pull/1"
@@ -56,7 +61,7 @@ def _tick(monitor, gate):
 
 
 def _gate(snapshot, github, runner):
-    return GithubPollUseCase(snapshot, github, runner, _Config())
+    return GithubPollUseCase(snapshot, github, runner, _Config(), PrWrites(time.monotonic))
 
 
 class TestTickIndependence(unittest.TestCase):
@@ -320,3 +325,62 @@ class TestPrime(unittest.TestCase):
         self.assertIsInstance(monitor.reads[0], NotYetRead)
         self.assertIs(monitor.reads[1], True)
         self.assertEqual(runner.starts, 1)
+
+
+class _Rig:
+    def __init__(self, runner):
+        self.url = "https://github.com/acme/widget/pull/9"
+        self.github = FakeGitHub(
+            behind_prs={self.url}, head_shas={self.url: "h1"}, strict_bases={_BASE},
+            updated_ats={self.url: 1.0})
+        self.snapshot = PrSnapshot(self.github)
+        self.writes = PrWrites(time.monotonic)
+        self.store = FakeStore()
+        item = self.store.create_item("feature", "d")
+        plant_pr(self.store, item, self.url)
+        self.step = self.store.create_step(step="watch-step", role="human", parent=item)
+        flow = _FlowAdapter(_BEHIND_FLOW)
+        self.monitor = MonitorPrsUseCase(
+            self.store, self.snapshot, FakeWorktrees(), flow, CompleteStepUseCase(self.store, flow),
+            trusted_authors=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
+            writes=self.writes)
+        self.poll = GithubPollUseCase(self.snapshot, self.github, runner, _Config(), self.writes)
+
+    def notes(self):
+        return self.store.get_node(self.step).notes or ""
+
+
+class TestWritesStayOffTheTick(unittest.TestCase):
+    def test_a_poll_that_never_returns_leaves_both_port_calls_unmade(self):
+        runner = BlockingGithubPollRunner()
+        rig = _Rig(runner)
+
+        for n in range(30):
+            rig.monitor.execute()
+            rig.poll.execute(float(n * _TICK))
+
+        self.assertEqual((rig.github.update_calls, rig.github.requires_calls), ([], []))
+        runner.pending[0]()
+        self.assertEqual(rig.github.calls.count(("pr_view", rig.url)), 1)
+        self.assertEqual(rig.github.update_calls, [])
+        self.assertEqual(rig.github.requires_calls, [])
+
+    def test_the_decided_update_lands_within_one_poll_interval_plus_one_tick(self):
+        rig = _Rig(InlineGithubPollRunner())
+        performed_at = None
+        applied_at = None
+
+        for n in range(_POLL // _TICK + 3):
+            now = float(n * _TICK)
+            response = rig.monitor.execute()
+            if response.updated and applied_at is None:
+                applied_at = now
+            rig.poll.execute(now)
+            if rig.github.update_calls and performed_at is None:
+                performed_at = now
+
+        self.assertEqual(performed_at, float(_POLL))
+        self.assertEqual(applied_at, float(_POLL + _TICK))
+        self.assertLessEqual(applied_at, _POLL + _TICK)
+        self.assertEqual(rig.github.update_calls, [(rig.url, "h1")])
+        self.assertIn("Branch updated onto main", rig.notes())
