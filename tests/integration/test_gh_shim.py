@@ -5,6 +5,7 @@ import shutil
 import stat
 import subprocess
 import tempfile
+import time
 import unittest
 
 from lightcycle.adapters.gh_shim import ensure_gh_shim
@@ -46,6 +47,19 @@ class _Env(unittest.TestCase):
     def log_lines(self, name):
         with open(os.path.join(self.logs, name)) as f:
             return f.read().splitlines()
+
+    def wait_for_log_lines(self, name, count, timeout=15.0):
+        deadline = time.monotonic() + timeout
+        lines = []
+        while time.monotonic() < deadline:
+            try:
+                lines = self.log_lines(name)
+            except FileNotFoundError:
+                lines = []
+            if len(lines) >= count and all(LINE.match(l) for l in lines):
+                return lines
+            time.sleep(0.05)
+        return lines
 
 
 class TestGhShimDirect(_Env):
@@ -126,9 +140,8 @@ class TestGhShimThroughSpawnWorker(_Env):
         })
 
         spawned = spawn_worker(config, "agent")
-        os.waitpid(spawned["pid"], 0)
 
-        lines = self.log_lines("gh-calls-%s.log" % spawned["spawnid"])
+        lines = self.wait_for_log_lines("gh-calls-%s.log" % spawned["spawnid"], 3)
         self.assertEqual(len(lines), 3)
         parsed = [LINE.match(l) for l in lines]
         self.assertEqual({m.group(2) for m in parsed}, {spawned["spawnid"]})
