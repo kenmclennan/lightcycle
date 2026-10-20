@@ -195,6 +195,25 @@ class TestFailureBounds(unittest.TestCase):
         h.uc.execute()
         self.assertEqual(len(github.update_calls), 2)
 
+    def test_closed_gate_drops_its_pending_request_while_a_gated_one_keeps_it(self):
+        url_a, url_b = _pr(20), _pr(21)
+        github = FakeGitHub(
+            behind_prs={url_a, url_b}, head_shas={url_a: "h1", url_b: "h2"},
+            strict_bases={_BASE},
+        )
+        h = _Harness(github)
+        h.uc._writes = PrWrites(h.clock)
+        _, step_a = h.gate(url_a)
+        h.gate(url_b)
+
+        h.uc.execute()
+        self.assertEqual(set(h.uc._pending), {url_a, url_b})
+
+        h.store.update_state(step_a, "done")
+        h.uc.execute()
+
+        self.assertEqual(set(h.uc._pending), {url_b})
+
     def test_head_moved_between_read_and_update_fails_closed(self):
         github, url = _behind(8, head="h1")
         real = github.pr_sync_state
