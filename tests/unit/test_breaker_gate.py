@@ -1,3 +1,5 @@
+import contextlib
+import io
 import json
 import unittest
 
@@ -917,6 +919,45 @@ class TestBreakerGatePoolWideSpin(unittest.TestCase):
             store.record_usage_calls, [(tid, 68, 10, 0, 0, 0.1, "list", None, None)],
         )
         self.assertIsNone(store.usage_accrual_state("sp-1"))
+
+
+class TestBreakerGateUnparseableLog(unittest.TestCase):
+    def test_a_dead_worker_whose_parse_raises_is_warned_marked_checked_and_not_reparsed(self):
+        class RaisingOnBadLog(ClaudeStreamAdapter):
+            def parse_attribution_event(self, lines):
+                if any("BAD" in line for line in lines):
+                    raise AttributeError("'str' object has no attribute 'get'")
+                return super().parse_attribution_event(lines)
+
+        store = RecordingFakeStore()
+        bad = create_owned_step(store, "build: bad", step="build", role="agent")
+        good = create_owned_step(store, "build: good", step="build", role="agent")
+        good_log = json.dumps({"type": "result", "modelUsage": {"sonnet": {
+            "inputTokens": 9, "outputTokens": 4, "costUSD": 0.5}}}).encode()
+        fs = FakeFs(files={"/l/bad.log": b"BAD\n", "/l/good.log": good_log})
+        workers = FakeWorkers(workers=[
+            {"spawnid": "sp-bad", "pid": 1, "step": bad, "log": "/l/bad.log", "started": 0},
+            {"spawnid": "sp-good", "pid": 2, "step": good, "log": "/l/good.log", "started": 0},
+        ])
+        gate = BreakerGateUseCase(
+            workers, fs, FakeBreakerPort(), FakeConfig(), stream=RaisingOnBadLog(), store=store
+        )
+
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            result = gate.execute(now=100)
+
+        self.assertIsNotNone(result.breaker)
+        self.assertIn("warning", err.getvalue())
+        self.assertIn("sp-bad", err.getvalue())
+        self.assertEqual(sorted(workers.checked), ["sp-bad", "sp-good"])
+        self.assertEqual([c[0] for c in store.record_usage_calls], [good])
+
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            gate.execute(now=101)
+        self.assertEqual(err.getvalue(), "")
+        self.assertEqual(sorted(workers.checked), ["sp-bad", "sp-good"])
 
 
 if __name__ == "__main__":

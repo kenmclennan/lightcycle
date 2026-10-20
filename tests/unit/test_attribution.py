@@ -196,6 +196,28 @@ class TestParseAttributionChunk(unittest.TestCase):
         self.assertEqual(delta2.turn_count, 1)
         self.assertEqual(len(message_ids), 2)
 
+    def test_a_permission_denied_system_line_with_a_string_message_contributes_nothing(self):
+        denied = json.dumps({
+            "type": "system", "subtype": "permission_denied", "message": "Tool call blocked",
+        })
+        usage_a = {"input_tokens": 10, "output_tokens": 2}
+        usage_b = {"input_tokens": 20, "output_tokens": 4}
+        lines = [
+            _assistant("msg-1", [], usage=usage_a),
+            denied,
+            _assistant("msg-2", [], usage=usage_b),
+        ]
+        delta, message_ids, _ = parse_attribution_chunk(lines, set(), {})
+        self.assertEqual(delta.turn_count, 2)
+        self.assertEqual(delta.recovered_input_tokens, 30)
+        self.assertEqual(delta.recovered_output_tokens, 6)
+        self.assertEqual(message_ids, {"msg-1", "msg-2"})
+
+    def test_a_non_list_content_is_treated_as_no_blocks(self):
+        line = json.dumps({"type": "assistant", "message": {"id": "msg-1", "content": "text"}})
+        delta, _, _ = parse_attribution_chunk([line], set(), {})
+        self.assertEqual(delta.turn_count, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

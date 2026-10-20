@@ -74,6 +74,16 @@ def _content_bytes(content):
     return 0
 
 
+def _message(data):
+    message = data.get("message")
+    return message if isinstance(message, dict) else {}
+
+
+def _content_blocks(message):
+    content = message.get("content")
+    return content if isinstance(content, list) else []
+
+
 def parse_attribution_chunk(lines, seen_message_ids, pending_tool_use):
     message_ids = set(seen_message_ids)
     new_message_ids = set()
@@ -90,13 +100,15 @@ def parse_attribution_chunk(lines, seen_message_ids, pending_tool_use):
             continue
         if not isinstance(data, dict):
             continue
-        content_blocks = (data.get("message") or {}).get("content") or []
+        message = _message(data)
+        content_blocks = _content_blocks(message)
         if data.get("type") == "assistant":
-            message_id = (data.get("message") or {}).get("id")
+            message_id = message.get("id")
             if message_id and message_id not in message_ids:
                 message_ids.add(message_id)
                 new_message_ids.add(message_id)
-                usage_by_id[message_id] = (data.get("message") or {}).get("usage") or {}
+                usage = message.get("usage")
+                usage_by_id[message_id] = usage if isinstance(usage, dict) else {}
             for block in content_blocks:
                 if isinstance(block, dict) and block.get("type") == "tool_use":
                     tool_names[block.get("id")] = block.get("name")
@@ -191,7 +203,7 @@ def extract_claimed_step(lines, limit=60) -> Optional[str]:
             continue
         if not isinstance(data, dict):
             continue
-        content_blocks = (data.get("message") or {}).get("content") or []
+        content_blocks = _content_blocks(_message(data))
         if data.get("type") == "assistant":
             for block in content_blocks:
                 if not isinstance(block, dict) or block.get("type") != "tool_use":
@@ -224,8 +236,8 @@ def saw_terminal_command(lines):
             continue
         if not isinstance(data, dict) or data.get("type") != "assistant":
             continue
-        for c in data.get("message", {}).get("content", []) or []:
-            if c.get("type") == "tool_use":
+        for c in _content_blocks(_message(data)):
+            if isinstance(c, dict) and c.get("type") == "tool_use":
                 cmd = str((c.get("input") or {}).get("command", ""))
                 if is_terminal_command(cmd):
                     return True
