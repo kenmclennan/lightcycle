@@ -36,6 +36,9 @@ class _FlowAdapter:
     def workflow_for(self, step):
         return "wf"
 
+    def unpinned_workflow(self, node):
+        return None
+
     def load_flow(self, name=None, project=None):
         return self._flow
 

@@ -5,7 +5,7 @@ from typing import List
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.park_step import ParkInput
 from lightcycle.application.flow.script_result import apply_stage_result
-from lightcycle.application.pool.pr_lookups import flow_for
+from lightcycle.application.pool.pr_lookups import flow_for, skip_unpinned
 from lightcycle.application.workflows.script_tooling import (
     ScriptInvocation,
     describe_violation,
@@ -88,6 +88,8 @@ class ScriptStageUseCase:
             return False
         if step.state != State.QUEUED or not is_engine_step(step):
             return False
+        if skip_unpinned(self._store, self._flow_service, step):
+            return False
         sd = flow_for(self._flow_service, step).step_def(step.stage)
         label = self._label(step, sd)
         reason, ok = result_violation(result, self._config.script_timeout_seconds())
@@ -119,6 +121,8 @@ class ScriptStageUseCase:
                 continue
             key = step_key(step.id)
             if key in running:
+                continue
+            if skip_unpinned(self._store, self._flow_service, step):
                 continue
             sd = flow_for(self._flow_service, step).step_def(step.stage)
             if not sd.script:

@@ -40,6 +40,9 @@ class StubFlowService:
     def workflow_for(self, node):
         return PIN
 
+    def unpinned_workflow(self, node):
+        return None
+
     def meta_for_step(self, stage, name=None):
         return {}
 

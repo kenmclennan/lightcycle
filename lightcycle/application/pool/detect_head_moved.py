@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import List
 
 from lightcycle.application.flow.complete_step import CompleteInput
-from lightcycle.application.pool.pr_lookups import _MIN_TIMESTAMP, flow_for, run_of
+from lightcycle.application.pool.pr_lookups import _MIN_TIMESTAMP, flow_for, run_of, skip_unpinned
 from lightcycle.domain.work import State, node_id_key, parse_timestamp
 from lightcycle.ports.github import ReadFailure
 
@@ -60,6 +60,8 @@ class DetectHeadMovedUseCase:
         head_moved = []
         for step in self._store.all_nodes():
             if step.type != "step" or step.state == State.DONE or not step.item:
+                continue
+            if skip_unpinned(self._store, self._flow_service, step):
                 continue
             flow = flow_for(self._flow_service, step)
             sd = flow.step_def(step.stage)
