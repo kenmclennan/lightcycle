@@ -177,6 +177,26 @@ class TestMacosFootprintKb(unittest.TestCase):
         with patch("lightcycle.adapters.machine._run", side_effect=_write_payload):
             self.assertEqual(_macos_footprint_kb([111]), {})
 
+    def test_returns_none_when_the_document_is_empty(self):
+        def _write_payload(argv):
+            with open(argv[3], "w") as f:
+                f.write("")
+            return ""
+
+        with patch("lightcycle.adapters.machine._run", side_effect=_write_payload):
+            self.assertIsNone(_macos_footprint_kb([111]))
+
+    def test_reports_no_readings_when_the_document_is_null_or_lacks_the_pid(self):
+        for raw in ("null", "[]", json.dumps({"processes": [{"pid": 999}]})):
+            def _write_payload(argv, raw=raw):
+                with open(argv[3], "w") as f:
+                    f.write(raw)
+                return ""
+
+            with self.subTest(raw=raw):
+                with patch("lightcycle.adapters.machine._run", side_effect=_write_payload):
+                    self.assertEqual(_macos_footprint_kb([111]), {})
+
     def test_returns_none_when_the_subprocess_call_fails(self):
         with patch("lightcycle.adapters.machine._run", return_value=None):
             self.assertIsNone(_macos_footprint_kb([111]))

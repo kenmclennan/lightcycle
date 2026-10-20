@@ -64,8 +64,12 @@ def _macos_footprint_kb(pids):
                 data = json.load(f)
         except (OSError, ValueError):
             return None
+        if not isinstance(data, dict):
+            return {}
         result = {}
         for proc in data.get("processes") or []:
+            if not isinstance(proc, dict):
+                continue
             aux = proc.get("auxiliary") or {}
             pid = proc.get("pid")
             current = aux.get("phys_footprint")
