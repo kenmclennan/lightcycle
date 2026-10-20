@@ -189,6 +189,13 @@ class DispatchPrFeedbackUseCase:
                            if t.item == step.item and t.state == State.DONE]
                 prior = total_outcome_count(history, conflict_outcome)
                 outcome = flow.pr_conflict_transition(step.stage, conflict_outcome, prior)
-                self._complete.execute(CompleteInput(step=step.id, outcome=outcome))
+                done = self._complete.execute(CompleteInput(step=step.id, outcome=outcome))
+                if outcome != conflict_outcome and done.next_step:
+                    self._store.note_condition(
+                        done.next_step,
+                        "pr_conflict_cap reached: %d conflicts at %s; rebase the branch onto main, "
+                        "resolve, push, then `lc done %s resolved`"
+                        % (prior, step.stage, done.next_step),
+                    )
                 conflicted.append(step.item)
         return DispatchPrFeedbackResponse(reworked=reworked, conflicted=conflicted)
