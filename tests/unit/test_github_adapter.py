@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from lightcycle.adapters.github import GitHubEventsAdapter
-from lightcycle.ports.github import CheckRun, PrSync, ReadFailure
+from lightcycle.ports.github import CheckRun, PrSync, RateLimit, ReadFailure
 
 _PR = "https://github.com/x/y/pull/7"
 
@@ -839,6 +839,57 @@ class TestRequiresUpToDate(unittest.TestCase):
             self.assertIsInstance(
                 self.adapter.requires_up_to_date("x/y@main"), ReadFailure
             )
+
+
+class TestRateLimit(unittest.TestCase):
+    def setUp(self):
+        self.adapter = GitHubEventsAdapter()
+
+    def _read(self, proc):
+        with patch("lightcycle.adapters.github.subprocess.run", return_value=proc) as run:
+            return self.adapter.rate_limit(), run
+
+    def test_reads_the_core_bucket_through_one_gh_api_rate_limit_call(self):
+        payload = json.dumps({"resources": {
+            "core": {"limit": 5000, "remaining": 4261, "reset": 1792503970, "used": 739},
+            "graphql": {"limit": 5000, "remaining": 1, "reset": 1},
+        }})
+
+        result, run = self._read(_proc(payload))
+
+        self.assertEqual(result, RateLimit(limit=5000, remaining=4261, reset=1792503970))
+        self.assertEqual(run.call_args.args[0], ["gh", "api", "rate_limit"])
+        self.assertEqual(run.call_count, 1)
+
+    def test_a_failed_gh_call_is_a_read_failure_not_zeros(self):
+        result, _ = self._read(_proc(returncode=1, stderr="rate limit exceeded"))
+
+        self.assertIsInstance(result, ReadFailure)
+        self.assertEqual(result.returncode, 1)
+
+    def test_a_missing_core_bucket_is_a_read_failure(self):
+        result, _ = self._read(_proc(json.dumps({"resources": {}})))
+
+        self.assertIsInstance(result, ReadFailure)
+
+    def test_a_non_integer_field_is_a_read_failure(self):
+        payload = json.dumps({"resources": {"core": {"limit": 5000, "remaining": "n/a", "reset": 1}}})
+
+        result, _ = self._read(_proc(payload))
+
+        self.assertIsInstance(result, ReadFailure)
+
+    def test_a_missing_field_is_a_read_failure(self):
+        payload = json.dumps({"resources": {"core": {"limit": 5000, "remaining": 10}}})
+
+        result, _ = self._read(_proc(payload))
+
+        self.assertIsInstance(result, ReadFailure)
+
+    def test_unparseable_output_is_a_read_failure(self):
+        result, _ = self._read(_proc("not json"))
+
+        self.assertIsInstance(result, ReadFailure)
 
 
 class TestUpdateBranch(unittest.TestCase):

@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 from lightcycle.application.pool.backup import BackupResponse
+from lightcycle.application.pool.github_budget import GithubBudgetState
 from lightcycle.application.pool.guidance_sync import GuidanceSyncResponse
 from lightcycle.application.pool.hook_completions import HookCompletionsResponse
 from lightcycle.application.pool.lifecycle_cadence import LifecycleCadenceResponse
@@ -63,6 +64,7 @@ class TickResponse:
     lifecycle: Optional[LifecycleCadenceResponse] = None
     scripts: Optional[ScriptStagesResponse] = None
     config: Optional[ReloadConfigResponse] = None
+    github: Optional[GithubBudgetState] = None
 
 
 class TickUseCase:
@@ -71,6 +73,7 @@ class TickUseCase:
         hook_completions, worktrees, git, backup_gate, worker_log, flow_service, spin_port, usage_gate,
         stream, memory_gate, guidance_gate,
         schedule_gate, config_reload, lifecycle_gate, script_gate, github_poll_gate,
+        github_budget, gh_call_gate,
     ):
         self._store = store
         self._workers = workers
@@ -93,6 +96,9 @@ class TickUseCase:
         self._usage_gate = usage_gate
         self._memory_gate = memory_gate
         self._guidance_gate = guidance_gate
+        self._github_budget = github_budget
+        self._gh_call_gate = gh_call_gate
+        self._budget_low = False
 
     def _guidance_sync(self, now):
         try:
@@ -153,6 +159,7 @@ class TickUseCase:
         backup_result = self._backup_gate.execute(input.now)
         guidance_result = self._guidance_sync(input.now)
         self._usage_gate.execute(input.now)
+        self._gh_call_gate.execute()
         swept = self._sweep.execute(
             input.now, self._config.max_boot_seconds(), self._config.stall_seconds()
         )
@@ -181,7 +188,14 @@ class TickUseCase:
         if input.drain:
             slots = 0
         inflight_total = sum(inflight_dict.values())
-        ready_roles = ReadyQueue(self._store.ready_steps()).roles()
+        ready_steps = self._store.ready_steps()
+        reading = self._github_budget.reading()
+        held = self._github_budget.held(ready_steps)
+        github_state = GithubBudgetState(
+            reading=reading, opened=reading.low and not self._budget_low,
+            closed=self._budget_low and not reading.low)
+        self._budget_low = reading.low
+        ready_roles = ReadyQueue([s for s in ready_steps if s.id not in held]).roles()
         ready_count = len(ready_roles)
         spawned = []
         if slots > 0:
@@ -224,4 +238,5 @@ class TickUseCase:
             lifecycle=lifecycle_result,
             scripts=scripts_result,
             config=config_result,
+            github=github_state,
         )

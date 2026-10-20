@@ -6,10 +6,14 @@ from lightcycle.adapters.breaker import BreakerAdapter
 from lightcycle.adapters.claude_stream import ClaudeStreamAdapter
 from lightcycle.adapters.drain import PoolDrainAdapter
 from lightcycle.adapters.fsio import FsAdapter
+from lightcycle.adapters.gh_shim import GhShimAdapter
 from lightcycle.adapters.github import GitHubEventsAdapter
+from lightcycle.adapters.github_budget_status import GithubBudgetStatusAdapter
 from lightcycle.adapters.gitio import GitAdapter
 from lightcycle.adapters.launcher import LauncherAdapter
 from lightcycle.adapters.lifecycle_runner import LifecycleRunnerAdapter
+from lightcycle.application.pool.gh_call_accrual import GhCallAccrualUseCase
+from lightcycle.application.pool.github_budget import GithubBudgetUseCase
 from lightcycle.application.pool.github_poll import GithubPollUseCase
 from lightcycle.application.pool.pr_snapshot import PrSnapshot
 from lightcycle.application.pool.pr_writes import PrWrites
@@ -48,6 +52,7 @@ class Container:
         claude_stream=None, machine=None, memory_gate_status=None,
         drain=None, guidance_sync_status=None, config_reload_status=None,
         lifecycle_runner=None, script_runner=None, github_poll_runner=None,
+        github_budget_status=None, gh_shim=None,
     ):
         self.config = config if config is not None else Config()
         self.store = store if store is not None else SqliteStore(self.config, now=now)
@@ -88,6 +93,11 @@ class Container:
             memory_gate_status if memory_gate_status is not None
             else MemoryGateStatusAdapter(self.config)
         )
+        self.github_budget_status = (
+            github_budget_status if github_budget_status is not None
+            else GithubBudgetStatusAdapter(self.config)
+        )
+        self.gh_shim = gh_shim if gh_shim is not None else GhShimAdapter(self.config)
         self.config_reload_status = (
             config_reload_status if config_reload_status is not None
             else ConfigReloadStatusAdapter(self.config)
@@ -106,6 +116,11 @@ class Container:
 
     def worktrees(self, flow=None):
         return worktrees_for(self, flow=flow)
+
+    def github_budget(self, flow=None):
+        return GithubBudgetUseCase(
+            self.github_budget_status, flow if flow is not None else self.flow_service(),
+            self.config, time.time)
 
     def tick(self, flow=None):
         from lightcycle.application.flow.complete_step import CompleteStepUseCase
@@ -151,7 +166,8 @@ class Container:
                 spin_port=self.spin, store=self.store,
             ),
             github_poll_gate=GithubPollUseCase(
-                snapshot, self.github, self.github_poll_runner, self.config, writes),
+                snapshot, self.github, self.github_poll_runner, self.config, writes,
+                self.github_budget_status, time.time),
             hook_completions=HookCompletionsUseCase(self.store, flow),
             worktrees=worktrees,
             git=self.git,
@@ -169,6 +185,9 @@ class Container:
             ),
             config_reload=ReloadConfigUseCase(
                 self.config, self.config_reload_status, os.getpid()),
+            github_budget=self.github_budget(flow),
+            gh_call_gate=GhCallAccrualUseCase(
+                self.store, self.worker_log, self.workers, self.config),
         )
 
     def sweep(self, flow=None):
@@ -219,7 +238,7 @@ class SimulationContainer:
         from lightcycle.application.flow.claim_step import ClaimStepUseCase
         from lightcycle.application.flow.complete_step import CompleteStepUseCase
         from lightcycle.adapters.simulate import (
-            NullWorkers, RecordingGit, SimulateConfig,
+            NullGithubBudget, NullWorkers, RecordingGit, SimulateConfig,
         )
         from lightcycle.config import Config
 
@@ -244,6 +263,6 @@ class SimulationContainer:
             self.store, self.git, container.fs, self.config, self.flow, container.scaffold
         )
         self.claim = ClaimStepUseCase(
-            self.store, self.flow, self.worktrees, NullWorkers(), self.config
+            self.store, self.flow, self.worktrees, NullWorkers(), self.config, NullGithubBudget()
         )
         self.complete = CompleteStepUseCase(self.store, self.flow, self.worktrees, self.config)

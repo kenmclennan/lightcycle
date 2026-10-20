@@ -103,6 +103,7 @@ def record_to_step(record, blocked_by=None):
         usage_cost_basis=meta.get("usage_cost_basis"),
         usage_rates_used=meta.get("usage_rates_used"),
         usage_thinking_tokens=meta.get("usage_thinking_tokens"),
+        usage_api_calls=meta.get("usage_api_calls"),
         turn_count=meta.get("turn_count") or 0,
         previous_step=record.get("previous_step"),
         report=record.get("report"),
@@ -155,6 +156,7 @@ class FakeStore(StorePort):
         self._tool_usage = {}
         self._backfill_log = {}
         self._usage_accrual_state = {}
+        self._gh_calls = {}
         self._counters = {}
         self._daily_summaries = {}
         self._schedule_run_requests = set()
@@ -533,9 +535,10 @@ class FakeStore(StorePort):
     def ready_steps(self):
         return [self._to_node(b) for b in self._ready_records()]
 
-    def claim_ready(self, role, assignee=None, item=None, stage=None):
+    def claim_ready(self, role, assignee=None, item=None, stage=None, exclude=()):
         candidates = [
             b for b in self._ready_records()
+            if b["id"] not in exclude
             if "for:%s" % role in (b.get("labels") or [])
             and (item is None or b.get("parent") == item)
             and (stage is None or "step:%s" % stage in (b.get("labels") or []))
@@ -548,6 +551,13 @@ class FakeStore(StorePort):
         b["claim_epoch"] = (b.get("claim_epoch") or 0) + 1
         self._record_history(b["id"], State.RUNNING)
         return self._to_node(b)
+
+    def record_gh_calls(self, spawnid, step, calls):
+        self._gh_calls[spawnid] = (step, calls)
+        b = self._get(step)
+        meta = dict(b.get("metadata") or {})
+        meta["usage_api_calls"] = sum(c for s, c in self._gh_calls.values() if s == step)
+        b["metadata"] = meta
 
     def accrue_active_seconds(self, step_ids, seconds):
         for tid in step_ids:

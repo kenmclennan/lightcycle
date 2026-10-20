@@ -108,6 +108,18 @@ class CheckWorkflowDirUseCase:
                     problems.append(
                         "workflow %s declares schedule: but source.toml has no requires-engine; "
                         "older engines would ignore it" % wf_name)
+        for role in sorted(bundle.steps):
+            step_meta, _ = split_frontmatter(bundle.steps[role] or "")
+            if "github" not in step_meta:
+                continue
+            if str(step_meta["github"]).strip() != "heavy":
+                problems.append(
+                    "step %s declares github: %r; the only accepted value is heavy"
+                    % (role, step_meta["github"]))
+            if manifest.requires_engine is None:
+                problems.append(
+                    "step %s declares github: but source.toml has no requires-engine; "
+                    "older engines would ignore it" % role)
         lifecycle_found = {}
         scripts = WorkflowScripts(self._bundle, self._fs)
         for wf_name in names:

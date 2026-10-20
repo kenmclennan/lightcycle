@@ -60,6 +60,7 @@ class Flow:
 
         owner = {}
         escalation = {}
+        github_heavy = {}
         scripts = {}
         presents = {}
         details = {}
@@ -68,6 +69,7 @@ class Flow:
             if meta is None:
                 continue
             escalation[stage] = bool(meta.get("escalation"))
+            github_heavy[stage] = str(meta.get("github") or "").strip() == "heavy"
             declared = meta.get("presents")
             if declared:
                 presents[stage] = str(declared).strip()
@@ -90,6 +92,7 @@ class Flow:
                 StepDef.from_graph(graph, stage),
                 owner=owner.get(stage),
                 escalation=escalation.get(stage, False),
+                github_heavy=github_heavy.get(stage, False),
                 script=scripts.get(stage),
                 presents=presents.get(stage),
                 detail=details.get(stage),

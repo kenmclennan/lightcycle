@@ -392,6 +392,42 @@ class StoreContractBase:
         self.assertTrue(claimed.claimed_by)
         self.assertTrue(all(t.claimed_by for t in s.claimed_steps()))
 
+    def test_claim_ready_exclude_skips_the_excluded_ids_and_claims_another_of_the_role(self):
+        s = self.make_store()
+        first = self._step(s, "a", role="agent")
+        second = self._step(s, "b", role="agent")
+        claimed = s.claim_ready("agent", exclude=(first,))
+        self.assertEqual(claimed.id, second)
+
+    def test_claim_ready_returns_none_when_only_excluded_steps_remain(self):
+        s = self.make_store()
+        only = self._step(s, "a", role="agent")
+        self.assertIsNone(s.claim_ready("agent", exclude=(only,)))
+        self.assertEqual(s.claim_ready("agent").id, only)
+
+    def test_a_step_never_metered_has_no_api_call_count(self):
+        s = self.make_store()
+        tid = self._step(s, "t", role="agent")
+        self.assertIsNone(s.get_node(tid).usage_api_calls)
+        self.assertIn("usage_api_calls", s.get_node(tid).as_dict())
+
+    def test_record_gh_calls_twice_for_one_spawn_leaves_the_last_value(self):
+        s = self.make_store()
+        tid = self._step(s, "t", role="agent")
+        s.record_gh_calls("spawn-a", tid, 2)
+        s.record_gh_calls("spawn-a", tid, 5)
+        self.assertEqual(s.get_node(tid).usage_api_calls, 5)
+
+    def test_record_gh_calls_for_two_spawns_of_one_step_sums_them(self):
+        s = self.make_store()
+        tid = self._step(s, "t", role="agent")
+        other = self._step(s, "u", role="agent")
+        s.record_gh_calls("spawn-a", tid, 4)
+        s.record_gh_calls("spawn-b", tid, 3)
+        s.record_gh_calls("spawn-c", other, 9)
+        self.assertEqual(s.get_node(tid).usage_api_calls, 7)
+        self.assertEqual(s.get_node(other).usage_api_calls, 9)
+
     def test_create_item_with_a_shortcode_mints_prefixed_ids_from_a_per_prefix_counter(self):
         s = self.make_store()
         horde_first = s.create_item("h1", "a description", shortcode="HORDE")

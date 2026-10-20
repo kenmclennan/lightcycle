@@ -607,7 +607,8 @@ def cmd_claim(argv):
     a = build_parser(COMMANDS["claim"]).parse_args(argv)
     try:
         resp = ClaimStepUseCase(
-            _container.store, _flow(), _worktrees(), _container.workers, _container.config
+            _container.store, _flow(), _worktrees(), _container.workers, _container.config,
+            _container.github_budget(_flow()),
         ).execute(ClaimInput(role=a.role))
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
@@ -1202,7 +1203,8 @@ def cmd_trace(argv):
                 print("  artifact %s: %s" % (art.type, art.value))
         for t in resp.steps:
             log = "  log:" + t.log if t.log else ""
-            print("  step %s  %s  [%s]%s" % (t.id, t.step or "-", t.state, log))
+            calls = "-" if t.api_calls is None else str(t.api_calls)
+            print("  step %s  %s  [%s]  calls:%s%s" % (t.id, t.step or "-", t.state, calls, log))
             for art in t.artifacts:
                 if art.type == "findings":
                     print("    artifact findings: see lc show %s" % t.id)
@@ -1257,7 +1259,7 @@ def cmd_doctor(argv):
         _container.store, _container.workflow_source, _container.config, _container.workflow_bundle,
         _container.fs, _container.machine, _container.worktrees(),
         _container.git, _container.guidance_sync_status,
-        _container.config_reload_status, _container.lock,
+        _container.config_reload_status, _container.lock, _container.github_budget(),
     ).execute(DoctorInput())
     if a.json:
         print(json.dumps(
@@ -1267,7 +1269,7 @@ def cmd_doctor(argv):
         return 0 if report.healthy() else 1
     for cat, probs in report.problems.items():
         if not probs:
-            print("%s: ok" % cat)
+            print("%s: %s" % (cat, report.notes.get(cat, "ok")))
             continue
         print("%s:" % cat)
         for p in probs:
@@ -1813,6 +1815,13 @@ def _tick_event_lines(result, ts):
         lines.append(
             "%s  %-7s  %s" % (ts, "spin", "opened - workers died with no observed work")
         )
+    if result.github is not None and result.github.opened:
+        reading = result.github.reading
+        reset_ts = time.strftime("%H:%M:%S", time.localtime(reading.reset))
+        lines.append("%s  %-7s  %s" % (
+            ts, "github", "budget low, %d remaining, resets at %s" % (reading.remaining, reset_ts)))
+    if result.github is not None and result.github.closed:
+        lines.append("%s  %-7s  %s" % (ts, "github", "budget recovered"))
     return lines
 
 
@@ -1988,6 +1997,7 @@ def cmd_start(argv):
     if not lock_result.acquired:
         sys.stderr.write("lc start already running, pid %d\n" % lock_result.holder_pid)
         return 1
+    _container.gh_shim.install()
     ClearDrainUseCase(_container.drain).execute()
 
     def _stop(*_):

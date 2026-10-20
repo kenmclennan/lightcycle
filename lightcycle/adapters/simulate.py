@@ -1,4 +1,5 @@
 import os
+from types import SimpleNamespace
 
 from lightcycle.ports.git import GitOutcome, GitPort
 from lightcycle.ports.github import Comment, GitHubEventsPort, PrSync, ReadFailure
@@ -242,6 +243,9 @@ class ScriptedGitHub(GitHubEventsPort):
     def pr_view(self, pr):
         return ReadFailure(-1, "pr views are not simulated")
 
+    def rate_limit(self):
+        return ReadFailure(-1, "the rate limit is not simulated")
+
     def check_runs(self, pr, sha):
         return self._check_runs.get(pr, ())
 
@@ -287,6 +291,14 @@ class NullWorkers(WorkersPort):
 
     def set_pid_started(self, spawnid, pid_started):
         self._refuse("set_pid_started")
+
+
+class NullGithubBudget:
+    def reading(self):
+        return SimpleNamespace(low=False)
+
+    def held(self, steps):
+        return frozenset()
 
 
 class SimulateConfig:

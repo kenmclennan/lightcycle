@@ -14,7 +14,8 @@ class _FakeStep:
     def __init__(self, stage="write-code", role="agent", turn_count=0, usage_cost_usd=Cost(),
                  usage_input_tokens=0, usage_output_tokens=0, usage_cache_read_tokens=0,
                  usage_cache_creation_tokens=0, usage_thinking_tokens=None, usage_cost_basis=None,
-                 usage_rates_used=None):
+                 usage_rates_used=None, usage_api_calls=None):
+        self.usage_api_calls = usage_api_calls
         self.stage = stage
         self.role = role
         self.turn_count = turn_count
@@ -214,6 +215,35 @@ class TestItemCost(unittest.TestCase):
         ]
         result = item_cost(steps)
         self.assertEqual(result.stages[0].unpriced_count, 1)
+
+
+class TestApiCalls(unittest.TestCase):
+    def test_a_step_carries_its_api_call_count(self):
+        step = _FakeStep(role="agent", turn_count=2, usage_api_calls=11)
+
+        self.assertEqual(step_cost(step, {}).api_calls, 11)
+
+    def test_a_step_never_metered_has_none(self):
+        step = _FakeStep(role="agent", turn_count=2)
+
+        self.assertIsNone(step_cost(step, {}).api_calls)
+
+    def test_an_item_sums_agent_steps_with_a_count(self):
+        steps = [
+            _FakeStep(role="agent", usage_api_calls=4), _FakeStep(role="agent", usage_api_calls=3),
+            _FakeStep(role="agent"), _FakeStep(role="human", usage_api_calls=100),
+        ]
+
+        self.assertEqual(item_cost(steps).api_calls, 7)
+
+    def test_an_item_where_no_agent_step_has_a_count_is_none(self):
+        steps = [_FakeStep(role="agent"), _FakeStep(role="human", usage_api_calls=100)]
+
+        self.assertIsNone(item_cost(steps).api_calls)
+
+    def test_a_metered_zero_is_a_zero_not_none(self):
+        self.assertEqual(item_cost([_FakeStep(role="agent", usage_api_calls=0)]).api_calls, 0)
+
 
 
 if __name__ == "__main__":

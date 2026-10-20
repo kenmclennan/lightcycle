@@ -162,6 +162,16 @@ class TestTrace(unittest.TestCase):
         self.assertEqual(
             resp.as_dict()["steps"][0]["artifacts"][0]["value"], "the digest")
 
+    def test_a_steps_api_calls_reach_the_trace_text_and_json(self):
+        s = FakeStore()
+        sid = s.create_item("st", "a description")
+        metered = s.create_step(step="build", role="agent", parent=sid)
+        s.create_step(step="review", role="agent", parent=sid)
+        s.record_gh_calls("sp-1", metered, 6)
+        resp = TraceUseCase(s, _Workers([]), FakeFs(), _Config()).execute(TraceInput(item=sid))
+        self.assertEqual([t.api_calls for t in resp.steps], [6, None])
+        self.assertEqual([t["api_calls"] for t in resp.as_dict()["steps"]], [6, None])
+
     def test_step_role_survives_to_the_trace(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")

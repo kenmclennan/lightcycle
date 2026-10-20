@@ -13,6 +13,7 @@ class StatusBar(Horizontal):
         yield Static(id="status-pool")
         yield Static(id="status-claude")
         yield Static(id="status-hold")
+        yield Static(id="status-github")
         yield Static(id="status-config")
         yield Static(id="status-version")
         yield Static(id="status-upgrade")
@@ -32,6 +33,7 @@ class StatusBar(Horizontal):
         upgrade_error=None,
         hold=None,
         config_changed=False,
+        github=None,
     ):
         if pool_transition_kind == "start":
             glyph_key = "pool-start-timed-out" if pool_transition_expired else "pool-starting"
@@ -72,6 +74,23 @@ class StatusBar(Horizontal):
         else:
             hold_widget.update("")
             hold_widget.display = False
+
+        github_widget = self.query_one("#status-github", Static)
+        if github is not None and github.known:
+            reset = time.strftime("%H:%M", time.localtime(github.reset))
+            if github.low:
+                github_glyph, github_colour = FOOTER_GLYPHS["pool-holding"]
+                github_widget.update(Text(
+                    "%s github budget low · %d left · resets %s" % (github_glyph, github.remaining, reset),
+                    style=COLOURS[github_colour]))
+            else:
+                github_widget.update(Text(
+                    "github %d/%d · resets %s" % (github.remaining, github.limit, reset),
+                    style=COLOURS["dim"]))
+            github_widget.display = True
+        else:
+            github_widget.update("")
+            github_widget.display = False
 
         config_widget = self.query_one("#status-config", Static)
         if config_changed:

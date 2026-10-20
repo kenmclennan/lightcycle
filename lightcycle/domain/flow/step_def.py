@@ -57,6 +57,7 @@ class StepDef:
     script: Optional[str] = None
     presents: Optional[str] = None
     detail: Optional[Tuple[str, ...]] = None
+    github_heavy: bool = False
 
     def __post_init__(self):
         object.__setattr__(self, "routes", MappingProxyType(dict(self.routes)))

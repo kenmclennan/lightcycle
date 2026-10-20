@@ -32,6 +32,13 @@ class ReadFailure:
 
 
 @dataclass(frozen=True)
+class RateLimit:
+    limit: int
+    remaining: int
+    reset: int
+
+
+@dataclass(frozen=True)
 class NotYetRead(ReadFailure):
     returncode: int = -2
     stderr: str = "no snapshot yet"
@@ -145,4 +152,8 @@ class GitHubEventsPort(ABC):
 
     @abstractmethod
     def pr_view(self, pr: str) -> Union[PrView, ReadFailure]:
+        pass
+
+    @abstractmethod
+    def rate_limit(self) -> Union[RateLimit, ReadFailure]:
         pass

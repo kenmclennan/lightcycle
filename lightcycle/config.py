@@ -22,6 +22,7 @@ _ENV_OVERRIDE_VARS = {
     "spin-cap": "LC_SPIN_CAP",
     "poll-seconds": "LC_POLL_SECONDS",
     "github-poll-seconds": "LC_GITHUB_POLL_SECONDS",
+    "github-reserve-calls": "LC_GITHUB_RESERVE_CALLS",
     "worker-history": "LC_WORKER_HISTORY",
     "editor": "EDITOR",
     "tui-autostart-pool": "LC_TUI_AUTOSTART_POOL",
@@ -89,6 +90,7 @@ _SEED_KEYS = [
     ("spin-cap", "3"),
     ("poll-seconds", "5"),
     ("github-poll-seconds", "60"),
+    ("github-reserve-calls", "750"),
     ("worker-history", "20"),
     ("editor", "vi"),
     ("backups-dir", "~/.lightcycle-backups"),
@@ -160,6 +162,7 @@ schedule-daily-summary:
 
 _NUMERIC_RANGES = {
     "github-poll-seconds": (1, None),
+    "github-reserve-calls": (0, None),
     "memory-reserve-fraction": (0.0, 1.0),
     "max-agents": (0, None),
     "guidance-budget-bytes": (0, None),
@@ -238,6 +241,13 @@ class Config:
 
     def base_env(self):
         return dict(self._environ)
+
+    def prepend_path(self, directory):
+        current = self._environ.get("PATH", "")
+        parts = current.split(os.pathsep) if current else []
+        if parts and parts[0] == directory:
+            return
+        self._environ["PATH"] = os.pathsep.join([directory] + [p for p in parts if p != directory])
 
     def agent_env(self):
         env = self.base_env()
@@ -583,6 +593,11 @@ class Config:
         if env is not None:
             return env
         return self._required_int("github-poll-seconds")
+
+    def github_reserve_calls(self):
+        env = self._env_int("LC_GITHUB_RESERVE_CALLS", None)
+        value = env if env is not None else self._required_int("github-reserve-calls")
+        return self._check_range("github-reserve-calls", value)
 
     def tui_autostart_pool(self):
         env = self._env_bool("LC_TUI_AUTOSTART_POOL", None)

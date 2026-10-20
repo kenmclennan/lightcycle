@@ -1,7 +1,8 @@
 import datetime
 import os
 import re
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 from typing import Dict, List
 
 from lightcycle.application.errors import UseCaseError
@@ -49,6 +50,7 @@ class DoctorInput:
 @dataclass(frozen=True)
 class DoctorReport:
     problems: Dict[str, List[Problem]]
+    notes: Dict[str, str] = field(default_factory=dict)
 
     def healthy(self) -> bool:
         return not any(self.problems.values())
@@ -57,8 +59,9 @@ class DoctorReport:
 class DoctorUseCase:
     def __init__(
         self, store, workflow_source, config, workflow_bundle, fs, machine, worktrees,
-        git, guidance_sync_status, config_reload_status, lock,
+        git, guidance_sync_status, config_reload_status, lock, github_budget,
     ):
+        self._github_budget = github_budget
         self._store = store
         self._workflow_source = workflow_source
         self._config = config
@@ -82,7 +85,8 @@ class DoctorUseCase:
         contracts = (
             contracts + self._requirement_problems() + self._suggestion_problems()
             + lifecycle_contract)
-        return DoctorReport(problems={
+        github_problems, github_note = self._github_budget_problems()
+        return DoctorReport(notes=github_note, problems={
             "store": fsck(nodes),
             "pins": pins,
             "contract": contracts,
@@ -93,7 +97,22 @@ class DoctorUseCase:
             "orphans": self._orphan_problems(),
             "facets": self._guidance_registration_problems() + self._facet_problems(),
             "guidance": self._guidance_problems() + self._guidance_shortcode_problems(),
+            "github": github_problems,
         })
+
+    def _github_budget_problems(self):
+        reading = self._github_budget.reading()
+        if not reading.known:
+            return [], {}
+        reset = time.strftime("%H:%M:%S", time.localtime(reading.reset))
+        if reading.low:
+            return [Problem(
+                "github",
+                "github budget low: %d of %d remaining, resets at %s; "
+                "github-heavy steps are not being claimed" % (reading.remaining, reading.limit, reset),
+            )], {}
+        return [], {"github": "ok - %d/%d remaining, resets at %s" % (
+            reading.remaining, reading.limit, reset)}
 
     def _in_flight_pins(self, nodes):
         for n in nodes:

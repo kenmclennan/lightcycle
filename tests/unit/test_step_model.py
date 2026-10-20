@@ -1,3 +1,4 @@
+from tests.support.fake_github_budget import FakeGithubBudget
 import json
 import unittest
 
@@ -32,7 +33,7 @@ class Rig:
 
     def claim_uc(self):
         return ClaimStepUseCase(
-            self.store, self.flow, FakeWorktrees(), self.workers, self.config)
+            self.store, self.flow, FakeWorktrees(), self.workers, self.config, FakeGithubBudget())
 
     def first_step(self, stage="build", role="agent"):
         return self.store.create_step(step=stage, role=role, parent=self.item)

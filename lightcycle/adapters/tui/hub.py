@@ -185,7 +185,7 @@ COST_NOT_RUN_MESSAGE = "This step hasn't run yet."
 COST_NO_TOOLS_MESSAGE = "No tool calls recorded for this step."
 ITEM_COST_EMPTY_MESSAGE = "This item has no usage to show yet."
 COST_FIELD_LABELS = {
-    "turns": "TURNS", "input_tokens": "INPUT TOKENS", "output_tokens": "OUTPUT TOKENS",
+    "turns": "TURNS", "api_calls": "API CALLS", "input_tokens": "INPUT TOKENS", "output_tokens": "OUTPUT TOKENS",
     "cache_read_tokens": "CACHE READ TOKENS", "cache_creation_tokens": "CACHE CREATION TOKENS",
     "thinking_tokens": "THINKING TOKENS", "cache_hit_rate": "CACHE HIT RATE", "cost": "COST",
     "cost_basis": "COST BASIS", "rates_used": "RATES USED",
@@ -223,6 +223,8 @@ def step_cost_fields(cost):
     if cost.cost_basis == "derived" and cost.rates_used:
         fields.append(("rates_used", _rates_used_text(cost.rates_used)))
     fields.append(("turns", format_tokens(cost.turn_count)))
+    if cost.api_calls is not None:
+        fields.append(("api_calls", format_tokens(cost.api_calls)))
     fields.append(("input_tokens", format_tokens(cost.input_tokens)))
     fields.append(("output_tokens", format_tokens(cost.output_tokens)))
     fields.append(("cache_read_tokens", format_tokens(cost.cache_read_tokens)))
@@ -237,6 +239,8 @@ def item_cost_fields(cost):
     cost_text = format_usd(cost.cost_usd) if cost.cost_usd else COST_NOT_RECORDED
     fields = [("cost", cost_text + _unpriced_suffix(cost.unpriced_count))]
     fields.append(("turns", format_tokens(cost.turn_count)))
+    if cost.api_calls is not None:
+        fields.append(("api_calls", format_tokens(cost.api_calls)))
     fields.append(("input_tokens", format_tokens(cost.input_tokens)))
     fields.append(("output_tokens", format_tokens(cost.output_tokens)))
     fields.append(("cache_read_tokens", format_tokens(cost.cache_read_tokens)))

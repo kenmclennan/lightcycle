@@ -4,8 +4,10 @@ from lightcycle.ports.claude_stream import ClaudeStreamPort
 from lightcycle.ports.config_reload_status import ConfigReloadStatusPort
 from lightcycle.ports.drain import PoolDrainPort
 from lightcycle.ports.fs import FsPort
+from lightcycle.ports.gh_shim import GhShimPort
 from lightcycle.ports.git import GitPort
 from lightcycle.ports.github import GitHubEventsPort
+from lightcycle.ports.github_budget_status import GithubBudgetStatusPort
 from lightcycle.ports.guidance_sync_status import GuidanceSyncStatusPort
 from lightcycle.ports.launcher import LauncherPort
 from lightcycle.ports.lifecycle_runner import LifecycleRunnerPort
@@ -28,6 +30,8 @@ from lightcycle.ports.workflow_source import WorkflowSourcePort
 __all__ = [
     "BackupPort",
     "BreakerPort",
+    "GhShimPort",
+    "GithubBudgetStatusPort",
     "ClaudeStreamPort",
     "ConfigReloadStatusPort",
     "FsPort",

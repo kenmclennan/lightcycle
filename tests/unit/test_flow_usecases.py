@@ -1,3 +1,4 @@
+from tests.support.fake_github_budget import FakeGithubBudget
 import datetime
 import os
 import unittest
@@ -1225,7 +1226,7 @@ class TestClaimWorkspaceGuard(unittest.TestCase):
         s.set_branch(rid, "feat/x")
         flow = _PhasedFlow(phase, FakeFs(METAS), s)
         workers = FakeWorkers(assigned={spawn: step} if spawn else None)
-        uc = ClaimStepUseCase(s, flow, worktrees, workers, FakeConfig(spawn=spawn))
+        uc = ClaimStepUseCase(s, flow, worktrees, workers, FakeConfig(spawn=spawn), FakeGithubBudget())
         return s, step, uc
 
     def test_a_workspace_that_disagrees_with_the_phases_run_parks_the_step_and_returns_no_work(self):
@@ -1303,7 +1304,7 @@ class TestClaimWorkspaceGuard(unittest.TestCase):
 class TestClaimTask(unittest.TestCase):
     def _uc(self, store, config=None):
         return ClaimStepUseCase(
-            store, flow_for(METAS, store), FakeWorktrees(), FakeWorkers(), config or FakeConfig()
+            store, flow_for(METAS, store), FakeWorktrees(), FakeWorkers(), config or FakeConfig(), FakeGithubBudget()
         )
 
     def test_claims_ready_task(self):
@@ -1340,7 +1341,7 @@ class TestClaimTask(unittest.TestCase):
         bid = s.create_step(step="audit", role="agent",
                             parent=s.create_item("i", "a description", shortcode="GRID"))
         flow = FlowService(FakeFs({"audit": {"model": "sonnet", "step": "audit"}}), s, PromptsConfig())
-        uc = ClaimStepUseCase(s, flow, FakeWorktrees(), FakeWorkers(), FakeConfig())
+        uc = ClaimStepUseCase(s, flow, FakeWorktrees(), FakeWorkers(), FakeConfig(), FakeGithubBudget())
         uc.execute(ClaimInput(role="agent"))
         self.assertEqual(s.get_node(bid).model, "sonnet")
 
@@ -1378,7 +1379,7 @@ class TestClaimTask(unittest.TestCase):
 
     def _idempotent_uc(self, s, workers):
         return ClaimStepUseCase(
-            s, flow_for(METAS, s), FakeWorktrees(), workers, FakeConfig(spawn="sp1")
+            s, flow_for(METAS, s), FakeWorktrees(), workers, FakeConfig(spawn="sp1"), FakeGithubBudget()
         )
 
     def test_idempotent_returns_assigned_inflight_without_a_fresh_claim(self):
@@ -1416,7 +1417,7 @@ class TestClaimTask(unittest.TestCase):
         step = create_owned_step(s, "build: x", step="build", role="agent")
         workers = FakeWorkers()
         uc = ClaimStepUseCase(
-            s, flow_for(METAS, s), FakeWorktrees(), workers, FakeConfig(spawn="sp1"))
+            s, flow_for(METAS, s), FakeWorktrees(), workers, FakeConfig(spawn="sp1"), FakeGithubBudget())
         first = uc.execute(ClaimInput(role="agent"))
         self.assertEqual(first.view.step.id, step)
         resume = uc.execute(ClaimInput(role="agent"))
@@ -1439,7 +1440,7 @@ class TestClaimTask(unittest.TestCase):
         uc = ClaimStepUseCase(
             s, flow_for(SPEC_METAS, s),
             FakeWorktrees(sync_specs_error=RuntimeError("net")),
-            FakeWorkers(assigned={"sp1": x}), FakeConfig(spawn="sp1"),
+            FakeWorkers(assigned={"sp1": x}), FakeConfig(spawn="sp1"), FakeGithubBudget(),
         )
         with self.assertRaises(RuntimeError):
             uc.execute(ClaimInput(role="agent"))
@@ -1454,7 +1455,7 @@ class TestClaimTask(unittest.TestCase):
         uc = ClaimStepUseCase(
             s, flow_for(SPEC_METAS, s),
             FakeWorktrees(sync_specs_error=RuntimeError("net")),
-            FakeWorkers(), FakeConfig(spawn="sp1"),
+            FakeWorkers(), FakeConfig(spawn="sp1"), FakeGithubBudget(),
         )
         with self.assertRaises(RuntimeError):
             uc.execute(ClaimInput(role="agent"))
@@ -1472,7 +1473,7 @@ class TestClaimTask(unittest.TestCase):
         create_owned_step(s, "build: x", step="build", role="agent")
         workers = FakeWorkers()
         ClaimStepUseCase(
-            s, flow_for(METAS, s), FakeWorktrees(), workers, FakeConfig(spawn="sp1")
+            s, flow_for(METAS, s), FakeWorktrees(), workers, FakeConfig(spawn="sp1"), FakeGithubBudget()
         ).execute(ClaimInput(role="agent"))
         self.assertEqual(len(workers.stamped), 1)
 
@@ -1481,7 +1482,7 @@ class TestClaimTask(unittest.TestCase):
         bid = create_owned_step(s, "build: x", step="build", role="agent")
         workers = FakeWorkers(raise_on_step_for=True)
         uc = ClaimStepUseCase(
-            s, flow_for(METAS, s), FakeWorktrees(), workers, FakeConfig(spawn="sp1")
+            s, flow_for(METAS, s), FakeWorktrees(), workers, FakeConfig(spawn="sp1"), FakeGithubBudget()
         )
         with self.assertRaises(RegistryUnreadable):
             uc.execute(ClaimInput(role="agent"))
@@ -1492,7 +1493,7 @@ class TestClaimTask(unittest.TestCase):
         bid = create_owned_step(s, "build: x", step="build", role="agent")
         workers = FakeWorkers(raise_on_set_step=True)
         uc = ClaimStepUseCase(
-            s, flow_for(METAS, s), FakeWorktrees(), workers, FakeConfig(spawn="sp1")
+            s, flow_for(METAS, s), FakeWorktrees(), workers, FakeConfig(spawn="sp1"), FakeGithubBudget()
         )
         with self.assertRaises(RegistryUnreadable):
             uc.execute(ClaimInput(role="agent"))
@@ -1504,7 +1505,7 @@ class TestClaimTask(unittest.TestCase):
         bid = s.create_step(step="build", role="agent",
                             parent=s.create_item("i", "a description", workflow="standard", shortcode="GRID"))
         resp = ClaimStepUseCase(
-            s, flow_for(SPEC_METAS, s), FakeWorktrees(), FakeWorkers(), FakeConfig()
+            s, flow_for(SPEC_METAS, s), FakeWorktrees(), FakeWorkers(), FakeConfig(), FakeGithubBudget()
         ).execute(ClaimInput(role="agent"))
         self.assertIsNone(resp)
         node = s.get_node(bid)
@@ -1518,7 +1519,7 @@ class TestClaimTask(unittest.TestCase):
         bid = s.create_step(step="build", role="agent",
                             parent=s.create_item("i", "a description", workflow="ghost/whatever", shortcode="GRID"))
         resp = ClaimStepUseCase(
-            s, _BrokenSelectorFlow(), FakeWorktrees(), FakeWorkers(), FakeConfig()
+            s, _BrokenSelectorFlow(), FakeWorktrees(), FakeWorkers(), FakeConfig(), FakeGithubBudget()
         ).execute(ClaimInput(role="agent"))
         self.assertIsNone(resp)
         node = s.get_node(bid)
@@ -1533,7 +1534,7 @@ class TestClaimTask(unittest.TestCase):
         bid = s.create_step(step="build", role="agent",
                             parent=s.create_item("i", "a description", workflow="standard", shortcode="GRID"))
         ClaimStepUseCase(
-            s, flow_for(SPEC_METAS, s), FakeWorktrees(), FakeWorkers(), FakeConfig()
+            s, flow_for(SPEC_METAS, s), FakeWorktrees(), FakeWorkers(), FakeConfig(), FakeGithubBudget()
         ).execute(ClaimInput(role="agent"))
         node_before = s.get_node(bid)
         expected_reason = node_before.park.reason
@@ -1613,7 +1614,7 @@ class TestClaimTask(unittest.TestCase):
         metas = {"coder": {"model": "sonnet", "step": "build", "phase": "spec",
                            "routes": {"done": "review"}}}
         resp = ClaimStepUseCase(
-            s, flow_for(metas, s), FakeWorktrees(), FakeWorkers(), FakeConfig()
+            s, flow_for(metas, s), FakeWorktrees(), FakeWorkers(), FakeConfig(), FakeGithubBudget()
         ).execute(ClaimInput(role="agent"))
         self.assertEqual(resp.phase, "spec")
 
@@ -1628,7 +1629,7 @@ class TestClaimTask(unittest.TestCase):
         bid = create_owned_step(s, "build: x", step="build", role="agent")
         uc = ClaimStepUseCase(
             s, flow_for(METAS, s), FakeWorktrees(ensure_error=RuntimeError("boom")),
-            FakeWorkers(), FakeConfig()
+            FakeWorkers(), FakeConfig(), FakeGithubBudget()
         )
         with self.assertRaises(RuntimeError):
             uc.execute(ClaimInput(role="agent"))
@@ -1644,7 +1645,7 @@ class TestClaimTask(unittest.TestCase):
         worktrees = FakeWorktrees()
 
         ClaimStepUseCase(
-            s, flow_for(METAS, s), worktrees, FakeWorkers(), FakeConfig()
+            s, flow_for(METAS, s), worktrees, FakeWorkers(), FakeConfig(), FakeGithubBudget()
         ).execute(ClaimInput(role="agent"))
 
         self.assertEqual(worktrees.sync_specs_calls, 1)
@@ -1655,7 +1656,7 @@ class TestClaimTask(unittest.TestCase):
         worktrees = FakeWorktrees()
 
         ClaimStepUseCase(
-            s, flow_for(METAS, s), worktrees, FakeWorkers(), FakeConfig()
+            s, flow_for(METAS, s), worktrees, FakeWorkers(), FakeConfig(), FakeGithubBudget()
         ).execute(ClaimInput(role="agent"))
 
         self.assertEqual(worktrees.sync_specs_calls, 0)
@@ -1667,7 +1668,7 @@ class TestClaimTask(unittest.TestCase):
         bid = s.create_step(step="build", role="agent", parent=item)
         uc = ClaimStepUseCase(
             s, flow_for(METAS, s), FakeWorktrees(sync_specs_error=RuntimeError("boom")),
-            FakeWorkers(), FakeConfig()
+            FakeWorkers(), FakeConfig(), FakeGithubBudget()
         )
 
         with self.assertRaises(RuntimeError):
@@ -1685,7 +1686,7 @@ class TestClaimConfigWithRealSteps(unittest.TestCase):
             FlowService(_RealFs(), store, _RealConfig()),
             FakeWorktrees(),
             FakeWorkers(),
-            FakeConfig(),
+            FakeConfig(), FakeGithubBudget(),
         )
 
     def test_surfaces_extra_frontmatter_as_config(self):

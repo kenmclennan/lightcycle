@@ -31,6 +31,11 @@ class FakeGitHub(GitHubEventsPort):
         self._tips = {}
         self._inline_events = []
         self.calls = []
+        self.rate_limit_reading = ReadFailure(-1, "no rate limit scripted")
+
+    def rate_limit(self):
+        self._record("rate_limit")
+        return self.rate_limit_reading
 
     def _record(self, name, *args):
         self.calls.append((name,) + args)

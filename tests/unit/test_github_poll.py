@@ -5,8 +5,9 @@ from lightcycle.application.pool.github_poll import GithubPollUseCase
 from lightcycle.application.pool.pr_snapshot import PrSnapshot
 from lightcycle.application.pool.pr_writes import PrWrites
 from lightcycle.config import ConfigError
-from lightcycle.ports.github import CheckRun, Comment, NotYetRead
+from lightcycle.ports.github import CheckRun, Comment, NotYetRead, RateLimit, ReadFailure
 from tests.support.fake_github import FakeGitHub
+from tests.support.fake_github_budget_status import FakeGithubBudgetStatus
 from tests.support.fake_github_poll_runner import BlockingGithubPollRunner, InlineGithubPollRunner
 
 _A = ["https://github.com/acme/widget/pull/%d" % n for n in range(1, 9)]
@@ -43,7 +44,10 @@ class _Pool:
         self.github = github or _github()
         self.snapshot = PrSnapshot(self.github)
         self.runner = runner or InlineGithubPollRunner()
-        self.gate = GithubPollUseCase(self.snapshot, self.github, self.runner, _Config(), PrWrites(time.monotonic))
+        self.status = FakeGithubBudgetStatus()
+        self.gate = GithubPollUseCase(
+            self.snapshot, self.github, self.runner, _Config(), PrWrites(time.monotonic),
+            self.status, lambda: 1000.0)
 
     def tick(self, now, prs=_ALL, files=(), checks=()):
         for pr in prs:
@@ -61,6 +65,41 @@ class _Pool:
         self.github.calls.clear()
 
 
+class TestBudgetRead(unittest.TestCase):
+    def test_a_cycle_publishes_limit_remaining_reset_and_read_time(self):
+        pool = _Pool()
+        pool.github.rate_limit_reading = RateLimit(5000, 4261, 1792503970)
+
+        pool.tick(0)
+
+        self.assertEqual(
+            pool.status.load(),
+            {"limit": 5000, "remaining": 4261, "reset": 1792503970, "read_at": 1000.0})
+
+    def test_exactly_one_rate_limit_read_per_cycle_even_with_no_wanted_prs(self):
+        pool = _Pool()
+        pool.github.rate_limit_reading = RateLimit(5000, 4000, 1792503970)
+
+        pool.tick(0, prs=[])
+        pool.tick(60, prs=[])
+        pool.tick(61, prs=[_A[0]])
+
+        self.assertEqual(pool.names().count("rate_limit"), 3)
+        self.assertEqual(len(pool.status.saves), 3)
+
+    def test_a_failed_read_leaves_the_previous_file_unchanged(self):
+        pool = _Pool()
+        pool.github.rate_limit_reading = RateLimit(5000, 4000, 1792503970)
+        pool.tick(0)
+        before = pool.status.load()
+        pool.github.rate_limit_reading = ReadFailure(1, "boom")
+
+        pool.tick(60)
+
+        self.assertEqual(pool.status.load(), before)
+        self.assertEqual(len(pool.status.saves), 1)
+
+
 class TestCallCounts(unittest.TestCase):
     def setUp(self):
         self.pool = _Pool()
@@ -70,9 +109,9 @@ class TestCallCounts(unittest.TestCase):
     def test_nothing_moved_costs_three_calls_per_repo_and_none_per_pr(self):
         self.assertTrue(self.pool.tick(60))
 
-        self.assertEqual(len(self.pool.github.calls), 6)
+        self.assertEqual(len(self.pool.github.calls), 7)
         self.assertEqual(sorted(self.pool.names()), sorted(
-            ["list_prs", "repo_inline_comments", "branch_tip"] * 2))
+            ["list_prs", "repo_inline_comments", "branch_tip"] * 2 + ["rate_limit"]))
         self.assertFalse(set(self.pool.names()) & set(_PER_PR_CALLS))
 
     def test_one_push_costs_five_reads_and_one_compare(self):
@@ -82,7 +121,7 @@ class TestCallCounts(unittest.TestCase):
 
         self.pool.tick(60, files=[(pr, "h-new")])
 
-        self.assertEqual(len(self.pool.github.calls), 12)
+        self.assertEqual(len(self.pool.github.calls), 13)
         self.assertEqual(self.pool.names().count("pr_view"), 1)
         self.assertEqual(self.pool.names().count("changed_files"), 1)
         self.assertEqual(self.pool.snapshot.head_sha(pr), "h-new")
@@ -95,7 +134,7 @@ class TestCallCounts(unittest.TestCase):
 
         self.pool.tick(60)
 
-        self.assertEqual(len(self.pool.github.calls), 13)
+        self.assertEqual(len(self.pool.github.calls), 14)
         self.assertEqual(self.pool.names().count("pr_view"), 7)
         self.assertNotIn(("pr_view", pr), self.pool.github.calls)
         self.assertTrue(self.pool.snapshot.is_merged(pr))
@@ -318,12 +357,20 @@ class TestColdStart(unittest.TestCase):
 
         self.assertEqual(pool.names().count("list_prs"), 2)
 
-    def test_no_gated_prs_starts_no_poll_and_a_later_pr_starts_one_at_once(self):
+    def test_no_gated_prs_runs_a_budget_only_cycle_and_a_later_pr_starts_a_poll_at_once(self):
         pool = _Pool()
 
-        self.assertFalse(pool.tick(0, prs=[]))
-        self.assertEqual(pool.runner.starts, 0)
+        self.assertTrue(pool.tick(0, prs=[]))
+        self.assertEqual(pool.names(), ["rate_limit"])
+        self.assertEqual(pool.runner.starts, 1)
         self.assertTrue(pool.tick(5, prs=[_A[0]]))
+        self.assertEqual(pool.runner.starts, 2)
+
+    def test_a_budget_only_cycle_is_not_repeated_before_the_poll_is_due(self):
+        pool = _Pool()
+        pool.tick(0, prs=[])
+
+        self.assertFalse(pool.tick(5, prs=[]))
         self.assertEqual(pool.runner.starts, 1)
 
     def test_the_poll_does_not_restart_before_it_is_due(self):
@@ -347,7 +394,7 @@ class TestRunnerAndConfig(unittest.TestCase):
     def test_an_unset_key_fails_at_construction_naming_it(self):
         github = _github()
         with self.assertRaises(ConfigError) as ctx:
-            GithubPollUseCase(PrSnapshot(github), github, InlineGithubPollRunner(), _Unset(), PrWrites(time.monotonic))
+            GithubPollUseCase(PrSnapshot(github), github, InlineGithubPollRunner(), _Unset(), PrWrites(time.monotonic), FakeGithubBudgetStatus(), time.time)
 
         self.assertIn("github-poll-seconds", str(ctx.exception))
 
@@ -355,7 +402,7 @@ class TestRunnerAndConfig(unittest.TestCase):
         config = _Config(60)
         github = _github()
         snapshot = PrSnapshot(github)
-        gate = GithubPollUseCase(snapshot, github, InlineGithubPollRunner(), config, PrWrites(time.monotonic))
+        gate = GithubPollUseCase(snapshot, github, InlineGithubPollRunner(), config, PrWrites(time.monotonic), FakeGithubBudgetStatus(), time.time)
         snapshot.pr_sync_state(_A[0])
         gate.execute(0)
         config.seconds = 10

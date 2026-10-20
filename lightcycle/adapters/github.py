@@ -5,7 +5,7 @@ import subprocess
 from typing import Optional, Tuple, Union
 
 from lightcycle.ports.github import (
-    CheckRun, Comment, GitHubEventsPort, ListedPr, PrSync, PrView, ReadFailure, Review,
+    CheckRun, Comment, GitHubEventsPort, ListedPr, PrSync, PrView, RateLimit, ReadFailure, Review,
 )
 
 _PR_URL_RE = re.compile(r"https://github\.com/([^/]+)/([^/]+)/pull/(\d+)")
@@ -393,6 +393,18 @@ class GitHubEventsAdapter(GitHubEventsPort):
             return json.loads(result.stdout)
         except (json.JSONDecodeError, ValueError):
             return ReadFailure(-1, "could not parse gh api JSON for %s" % path)
+
+    def rate_limit(self) -> Union[RateLimit, ReadFailure]:
+        data = self._gh_api_json("rate_limit")
+        if isinstance(data, ReadFailure):
+            return data
+        core = ((data or {}).get("resources") or {}).get("core") if isinstance(data, dict) else None
+        if not isinstance(core, dict):
+            return ReadFailure(-1, "rate_limit response carries no core bucket")
+        fields = [core.get(k) for k in ("limit", "remaining", "reset")]
+        if not all(isinstance(v, int) and not isinstance(v, bool) for v in fields):
+            return ReadFailure(-1, "rate_limit core bucket has a missing or non-integer field")
+        return RateLimit(limit=fields[0], remaining=fields[1], reset=fields[2])
 
     def requires_up_to_date(self, base_key: str) -> Union[bool, ReadFailure]:
         repo_path, _, base = base_key.partition("@")

@@ -1,3 +1,4 @@
+from tests.support.fake_gh_shim import FakeGhShim
 import io
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -222,6 +223,7 @@ class _StartContainer:
         self.config = _Config()
         self.worker_log = None
         self.upgrade = None
+        self.gh_shim = FakeGhShim()
         self.ticked = 0
 
     def tick(self, flow=None):
@@ -275,6 +277,16 @@ class TestCmdStartDrainLoop(unittest.TestCase):
                 "lc start drained - no workers or engine steps running, stopping",
             ],
         )
+
+    def test_the_gh_shim_is_installed_once_before_the_first_tick_is_built(self):
+        events = []
+        container = _StartContainer(FakeDrain())
+        container.gh_shim.install = lambda: events.append("install")
+        container.tick = lambda flow=None: events.append("tick") or object()
+
+        self._start(container, [3, 0], request_on_first=True)
+
+        self.assertEqual(events, ["install", "tick"])
 
     def test_exits_on_the_first_drain_tick_when_nothing_is_alive(self):
         rc, _ = self._start(_StartContainer(FakeDrain()), [3, 0], request_on_first=True)

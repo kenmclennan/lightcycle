@@ -1124,6 +1124,66 @@ class TestGuidanceRetirementConfig(unittest.TestCase):
                     getattr(_cfg({env: bad}), getter)()
 
 
+class TestGithubReserveCalls(unittest.TestCase):
+    def test_seeded_at_seven_hundred_and_fifty(self):
+        self.assertEqual(dict(_SEED_KEYS)["github-reserve-calls"], "750")
+
+    def test_the_file_value_is_read(self):
+        self.assertEqual(_cfg(github_reserve_calls="500").github_reserve_calls(), 500)
+
+    def test_env_override_wins(self):
+        c = _cfg({"LC_GITHUB_RESERVE_CALLS": "7"}, github_reserve_calls="750")
+        self.assertEqual(c.github_reserve_calls(), 7)
+
+    def test_zero_is_accepted_and_turns_the_hold_off(self):
+        self.assertEqual(_cfg(github_reserve_calls="0").github_reserve_calls(), 0)
+
+    def test_negative_is_refused_naming_the_key(self):
+        with self.assertRaises(ConfigError) as ctx:
+            _cfg(github_reserve_calls="-1").github_reserve_calls()
+        self.assertIn("github-reserve-calls", str(ctx.exception))
+
+    def test_missing_fails_naming_the_key(self):
+        with self.assertRaises(ConfigError) as ctx:
+            _cfg(spin_cap="3").github_reserve_calls()
+        self.assertIn("github-reserve-calls", str(ctx.exception))
+
+    def test_shows_in_the_seeded_key_report(self):
+        self.assertIn("github-reserve-calls", [k for k, _v in _SEED_KEYS])
+
+
+class TestPrependPath(unittest.TestCase):
+    def test_the_directory_ends_up_first(self):
+        env = {"PATH": "/usr/bin:/bin"}
+
+        Config(environ=env).prepend_path("/shims")
+
+        self.assertEqual(env["PATH"], "/shims:/usr/bin:/bin")
+
+    def test_prepending_twice_leaves_path_unchanged(self):
+        env = {"PATH": "/usr/bin"}
+        c = Config(environ=env)
+        c.prepend_path("/shims")
+
+        c.prepend_path("/shims")
+
+        self.assertEqual(env["PATH"], "/shims:/usr/bin")
+
+    def test_a_directory_already_further_along_moves_to_the_front(self):
+        env = {"PATH": "/usr/bin:/shims:/bin"}
+
+        Config(environ=env).prepend_path("/shims")
+
+        self.assertEqual(env["PATH"], "/shims:/usr/bin:/bin")
+
+    def test_an_empty_path_becomes_just_the_directory(self):
+        env = {}
+
+        Config(environ=env).prepend_path("/shims")
+
+        self.assertEqual(env["PATH"], "/shims")
+
+
 class TestAgentEnv(unittest.TestCase):
     def _pin(self):
         return Config(environ={}).engine_root()

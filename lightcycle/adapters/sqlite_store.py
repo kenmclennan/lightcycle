@@ -107,6 +107,7 @@ CREATE TABLE IF NOT EXISTS steps (
     usage_cost_basis TEXT,
     usage_rates_used TEXT,
     usage_thinking_tokens INTEGER,
+    usage_api_calls INTEGER,
     turn_count INTEGER NOT NULL DEFAULT 0,
     previous_step TEXT,
     report TEXT,
@@ -133,6 +134,14 @@ CREATE TABLE IF NOT EXISTS step_tool_usage (
 );
 
 CREATE INDEX IF NOT EXISTS idx_step_tool_usage_tool ON step_tool_usage(tool);
+
+CREATE TABLE IF NOT EXISTS step_gh_calls (
+    spawnid TEXT PRIMARY KEY,
+    step    TEXT NOT NULL,
+    calls   INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_step_gh_calls_step ON step_gh_calls(step);
 
 CREATE TABLE IF NOT EXISTS usage_backfill_log (
     log_file    TEXT PRIMARY KEY,
@@ -300,7 +309,7 @@ _STEP_COLUMNS = (
     "created_at", "fired_at", "closed_at", "active_seconds",
     "usage_input_tokens", "usage_output_tokens", "usage_cache_read_tokens",
     "usage_cache_creation_tokens", "usage_cost_usd", "usage_cost_basis", "usage_rates_used",
-    "usage_thinking_tokens", "turn_count", "previous_step", "report", "log_path",
+    "usage_thinking_tokens", "usage_api_calls", "turn_count", "previous_step", "report", "log_path",
 )
 
 _PARK_COLUMNS = {"needs": "park_needs", "reason": "park_reason", "tried": "park_tried"}
@@ -533,6 +542,7 @@ class SqliteStore(StorePort):
             ("usage_cost_basis", "TEXT"),
             ("usage_rates_used", "TEXT"),
             ("usage_thinking_tokens", "INTEGER"),
+            ("usage_api_calls", "INTEGER"),
             ("turn_count", "INTEGER NOT NULL DEFAULT 0"),
             ("claim_epoch", "INTEGER NOT NULL DEFAULT 0"),
             ("previous_step", "TEXT"),
@@ -672,6 +682,7 @@ class SqliteStore(StorePort):
             usage_cost_basis=d["usage_cost_basis"],
             usage_rates_used=d["usage_rates_used"],
             usage_thinking_tokens=d["usage_thinking_tokens"],
+            usage_api_calls=d["usage_api_calls"],
             turn_count=d["turn_count"],
             previous_step=d["previous_step"],
             report=d["report"],
@@ -1165,9 +1176,13 @@ class SqliteStore(StorePort):
             ")"
         )
 
-    def claim_ready(self, role, assignee=None, item=None, stage=None):
+    def claim_ready(self, role, assignee=None, item=None, stage=None, exclude=()):
         extra_sql = ""
         params = [role]
+        excluded = list(exclude)
+        if excluded:
+            extra_sql += " AND id NOT IN (%s)" % ", ".join("?" * len(excluded))
+            params.extend(excluded)
         if item is not None:
             extra_sql += " AND item = ?"
             params.append(item)
@@ -1198,6 +1213,19 @@ class SqliteStore(StorePort):
         self._record_history(tid, State.RUNNING)
         self._commit()
         return self.get_node(tid)
+
+    def record_gh_calls(self, spawnid, step, calls):
+        self._conn.execute(
+            "INSERT INTO step_gh_calls (spawnid, step, calls) VALUES (?, ?, ?) "
+            "ON CONFLICT(spawnid) DO UPDATE SET step = excluded.step, calls = excluded.calls",
+            (spawnid, step, calls),
+        )
+        self._conn.execute(
+            "UPDATE steps SET usage_api_calls = "
+            "(SELECT SUM(calls) FROM step_gh_calls WHERE step = ?) WHERE id = ?",
+            (step, step),
+        )
+        self._commit()
 
     def accrue_active_seconds(self, step_ids, seconds):
         ids = list(step_ids)

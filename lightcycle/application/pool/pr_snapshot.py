@@ -141,6 +141,9 @@ class PrSnapshot(GitHubEventsPort):
         view = self._view(pr)
         return view if isinstance(view, ReadFailure) else view.head_sha
 
+    def rate_limit(self):
+        return self._github.rate_limit()
+
     def pr_sync_state(self, pr):
         view = self._view(pr)
         if isinstance(view, ReadFailure):

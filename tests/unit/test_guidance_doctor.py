@@ -1,3 +1,4 @@
+from tests.support.fake_github_budget import FakeGithubBudget
 import unittest
 
 from lightcycle.application.inspect import DoctorInput, DoctorUseCase
@@ -29,7 +30,7 @@ def _problems(files, projects=(), budget=None, git=None, status=None):
     source.add_bundle("acme", "sha1", 1, current=True)
     report = DoctorUseCase(
         store, source, _cfg(**keys), FakeWorkflowBundle(), fs, FakeMachine(), _Worktrees(),
-        git, status if status is not None else FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False)).execute(DoctorInput())
+        git, status if status is not None else FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False), FakeGithubBudget()).execute(DoctorInput())
     return [
         p.message for p in report.problems["guidance"]
         if p.kind != "guidance-entries-nonconforming"
@@ -44,7 +45,7 @@ def _problem_objects(files):
     git = FakeGit(ref="origin/main", ref_files={"origin/main": dict(files)})
     report = DoctorUseCase(
         store, source, _cfg(**_ALL_KEYS), FakeWorkflowBundle(), FakeFs(dirs={"/kb": []}),
-        FakeMachine(), _Worktrees(), git, FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False)).execute(DoctorInput())
+        FakeMachine(), _Worktrees(), git, FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False), FakeGithubBudget()).execute(DoctorInput())
     return report.problems["guidance"]
 
 
@@ -171,12 +172,12 @@ class TestDoctorGuidance(unittest.TestCase):
         source.add_bundle("acme", "sha1", 1, current=True)
         report = DoctorUseCase(
             store, source, _cfg(**_ALL_KEYS), FakeWorkflowBundle(), FakeFs(), FakeMachine(),
-            _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False)).execute(DoctorInput())
+            _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False), FakeGithubBudget()).execute(DoctorInput())
         self.assertEqual(report.problems["guidance"], [])
         store.add_project("guidance", shortcode="GDN", local_path="/gone")
         report = DoctorUseCase(
             store, source, _cfg(**_ALL_KEYS), FakeWorkflowBundle(), FakeFs(), FakeMachine(),
-            _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False)).execute(DoctorInput())
+            _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False), FakeGithubBudget()).execute(DoctorInput())
         self.assertEqual(report.problems["guidance"], [])
 
     def test_malformed_entries_are_reported_by_id(self):
@@ -222,7 +223,7 @@ class TestDoctorGuidance(unittest.TestCase):
         report = DoctorUseCase(
             store, source, _cfg(**keys), FakeWorkflowBundle(), FakeFs(), FakeMachine(),
             _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(),
-            FakeLock(running=False)).execute(DoctorInput())
+            FakeLock(running=False), FakeGithubBudget()).execute(DoctorInput())
         return [p for p in report.problems["guidance"] if p.kind == "guidance-shortcode-missing"]
 
     def test_draft_without_verified_is_not_reported(self):
@@ -266,7 +267,7 @@ class TestDoctorRevertedEntry(unittest.TestCase):
         report = DoctorUseCase(
             store, source, _cfg(**_ALL_KEYS), FakeWorkflowBundle(), FakeFs(dirs={"/kb": []}),
             FakeMachine(), _Worktrees(), git, FakeGuidanceSyncStatus(), FakeConfigReloadStatus(),
-            FakeLock(running=False)).execute(DoctorInput())
+            FakeLock(running=False), FakeGithubBudget()).execute(DoctorInput())
         return [p for p in report.problems["guidance"] if p.kind == "guidance-entry-reverted"]
 
     def test_stable_then_draft_is_flagged_with_the_reverting_commit(self):

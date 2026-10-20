@@ -12,6 +12,7 @@ from lightcycle.application.pool.tick import TickInput
 from lightcycle.ports.github import CheckRun, Comment, NotYetRead, ReadFailure, Review
 from tests.support.fake_git import FakeGit
 from tests.support.fake_github import FakeGitHub
+from tests.support.fake_github_budget_status import FakeGithubBudgetStatus
 from tests.support.fake_github_poll_runner import BlockingGithubPollRunner, InlineGithubPollRunner
 from tests.support.fake_store import FakeStore
 from tests.support.fake_workers import FakeWorkers
@@ -61,7 +62,7 @@ def _tick(monitor, gate):
 
 
 def _gate(snapshot, github, runner):
-    return GithubPollUseCase(snapshot, github, runner, _Config(), PrWrites(time.monotonic))
+    return GithubPollUseCase(snapshot, github, runner, _Config(), PrWrites(time.monotonic), FakeGithubBudgetStatus(), time.time)
 
 
 class TestTickIndependence(unittest.TestCase):
@@ -202,11 +203,11 @@ class TestColdStart(unittest.TestCase):
 
         tick.execute(TickInput(now=0.0))
         tick.execute(TickInput(now=float(_TICK)))
-        self.assertEqual(runner.starts, 0)
+        self.assertEqual(github.calls, [("rate_limit",)])
 
         watching.append(_PR)
         tick.execute(TickInput(now=2.0 * _TICK))
-        self.assertEqual(runner.starts, 1)
+        self.assertEqual(runner.starts, 2)
 
 
 def _push(github):
@@ -344,7 +345,7 @@ class _Rig:
             self.store, self.snapshot, FakeWorktrees(), flow, CompleteStepUseCase(self.store, flow),
             trusted_authors=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
             writes=self.writes)
-        self.poll = GithubPollUseCase(self.snapshot, self.github, runner, _Config(), self.writes)
+        self.poll = GithubPollUseCase(self.snapshot, self.github, runner, _Config(), self.writes, FakeGithubBudgetStatus(), time.time)
 
     def notes(self):
         return self.store.get_node(self.step).notes or ""
