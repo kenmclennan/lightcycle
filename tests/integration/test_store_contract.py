@@ -1091,6 +1091,23 @@ class TestSqliteStoreUsageColumnsMigration(unittest.TestCase):
         ).fetchone()
         self.assertIsNotNone(idx)
 
+    def test_existing_store_gains_artifacts_item_index(self):
+        root = tempfile.mkdtemp()
+        self._seed_pre_usage_store(root)
+        store = SqliteStore(self._config(root))
+
+        idx = store._conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_artifacts_item'"
+        ).fetchone()
+        self.assertIsNotNone(idx)
+        plan = " ".join(
+            row[3]
+            for row in store._conn.execute(
+                "EXPLAIN QUERY PLAN SELECT * FROM artifacts WHERE item_id = 'x'"
+            )
+        )
+        self.assertIn("idx_artifacts_item", plan)
+
     def test_migration_is_idempotent_on_reopen(self):
         root = tempfile.mkdtemp()
         self._seed_pre_usage_store(root)

@@ -172,6 +172,7 @@ CREATE TABLE IF NOT EXISTS artifacts (
     internal INTEGER NOT NULL DEFAULT 0,
     kind TEXT
 );
+CREATE INDEX IF NOT EXISTS idx_artifacts_item ON artifacts(item_id);
 
 CREATE TABLE IF NOT EXISTS labels (
     node_id TEXT NOT NULL,
