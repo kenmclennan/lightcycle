@@ -261,7 +261,7 @@ class TestMonitorWiring(unittest.TestCase):
         monitor = MonitorPrsUseCase(
             store, github, FakeWorktrees(), flow, CompleteStepUseCase(store, flow),
             trusted_authors=lambda: frozenset(), held_shortcode=lambda: "HLD",
-            writes=InlinePrWrites(github, time.monotonic),
+            writes=InlinePrWrites(github, time.monotonic), ci_clock=time.monotonic, ci_poll_seconds=lambda: 60,
         )
 
         first = monitor.execute()

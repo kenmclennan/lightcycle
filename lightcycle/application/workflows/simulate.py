@@ -188,6 +188,7 @@ class WorkflowSimulateUseCase:
                 trusted_authors=lambda: frozenset({"reviewer"}),
                 held_shortcode=lambda: "HLD",
                 writes=InlinePrWrites(github, time.monotonic),
+                ci_clock=time.monotonic, ci_poll_seconds=lambda: 60,
             )
             violations += self._drive(item_id, pin, graph, walk, github, monitor, trace, index)
         violations += self._run_script_guards(pin, guards, trace)

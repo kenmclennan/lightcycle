@@ -147,6 +147,7 @@ class Container:
                 self.store, snapshot, worktrees, flow, complete,
                 trusted_authors=self.config.trusted_authors,
                 held_shortcode=self.config.held_comment_shortcode, writes=writes,
+                ci_clock=time.monotonic, ci_poll_seconds=self.config.github_poll_seconds,
             ),
             schedule_gate=ScheduleCadenceUseCase(
                 self.store, self.config, flow, self.workflow_source, self.git,

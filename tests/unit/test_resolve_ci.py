@@ -1,9 +1,11 @@
+import time
 import unittest
 
 from lightcycle.application.flow.complete_step import CompleteStepUseCase
+from lightcycle.application.pool.pr_snapshot import PrSnapshot
 from lightcycle.application.pool.resolve_ci import ResolveCiUseCase
 from lightcycle.domain.work import State
-from lightcycle.ports.github import CheckRun, NotYetRead
+from lightcycle.ports.github import CheckRun, NotYetRead, ReadFailure
 from tests.support.fake_fs import flow_from_metas
 from tests.support.fake_github import FakeGitHub
 from tests.support.fake_store import FakeStore
@@ -118,7 +120,7 @@ class TestResolveCiJudgedSha(unittest.TestCase):
             (_URL, "sha1"): (CheckRun(name="build", status=conclusion[0], conclusion=conclusion[1]),)
         })
         flow = _FlowAdapter(_FLOW)
-        ResolveCiUseCase(store, gh, flow, CompleteStepUseCase(store, flow)).execute()
+        ResolveCiUseCase(store, gh, flow, CompleteStepUseCase(store, flow), clock=time.monotonic, poll_seconds=lambda: 60).execute()
         return [a.value for a in store.item_artifacts(step) if a.type == "ci-judged-sha"]
 
     def test_success_writes_the_judged_sha(self):
@@ -155,7 +157,7 @@ class TestResolveCiConfirmsHeadBeforeFailed(unittest.TestCase):
         step = store.create_step(step="poll-ci", role="engine", parent=item)
 
         flow = _FlowAdapter(_FLOW)
-        uc = ResolveCiUseCase(store, github, flow, CompleteStepUseCase(store, flow))
+        uc = ResolveCiUseCase(store, github, flow, CompleteStepUseCase(store, flow), clock=time.monotonic, poll_seconds=lambda: 60)
         return store, item, step, uc
 
     def _judged(self, store, step):
@@ -237,7 +239,7 @@ class TestResolveCiUseCase(unittest.TestCase):
         step = store.create_step(step="poll-ci", role="engine", parent=item)
 
         complete = CompleteStepUseCase(store, _FlowAdapter(flow))
-        uc = ResolveCiUseCase(store, github, _FlowAdapter(flow), complete)
+        uc = ResolveCiUseCase(store, github, _FlowAdapter(flow), complete, clock=time.monotonic, poll_seconds=lambda: 60)
         return store, item, step, uc
 
     def test_ci_still_pending_does_not_complete(self):
@@ -314,3 +316,140 @@ class TestResolveCiUseCase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class _ScriptedGitHub(FakeGitHub):
+    def __init__(self, head, checks):
+        super().__init__()
+        self.head = head
+        self.checks = checks
+
+    def head_sha(self, pr):
+        return self.head
+
+    def check_runs(self, pr, sha):
+        return self.checks
+
+
+class _Clock:
+    def __init__(self):
+        self.now = 0.0
+
+    def __call__(self):
+        return self.now
+
+
+_GREEN = (CheckRun(name="build", status="completed", conclusion="success"),)
+
+
+class TestCiUnreadDiagnostics(unittest.TestCase):
+    def _setup(self, github):
+        store = FakeStore()
+        item = store.create_item("building a thing", "a description")
+        plant_pr(store, item, _URL, branch=_BRANCH)
+        step = store.create_step(step="poll-ci", role="engine", parent=item)
+        flow = _FlowAdapter(_FLOW)
+        clock = _Clock()
+        uc = ResolveCiUseCase(
+            store, github, flow, CompleteStepUseCase(store, flow),
+            clock=clock, poll_seconds=lambda: 60)
+        return store, item, step, uc, clock
+
+    def _run(self, uc, clock, at):
+        clock.now = at
+        return [(u.step, u.reason, u.detail) for u in uc.execute().ci_unread]
+
+    def test_an_unpolled_snapshot_logs_head_not_yet_read_once_past_the_interval(self):
+        snapshot = PrSnapshot(FakeGitHub())
+        _, _, step, uc, clock = self._setup(snapshot)
+
+        self.assertEqual(self._run(uc, clock, 0.0), [])
+        self.assertEqual(self._run(uc, clock, 60.0), [])
+        self.assertEqual(
+            self._run(uc, clock, 65.0), [(step, "head-not-yet-read", "no snapshot yet")])
+        self.assertEqual(self._run(uc, clock, 70.0), [])
+        self.assertEqual(self._run(uc, clock, 600.0), [])
+
+    def test_a_published_view_without_checks_logs_checks_not_yet_read(self):
+        github = _ScriptedGitHub("sha1", NotYetRead())
+        _, _, step, uc, clock = self._setup(github)
+
+        self._run(uc, clock, 0.0)
+
+        self.assertEqual(
+            self._run(uc, clock, 61.0), [(step, "checks-not-yet-read", "no snapshot yet")])
+
+    def test_a_head_read_failure_logs_head_read_failed_with_the_stderr(self):
+        github = _ScriptedGitHub(ReadFailure(1, "boom"), _GREEN)
+        _, _, step, uc, clock = self._setup(github)
+
+        self._run(uc, clock, 0.0)
+
+        self.assertEqual(self._run(uc, clock, 61.0), [(step, "head-read-failed", "boom")])
+
+    def test_a_checks_read_failure_logs_checks_read_failed_with_the_stderr(self):
+        github = _ScriptedGitHub("sha1", ReadFailure(1, "boom"))
+        _, _, step, uc, clock = self._setup(github)
+
+        self._run(uc, clock, 0.0)
+
+        self.assertEqual(self._run(uc, clock, 61.0), [(step, "checks-read-failed", "boom")])
+
+    def test_each_change_of_reason_logs_one_line(self):
+        github = _ScriptedGitHub("sha1", NotYetRead())
+        _, _, step, uc, clock = self._setup(github)
+        lines = []
+
+        self._run(uc, clock, 0.0)
+        lines += self._run(uc, clock, 61.0)
+        github.checks = ReadFailure(1, "boom")
+        lines += self._run(uc, clock, 66.0)
+        lines += self._run(uc, clock, 71.0)
+        github.checks = NotYetRead()
+        lines += self._run(uc, clock, 76.0)
+
+        self.assertEqual(
+            [reason for _, reason, _ in lines],
+            ["checks-not-yet-read", "checks-read-failed", "checks-not-yet-read"])
+
+    def test_a_step_that_recovers_and_fails_again_starts_a_new_episode(self):
+        github = _ScriptedGitHub("sha1", NotYetRead())
+        _, _, step, uc, clock = self._setup(github)
+
+        self._run(uc, clock, 0.0)
+        self.assertEqual(len(self._run(uc, clock, 61.0)), 1)
+        github.checks = (CheckRun(name="build", status="in_progress", conclusion=None),)
+        self.assertEqual(self._run(uc, clock, 66.0), [])
+        github.checks = NotYetRead()
+        self.assertEqual(self._run(uc, clock, 71.0), [])
+        self.assertEqual(self._run(uc, clock, 131.0), [])
+        self.assertEqual(
+            self._run(uc, clock, 132.0), [(step, "checks-not-yet-read", "no snapshot yet")])
+
+    def test_only_the_unreadable_step_is_reported_and_the_readable_one_still_resolves(self):
+        store = FakeStore()
+        flow = _FlowAdapter(_FLOW)
+        clock = _Clock()
+        stuck_item = store.create_item("stuck", "a description")
+        plant_pr(store, stuck_item, "https://github.com/acme/widget/pull/9", branch="feat/stuck")
+        stuck = store.create_step(step="poll-ci", role="engine", parent=stuck_item)
+        ok_item = store.create_item("fine", "a description")
+        plant_pr(store, ok_item, _URL, branch=_BRANCH)
+        fine = store.create_step(step="poll-ci", role="engine", parent=ok_item)
+
+        class _Split(_ScriptedGitHub):
+            def head_sha(self, pr):
+                return NotYetRead() if pr.endswith("/9") else "sha1"
+
+        split = _Split("sha1", _GREEN)
+        uc = ResolveCiUseCase(
+            store, split, flow, CompleteStepUseCase(store, flow),
+            clock=clock, poll_seconds=lambda: 60)
+        clock.now = 0.0
+        first = uc.execute()
+        clock.now = 61.0
+        second = uc.execute()
+
+        self.assertEqual(first.ci_resolved, [ok_item])
+        self.assertEqual(store.get_node(fine).state, State.DONE)
+        self.assertEqual([u.step for u in second.ci_unread], [stuck])

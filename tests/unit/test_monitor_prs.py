@@ -215,7 +215,7 @@ class TestTickWithMonitor(unittest.TestCase):
         monitor = MonitorPrsUseCase(
             store, FakeGitHub(merged_prs={url}), worktrees, _FlowAdapter(_FLOW),
             trusted_authors=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
-            writes=InlinePrWrites(FakeGitHub(), time.monotonic),
+            writes=InlinePrWrites(FakeGitHub(), time.monotonic), ci_clock=time.monotonic, ci_poll_seconds=lambda: 60,
         )
 
         result = make_tick(
@@ -236,7 +236,7 @@ class TestTickWithMonitor(unittest.TestCase):
         monitor = MonitorPrsUseCase(
             store, FakeGitHub(closed_prs={url}), worktrees, _FlowAdapter(_FLOW),
             trusted_authors=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
-            writes=InlinePrWrites(FakeGitHub(), time.monotonic),
+            writes=InlinePrWrites(FakeGitHub(), time.monotonic), ci_clock=time.monotonic, ci_poll_seconds=lambda: 60,
         )
 
         result = make_tick(
@@ -330,7 +330,7 @@ class TestMonitorPrsUseCaseComposesAllThreeJobs(unittest.TestCase):
         uc = MonitorPrsUseCase(
             store, gh, worktrees, _FlowAdapter(flow), complete,
             trusted_authors=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
-            writes=InlinePrWrites(gh, time.monotonic),
+            writes=InlinePrWrites(gh, time.monotonic), ci_clock=time.monotonic, ci_poll_seconds=lambda: 60,
         )
 
         result = uc.execute()

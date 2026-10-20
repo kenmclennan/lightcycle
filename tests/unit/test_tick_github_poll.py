@@ -101,7 +101,7 @@ class TestCiStageIssuesNoGitCall(unittest.TestCase):
         plant_pr(store, item, _PR, branch="feat/thing")
         step = store.create_step(step="poll-ci", role="engine", parent=item)
         flow = _FlowAdapter(_FLOW)
-        monitor = _CiMonitor(ResolveCiUseCase(store, snapshot, flow, CompleteStepUseCase(store, flow)))
+        monitor = _CiMonitor(ResolveCiUseCase(store, snapshot, flow, CompleteStepUseCase(store, flow), clock=time.monotonic, poll_seconds=lambda: 60))
         git = FakeGit()
         tick = make_tick(
             store, FakeWorkers(), FakeSpawner(), _Config(), monitor=monitor,
@@ -125,7 +125,7 @@ def _ci_pool(hold_view):
     item = store.create_item("building a thing", "a description")
     plant_pr(store, item, _PR, branch="feat/thing")
     flow = _FlowAdapter(_FLOW)
-    monitor = _CiMonitor(ResolveCiUseCase(store, snapshot, flow, CompleteStepUseCase(store, flow)))
+    monitor = _CiMonitor(ResolveCiUseCase(store, snapshot, flow, CompleteStepUseCase(store, flow), clock=time.monotonic, poll_seconds=lambda: 60))
     tick = make_tick(
         store, FakeWorkers(), FakeSpawner(), _Config(), monitor=monitor,
         github_poll_gate=_gate(snapshot, github, InlineGithubPollRunner()),
@@ -171,6 +171,91 @@ class TestCiJudgementAnchor(unittest.TestCase):
         self.assertEqual(judged, [compared])
         self.assertEqual(compared, "sha1")
         self.assertIn(compared, store.get_node(step).report)
+
+
+def _conflicted_then_rebased(github):
+    github._conflicted.add(_PR)
+    github.touch(_PR, 150.0)
+
+
+def _rework_push(github):
+    github._head_shas[_PR] = "sha1"
+    github._check_runs_by_sha[(_PR, "sha1")] = (CheckRun("ci", "in_progress", None),)
+    github.touch(_PR, 200.0)
+
+
+def _rebase_clears_conflict(github):
+    github._conflicted.discard(_PR)
+    github._head_shas[_PR] = "sha1"
+    github._check_runs_by_sha[(_PR, "sha1")] = (CheckRun("ci", "in_progress", None),)
+    github.touch(_PR, 200.0)
+
+
+def _head_change_pool(before_move):
+    github = FakeGitHub(
+        updated_ats={_PR: 100.0},
+        head_shas={_PR: "sha0"},
+        check_runs_by_sha={(_PR, "sha0"): (CheckRun("ci", "completed", "success"),)})
+    snapshot = PrSnapshot(github)
+    store = FakeStore()
+    item = store.create_item("building a thing", "a description")
+    plant_pr(store, item, _PR, branch="feat/thing")
+    flow = _FlowAdapter(_FLOW)
+    monitor = _CiMonitor(ResolveCiUseCase(
+        store, snapshot, flow, CompleteStepUseCase(store, flow),
+        clock=time.monotonic, poll_seconds=lambda: _POLL))
+    tick = make_tick(
+        store, FakeWorkers(), FakeSpawner(), _Config(), monitor=monitor,
+        github_poll_gate=_gate(snapshot, github, InlineGithubPollRunner()),
+        config_reload=_Reload("unchanged"))
+    clock = [0.0]
+
+    def run(seconds, hold=True):
+        end = clock[0] + seconds
+        while clock[0] < end:
+            if hold:
+                snapshot.pr_sync_state(_PR)
+            tick.execute(TickInput(now=clock[0]))
+            clock[0] += _TICK
+
+    first = store.create_step(step="poll-ci", role="engine", parent=item)
+    run(_POLL + 2 * _TICK)
+    assert store.get_node(first).state.value == "done"
+    for event in before_move:
+        event(github)
+        run(_POLL + _TICK)
+    return github, store, item, snapshot, run, clock
+
+
+class TestCiJudgementAfterHeadChange(unittest.TestCase):
+    def _assert_judged_on_new_head(self, before_move):
+        github, store, item, snapshot, run, clock = _head_change_pool(before_move)
+        second = store.create_step(step="poll-ci", role="engine", parent=item)
+        run(3 * _TICK)
+        self.assertEqual(store.get_node(second).state.value, "queued")
+
+        github._check_runs_by_sha[(_PR, "sha1")] = (CheckRun("ci", "completed", "success"),)
+        github.touch(_PR, clock[0])
+        concluded_at = clock[0]
+        judged_at = None
+        while clock[0] <= concluded_at + 4 * _POLL:
+            run(_TICK)
+            if store.get_node(second).state.value == "done":
+                judged_at = clock[0] - _TICK
+                break
+
+        self.assertIsNotNone(judged_at)
+        self.assertLessEqual(judged_at - concluded_at, _POLL + _TICK)
+        judged = [a.value for a in store.item_artifacts(second) if a.type == "ci-judged-sha"]
+        self.assertEqual(judged, ["sha1"])
+        self.assertIn("sha1", store.get_node(second).report)
+        self.assertIn((_PR, "sha0"), github._check_runs_by_sha)
+
+    def test_a_conflict_rebase_force_push_is_judged_on_the_new_head(self):
+        self._assert_judged_on_new_head([_conflicted_then_rebased, _rebase_clears_conflict])
+
+    def test_a_rework_push_is_judged_on_the_new_head(self):
+        self._assert_judged_on_new_head([_rework_push])
 
 
 class TestColdStart(unittest.TestCase):
@@ -345,7 +430,7 @@ class _Rig:
         self.monitor = MonitorPrsUseCase(
             self.store, self.snapshot, FakeWorktrees(), flow, CompleteStepUseCase(self.store, flow),
             trusted_authors=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
-            writes=self.writes)
+            writes=self.writes, ci_clock=time.monotonic, ci_poll_seconds=lambda: 60)
         self.poll = GithubPollUseCase(self.snapshot, self.github, runner, _Config(), self.writes, FakeGithubBudgetStatus(), time.time, FakeFs())
 
     def notes(self):
