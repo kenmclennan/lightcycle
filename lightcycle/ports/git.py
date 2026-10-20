@@ -106,10 +106,6 @@ class GitPort(ABC):
         pass
 
     @abstractmethod
-    def remote_head_sha(self, root, branch):
-        pass
-
-    @abstractmethod
     def ref_sha(self, root, ref):
         pass
 

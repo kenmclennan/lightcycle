@@ -9,7 +9,7 @@ class FakeGit(GitPort, TeardownLedgerPort):
                  dirty=(), events=None, branches=(), base=None, raises=(),
                  remote_unreadable=(), sync_result=True, clone_result=True,
                  sync_default_result=True, worktree_add_fails=False,
-                 torn_down_branches=(), head_shas=None, init_ok=True, commit_ok=True,
+                 torn_down_branches=(), init_ok=True, commit_ok=True,
                  missing_identity=(), ref=None, ref_files=None, fetch_ok=True,
                  fetch_detail="boom", added=None, changed=None, ref_shas=None,
                  history=None, approvals=None, uncommitted=None):
@@ -28,7 +28,6 @@ class FakeGit(GitPort, TeardownLedgerPort):
         self._sync_default_result = sync_default_result
         self._worktree_add_fails = worktree_add_fails
         self._torn_down_branches = tuple(torn_down_branches)
-        self._head_shas = head_shas or {}
         self._ref_shas = dict(ref_shas or {})
         self._init_ok = init_ok
         self._commit_ok = commit_ok
@@ -160,10 +159,6 @@ class FakeGit(GitPort, TeardownLedgerPort):
         self.calls.append(("common_dir", root))
         self._raise_if("common_dir", root)
         return os.path.join(root, ".git")
-
-    def remote_head_sha(self, root, branch):
-        self.calls.append(("remote_head_sha", root, branch))
-        return self._head_shas.get((root, branch))
 
     def ref_sha(self, root, ref):
         self.calls.append(("ref_sha", root, ref))

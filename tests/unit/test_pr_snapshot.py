@@ -43,7 +43,7 @@ class TestUnreadPr(unittest.TestCase):
 
         self.assertEqual(wanted.prs, frozenset([_PR]))
         self.assertEqual(wanted.files, frozenset([(_PR, "h1")]))
-        self.assertEqual(wanted.checks, frozenset([(_PR, "h2")]))
+        self.assertEqual(wanted.checks, frozenset([_PR]))
         self.assertEqual(self.snap.take_wanted().prs, frozenset())
 
 

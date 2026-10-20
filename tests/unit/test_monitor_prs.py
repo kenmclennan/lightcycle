@@ -24,7 +24,6 @@ from lightcycle.application.pool.no_op_gates import (
 )
 from tests.support.fake_fs import flow_from_metas
 from lightcycle.ports.github import CheckRun, Comment
-from tests.support.fake_git import FakeGit
 from tests.support.fake_github import FakeGitHub
 from tests.support.fake_store import FakeStore
 
@@ -312,14 +311,14 @@ class TestMonitorPrsUseCaseComposesAllThreeJobs(unittest.TestCase):
             check_runs_by_sha={
                 (ci_url, "sha1"): (CheckRun(name="build", status="completed", conclusion="success"),)
             },
+            head_shas={ci_url: "sha1"},
         )
-        git = FakeGit(head_shas={(ci_root, ci_branch): "sha1"})
         worktrees = FakeWorktrees()
         worktrees.paths[ci_item] = ci_root
         complete = CompleteStepUseCase(store, _FlowAdapter(flow))
 
         uc = MonitorPrsUseCase(
-            store, gh, worktrees, _FlowAdapter(flow), complete, git=git,
+            store, gh, worktrees, _FlowAdapter(flow), complete,
             trusted_authors=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
         )
 

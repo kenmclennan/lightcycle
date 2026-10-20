@@ -191,13 +191,6 @@ def common_dir(root):
     return os.path.normpath(path)
 
 
-def remote_head_sha(root, branch):
-    if not git_ok(root, "fetch", "origin", branch, "--quiet"):
-        return None
-    proc = git(root, "rev-parse", "FETCH_HEAD")
-    return proc.stdout.strip() if proc.returncode == 0 else None
-
-
 def ref_sha(root, ref):
     proc = git(root, "rev-parse", "--verify", "--quiet", ref + "^{commit}")
     if proc.returncode == 0:
@@ -407,9 +400,6 @@ class GitAdapter(GitPort):
 
     def common_dir(self, root):
         return common_dir(root)
-
-    def remote_head_sha(self, root, branch):
-        return remote_head_sha(root, branch)
 
     def ref_sha(self, root, ref):
         return ref_sha(root, ref)

@@ -160,8 +160,18 @@ class PrPoll:
             self._snapshot.publish_files(pr, sha, files)
 
     def _read_checks(self, wanted_checks):
-        for pr, sha in sorted(wanted_checks):
+        for pr in sorted(wanted_checks):
+            entry = self._snapshot.entry_of(pr)
+            if entry is None or entry.view is None:
+                continue
+            sha = entry.view.head_sha
             runs = self._github.check_runs(pr, sha)
             if isinstance(runs, ReadFailure):
                 continue
-            self._snapshot.publish_checks(pr, sha, runs)
+            view = self._github.pr_view(pr)
+            if isinstance(view, ReadFailure):
+                continue
+            current = self._snapshot.entry_of(pr) or entry
+            self._snapshot.publish(pr, replace(current, state=view.state, view=view))
+            if view.head_sha == sha:
+                self._snapshot.publish_checks(pr, sha, runs)

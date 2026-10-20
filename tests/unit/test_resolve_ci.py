@@ -3,9 +3,8 @@ import unittest
 from lightcycle.application.flow.complete_step import CompleteStepUseCase
 from lightcycle.application.pool.resolve_ci import ResolveCiUseCase
 from lightcycle.domain.work import State
-from lightcycle.ports.github import CheckRun
+from lightcycle.ports.github import CheckRun, NotYetRead
 from tests.support.fake_fs import flow_from_metas
-from tests.support.fake_git import FakeGit
 from tests.support.fake_github import FakeGitHub
 from tests.support.fake_store import FakeStore
 
@@ -77,7 +76,6 @@ class _FlowAdapter:
 
 _URL = "https://github.com/x/y/pull/90"
 _BRANCH = "feat/thing"
-_ROOT = "/repo/thing"
 
 _FLOW = flow_from_metas({
     "poller": {
@@ -106,28 +104,6 @@ _NO_HOOKS_FLOW = flow_from_metas({
 })
 
 
-class TestResolveCiActingStep(unittest.TestCase):
-    def test_the_worktree_is_resolved_from_the_poll_ci_step_not_another_open_step(self):
-        store = FakeStore()
-        item = store.create_item("building a thing", "a description")
-        plant_pr(store, item, _URL, branch=_BRANCH)
-        store.create_step(step="spec-handle-feedback", role="agent", parent=item)
-        poll = store.create_step(step="poll-ci", role="engine", parent=item)
-        asked = []
-
-        class _Worktrees:
-            def worktree_path(self, node):
-                asked.append(node)
-                return None
-
-        complete = CompleteStepUseCase(store, _FlowAdapter(_FLOW))
-        ResolveCiUseCase(
-            store, FakeGitHub(), FakeGit(), _Worktrees(), _FlowAdapter(_FLOW), complete
-        ).execute()
-
-        self.assertEqual([(n.id, n.stage) for n in asked], [(poll, "poll-ci")])
-
-
 class TestResolveCiJudgedSha(unittest.TestCase):
     def _judged(self, conclusion, checks_sha="sha1"):
         store = FakeStore()
@@ -135,18 +111,11 @@ class TestResolveCiJudgedSha(unittest.TestCase):
         plant_pr(store, item, _URL, branch=_BRANCH)
         step = store.create_step(step="poll-ci", role="engine", parent=item)
 
-        class _Worktrees:
-            def worktree_path(self, item_id):
-                return _ROOT
-
-        gh = FakeGitHub(check_runs_by_sha={
+        gh = FakeGitHub(head_shas={_URL: "sha1"}, check_runs_by_sha={
             (_URL, "sha1"): (CheckRun(name="build", status=conclusion[0], conclusion=conclusion[1]),)
         })
-        git = FakeGit(head_shas={(_ROOT, _BRANCH): "sha1"})
         flow = _FlowAdapter(_FLOW)
-        ResolveCiUseCase(
-            store, gh, git, _Worktrees(), flow, CompleteStepUseCase(store, flow)
-        ).execute()
+        ResolveCiUseCase(store, gh, flow, CompleteStepUseCase(store, flow)).execute()
         return [a.value for a in store.item_artifacts(step) if a.type == "ci-judged-sha"]
 
     def test_success_writes_the_judged_sha(self):
@@ -159,13 +128,13 @@ class TestResolveCiJudgedSha(unittest.TestCase):
         self.assertEqual(self._judged(("in_progress", None)), [])
 
 
-class _SequencedGit(FakeGit):
-    def __init__(self, shas):
-        super().__init__()
+class _SequencedGitHub(FakeGitHub):
+    def __init__(self, shas, **kw):
+        super().__init__(**kw)
         self._sequence = list(shas)
 
-    def remote_head_sha(self, root, branch):
-        return self._sequence.pop(0) if self._sequence else None
+    def head_sha(self, pr):
+        return self._sequence.pop(0) if self._sequence else NotYetRead()
 
 
 _FAIL_URL = "https://github.com/x/y/actions/runs/7/job/8"
@@ -176,25 +145,21 @@ def _failing(sha, url=_FAIL_URL):
 
 
 class TestResolveCiConfirmsHeadBeforeFailed(unittest.TestCase):
-    def _setup(self, github, git):
+    def _setup(self, github):
         store = FakeStore()
         item = store.create_item("building a thing", "a description")
         plant_pr(store, item, _URL, branch=_BRANCH)
         step = store.create_step(step="poll-ci", role="engine", parent=item)
 
-        class _Worktrees:
-            def worktree_path(self, node):
-                return _ROOT
-
         flow = _FlowAdapter(_FLOW)
-        uc = ResolveCiUseCase(store, github, git, _Worktrees(), flow, CompleteStepUseCase(store, flow))
+        uc = ResolveCiUseCase(store, github, flow, CompleteStepUseCase(store, flow))
         return store, item, step, uc
 
     def _judged(self, store, step):
         return [a.value for a in store.item_artifacts(step) if a.type == "ci-judged-sha"]
 
     def test_unchanged_head_completes_failed_and_names_sha_check_url_and_pr(self):
-        store, item, step, uc = self._setup(FakeGitHub(check_runs_by_sha=_failing("sha1")), _SequencedGit(["sha1", "sha1"]))
+        store, item, step, uc = self._setup(_SequencedGitHub(["sha1", "sha1"], check_runs_by_sha=_failing("sha1")))
 
         uc.execute()
 
@@ -205,8 +170,9 @@ class TestResolveCiConfirmsHeadBeforeFailed(unittest.TestCase):
 
     def test_moved_head_routes_nothing_then_repoll_reaches_the_new_head(self):
         passing = {(_URL, "sha2"): (CheckRun(name="build", status="completed", conclusion="success"),)}
-        gh = FakeGitHub(check_runs_by_sha={**_failing("sha1"), **passing})
-        store, item, step, uc = self._setup(gh, _SequencedGit(["sha1", "sha2", "sha2", "sha2"]))
+        store, item, step, uc = self._setup(_SequencedGitHub(
+            ["sha1", "sha2", "sha2", "sha2"], check_runs_by_sha={**_failing("sha1"), **passing},
+        ))
 
         first = uc.execute()
 
@@ -220,7 +186,7 @@ class TestResolveCiConfirmsHeadBeforeFailed(unittest.TestCase):
         self.assertEqual(store.get_node(step).outcome, "succeeded")
 
     def test_unreadable_confirm_read_routes_nothing(self):
-        store, item, step, uc = self._setup(FakeGitHub(check_runs_by_sha=_failing("sha1")), _SequencedGit(["sha1", None]))
+        store, item, step, uc = self._setup(_SequencedGitHub(["sha1", None], check_runs_by_sha=_failing("sha1")))
 
         result = uc.execute()
 
@@ -229,10 +195,10 @@ class TestResolveCiConfirmsHeadBeforeFailed(unittest.TestCase):
         self.assertEqual(self._judged(store, step), [])
 
     def test_moved_then_settled_head_fails_naming_the_new_sha(self):
-        store, item, step, uc = self._setup(
-            FakeGitHub(check_runs_by_sha={**_failing("sha1"), **_failing("sha2")}),
-            _SequencedGit(["sha1", "sha2", "sha2", "sha2"]),
-        )
+        store, item, step, uc = self._setup(_SequencedGitHub(
+            ["sha1", "sha2", "sha2", "sha2"],
+            check_runs_by_sha={**_failing("sha1"), **_failing("sha2")},
+        ))
 
         uc.execute()
         self.assertEqual(store.get_node(step).state, State.QUEUED)
@@ -245,15 +211,15 @@ class TestResolveCiConfirmsHeadBeforeFailed(unittest.TestCase):
         self.assertNotIn("sha1", node.report)
 
     def test_empty_url_leaves_no_stray_space(self):
-        store, item, step, uc = self._setup(FakeGitHub(check_runs_by_sha=_failing("sha1", url="")), _SequencedGit(["sha1", "sha1"]))
+        store, item, step, uc = self._setup(_SequencedGitHub(["sha1", "sha1"], check_runs_by_sha=_failing("sha1", url="")))
 
         uc.execute()
 
         self.assertEqual(store.get_node(step).report, "CI failed on sha1: check 'build', PR %s." % _URL)
 
     def test_success_on_a_moved_head_is_unchanged(self):
-        gh = FakeGitHub(check_runs_by_sha={(_URL, "sha1"): (CheckRun(name="build", status="completed", conclusion="success"),)})
-        store, item, step, uc = self._setup(gh, _SequencedGit(["sha1", "sha2"]))
+        gh = _SequencedGitHub(["sha1", "sha2"], check_runs_by_sha={(_URL, "sha1"): (CheckRun(name="build", status="completed", conclusion="success"),)})
+        store, item, step, uc = self._setup(gh)
 
         uc.execute()
 
@@ -261,26 +227,21 @@ class TestResolveCiConfirmsHeadBeforeFailed(unittest.TestCase):
 
 
 class TestResolveCiUseCase(unittest.TestCase):
-    def _setup(self, github, git, flow=_FLOW, worktree_path=_ROOT):
+    def _setup(self, github, flow=_FLOW):
         store = FakeStore()
         item = store.create_item("building a thing", "a description")
         plant_pr(store, item, _URL, branch=_BRANCH)
         step = store.create_step(step="poll-ci", role="engine", parent=item)
 
-        class _Worktrees:
-            def worktree_path(self, item_id):
-                return worktree_path
-
         complete = CompleteStepUseCase(store, _FlowAdapter(flow))
-        uc = ResolveCiUseCase(store, github, git, _Worktrees(), _FlowAdapter(flow), complete)
+        uc = ResolveCiUseCase(store, github, _FlowAdapter(flow), complete)
         return store, item, step, uc
 
     def test_ci_still_pending_does_not_complete(self):
-        gh = FakeGitHub(check_runs_by_sha={
+        gh = FakeGitHub(head_shas={_URL: "sha1"}, check_runs_by_sha={
             (_URL, "sha1"): (CheckRun(name="build", status="in_progress", conclusion=None),)
         })
-        git = FakeGit(head_shas={(_ROOT, _BRANCH): "sha1"})
-        store, item, step, uc = self._setup(gh, git)
+        store, item, step, uc = self._setup(gh)
 
         result = uc.execute()
 
@@ -288,9 +249,8 @@ class TestResolveCiUseCase(unittest.TestCase):
         self.assertEqual(result.ci_resolved, [])
 
     def test_check_runs_read_failure_never_advances(self):
-        gh = FakeGitHub(failing_calls={"check_runs"})
-        git = FakeGit(head_shas={(_ROOT, _BRANCH): "sha1"})
-        store, item, step, uc = self._setup(gh, git)
+        gh = FakeGitHub(head_shas={_URL: "sha1"}, failing_calls={"check_runs"})
+        store, item, step, uc = self._setup(gh)
 
         result = uc.execute()
 
@@ -298,11 +258,10 @@ class TestResolveCiUseCase(unittest.TestCase):
         self.assertEqual(result.ci_resolved, [])
 
     def test_ci_succeeded_completes_with_the_declared_outcome(self):
-        gh = FakeGitHub(check_runs_by_sha={
+        gh = FakeGitHub(head_shas={_URL: "sha1"}, check_runs_by_sha={
             (_URL, "sha1"): (CheckRun(name="build", status="completed", conclusion="success"),)
         })
-        git = FakeGit(head_shas={(_ROOT, _BRANCH): "sha1"})
-        store, item, step, uc = self._setup(gh, git)
+        store, item, step, uc = self._setup(gh)
 
         result = uc.execute()
 
@@ -312,11 +271,10 @@ class TestResolveCiUseCase(unittest.TestCase):
         self.assertEqual(result.ci_resolved, [item])
 
     def test_ci_failed_completes_with_the_declared_outcome_and_names_the_check(self):
-        gh = FakeGitHub(check_runs_by_sha={
+        gh = FakeGitHub(head_shas={_URL: "sha1"}, check_runs_by_sha={
             (_URL, "sha1"): (CheckRun(name="build", status="completed", conclusion="failure"),)
         })
-        git = FakeGit(head_shas={(_ROOT, _BRANCH): "sha1"})
-        store, item, step, uc = self._setup(gh, git)
+        store, item, step, uc = self._setup(gh)
 
         result = uc.execute()
 
@@ -329,35 +287,21 @@ class TestResolveCiUseCase(unittest.TestCase):
         self.assertEqual(result.ci_resolved, [item])
 
     def test_stage_with_no_ci_hooks_declared_is_skipped(self):
-        gh = FakeGitHub(check_runs_by_sha={
+        gh = FakeGitHub(head_shas={_URL: "sha1"}, check_runs_by_sha={
             (_URL, "sha1"): (CheckRun(name="build", status="completed", conclusion="success"),)
         })
-        git = FakeGit(head_shas={(_ROOT, _BRANCH): "sha1"})
-        store, item, step, uc = self._setup(gh, git, flow=_NO_HOOKS_FLOW)
+        store, item, step, uc = self._setup(gh, flow=_NO_HOOKS_FLOW)
 
         result = uc.execute()
 
         self.assertEqual(store.get_node(step).state, State.QUEUED)
         self.assertEqual(result.ci_resolved, [])
 
-    def test_no_worktree_path_never_advances(self):
+    def test_unreadable_head_never_advances(self):
         gh = FakeGitHub(check_runs_by_sha={
             (_URL, "sha1"): (CheckRun(name="build", status="completed", conclusion="success"),)
         })
-        git = FakeGit(head_shas={(_ROOT, _BRANCH): "sha1"})
-        store, item, step, uc = self._setup(gh, git, worktree_path=None)
-
-        result = uc.execute()
-
-        self.assertEqual(store.get_node(step).state, State.QUEUED)
-        self.assertEqual(result.ci_resolved, [])
-
-    def test_no_remote_head_sha_never_advances(self):
-        gh = FakeGitHub(check_runs_by_sha={
-            (_URL, "sha1"): (CheckRun(name="build", status="completed", conclusion="success"),)
-        })
-        git = FakeGit(head_shas={})
-        store, item, step, uc = self._setup(gh, git)
+        store, item, step, uc = self._setup(gh)
 
         result = uc.execute()
 

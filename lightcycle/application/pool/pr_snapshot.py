@@ -185,7 +185,7 @@ class PrSnapshot(GitHubEventsPort):
     def check_runs(self, pr, sha):
         self._entry(pr)
         with self._lock:
-            self._pending.checks.add((pr, sha))
+            self._pending.checks.add(pr)
             if (pr, sha) in self._checks:
                 return self._checks[(pr, sha)]
         return NotYetRead()

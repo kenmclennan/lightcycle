@@ -133,10 +133,6 @@ class RecordingGit(GitPort, TeardownLedgerPort):
         self._record("common_dir", root)
         return os.path.join(root, ".git")
 
-    def remote_head_sha(self, root, branch):
-        self._record("remote_head_sha", root, branch)
-        return "sim-sha"
-
     def ref_sha(self, root, ref):
         self._record("ref_sha", root, ref)
         return "sim-sha"
@@ -229,7 +225,7 @@ class ScriptedGitHub(GitHubEventsPort):
         return []
 
     def head_sha(self, pr):
-        return ""
+        return "sim-sha"
 
     def changed_files(self, pr, sha, base=None):
         return frozenset()
