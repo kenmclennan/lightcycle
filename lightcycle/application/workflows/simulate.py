@@ -182,7 +182,7 @@ class WorkflowSimulateUseCase:
             item_id = self._seed_item(pin, graph)
             github = self._github_factory()
             monitor = MonitorPrsUseCase(
-                self._store, github, self._worktrees, self._flow, self._complete, git=self._git,
+                self._store, github, self._worktrees, self._flow, self._complete,
                 trusted_authors=lambda: frozenset({"reviewer"}),
                 held_shortcode=lambda: "HLD",
             )

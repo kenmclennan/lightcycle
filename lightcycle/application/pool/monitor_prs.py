@@ -25,7 +25,7 @@ class MonitorPrsResponse:
 
 class MonitorPrsUseCase:
     def __init__(
-        self, store, github, worktrees, flow_service, complete=None, *, git=None,
+        self, store, github, worktrees, flow_service, complete=None, *,
         trusted_authors, held_shortcode,
     ):
         check_content_pin = CheckContentPinUseCase(
@@ -41,7 +41,7 @@ class MonitorPrsUseCase:
         )
         self._detect_head_moved = DetectHeadMovedUseCase(store, flow_service, complete)
         self._update_behind = UpdateBehindPrsUseCase(store, github, flow_service, time.monotonic)
-        self._resolve_ci = ResolveCiUseCase(store, github, git, worktrees, flow_service, complete)
+        self._resolve_ci = ResolveCiUseCase(store, github, flow_service, complete)
 
     def execute(self) -> MonitorPrsResponse:
         resolved = self._resolve.execute()

@@ -1,15 +1,19 @@
 import unittest
 
+from lightcycle.application.flow.complete_step import CompleteStepUseCase
 from lightcycle.application.pool.github_poll import GithubPollUseCase
 from lightcycle.application.pool.no_op_gates import NoOpMonitor
 from lightcycle.application.pool.pr_snapshot import PrSnapshot
+from lightcycle.application.pool.resolve_ci import ResolveCiUseCase
 from lightcycle.application.pool.tick import TickInput
 from lightcycle.ports.github import CheckRun, Comment, NotYetRead, ReadFailure, Review
+from tests.support.fake_git import FakeGit
 from tests.support.fake_github import FakeGitHub
 from tests.support.fake_github_poll_runner import BlockingGithubPollRunner, InlineGithubPollRunner
 from tests.support.fake_store import FakeStore
 from tests.support.fake_workers import FakeWorkers
 from tests.unit.test_pool import FakeSpawner, make_tick
+from tests.unit.test_resolve_ci import _FLOW, _FlowAdapter, plant_pr
 from tests.unit.test_tick_lifecycle_gate import _Config as _BaseConfig, _Reload
 
 _PR = "https://github.com/acme/widget/pull/1"
@@ -70,6 +74,96 @@ class TestTickIndependence(unittest.TestCase):
         self.assertEqual(runner.starts, 1)
         self.assertTrue(all(isinstance(r, NotYetRead) for r in monitor.reads))
         self.assertEqual(github.calls, [])
+
+
+class _CiMonitor:
+    def __init__(self, resolve):
+        self._resolve = resolve
+
+    def execute(self):
+        self._resolve.execute()
+        return NoOpMonitor().execute()
+
+
+class TestCiStageIssuesNoGitCall(unittest.TestCase):
+    def test_a_tick_with_a_ci_step_and_a_poll_that_never_returns_runs_no_git_fetch(self):
+        github = _Exploding(updated_ats={_PR: 1.0}, head_shas={_PR: "sha1"})
+        snapshot = PrSnapshot(github)
+        store = FakeStore()
+        item = store.create_item("building a thing", "a description")
+        plant_pr(store, item, _PR, branch="feat/thing")
+        step = store.create_step(step="poll-ci", role="engine", parent=item)
+        flow = _FlowAdapter(_FLOW)
+        monitor = _CiMonitor(ResolveCiUseCase(store, snapshot, flow, CompleteStepUseCase(store, flow)))
+        git = FakeGit()
+        tick = make_tick(
+            store, FakeWorkers(), FakeSpawner(), _Config(), monitor=monitor,
+            github_poll_gate=_gate(snapshot, github, BlockingGithubPollRunner()),
+            config_reload=_Reload("unchanged"), git=git)
+
+        for n in range(3):
+            tick.execute(TickInput(now=float(n * _TICK)))
+
+        self.assertEqual([c for c in git.calls if "fetch" in c[0]], [])
+        self.assertEqual(store.get_node(step).state.value, "queued")
+
+
+def _ci_pool(hold_view):
+    github = FakeGitHub(
+        updated_ats={_PR: 100.0},
+        head_shas={_PR: "sha1"},
+        check_runs_by_sha={(_PR, "sha1"): (CheckRun("ci", "completed", "success"),)})
+    snapshot = PrSnapshot(github)
+    store = FakeStore()
+    item = store.create_item("building a thing", "a description")
+    plant_pr(store, item, _PR, branch="feat/thing")
+    flow = _FlowAdapter(_FLOW)
+    monitor = _CiMonitor(ResolveCiUseCase(store, snapshot, flow, CompleteStepUseCase(store, flow)))
+    tick = make_tick(
+        store, FakeWorkers(), FakeSpawner(), _Config(), monitor=monitor,
+        github_poll_gate=_gate(snapshot, github, InlineGithubPollRunner()),
+        config_reload=_Reload("unchanged"))
+    return store, item, snapshot, tick
+
+
+def _judged_at(hold_view, created_at):
+    store, item, snapshot, tick = _ci_pool(hold_view)
+    step = None
+    for n in range(0, 80):
+        now = float(n * _TICK)
+        if hold_view:
+            snapshot.pr_sync_state(_PR)
+        if step is None and now >= created_at:
+            step = store.create_step(step="poll-ci", role="engine", parent=item)
+        tick.execute(TickInput(now=now))
+        if step is not None and store.get_node(step).state.value == "done":
+            return store, step, snapshot, now
+    raise AssertionError("poll-ci was never judged")
+
+
+class TestCiJudgementLatency(unittest.TestCase):
+    def test_a_pr_with_a_held_view_is_judged_within_one_poll_interval_plus_a_tick(self):
+        _, _, _, judged_at = _judged_at(True, 7.0)
+
+        self.assertLessEqual(judged_at - 7.0, _POLL + _TICK)
+
+    def test_a_pr_with_no_view_yet_needs_the_second_poll(self):
+        _, _, _, judged_at = _judged_at(False, 7.0)
+
+        self.assertGreater(judged_at - 7.0, _POLL + _TICK)
+        self.assertLessEqual(judged_at - 7.0, 2 * _POLL + _TICK)
+
+
+class TestCiJudgementAnchor(unittest.TestCase):
+    def test_the_judged_sha_and_the_note_equal_the_head_detect_head_moved_compares(self):
+        store, step, snapshot, _ = _judged_at(True, 7.0)
+
+        compared = snapshot.pr_sync_state(_PR).head_sha
+        judged = [a.value for a in store.item_artifacts(step) if a.type == "ci-judged-sha"]
+
+        self.assertEqual(judged, [compared])
+        self.assertEqual(compared, "sha1")
+        self.assertIn(compared, store.get_node(step).report)
 
 
 class TestColdStart(unittest.TestCase):

@@ -3,7 +3,7 @@ import unittest
 from lightcycle.application.pool.github_poll import GithubPollUseCase
 from lightcycle.application.pool.pr_snapshot import PrSnapshot
 from lightcycle.config import ConfigError
-from lightcycle.ports.github import Comment, NotYetRead
+from lightcycle.ports.github import CheckRun, Comment, NotYetRead
 from tests.support.fake_github import FakeGitHub
 from tests.support.fake_github_poll_runner import BlockingGithubPollRunner, InlineGithubPollRunner
 
@@ -160,14 +160,100 @@ class TestCallCounts(unittest.TestCase):
         pr = _A[0]
         self.pool.tick(60, checks=[(pr, "h1")])
         self.assertEqual(self.pool.names().count("check_runs"), 1)
+        self.assertEqual(self.pool.github.calls.count(("pr_view", pr)), 1)
         self.pool.reset()
 
         self.pool.tick(120, checks=[(pr, "h1")])
         self.assertEqual(self.pool.names().count("check_runs"), 1)
+        self.assertEqual(self.pool.github.calls.count(("pr_view", pr)), 1)
         self.pool.reset()
 
         self.pool.tick(180)
         self.assertNotIn("check_runs", self.pool.names())
+
+
+def _kwargs():
+    return dict(
+        updated_ats={pr: 100.0 for pr in _ALL},
+        base_keys={pr: "acme/gadget@main" for pr in _B},
+        head_shas={pr: "h-" + pr[-8:] for pr in _ALL},
+        check_runs_by_sha=_failing_runs(),
+    )
+
+
+class _MovingHead(FakeGitHub):
+    def __init__(self, moved_to, **kw):
+        super().__init__(**kw)
+        self._moved_to = moved_to
+        self._checked = False
+
+    def check_runs(self, pr, sha):
+        self._checked = True
+        return super().check_runs(pr, sha)
+
+    def pr_view(self, pr):
+        if self._checked and pr in self._moved_to:
+            self._head_shas[pr] = self._moved_to[pr]
+        return super().pr_view(pr)
+
+
+def _failing_runs():
+    return {
+        (pr, "h-" + pr[-8:]): (CheckRun(name="build", status="completed", conclusion="failure"),)
+        for pr in _ALL
+    }
+
+
+def _pool_after_first_poll(github):
+    pool = _Pool(github=github)
+    pool.tick(60)
+    pool.reset()
+    return pool
+
+
+class TestChecksPublishedOnlyForAConfirmedHead(unittest.TestCase):
+    def test_a_confirmed_head_publishes_its_checks(self):
+        pool = _pool_after_first_poll(_github(check_runs_by_sha=_failing_runs()))
+        pr = _A[0]
+        sha = pool.snapshot.head_sha(pr)
+
+        pool.tick(120, checks=[(pr, sha)])
+
+        self.assertEqual(pool.names().count("check_runs"), 1)
+        self.assertEqual(len(pool.snapshot.check_runs(pr, sha)), 1)
+
+    def test_a_head_that_moved_during_the_poll_discards_the_checks_and_keeps_the_new_view(self):
+        pr = _A[0]
+        pool = _pool_after_first_poll(_MovingHead({pr: "moved"}, **_kwargs()))
+        old = pool.snapshot.head_sha(pr)
+
+        pool.tick(120, checks=[(pr, old)])
+
+        self.assertIsInstance(pool.snapshot.check_runs(pr, old), NotYetRead)
+        self.assertEqual(pool.snapshot.head_sha(pr), "moved")
+        self.assertEqual(pool.snapshot.entry_of(pr).updated_at, 100.0)
+
+    def test_a_failed_confirming_view_publishes_nothing(self):
+        github = _github(check_runs_by_sha=_failing_runs())
+        pool = _pool_after_first_poll(github)
+        pr = _A[0]
+        sha = pool.snapshot.head_sha(pr)
+        github._failing_calls.add("pr_view")
+
+        pool.tick(120, checks=[(pr, sha)])
+
+        self.assertIsInstance(pool.snapshot.check_runs(pr, sha), NotYetRead)
+
+    def test_only_the_confirmed_pr_of_two_publishes(self):
+        first, second = _A[0], _A[1]
+        pool = _pool_after_first_poll(_MovingHead({second: "moved"}, **_kwargs()))
+        first_sha = pool.snapshot.head_sha(first)
+        second_sha = pool.snapshot.head_sha(second)
+
+        pool.tick(120, checks=[(first, first_sha), (second, second_sha)])
+
+        self.assertEqual(len(pool.snapshot.check_runs(first, first_sha)), 1)
+        self.assertIsInstance(pool.snapshot.check_runs(second, second_sha), NotYetRead)
 
 
 class TestFailures(unittest.TestCase):

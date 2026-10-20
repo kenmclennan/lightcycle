@@ -88,7 +88,7 @@ Every stage name is an **action**. The stage and its markdown file are the same 
 - **open-pr** (agent) - push the branch and open the PR (used at both the spec and code phases).
 - **await-merge** (human) - you review and merge the PR; lightcycle never merges for you. The spec-phase `await-merge` is the review gate; merging it advances the SAME item into the code phase (no workflow flip).
 - **write-code** (agent) - implement the merged spec on a branch in the project repo.
-- **poll-ci** (engine) - the engine reads the PR's head SHA and check-runs itself, every tick, until CI concludes; no worker is ever spawned for it. Before routing `failed` it re-reads the branch tip and, if the tip moved or cannot be read, leaves the step queued to read again next tick.
+- **poll-ci** (engine) - the engine judges the PR snapshot's head SHA and the check-runs the GitHub poll read for it, every tick, until CI concludes; no worker is ever spawned for it. Before routing `failed` it re-reads the snapshot's head and, if the head moved or cannot be read, leaves the step queued to read again next tick.
 - **watch-ci** (agent) - investigate a CI conclusion the engine already read: comment handling always, plus log-fetching and judgement on failure.
 - **review-code** (agent) - review the code on the PR.
 - **handle-feedback** (agent) - interpret PR feedback (`@lc` mention or a review bot) and decide rework / answer / ignore.

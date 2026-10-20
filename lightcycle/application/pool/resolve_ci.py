@@ -14,11 +14,9 @@ class ResolveCiResponse:
 
 
 class ResolveCiUseCase:
-    def __init__(self, store, github, git, worktrees, flow_service, complete):
+    def __init__(self, store, github, flow_service, complete):
         self._store = store
         self._github = github
-        self._git = git
-        self._worktrees = worktrees
         self._flow_service = flow_service
         self._complete = complete
 
@@ -35,11 +33,8 @@ class ResolveCiUseCase:
             pr_value = run.pr if run else None
             if not pr_value:
                 continue
-            root = self._worktrees.worktree_path(step)
-            if not root or not run.branch:
-                continue
-            sha = self._git.remote_head_sha(root, run.branch)
-            if not sha:
+            sha = self._github.head_sha(pr_value)
+            if isinstance(sha, ReadFailure) or not sha:
                 continue
             checks = self._github.check_runs(pr_value, sha)
             if isinstance(checks, ReadFailure):
@@ -54,7 +49,7 @@ class ResolveCiUseCase:
                 ))
                 ci_resolved.append(step.item)
             elif outcome == "failure" and sd.ci_failure:
-                if self._git.remote_head_sha(root, run.branch) != sha:
+                if self._github.head_sha(pr_value) != sha:
                     continue
                 self._store.add_artifact(step.id, "ci-judged-sha", sha, internal=True)
                 fc = failing_check(checks)

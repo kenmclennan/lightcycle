@@ -125,7 +125,7 @@ class Container:
             self.spawner,
             self.config,
             monitor=MonitorPrsUseCase(
-                self.store, snapshot, worktrees, flow, complete, git=self.git,
+                self.store, snapshot, worktrees, flow, complete,
                 trusted_authors=self.config.trusted_authors,
                 held_shortcode=self.config.held_comment_shortcode,
             ),
