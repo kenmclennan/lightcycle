@@ -30,7 +30,7 @@ class PrPoll:
             failed |= self._poll_repo(repo, prs)
         self._compare_files(wanted.files)
         self._read_checks(wanted.checks)
-        self._snapshot.retain(wanted.prs)
+        self._snapshot.retain(wanted.prs, wanted.checks)
         self._writes.retain(wanted.prs)
 
     def _poll_repo(self, repo, prs):
