@@ -13,6 +13,7 @@ class Comment:
     id: Optional[str] = None
     in_reply_to_id: Optional[str] = None
     created_at: float = 0.0
+    review_id: Optional[str] = None
 
 
 @dataclass(frozen=True)

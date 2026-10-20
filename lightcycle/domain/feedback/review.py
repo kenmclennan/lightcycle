@@ -29,8 +29,16 @@ def review_has_signal(review):
     return False
 
 
-def outstanding_reviews(reviews):
-    return [r for r in reviews if review_has_signal(r)]
+def outstanding_reviews(reviews, inline_comments, mention_token):
+    linked = {c.review_id for c in inline_comments if c.review_id is not None}
+    return [
+        r for r in reviews
+        if review_has_signal(r)
+        and (
+            (r.id is not None and r.id in linked)
+            or (mention_token and mention_token in r.body)
+        )
+    ]
 
 
 def parse_decision(body):

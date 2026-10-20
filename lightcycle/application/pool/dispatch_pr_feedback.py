@@ -116,7 +116,7 @@ class DispatchPrFeedbackUseCase:
             c for c in top_level
             if mention_token and LC_MARKER not in c.body and mention_token in c.body
         ]
-        signalled = outstanding_reviews(reviews)
+        signalled = outstanding_reviews(reviews, inline, mention_token)
 
         dispatched_through = _epoch(run.comments_dispatched_through)
         admitted = []

@@ -209,7 +209,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
         )
 
     def _inline_comment(self, ts, body="nit: rename this", author="reviewer",
-                         cid=None, in_reply_to=None):
+                         cid=None, in_reply_to=None, review_id=None):
         return (
             ts,
             Comment(
@@ -221,10 +221,11 @@ class TestMonitorPrsFeedback(unittest.TestCase):
                 id=cid or str(ts),
                 in_reply_to_id=in_reply_to,
                 created_at=ts,
+                review_id=review_id,
             ),
         )
 
-    def _bot_review(self, ts, author=_BOT_LOGIN, body="looks like a bug on line 12", state="COMMENTED"):
+    def _bot_review(self, ts, author=_BOT_LOGIN, body="@lc looks like a bug on line 12", state="COMMENTED"):
         return (ts, Review(author=author, body=body, created_at=ts, state=state, id="r%s" % ts))
 
     def test_mention_comment_after_push_spawns_handle_feedback(self):
@@ -358,7 +359,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
             1200.0,
             Review(
                 author=_BOT_LOGIN,
-                body="already replied %s" % LC_MARKER,
+                body="@lc already replied %s" % LC_MARKER,
                 created_at=1200.0,
                 state="COMMENTED",
                 id="r1200.0",
@@ -413,12 +414,70 @@ class TestMonitorPrsFeedback(unittest.TestCase):
         gh = FakeGitHub(
             push_time=1000.0,
             timed_reviews=[self._bot_review(1500.0, body="", state="CHANGES_REQUESTED")],
+            timed_comments=[self._inline_comment(1500.0, review_id="r1500.0")],
         )
         store, item, step, worktrees, uc = self._setup(url, gh)
 
         result = uc.execute()
 
         self.assertEqual(result.reworked, [item])
+
+    def test_zero_finding_commented_summary_alone_does_not_spawn(self):
+        url = "https://github.com/x/y/pull/37-summary-only"
+        gh = FakeGitHub(
+            push_time=1000.0,
+            timed_reviews=[self._bot_review(1500.0, body="Approval recommended, 0 open findings")],
+        )
+        store, item, step, worktrees, uc = self._setup(url, gh)
+
+        result = uc.execute()
+
+        self.assertEqual(result.reworked, [])
+        self.assertEqual(self._spawned_feedback_steps(store, step), [])
+
+    def test_summary_with_a_linked_inline_comment_spawns_one_step(self):
+        url = "https://github.com/x/y/pull/37-summary-linked"
+        gh = FakeGitHub(
+            push_time=1000.0,
+            timed_reviews=[self._bot_review(1500.0, body="Two findings inline")],
+            timed_comments=[self._inline_comment(1500.0, review_id="r1500.0")],
+        )
+        store, item, step, worktrees, uc = self._setup(url, gh)
+
+        result = uc.execute()
+
+        self.assertEqual(result.reworked, [item])
+        self.assertEqual(len(self._spawned_feedback_steps(store, step)), 1)
+
+    def test_summary_with_the_mention_token_spawns_one_step(self):
+        url = "https://github.com/x/y/pull/37-summary-token"
+        gh = FakeGitHub(
+            push_time=1000.0,
+            timed_reviews=[self._bot_review(1500.0, body="@lc please rework this")],
+        )
+        store, item, step, worktrees, uc = self._setup(url, gh)
+
+        result = uc.execute()
+
+        self.assertEqual(result.reworked, [item])
+        self.assertEqual(len(self._spawned_feedback_steps(store, step)), 1)
+
+    def test_untrusted_summary_only_review_is_not_held(self):
+        url = "https://github.com/x/y/pull/37-untrusted-summary"
+        gh = FakeGitHub(
+            push_time=1000.0,
+            timed_reviews=[
+                self._bot_review(1500.0, author="some-other[bot]", body="Looks fine overall")
+            ],
+        )
+        store, item, step, worktrees, uc = self._setup(url, gh)
+
+        result = uc.execute()
+
+        self.assertEqual(result.reworked, [])
+        held = [n for n in store.all_nodes()
+                if n.type == "step" and n.stage == "review-held-comment"]
+        self.assertEqual(held, [])
 
     def test_commented_review_with_body_triggers(self):
         url = "https://github.com/x/y/pull/37-commented-with-body"

@@ -152,7 +152,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
         jq = (
             ".[] | select((.created_at|fromdateiso8601) > %s) | "
             "{author: .user.login, body, id, in_reply_to_id, path, line, "
-            "created_at: (.created_at|fromdateiso8601)}"
+            "pull_request_review_id, created_at: (.created_at|fromdateiso8601)}"
             % since
         )
         try:
@@ -191,6 +191,10 @@ class GitHubEventsAdapter(GitHubEventsPort):
                         if c.get("in_reply_to_id") is not None else None
                     ),
                     created_at=c.get("created_at", 0.0),
+                    review_id=(
+                        str(c["pull_request_review_id"])
+                        if c.get("pull_request_review_id") is not None else None
+                    ),
                 )
             )
 
