@@ -166,7 +166,8 @@ CONTEXT_CONTINUATION_INDENT = 2
 CONTEXT_INPUTS_LIVE_TITLE = "INPUTS (live, not yet frozen)"
 CONTEXT_NONE_TEXT = "none"
 DETAIL_FIELD_LABELS = {
-    "pr": "PR", "branch": "BRANCH", "worktree": "WORKTREE",
+    "pr": "PR", "spec-pr": "SPEC PR", "branch": "BRANCH", "worktree": "WORKTREE",
+    "spec": "SPEC", "ci-checks": "CI CHECKS",
     "model": "MODEL", "claimed_by": "CLAIMED_BY", "session": "SESSION",
     "outcome": "OUTCOME", "report": "REPORT",
     "needs": "NEEDS", "reason": "REASON",
@@ -692,7 +693,7 @@ def _stacked_block_cell(key_field, indent, body, row_budget, style):
 def detail_row_cells(field, layout=None, row_budget=None, titles=None):
     key, value = field
     label = _detail_field_label(key)
-    style = COLOURS["cyan"] if key in ("pr", "worktree") else COLOURS["text"]
+    style = COLOURS["cyan"] if key in ("pr", "spec-pr", "worktree", "ci-checks") else COLOURS["text"]
     block = detail_value_is_block(value)
     if layout is not None and layout.stacked:
         key_field = pad_field(Text(label, style=COLOURS["dim"]), layout.atomic_widths["key"])
@@ -2743,7 +2744,10 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         if key_value == "worktree":
             self._open_worktree(value)
             return
-        if key_value == "pr" or detail_value_is_url(value):
+        if key_value == "spec":
+            self._open_worktree(value)
+            return
+        if key_value in ("pr", "spec-pr", "ci-checks") or detail_value_is_url(value):
             url = value.strip()
             use_case = OpenArtifactUseCase(self._container.fs, self._container.launcher)
             result = use_case.execute(OpenArtifactInput(kind="url", value=url))

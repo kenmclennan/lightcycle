@@ -291,19 +291,19 @@ def _outcome_report_first(ctx):
     assert _field_value(ctx, "report") == "reviewed and merged"
 
 
-@then("the PR is shown after the outcome and the report")
-def _pr_after_outcome_report(ctx):
-    assert _field_keys(ctx) == ["outcome", "report", "pr"]
+@then("the run rows lead, followed by the outcome and the report")
+def _run_rows_then_outcome_report(ctx):
+    assert _field_keys(ctx) == ["pr", "branch", "worktree", "outcome", "report"]
 
 
-@then("its Detail entries are branch, worktree and pr, in that order")
+@then("its Detail entries are pr, branch and worktree, in that order")
 def _declared_entries_in_order(ctx):
-    assert _field_keys(ctx) == ["branch", "worktree", "pr"]
+    assert _field_keys(ctx) == ["pr", "branch", "worktree"]
 
 
 @then("the worktree entry is shown blank")
 def _worktree_entry_blank(ctx):
-    assert _field_keys(ctx) == ["branch", "worktree"]
+    assert _field_keys(ctx) == ["pr", "branch", "worktree"]
     assert _field_value(ctx, "worktree") == ""
 
 
@@ -341,9 +341,9 @@ def _pr_shown_on_screen(ctx):
     assert _field_value(ctx, "pr") == ctx["pr_url"]
 
 
-@then("no branch field is shown")
-def _no_branch_field(ctx):
-    assert not _field_present(ctx, "branch")
+@then("a branch field is shown")
+def _branch_field(ctx):
+    assert _field_present(ctx, "branch")
 
 
 @then("no PR field is shown")
@@ -354,11 +354,6 @@ def _no_pr_field(ctx):
 @then("the worktree is shown")
 def _worktree_shown(ctx):
     assert _field_value(ctx, "worktree") == ctx["worktree_path"]
-
-
-@then("no worktree field is shown")
-def _no_worktree_field(ctx):
-    assert not _field_present(ctx, "worktree")
 
 
 @then("the worktree opens in the editor")

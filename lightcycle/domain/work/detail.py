@@ -1,10 +1,15 @@
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
+SPEC_PHASE = "spec"
+SPEC_ROW = "spec"
+SPEC_PR_ROW = "spec-pr"
+CI_CHECKS_ROW = "ci-checks"
 EXECUTION_FIELDS = (
-    "pr", "branch", "worktree", "outcome", "report", "claimed_by", "model", "session",
-    "needs", "reason",
+    "pr", SPEC_PR_ROW, "branch", "worktree", SPEC_ROW, CI_CHECKS_ROW, "outcome", "report",
+    "claimed_by", "model", "session", "needs", "reason",
 )
+CI_JUDGED_SHA = "ci-judged-sha"
 RESERVED_INPUT_NAMES = ("description", "repo", "workflow", "report")
 IN_PREFIX = "in:"
 OUT_PREFIX = "out:"
@@ -99,6 +104,28 @@ def default_detail(has_run, presents=None):
     if legacy is not None and legacy not in names:
         names.insert(0, legacy)
     return tuple(names)
+
+
+def leading_run_names(has_spec_run, has_spec, has_ci_sha):
+    names = ["pr"]
+    if has_spec_run:
+        names.append(SPEC_PR_ROW)
+    names.extend(["branch", "worktree"])
+    if has_spec:
+        names.append(SPEC_ROW)
+    if has_ci_sha:
+        names.append(CI_CHECKS_ROW)
+    return tuple(names)
+
+
+def with_leading(leading, names):
+    return tuple(leading) + tuple(n for n in names if n not in leading)
+
+
+def ci_checks_url(pr, sha):
+    if not pr or not sha:
+        return None
+    return "%s/checks?sha=%s" % (pr.rstrip("/"), sha)
 
 
 def detail_presents(presents, entries):
