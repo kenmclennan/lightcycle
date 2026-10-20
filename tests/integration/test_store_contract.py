@@ -1085,6 +1085,19 @@ class TestSqliteStoreUsageColumnsMigration(unittest.TestCase):
         cols = {r[1] for r in store._conn.execute("PRAGMA table_info(steps)").fetchall()}
         self.assertIn("usage_api_calls", cols)
 
+    def test_delete_clears_the_removed_steps_gh_call_and_tool_usage_rows(self):
+        store = make_sqlite_store()
+        item = store.create_item("owning item", "a description", shortcode="GRID")
+        step = create_owned_step(store, "a step", parent=item)
+        store.record_gh_calls("sp-1", step, 4)
+        store._conn.execute(
+            "INSERT INTO step_tool_usage (step, tool, calls, bytes) VALUES (?, 'Bash', 1, 1)", (step,)
+        )
+        store.delete(step)
+        for table in ("step_gh_calls", "step_tool_usage"):
+            n = store._conn.execute("SELECT COUNT(*) FROM %s WHERE step = ?" % table, (step,)).fetchone()[0]
+            self.assertEqual(n, 0, table)
+
     def test_existing_store_gains_usage_api_calls_and_the_step_gh_calls_table(self):
         root = tempfile.mkdtemp()
         self._seed_pre_usage_store(root)

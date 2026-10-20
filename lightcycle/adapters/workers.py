@@ -7,6 +7,7 @@ import sys
 from contextlib import contextmanager
 
 from lightcycle.domain.pool.worker import Worker
+from lightcycle.domain.work.worker_log import gh_calls_filename
 from lightcycle.ports.workers import RegistryUnreadable, WorkersPort
 
 
@@ -153,7 +154,28 @@ def prune_workers(root, keep_dead):
             return 0
         drop = set(dead_idx[:n_drop])
         write_workers(root, [w for i, w in enumerate(workers) if i not in drop])
+        for i in drop:
+            _remove_quietly(os.path.join(root, "logs", gh_calls_filename(workers[i].get("spawnid"))))
         return n_drop
+
+
+def _remove_quietly(path):
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+
+
+def prune_pool_gh_call_logs(root, keep):
+    logs = os.path.join(root, "logs")
+    try:
+        names = sorted(
+            n for n in os.listdir(logs) if n.startswith("gh-calls-pool-") and n.endswith(".log")
+        )
+    except OSError:
+        return
+    for name in names[:max(0, len(names) - max(keep, 1))]:
+        _remove_quietly(os.path.join(logs, name))
 
 
 def set_step(root, spawnid, step):
@@ -208,7 +230,9 @@ class WorkersAdapter(WorkersPort):
 
     def prune_workers(self, keep_dead=None):
         kd = self._config.worker_history() if keep_dead is None else keep_dead
-        return prune_workers(self._config.data_root(), kd)
+        dropped = prune_workers(self._config.data_root(), kd)
+        prune_pool_gh_call_logs(self._config.data_root(), kd)
+        return dropped
 
     def set_step(self, spawnid, step):
         return set_step(self._config.data_root(), spawnid, step)
