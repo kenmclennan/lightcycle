@@ -38,6 +38,7 @@ class StepCost:
     cost_per_turn: Optional[Cost]
     rates_used: Optional[dict] = None
     tools: Tuple[ToolUsageRow, ...] = ()
+    api_calls: Optional[int] = None
 
 
 def step_cost(step, tool_usage) -> StepCost:
@@ -70,7 +71,7 @@ def step_cost(step, tool_usage) -> StepCost:
             step.usage_cache_read_tokens, step.usage_cache_creation_tokens, step.usage_input_tokens,
         ),
         cost_usd=step.usage_cost_usd, cost_basis=step.usage_cost_basis, cost_per_turn=cost_per_turn_value,
-        rates_used=rates_used, tools=tools,
+        rates_used=rates_used, tools=tools, api_calls=step.usage_api_calls,
     )
 
 
@@ -101,6 +102,7 @@ class ItemCost:
     not_recorded_count: int
     unpriced_count: int = 0
     stages: Tuple[StageSubtotal, ...] = field(default_factory=tuple)
+    api_calls: Optional[int] = None
 
 
 def item_cost(steps) -> ItemCost:
@@ -113,6 +115,7 @@ def item_cost(steps) -> ItemCost:
     thinking_values = [
         s.usage_thinking_tokens for s in agent_steps if s.usage_thinking_tokens is not None
     ]
+    api_call_values = [s.usage_api_calls for s in agent_steps if s.usage_api_calls is not None]
     cost_usd = sum((s.usage_cost_usd for s in agent_steps), Cost())
     priced_steps = [s for s in agent_steps if s.usage_cost_basis not in (None, "unpriced")]
     recorded_turn_count = sum(s.turn_count for s in priced_steps)
@@ -129,6 +132,7 @@ def item_cost(steps) -> ItemCost:
         not_recorded_count=sum(1 for s in agent_steps if s.turn_count > 0 and s.usage_cost_basis is None),
         unpriced_count=sum(1 for s in agent_steps if s.usage_cost_basis == "unpriced"),
         stages=_stage_subtotals(agent_steps),
+        api_calls=sum(api_call_values) if api_call_values else None,
     )
 
 

@@ -8,6 +8,7 @@ from pathlib import Path
 import lightcycle.cli as cli
 from lightcycle.config import Config
 from lightcycle.container import Container
+from tests.support.fake_gh_shim import FakeGhShim
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -67,7 +68,7 @@ def inject_container(test, *, store, home, config_path, extra_env=None, github=N
     if hasattr(store, "bind_config"):
         store.bind_config(config)
     orig = cli._container
-    cli.set_container(Container(store=store, config=config, github=github))
+    cli.set_container(Container(store=store, config=config, github=github, gh_shim=FakeGhShim()))
     if hasattr(test, "addCleanup"):
         test.addCleanup(lambda: cli.set_container(orig))
     return config

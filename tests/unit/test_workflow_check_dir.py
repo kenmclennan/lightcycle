@@ -347,3 +347,40 @@ class TestScheduleNeedsRequiresEngine(unittest.TestCase):
     def test_requires_engine_without_a_schedule_reports_nothing(self):
         rc, _out, err = run_check("--dir", self._build(False, True), "spec-driven")
         self.assertEqual(rc, 0, err)
+
+
+class TestGithubKeyChecks(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        cli.set_container(_Container())
+
+    def _build(self, value, requires):
+        root = _bundle(self.tmp)
+        step = os.path.join(root, "steps", "write-code.md")
+        with open(step) as f:
+            text = f.read()
+        with open(step, "w") as f:
+            f.write(text.replace("---\n", "---\ngithub: %s\n" % value, 1))
+        if requires:
+            with open(os.path.join(root, "source.toml"), "a") as f:
+                f.write('requires-engine = ">=0.6.0"\n')
+        return root
+
+    def test_heavy_with_requires_engine_reports_nothing(self):
+        rc, _out, err = run_check("--dir", self._build("heavy", True), "spec-driven")
+        self.assertEqual(rc, 0, err)
+
+    def test_any_other_value_is_reported(self):
+        rc, _out, err = run_check("--dir", self._build("heavey", True), "spec-driven")
+        self.assertEqual(rc, 1)
+        self.assertIn("declares github: 'heavey'; the only accepted value is heavy", err)
+
+    def test_the_key_without_requires_engine_is_reported(self):
+        rc, _out, err = run_check("--dir", self._build("heavy", False), "spec-driven")
+        self.assertEqual(rc, 1)
+        self.assertIn("declares github: but source.toml has no requires-engine", err)
+
+    def test_the_support_library_bundle_has_no_github_key(self):
+        rc, _out, err = run_check("--dir", _bundle(self.tmp), "spec-driven")
+        self.assertEqual(rc, 0, err)

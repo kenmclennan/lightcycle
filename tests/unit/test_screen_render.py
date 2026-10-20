@@ -447,3 +447,35 @@ def test_a_running_agent_opens_on_its_log():
     frame = render("hub#active-log", size=(100, 30))
 
     assert "Nothing live to stream." not in frame
+
+
+def test_a_known_budget_above_the_reserve_renders_the_dim_remaining_segment():
+    frame = render("priority-list#github-budget")
+
+    assert "github 4261/5000 · resets " in frame
+    assert "budget low" not in frame
+
+
+def test_a_low_budget_renders_the_amber_hold_segment_in_the_footer():
+    frame = render("priority-list#github-budget-low")
+
+    assert "github budget low · 312 left · resets " in frame
+    assert "github 312/5000" not in frame
+
+
+def test_the_low_budget_segment_is_painted_in_the_hold_colour_not_dim():
+    from lightcycle.adapters.tui.design_system import COLOURS
+
+    coloured = render("priority-list#github-budget-low", colour=True)
+    plain = render("priority-list#github-budget")
+    rgb = COLOURS["amber"].lstrip("#")
+    amber = "\x1b[38;2;%d;%d;%d" % tuple(int(rgb[i:i + 2], 16) for i in (0, 2, 4))
+
+    assert amber in coloured.split("github budget low")[0].rsplit("\n", 1)[-1]
+    assert "github budget low" not in plain
+
+
+def test_no_reading_hides_the_github_segment():
+    frame = render("priority-list#normal")
+
+    assert "github " not in frame.split("\n")[-3]

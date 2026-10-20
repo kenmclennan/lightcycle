@@ -66,6 +66,7 @@ from lightcycle.application.goals import ListGoalsUseCase
 from lightcycle.application.pool import (
     BreakerStatusUseCase,
     DrainPoolUseCase,
+    GithubBudgetUseCase,
     LiveWorkerCountUseCase,
     PoolDrainStatusUseCase,
     PoolHoldStatusUseCase,
@@ -1637,6 +1638,9 @@ class LightcycleApp(App):
     #status-hold {{
         display: none;
     }}
+    #status-github {{
+        display: none;
+    }}
     #status-config {{
         display: none;
     }}
@@ -1869,7 +1873,7 @@ class LightcycleApp(App):
         else:
             self._rebuild_table(table, rows)
 
-    def _render_status_bar(self, status_bar, running, breaker, hold, drain=None) -> None:
+    def _render_status_bar(self, status_bar, running, breaker, hold, drain=None, github=None) -> None:
         status_bar.report(
             pool_running=running,
             pool_transition_kind=self._pool_transition_kind,
@@ -1883,6 +1887,7 @@ class LightcycleApp(App):
             upgrade_error=self._upgrade_error,
             hold=hold,
             config_changed=self._container.config.config_mtime() != self._config_mtime_at_load,
+            github=github,
         )
 
     def _refresh_status_bar(self) -> None:
@@ -1898,12 +1903,16 @@ class LightcycleApp(App):
         hold = PoolHoldStatusUseCase(
             self._container.memory_gate_status, self._container.workers, self._container.config,
         ).execute(self._container.workers.pid_alive)
+        github = GithubBudgetUseCase(
+            self._container.github_budget_status, self._container.flow_service(),
+            self._container.config, lambda: self._now().timestamp(),
+        ).reading()
         for screen in self.screen_stack:
             try:
                 status_bar = screen.query_one(StatusBar)
             except NoMatches:
                 continue
-            self._render_status_bar(status_bar, running, breaker, hold, drain)
+            self._render_status_bar(status_bar, running, breaker, hold, drain, github)
 
     def _begin_pool_transition(self, kind) -> None:
         self._pool_transition_kind = kind

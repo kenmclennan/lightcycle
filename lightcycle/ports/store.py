@@ -189,7 +189,11 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def claim_ready(self, role, assignee=None, item=None, stage=None):
+    def claim_ready(self, role, assignee=None, item=None, stage=None, exclude=()):
+        pass
+
+    @abstractmethod
+    def record_gh_calls(self, spawnid, step, calls):
         pass
 
     @abstractmethod

@@ -1077,6 +1077,26 @@ class TestSqliteStoreUsageColumnsMigration(unittest.TestCase):
         ).fetchone()
         self.assertIsNotNone(idx)
 
+    def test_the_step_gh_calls_table_has_its_indexes_and_steps_gain_usage_api_calls(self):
+        store = make_sqlite_store()
+        names = {r[1] for r in store._conn.execute("PRAGMA index_list(step_gh_calls)").fetchall()}
+        self.assertIn("idx_step_gh_calls_step", names)
+        self.assertIn("sqlite_autoindex_step_gh_calls_1", names)
+        cols = {r[1] for r in store._conn.execute("PRAGMA table_info(steps)").fetchall()}
+        self.assertIn("usage_api_calls", cols)
+
+    def test_existing_store_gains_usage_api_calls_and_the_step_gh_calls_table(self):
+        root = tempfile.mkdtemp()
+        self._seed_pre_usage_store(root)
+        store = SqliteStore(self._config(root))
+        cols = {r[1] for r in store._conn.execute("PRAGMA table_info(steps)").fetchall()}
+        self.assertIn("usage_api_calls", cols)
+        self.assertIsNone(store.get_step("s-1").usage_api_calls)
+        table = store._conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'step_gh_calls'"
+        ).fetchone()
+        self.assertIsNotNone(table)
+
     def test_existing_store_gains_step_tool_usage_and_backfill_log_tables(self):
         root = tempfile.mkdtemp()
         self._seed_pre_usage_store(root)

@@ -25,7 +25,7 @@ def main():
         return 1
     claim = ClaimStepUseCase(
         container.store, container.flow_service(), container.worktrees(),
-        container.workers, config,
+        container.workers, config, container.github_budget(),
     )
     select = SelectGuidanceUseCase(container.store, container.fs, container.git, config)
     try:

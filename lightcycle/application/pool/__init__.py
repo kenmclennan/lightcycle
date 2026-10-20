@@ -5,6 +5,7 @@ from lightcycle.application.pool.breaker_status import (
     BreakerStatusResponse,
     BreakerStatusUseCase,
 )
+from lightcycle.application.pool.github_budget import GithubBudgetUseCase
 from lightcycle.application.pool.hook_completions import (
     HookCompletionsResponse,
     HookCompletionsUseCase,
@@ -54,6 +55,7 @@ __all__ = [
     "ClearDrainUseCase",
     "DrainPoolResponse",
     "DrainPoolUseCase",
+    "GithubBudgetUseCase",
     "HookCompletionsResponse",
     "HookCompletionsUseCase",
     "ListWorkersUseCase",

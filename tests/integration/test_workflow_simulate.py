@@ -1,3 +1,4 @@
+from lightcycle.adapters.simulate import NullGithubBudget
 import os
 import shutil
 import tempfile
@@ -129,6 +130,7 @@ def _seed_config(home):
         "max-boot-seconds: 120",
         "poll-seconds: 5",
         "github-poll-seconds: 60",
+        "github-reserve-calls: 750",
         "worker-history: 20",
         "editor: vi",
         "audit-shortcode: AUD",
@@ -242,7 +244,7 @@ class SimulateTestCase(unittest.TestCase):
         git = RecordingGit()
         flow = make_flow_service(c.workflow_bundle, store, c.config, c.workflow_source)
         worktrees = make_worktrees(store, git, c.fs, sim_config, flow, c.scaffold)
-        claim = ClaimStepUseCase(store, flow, worktrees, NullWorkers(), sim_config)
+        claim = ClaimStepUseCase(store, flow, worktrees, NullWorkers(), sim_config, NullGithubBudget())
         complete = CompleteStepUseCase(store, flow, worktrees, sim_config)
         use_case = WorkflowSimulateUseCase(
             store, flow, worktrees, claim, complete, projects_root, git,

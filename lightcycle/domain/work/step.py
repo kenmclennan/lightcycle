@@ -34,6 +34,7 @@ class Step:
     usage_cost_basis: Optional[str] = None
     usage_rates_used: Optional[str] = None
     usage_thinking_tokens: Optional[int] = None
+    usage_api_calls: Optional[int] = None
     turn_count: int = 0
     previous_step: Optional[str] = None
     report: Optional[str] = None
@@ -83,6 +84,7 @@ class Step:
             "usage_cost_basis": self.usage_cost_basis,
             "usage_rates_used": self.usage_rates_used,
             "usage_thinking_tokens": self.usage_thinking_tokens,
+            "usage_api_calls": self.usage_api_calls,
             "turn_count": self.turn_count,
             "previous_step": self.previous_step,
             "report": self.report,

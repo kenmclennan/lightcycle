@@ -1,3 +1,4 @@
+from tests.support.fake_github_budget import FakeGithubBudget
 import io
 import json
 import unittest
@@ -105,6 +106,9 @@ class FakeContainer:
         self.config_reload_status = FakeConfigReloadStatus()
         self.lock = FakeLock(running=False)
 
+    def github_budget(self):
+        return FakeGithubBudget()
+
     def worktrees(self):
         return FakeWorktrees()
 
@@ -133,10 +137,21 @@ class TestCmdDoctor(unittest.TestCase):
         self.assertEqual(rc, 0)
         data = json.loads(out)
         self.assertEqual(
-            set(data.keys()), {"store", "pins", "contract", "origin", "config", "orphans", "facets", "guidance"}
+            set(data.keys()), {"store", "pins", "contract", "origin", "config", "orphans", "facets", "guidance", "github"}
         )
         for probs in data.values():
             self.assertEqual(probs, [])
+
+    def test_the_text_output_prints_the_github_line_with_the_figures(self):
+        container = FakeContainer(FakeStore())
+        container.github_budget = lambda: FakeGithubBudget(
+            remaining=4261, limit=5000, reset=1792503970)
+        cli.set_container(container)
+
+        rc, out, err = call(cli.cmd_doctor)
+
+        self.assertEqual(rc, 0)
+        self.assertRegex(out, r"github: ok - 4261/5000 remaining, resets at \d\d:\d\d:\d\d")
 
     def test_failing_origin_reports_in_origin_category(self):
         source = FakeWorkflowSource()

@@ -1,3 +1,4 @@
+from tests.support.fake_github_budget import FakeGithubBudget
 import os
 import tempfile
 import unittest
@@ -110,7 +111,7 @@ class _Worktrees:
 def _uc(store, source, config, bundle):
     return DoctorUseCase(
         store, source, config, bundle, FakeFs(), FakeMachine(), _Worktrees(),
-        FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False))
+        FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False), FakeGithubBudget())
 
 
 class TestAllKeysCoversEverySeedKey(unittest.TestCase):
@@ -522,6 +523,38 @@ class TestDoctorUseCase(unittest.TestCase):
         self.assertEqual(report.problems["store"][0].node_id, item)
 
 
+class TestDoctorGithubBudget(unittest.TestCase):
+    def _report(self, budget):
+        source = FakeWorkflowSource()
+        source.add_bundle("acme", "sha1", 1, current=True)
+        return DoctorUseCase(
+            FakeStore(), source, _cfg(**_ALL_KEYS), FakeWorkflowBundle(), FakeFs(), FakeMachine(),
+            _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(),
+            FakeLock(running=False), budget).execute(DoctorInput())
+
+    def test_a_known_budget_above_the_reserve_is_ok_with_the_figures(self):
+        report = self._report(FakeGithubBudget(remaining=4261, limit=5000, reset=1792503970))
+
+        self.assertEqual(report.problems["github"], [])
+        self.assertTrue(report.notes["github"].startswith("ok - 4261/5000 remaining, resets at "))
+
+    def test_a_low_budget_is_one_problem_naming_the_figures(self):
+        report = self._report(FakeGithubBudget(low=True, remaining=300, limit=5000, reset=1792503970))
+
+        messages = [p.message for p in report.problems["github"]]
+        self.assertEqual(len(messages), 1)
+        self.assertTrue(messages[0].startswith("github budget low: 300 of 5000 remaining, resets at "))
+        self.assertIn("github-heavy steps are not being claimed", messages[0])
+        self.assertFalse(report.healthy())
+
+    def test_no_reading_adds_nothing(self):
+        report = self._report(FakeGithubBudget())
+
+        self.assertEqual(report.problems["github"], [])
+        self.assertEqual(report.notes, {})
+        self.assertTrue(report.healthy())
+
+
 class TestDoctorOrphans(unittest.TestCase):
     def _report(self, store, fs, machine, worktrees):
         source = FakeWorkflowSource()
@@ -529,7 +562,7 @@ class TestDoctorOrphans(unittest.TestCase):
         config = _cfg(**_ALL_KEYS)
         return DoctorUseCase(
             store, source, config, FakeWorkflowBundle(), fs, machine, worktrees,
-            FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False)).execute(DoctorInput())
+            FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False), FakeGithubBudget()).execute(DoctorInput())
 
     def test_worktree_matching_a_claimed_items_path_reports_no_problem(self):
         store = FakeStore()
@@ -627,7 +660,7 @@ class TestDoctorFacets(unittest.TestCase):
         source.add_bundle("acme", "sha1", 1, current=True)
         report = DoctorUseCase(
             store, source, _cfg(**_ALL_KEYS), FakeWorkflowBundle(), fs, FakeMachine(), _Worktrees(),
-            git if git is not None else FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False)).execute(DoctorInput())
+            git if git is not None else FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False), FakeGithubBudget()).execute(DoctorInput())
         return report.problems["facets"]
 
     def _kb(self, *pages):
@@ -770,7 +803,7 @@ def _schedule_doctor(blocks, known=None, projects=("acme/app",), origin="acme"):
     config = _ScheduleConfig(_cfg(**_ALL_KEYS), blocks)
     uc = DoctorUseCase(
         store, _ScheduleSource(known, origin), config, _ScheduleBundle(known), FakeFs(),
-        FakeMachine(), _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False))
+        FakeMachine(), _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False), FakeGithubBudget())
     return uc.execute(DoctorInput())
 
 
@@ -809,7 +842,8 @@ class TestDoctorSchedules(unittest.TestCase):
     def test_the_json_category_keys_are_unchanged(self):
         self.assertEqual(
             set(_schedule_doctor({}).problems),
-            {"store", "pins", "contract", "origin", "config", "orphans", "facets", "guidance"})
+            {"store", "pins", "contract", "origin", "config", "orphans", "facets", "guidance",
+             "github"})
 
     def test_an_off_schedule_is_not_a_finding(self):
         report = _schedule_doctor({"weekly": _block(enabled="false", guard="shell-out")})
@@ -882,7 +916,7 @@ def _lifecycle_doctor(known, config_text="", present=("acme/scripts/install.sh",
     uc = DoctorUseCase(
         FakeStore(), _ScheduleSource(known), config, _ScheduleBundle(known), fs,
         FakeMachine(), _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(),
-        FakeConfigReloadStatus(), FakeLock(running=False))
+        FakeConfigReloadStatus(), FakeLock(running=False), FakeGithubBudget())
     return uc.execute(DoctorInput())
 
 
@@ -958,7 +992,7 @@ class TestDoctorWorkflowLifecycle(unittest.TestCase):
         uc = DoctorUseCase(
             FakeStore(), source, config, _ScheduleBundle(known), FakeFs(), FakeMachine(),
             _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(),
-            FakeLock(running=False))
+            FakeLock(running=False), FakeGithubBudget())
         messages = [p.message for p in uc.execute(DoctorInput()).problems["config"]]
         self.assertTrue(any("workflow-acme-b-c" in m for m in messages), messages)
 
@@ -975,7 +1009,7 @@ class TestReloadProblems(unittest.TestCase):
             FakeStore(), source, config, FakeWorkflowBundle(), FakeFs(), FakeMachine(),
             _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(),
             FakeConfigReloadStatus(dict(state, pid=pid)),
-            FakeLock(running=True, pid=4242),
+            FakeLock(running=True, pid=4242), FakeGithubBudget(),
         ).execute(DoctorInput()).problems["config"]
 
     def _rejected(self, **kw):

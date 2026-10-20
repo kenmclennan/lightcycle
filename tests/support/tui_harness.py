@@ -17,6 +17,8 @@ from lightcycle.adapters.lock import RunLockAdapter
 from lightcycle.adapters.machine import MachineAdapter
 from lightcycle.adapters.guidance_sync_status import GuidanceSyncStatusAdapter
 from lightcycle.adapters.config_reload_status import ConfigReloadStatusAdapter
+from lightcycle.adapters.gh_shim import GhShimAdapter
+from lightcycle.adapters.github_budget_status import GithubBudgetStatusAdapter
 from lightcycle.adapters.memory_gate_status import MemoryGateStatusAdapter
 from lightcycle.adapters.scaffold import ScaffoldAdapter
 from lightcycle.adapters.spawner import SpawnerAdapter
@@ -44,6 +46,8 @@ from lightcycle.adapters.tui.design_system import ACTIVE_GLYPH_REST_INDEX
 from lightcycle.adapters.tui.hub import NodeHubScreen
 from tests.support.fake_drain import FakeDrain
 from tests.support.fake_fs import FakeFs
+from tests.support.fake_gh_shim import FakeGhShim
+from tests.support.fake_github_budget_status import FakeGithubBudgetStatus
 from tests.support.fake_github import FakeGitHub
 from tests.support.fake_machine import FakeMachine
 from tests.support.fake_store import FakeStore
@@ -283,6 +287,8 @@ _LIVE_ADAPTER_TYPES = {
     "scaffold": ScaffoldAdapter,
     "machine": MachineAdapter,
     "memory_gate_status": MemoryGateStatusAdapter,
+    "github_budget_status": GithubBudgetStatusAdapter,
+    "gh_shim": GhShimAdapter,
     "config_reload_status": ConfigReloadStatusAdapter,
     "guidance_sync_status": GuidanceSyncStatusAdapter,
 }
@@ -301,6 +307,7 @@ def make_test_container(store=None, lock=None, breaker=None, fs=None, workers=No
                          launcher=None, git=None, spawner=None, github=None, backup=None,
                          workflow_bundle=None, worker_log=None, autostart_pool=False,
                          machine=None, memory_gate_status=None, guidance_sync_status=None,
+                         github_budget_status=None,
                          tui_metrics=False,
                          upgrade_check_seconds=3600, drain=None, config_reload_status=None):
     fs_double = fs or FakeFs()
@@ -334,6 +341,11 @@ def make_test_container(store=None, lock=None, breaker=None, fs=None, workers=No
         memory_gate_status=(
             memory_gate_status if memory_gate_status is not None else FakeMemoryGateStatus()
         ),
+        github_budget_status=(
+            github_budget_status if github_budget_status is not None
+            else FakeGithubBudgetStatus()
+        ),
+        gh_shim=FakeGhShim(),
         guidance_sync_status=(
             guidance_sync_status if guidance_sync_status is not None
             else FakeGuidanceSyncStatus()

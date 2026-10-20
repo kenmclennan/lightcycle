@@ -19,11 +19,13 @@ class TraceNode:
     log: Optional[str]
     role: Optional[str]
     artifacts: List[Artifact] = field(default_factory=list)
+    api_calls: Optional[int] = None
 
     def as_dict(self):
         return {
             "id": self.id, "step": self.step, "state": self.state, "log": self.log,
             "role": self.role, "artifacts": [a.as_dict() for a in self.artifacts],
+            "api_calls": self.api_calls,
         }
 
 
@@ -73,6 +75,7 @@ class TraceUseCase:
             TraceNode(
                 id=kt.id, step=kt.stage, state=kt.state, log=self._log_for_step(kt),
                 role=kt.role, artifacts=self._store.item_artifacts(kt.id),
+                api_calls=kt.usage_api_calls,
             )
             for kt in self._store.children(input.item)
         ]

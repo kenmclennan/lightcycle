@@ -13,6 +13,8 @@ from lightcycle.application.pool.no_op_gates import (
     NoOpMonitor,
     NoOpConfigReload,
     NoOpLifecycleGate,
+    NoOpGhCallGate,
+    NoOpGithubBudget,
     NoOpGithubPollGate,
     NoOpScriptGate,
     NoOpScheduleGate,
@@ -296,6 +298,7 @@ def _pool_ticks(ctx):
         github_poll_gate=NoOpGithubPollGate(),
         config_reload=NoOpConfigReload(),
         guidance_gate=NoOpGuidanceGate(),
+        github_budget=NoOpGithubBudget(), gh_call_gate=NoOpGhCallGate(),
     )
     ctx["tick_result"] = tick.execute(TickInput(now=ctx["now"]))
     ctx["spawner"] = spawner

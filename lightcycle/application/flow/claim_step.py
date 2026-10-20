@@ -21,7 +21,7 @@ class ClaimInput:
     stage: Optional[str] = None
 
 
-_STRUCTURAL_META_KEYS = ("model", "accepts", "produces", "presents", "detail")
+_STRUCTURAL_META_KEYS = ("model", "accepts", "produces", "presents", "detail", "github")
 
 
 @dataclass(frozen=True)
@@ -56,7 +56,8 @@ class ClaimResponse:
 
 
 class ClaimStepUseCase:
-    def __init__(self, store, flow, worktrees, workers, config):
+    def __init__(self, store, flow, worktrees, workers, config, github_budget):
+        self._github_budget = github_budget
         self._store = store
         self._flow = flow
         self._worktrees = worktrees
@@ -88,7 +89,11 @@ class ClaimStepUseCase:
 
     def _claim(self, role, item=None, stage=None):
         spawnid = self._config.spawn_id()
-        t = self._store.claim_ready(role, spawnid or role, item=item, stage=stage)
+        exclude = ()
+        if self._github_budget.reading().low:
+            exclude = tuple(sorted(self._github_budget.held(self._store.ready_steps())))
+        t = self._store.claim_ready(
+            role, spawnid or role, item=item, stage=stage, exclude=exclude)
         if t is None:
             return None
         selection = self._flow.workflow_for(t)

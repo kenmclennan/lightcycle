@@ -5,6 +5,7 @@ import sys
 import time
 import uuid
 
+from lightcycle.adapters.gh_shim import ensure_gh_shim
 from lightcycle.adapters.workers import process_start_time, register_worker, set_pid_started
 from lightcycle.domain.work.worker_log import worker_log_filename
 from lightcycle.ports.spawner import SpawnerPort
@@ -31,6 +32,7 @@ def spawn_worker(config, role):
                LC_MAX_AGENTS=str(config.max_agents()))
     pkg_parent = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     env["PYTHONPATH"] = os.pathsep.join(p for p in (pkg_parent, env.get("PYTHONPATH", "")) if p)
+    env["PATH"] = os.pathsep.join([ensure_gh_shim(root), env.get("PATH") or os.defpath])
     override = config.spawn_cmd()
     with open(log, "a") as logf:
         if override:

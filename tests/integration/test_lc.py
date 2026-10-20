@@ -128,6 +128,7 @@ def write_config(projects=None, specs=None):
         "spin-cap: 3",
         "poll-seconds: 5",
         "github-poll-seconds: 60",
+        "github-reserve-calls: 750",
         "worker-history: 20",
         "editor: vi",
         "audit-shortcode: AUD",
@@ -1795,6 +1796,18 @@ class TestTrace(unittest.TestCase):
         self.assertIn("artifact pr [spec]: https://github.com/x/y/pull/1", out2)
         self.assertIn("artifact pr [code]: https://github.com/x/y/pull/2", out2)
 
+    def test_trace_text_shows_each_steps_call_count_and_a_dash_when_never_metered(self):
+        rc, out, err = call(_file_compat, "specs/Z.md", "--step", "build", "--workflow", "lightcycle/spec-driven")
+        sid = out.strip()
+        step = self.store.children(sid)[0].id
+
+        _rc, before, _err = call(_cli_mod.cmd_trace, sid)
+        self.store.record_gh_calls("sp-1", step, 4)
+        _rc, after, _err = call(_cli_mod.cmd_trace, sid)
+
+        self.assertIn("  calls:-", before)
+        self.assertIn("  calls:4", after)
+
     def test_trace_of_a_step_id_refuses_naming_the_parent_item(self):
         rc, out, err = call(_file_compat, "specs/Z.md", "--step", "build", "--workflow", "lightcycle/spec-driven")
         sid = out.strip()
@@ -3422,6 +3435,16 @@ class TestNodeDTOReadSurface(unittest.TestCase):
         self.assertEqual(d["id"], tid)
         for field in self.AGENT_CONSUMED_FIELDS:
             self.assertIn(field, d, "lc claim dropped field: %s" % field)
+
+    def test_show_surfaces_the_steps_api_call_count(self):
+        tid = self._make_task()
+        rc, out, err = call(_cli_mod.cmd_show, tid)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("usage_api_calls", json.loads(out))
+        self.assertIsNone(json.loads(out)["usage_api_calls"])
+        self.store.record_gh_calls("sp-1", tid, 3)
+        rc, out, err = call(_cli_mod.cmd_show, tid)
+        self.assertEqual(json.loads(out)["usage_api_calls"], 3)
 
     STEP_MODEL_FIELDS = (
         "inputs", "outputs", "records", "detail", "detail_presents", "report",

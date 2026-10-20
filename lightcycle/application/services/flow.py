@@ -213,6 +213,9 @@ class FlowService:
     def flow_next(self, step, outcome, name=None):
         return self.load_flow(name).next(step, outcome)
 
+    def is_github_heavy(self, step):
+        return self.flow_for(step).step_def(step.stage).github_heavy
+
     def meta_for_step(self, stage, name=None):
         graph, root = self._graph_and_root(name)
         a = self._workflow_bundle.parse_step(graph.file_for(stage), self._with_engine_fragments(root))

@@ -1,6 +1,7 @@
 from lightcycle.application.pool.backup import BackupResponse
 from lightcycle.application.pool.breaker_gate import BreakerGateResponse
 from lightcycle.application.pool.hook_completions import HookCompletionsResponse
+from lightcycle.application.pool.github_budget import GithubBudgetReading
 from lightcycle.application.pool.guidance_sync import GuidanceSyncResponse
 from lightcycle.application.pool.lifecycle_cadence import LifecycleCadenceResponse
 from lightcycle.application.pool.memory_gate import MemoryGateResponse
@@ -43,6 +44,19 @@ class NoOpGithubPollGate:
 
     def execute(self, now):
         return False
+
+
+class NoOpGithubBudget:
+    def reading(self):
+        return GithubBudgetReading(False, None, None, None, 0, False)
+
+    def held(self, steps):
+        return frozenset()
+
+
+class NoOpGhCallGate:
+    def execute(self):
+        return None
 
 
 class NoOpScriptGate:
