@@ -178,6 +178,23 @@ class TestFailureBounds(unittest.TestCase):
         h.uc.execute()
         self.assertEqual(len(github.update_calls), 2)
 
+    def test_closed_gate_drops_its_state_and_a_later_gate_is_evaluated_afresh(self):
+        github, url = _behind(10, head="h1", failing_calls={"update_branch"})
+        h = _Harness(github)
+        item, step = h.gate(url)
+
+        h.uc.execute()
+        h.uc.execute()
+        self.assertEqual(len(github.update_calls), 1)
+
+        h.store.update_state(step, "done")
+        h.uc.execute()
+        self.assertEqual(h.uc._attempted, set())
+
+        _, reopened = h.gate(url)
+        h.uc.execute()
+        self.assertEqual(len(github.update_calls), 2)
+
     def test_head_moved_between_read_and_update_fails_closed(self):
         github, url = _behind(8, head="h1")
         real = github.pr_sync_state
