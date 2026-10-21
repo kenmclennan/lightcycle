@@ -106,6 +106,9 @@ class FakeWorktreesForRemove:
             return []
         return [(self._target, self.worktree_path(item))]
 
+    def unmerged_refusals(self, item, merged_prs=frozenset()):
+        return []
+
     def remove(self, item):
         self.removed.append(item)
 

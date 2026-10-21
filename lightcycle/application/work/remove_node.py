@@ -80,6 +80,12 @@ class RemoveNodeUseCase:
                     "refusing to delete %s: worktree has uncommitted changes "
                     "- commit or discard, or use --force" % node.id
                 )
+            unmerged = self._worktrees.unmerged_refusals(node.id)
+            if unmerged:
+                raise UseCaseError(
+                    "refusing to delete %s: %s - merge or push the work, or use --force"
+                    % (node.id, "; ".join(unmerged))
+                )
 
         steps_removed = 0
         with self._store.transaction():
