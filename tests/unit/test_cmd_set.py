@@ -165,7 +165,7 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
 class TestRenderFieldRefusalOfNoStructure(unittest.TestCase):
     def test_a_field_owned_by_neither_structure_says_so(self):
         refusal = FieldRefusal(fields=("goal",), requested_type="item", owner=None)
-        self.assertEqual(intake_cmds._render_field_refusal(refusal), "--goal belongs to no structure")
+        self.assertEqual(intake_cmds.render_field_refusal(refusal), "--goal belongs to no structure")
 
 
 class TestCmdSetEmptyStringIsNeverAValue(unittest.TestCase):

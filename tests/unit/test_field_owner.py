@@ -3,8 +3,8 @@ import unittest
 from lightcycle.cli_commands import flags_by_verb
 from lightcycle.domain.work import (
     DONE_FIELDS_BY_TYPE, FIELDS_BY_TYPE, FieldRefusal, StateRefusal, refuse_fields, refuse_state,
-    render_field_refusal,
 )
+from lightcycle.commands.intake import render_field_refusal
 
 
 class TestRefuseFields(unittest.TestCase):
