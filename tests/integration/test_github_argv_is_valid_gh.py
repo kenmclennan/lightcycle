@@ -15,7 +15,8 @@ def _captured_argvs():
 
     def _record(argv, *a, **kw):
         calls.append(list(argv))
-        return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+        stdout = '{"headRefOid": "deadbeef"}' if "headRefOid" in argv else ""
+        return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
 
     with patch("lightcycle.adapters.github.subprocess.run", side_effect=_record):
         adapter.is_merged(_PR)
@@ -44,6 +45,7 @@ class TestEveryGhArgvParses(unittest.TestCase):
     def test_gh_accepts_every_flag_the_adapter_passes(self):
         argvs = _captured_argvs()
         self.assertTrue(argvs)
+        self.assertTrue(any("/repos/acme/widget/commits/deadbeef" in a for argv in argvs for a in argv))
 
         rejected = []
         for argv in argvs:

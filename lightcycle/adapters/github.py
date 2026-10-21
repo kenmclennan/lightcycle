@@ -78,12 +78,17 @@ class GitHubEventsAdapter(GitHubEventsPort):
         parts = _repo_parts(pr)
         if not parts:
             return ReadFailure(-1, "pr is not a parseable GitHub PR URL: %r" % pr)
-        owner, repo, number = parts
+        owner, repo, _number = parts
+        sha = self.head_sha(pr)
+        if isinstance(sha, ReadFailure):
+            return sha
+        if not sha:
+            return ReadFailure(-1, "gh returned no head sha for %r" % pr)
         try:
             result = subprocess.run(
                 [
-                    "gh", "api", "/repos/%s/%s/pulls/%s/commits" % (owner, repo, number),
-                    "--jq", ".[-1].commit.committer.date // empty",
+                    "gh", "api", "/repos/%s/%s/commits/%s" % (owner, repo, sha),
+                    "--jq", ".commit.committer.date // empty",
                 ],
                 capture_output=True,
                 text=True,
@@ -117,7 +122,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
             r = subprocess.run(
                 [
                     "gh", "api", "--paginate",
-                    "/repos/%s/%s/issues/%s/comments" % (owner, repo, number),
+                    "/repos/%s/%s/issues/%s/comments?per_page=100" % (owner, repo, number),
                     "--jq", jq,
                 ],
                 capture_output=True,
@@ -165,7 +170,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
             r = subprocess.run(
                 [
                     "gh", "api", "--paginate",
-                    "/repos/%s/%s/pulls/%s/comments" % (owner, repo, number),
+                    "/repos/%s/%s/pulls/%s/comments?per_page=100" % (owner, repo, number),
                     "--jq", jq,
                 ],
                 capture_output=True,
@@ -269,23 +274,21 @@ class GitHubEventsAdapter(GitHubEventsPort):
         if not parts:
             return ReadFailure(-1, "pr is not a parseable GitHub PR URL: %r" % pr)
         owner, repo, _number = parts
-        try:
-            result = subprocess.run(
-                [
-                    "gh", "api", "/repos/%s/%s/commits/%s/check-runs" % (owner, repo, sha),
-                    "--jq", "[.check_runs[]|{name,status,conclusion,started_at,url:.html_url}]",
-                ],
-                capture_output=True, text=True,
-                timeout=_GH_TIMEOUT_SECONDS,
+        rows = self._gh_api_lines(
+            "/repos/%s/%s/commits/%s/check-runs?per_page=100" % (owner, repo, sha),
+            ".total_count as $total | .check_runs[] | "
+            "{name,status,conclusion,started_at,url:.html_url,total:$total}",
+            paginate=True,
+        )
+        if isinstance(rows, ReadFailure):
+            return rows
+        data = rows
+        if data and any(c.get("total") != len(data) for c in data):
+            return ReadFailure(
+                -1,
+                "check-runs total_count %s does not match the %d runs returned"
+                % (data[0].get("total"), len(data)),
             )
-        except subprocess.TimeoutExpired:
-            return _timeout_read_failure()
-        if result.returncode != 0:
-            return ReadFailure(result.returncode, result.stderr)
-        try:
-            data = json.loads(result.stdout)
-        except (json.JSONDecodeError, ValueError):
-            return ReadFailure(-1, "could not parse gh api check-runs JSON")
         return tuple(
             CheckRun(
                 name=c.get("name") or "",
@@ -314,7 +317,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
             r = subprocess.run(
                 [
                     "gh", "api", "--paginate",
-                    "/repos/%s/%s/pulls/%s/reviews" % (owner, repo, number),
+                    "/repos/%s/%s/pulls/%s/reviews?per_page=100" % (owner, repo, number),
                     "--jq", jq,
                 ],
                 capture_output=True,
