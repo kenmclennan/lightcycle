@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from lightcycle.application.errors import UseCaseError
+from lightcycle.application.errors import FieldRefusalError
 from lightcycle.application.work.title_guard import validate_title
-from lightcycle.domain.work import refuse_fields, render_field_refusal
+from lightcycle.domain.work import refuse_fields
 
 _EDIT_FIELDS = ("title", "description", "project", "workflow", "label", "notes")
 
@@ -34,7 +34,7 @@ class EditNodeUseCase:
         given = {f for f in _EDIT_FIELDS if getattr(input, f) is not None}
         refusal = refuse_fields(self._store.type_of(input.step), given)
         if refusal is not None:
-            raise UseCaseError(render_field_refusal(refusal))
+            raise FieldRefusalError(refusal)
         with self._store.transaction():
             tid = self._store.edit_node(
                 input.step,

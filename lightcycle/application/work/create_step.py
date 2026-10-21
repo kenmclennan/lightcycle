@@ -1,10 +1,10 @@
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-from lightcycle.application.errors import UseCaseError
+from lightcycle.application.errors import FieldRefusalError, UseCaseError
 from lightcycle.application.flow.passes import PassBook
 from lightcycle.application.work.title_guard import validate_title
-from lightcycle.domain.work import refuse_fields, render_field_refusal
+from lightcycle.domain.work import refuse_fields
 
 
 @dataclass(frozen=True)
@@ -60,7 +60,7 @@ class CreateStepUseCase:
                 % (input.step, ", ".join(flow.steps()) or "(none)")
             )
         if input.title.strip():
-            raise UseCaseError(render_field_refusal(refuse_fields("step", ("title",))))
+            raise FieldRefusalError(refuse_fields("step", ("title",)))
         with self._store.transaction():
             tid = self._store.create_step(stage=input.step, role=role, item=input.parent)
             if input.note:

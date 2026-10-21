@@ -9,7 +9,7 @@ from lightcycle.application.feedback import (
 from lightcycle.domain.goals import goal_log_stamp
 from lightcycle.domain.work import (
     ALLOWED_STATES_BY_FLAG, FIELDS_BY_TYPE, FieldRefusal, State,
-    UNSETTABLE_FIELDS, UNSET_REFUSAL_REASONS, all_states, missing_for_state, refuse_fields, refuse_state, render_cap_refusal, render_field_refusal,
+    UNSETTABLE_FIELDS, UNSET_REFUSAL_REASONS, all_states, missing_for_state, refuse_fields, refuse_state, render_cap_refusal,
 )
 from lightcycle.domain.work.state import ALIASES
 from lightcycle.application.goals import (
@@ -45,7 +45,7 @@ from lightcycle.application.work import (
     RemoveNodeInput,
     RemoveNodeUseCase,
 )
-from lightcycle.application.errors import UseCaseError
+from lightcycle.application.errors import FieldRefusalError, UseCaseError
 from lightcycle.application.flow import (
     BlockInput,
     BlockStepUseCase,
@@ -85,6 +85,9 @@ def cmd_new(argv):
                     workflow=a.workflow, repo=a.repo, backlog=a.backlog,
                 )
             )
+        except FieldRefusalError as e:
+            sys.stderr.write("%s\n" % render_field_refusal(e.refusal))
+            return 1
         except UseCaseError as e:
             sys.stderr.write("%s\n" % e)
             return 1
@@ -262,12 +265,18 @@ def _named(node_type):
 
 def _render_refusal(refusal):
     if isinstance(refusal, FieldRefusal):
-        return _render_field_refusal(refusal)
+        return render_field_refusal(refusal)
     return _render_state_refusal(refusal)
 
 
-def _render_field_refusal(r):
-    return render_field_refusal(r)
+def render_field_refusal(refusal):
+    named = ", ".join("--%s" % f for f in refusal.fields)
+    verb = "belong" if len(refusal.fields) > 1 else "belongs"
+    if refusal.owner is None:
+        return "%s %s to no structure" % (named, verb)
+    return "%s %s to %s, not %s" % (
+        named, verb, _named(refusal.owner), _named(refusal.requested_type),
+    )
 
 
 def _render_state_refusal(r):
@@ -399,6 +408,9 @@ def cmd_set(argv):
                           project=effective_project, workflow=workflow_pin,
                           label=a.label, notes=effective_notes)
         ).id
+    except FieldRefusalError as e:
+        sys.stderr.write("%s\n" % render_field_refusal(e.refusal))
+        return 1
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
         return 1

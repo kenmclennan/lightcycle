@@ -21,7 +21,6 @@ from lightcycle.domain.work.field_owner import (
     ALLOWED_STATES_BY_FLAG, DONE_FIELDS_BY_TYPE, FIELDS_BY_TYPE, FieldRefusal,
     REQUIRED_WITH_STATE, STATES_BY_TYPE, StateRefusal, UNSETTABLE_FIELDS,
     UNSET_REFUSAL_REASONS, all_states, missing_for_state, refuse_fields, refuse_state,
-    render_field_refusal,
 )
 from lightcycle.domain.work.item import Item
 from lightcycle.domain.work.park import Park
@@ -64,7 +63,7 @@ __all__ = [
     "ALLOWED_STATES_BY_FLAG", "DONE_FIELDS_BY_TYPE", "FIELDS_BY_TYPE", "FieldRefusal",
     "REQUIRED_WITH_STATE", "STATES_BY_TYPE", "StateRefusal", "UNSETTABLE_FIELDS",
     "UNSET_REFUSAL_REASONS",
-    "all_states", "missing_for_state", "refuse_fields", "refuse_state", "render_field_refusal",
+    "all_states", "missing_for_state", "refuse_fields", "refuse_state",
     "Item", "LogKind", "LogLine", "NodeQueue", "NodeSpec", "NodeView", "Park",
     "SlowKind", "SlowStep", "StageBaseline", "slow_steps",
     "Step", "compose_step_title", "format_step_id", "node_id_key",

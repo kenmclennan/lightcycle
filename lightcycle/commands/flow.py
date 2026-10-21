@@ -5,7 +5,7 @@ import time
 from lightcycle.cli_commands import COMMANDS, build_parser
 
 from lightcycle.domain.work import (
-    DONE_FIELDS_BY_TYPE, refuse_fields, render_field_refusal,
+    DONE_FIELDS_BY_TYPE, refuse_fields,
 )
 from lightcycle.application.work.close_item import TeardownRefused
 from lightcycle.application.work import (
@@ -27,7 +27,7 @@ from lightcycle.ports.workers import RegistryUnreadable
 
 
 from lightcycle.commands.context import container, flow as _flow, worktrees as _worktrees
-from lightcycle.commands.intake import _refuse_over_cap
+from lightcycle.commands.intake import _refuse_over_cap, render_field_refusal
 
 
 def cmd_claim(argv):
