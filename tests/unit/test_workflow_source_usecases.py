@@ -747,6 +747,7 @@ class TestInit(unittest.TestCase):
         ).execute("acme")
         with open(os.path.join(project_dir, ".github", "workflows", "simulate.yml")) as f:
             content = f.read()
+        self.assertIn("    timeout-minutes: 20\n", content)
         self.assertEqual(content, """name: simulate
 
 on:
@@ -762,6 +763,7 @@ env:
 jobs:
   simulate:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
