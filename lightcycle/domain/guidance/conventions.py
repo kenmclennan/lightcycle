@@ -1,6 +1,6 @@
 import re
 
-CONVENTIONS_VERSION = 2
+CONVENTIONS_VERSION = 3
 
 CONVENTIONS_TEXT = """# Conventions
 
@@ -19,6 +19,7 @@ This guidance repo follows the Open Knowledge Format (OKF) 0.2 with the lightcyc
 - Every guidance entry carries three required front-matter fields, each one non-empty line, none delivered to a worker: `purpose` (the problem the entry solves), `when` (the circumstances in which it helps) and `why` (why this approach over the alternatives).
 - An entry names no item id anywhere in the file. Where a finding came from lives on the `guidance-entry` item.
 - A change that touches only `purpose`, `when` and `why` leaves `status`, `verified` and the body byte-identical, and the entry keeps its `stable` status.
+- `moved-to: <entry id>` is a plain scalar a `status: deprecated` entry may carry to name the entry that replaces it. The old path stays as a stub, since delivery history keys on the id.
 - `covers: <issue url>` marks an entry that stands in for an upstream fix until that issue ships.
 
 ## Facets
@@ -29,7 +30,7 @@ A facet is valid only when this repo has a concept page named for it, anywhere i
 
 - `status: stable` is delivered once it is on the default branch. Merging the pull request that sets it is the human approval. `verified` is optional free text and is ignored for delivery.
 - `status: draft` is never delivered.
-- `status: deprecated` is retired and never delivered.
+- `status: deprecated` is retired and never delivered. To move an entry, write it at the new path and leave the old path as a deprecated stub with `moved-to`.
 
 ## Delivery
 
@@ -57,6 +58,8 @@ Both modes run the same rules:
 8. A missing or empty `purpose`, `when` or `why` fails, one failure per field.
 9. An item id anywhere in the file fails, one failure per match.
 10. A changed file without `type: Guidance` that no changed entry names as a facet fails.
+11. `moved-to` on an entry whose status is not `deprecated` fails.
+12. `moved-to` naming an id with no entry file in the tree fails.
 """
 
 STEP = re.compile(r"^([a-z0-9][a-z0-9-]*/)?[a-z0-9][a-z0-9-]*$")
@@ -110,7 +113,7 @@ def is_checked_path(path):
     return path.endswith(".md") and name not in SKIPPED_NAMES
 
 
-def check_entries(mode, changed, deleted, facet_pages, read_head, read_base):
+def check_entries(mode, changed, deleted, facet_pages, entry_ids, read_head, read_base):
     failures = []
 
     for path in deleted:
@@ -152,6 +155,11 @@ def check_entries(mode, changed, deleted, facet_pages, read_head, read_base):
         for field in CONTEXT:
             if not top.get(field):
                 failures.append("%s: missing or empty front-matter field '%s'" % (path, field))
+        if "moved-to" in top:
+            if status != "deprecated":
+                failures.append("%s: moved-to is only allowed on a status: deprecated entry" % path)
+            elif top["moved-to"] not in entry_ids:
+                failures.append("%s: moved-to '%s' names no entry in the tree" % (path, top["moved-to"]))
         for found in item_ids(texts[path]):
             failures.append(
                 "%s: names item id '%s' - record its origin on the item's finding artifact instead"

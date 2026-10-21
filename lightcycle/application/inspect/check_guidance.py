@@ -52,5 +52,10 @@ class CheckGuidanceUseCase:
             for rel in self._fs.list_files(directory)
             if rel.endswith(".md")
         }
-        failures = check_entries(mode, changed, deleted, facet_pages, read_head, read_base)
+        entry_ids = {
+            rel[:-3]
+            for rel in self._fs.list_files(directory)
+            if is_checked_path(rel)
+        }
+        failures = check_entries(mode, changed, deleted, facet_pages, entry_ids, read_head, read_base)
         return failures, len(changed)

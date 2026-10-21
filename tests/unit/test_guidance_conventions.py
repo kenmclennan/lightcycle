@@ -24,7 +24,8 @@ def entry(status="draft", applies="  facets: [kotlin]\n  steps: [write-code]", e
 
 
 class Tree:
-    def __init__(self, head, base=None, pages=("kotlin",)):
+    def __init__(self, head, base=None, pages=("kotlin",), ids=None):
+        self.ids = ids
         self.head = head
         self.base = base or {}
         self.pages = set(pages)
@@ -32,6 +33,7 @@ class Tree:
     def check(self, mode, deleted=()):
         return check_entries(
             mode, list(self.head), list(deleted), self.pages,
+            set(self.ids if self.ids is not None else (p[:-3] for p in self.head)),
             lambda p: self.head[p], lambda p: self.base.get(p),
         )
 
@@ -41,25 +43,54 @@ class TestConventionsText(unittest.TestCase):
         lines = CONVENTIONS_TEXT.splitlines()
         self.assertEqual(lines[0], "# Conventions")
         self.assertEqual(lines[2], "Conventions version: %d" % CONVENTIONS_VERSION)
-        self.assertEqual(CONVENTIONS_VERSION, 2)
+        self.assertEqual(CONVENTIONS_VERSION, 3)
 
     def test_text_names_every_rule_and_no_item_id(self):
         self.assertEqual(item_ids(CONVENTIONS_TEXT), [])
         self.assertIn("## Checks", CONVENTIONS_TEXT)
-        for n in range(1, 11):
+        for n in range(1, 13):
             self.assertIn("\n%d. " % n, CONVENTIONS_TEXT)
-        self.assertNotIn("\n11. ", CONVENTIONS_TEXT)
+        self.assertNotIn("\n13. ", CONVENTIONS_TEXT)
         for word in ("purpose", "when", "why", "item id"):
             self.assertIn(word, CONVENTIONS_TEXT)
 
-    def test_text_is_version_two_and_drops_the_verified_rules(self):
-        self.assertIn("Conventions version: 2", CONVENTIONS_TEXT)
+    def test_text_states_the_moved_to_field_and_rule(self):
+        self.assertIn("- `moved-to: <entry id>`", CONVENTIONS_TEXT)
+        self.assertIn("\n11. `moved-to`", CONVENTIONS_TEXT)
+
+    def test_text_is_version_three_and_drops_the_verified_rules(self):
+        self.assertIn("Conventions version: 3", CONVENTIONS_TEXT)
         for removed in (
             "fails unless the entry is context-only",
             "with an empty or missing `verified` fails",
             "Context-only means",
         ):
             self.assertNotIn(removed, CONVENTIONS_TEXT)
+
+
+class TestMovedTo(unittest.TestCase):
+    def test_deprecated_stub_naming_an_existing_entry_passes(self):
+        head = {"old.md": entry(status="deprecated", extra="moved-to: new\n"), "new.md": entry()}
+        self.assertEqual(Tree(head).check("final"), [])
+
+    def test_moved_to_naming_a_missing_id_fails_naming_it(self):
+        head = {"old.md": entry(status="deprecated", extra="moved-to: gone/entry\n")}
+        failures = Tree(head).check("final")
+        self.assertEqual(len(failures), 1)
+        self.assertIn("gone/entry", failures[0])
+
+    def test_moved_to_on_a_stable_entry_fails(self):
+        head = {"old.md": entry(status="stable", extra="moved-to: new\n"), "new.md": entry()}
+        failures = Tree(head).check("final")
+        self.assertEqual(len(failures), 1)
+        self.assertIn("deprecated", failures[0])
+
+    def test_target_outside_the_changed_set_still_counts_when_in_the_tree(self):
+        head = {"old.md": entry(status="deprecated", extra="moved-to: elsewhere/new\n")}
+        self.assertEqual(Tree(head, ids={"old", "elsewhere/new"}).check("final"), [])
+
+    def test_deprecated_stub_without_moved_to_still_passes(self):
+        self.assertEqual(Tree({"old.md": entry(status="deprecated")}).check("final"), [])
 
 
 class TestParsingEdges(unittest.TestCase):

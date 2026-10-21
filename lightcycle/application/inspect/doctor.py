@@ -493,10 +493,14 @@ class DoctorUseCase:
             raw = self._git.read_file_at(root, ref, path)
             return "" if raw is None else raw.decode("utf-8", errors="replace")
 
+        entry_ids = {
+            rel[: -len(".md")] for rel in library.files(root)
+            if rel.endswith(".md") and rel.rsplit("/", 1)[-1] not in SKIPPED_NAMES
+        }
         failing = [
             path for path in paths
             if path.rsplit("/", 1)[-1] not in SKIPPED_NAMES
-            and check_entries("final", [path], [], pages, read_head, lambda p: None)
+            and check_entries("final", [path], [], pages, entry_ids, read_head, lambda p: None)
         ]
         if not failing:
             return []
