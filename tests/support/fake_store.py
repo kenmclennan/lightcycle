@@ -27,7 +27,7 @@ from lightcycle.domain.runs import Pass, PhaseRun, pass_id, run_id
 from lightcycle.domain.work.outputs import ArtifactRecord
 from lightcycle.domain.work import (
     Artifact, DailySummary, Item, NodeView, Park, State, Step, default_kind_for, derive_state,
-    merge_condition_note, role_state,
+    merge_condition_note,
 )
 
 _DEFAULT_CONTEXT_TYPES = frozenset({"spec"})
@@ -379,14 +379,6 @@ class FakeStore(StorePort):
             if run.pr:
                 present.add("pr")
         return present
-
-    def reassign(self, tid, role):
-        cur = getattr(self.get_node(tid), "role", None)
-        if cur and cur != role:
-            self.label_remove(tid, "for:%s" % cur)
-        self.label_add(tid, "for:%s" % role)
-        self.update_state(tid, role_state(role))
-        self.assign(tid, "")
 
     def closed_items(self):
         return [self._to_item(b) for b in self._records.values()

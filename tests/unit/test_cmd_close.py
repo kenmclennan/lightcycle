@@ -4,6 +4,7 @@ from unittest import mock
 from contextlib import redirect_stderr, redirect_stdout
 
 from lightcycle import cli
+from lightcycle.commands import flow as flow_cmds
 from tests.support.fake_store import FakeStore
 from tests.support.step_factory import create_owned_step
 
@@ -124,7 +125,7 @@ class TestCmdCloseRefusedByTheTeardownGuard(unittest.TestCase):
         self.store = FakeStore()
         self.container = _RefusingContainer(self.store)
         cli.set_container(self.container)
-        patcher = mock.patch.object(cli, "_worktrees", lambda: _RefusingWorktrees())
+        patcher = mock.patch.object(flow_cmds, "_worktrees", lambda: _RefusingWorktrees())
         patcher.start()
         self.addCleanup(patcher.stop)
 

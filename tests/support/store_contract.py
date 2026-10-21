@@ -1,5 +1,6 @@
 import datetime
 
+from lightcycle.application.flow.route_step import RouteStepService
 from lightcycle.domain.money import Cost
 from lightcycle.domain.pool import AttributionEvent, ModelRates, ToolUsage, UsageEvent, UsageResume
 from lightcycle.domain.work import NodeSpec
@@ -461,13 +462,13 @@ class StoreContractBase:
     def test_reassign_to_human_is_waiting(self):
         s = self.make_store()
         tid = self._step(s, "t", role="agent")
-        s.reassign(tid, "human")
+        RouteStepService(s).route(tid, "human")
         self.assertEqual(s.get_node(tid).state, "waiting")
 
     def test_reassign_to_an_agent_role_is_queued(self):
         s = self.make_store()
         tid = self._step(s, "t", role="human")
-        s.reassign(tid, "some-agent-role")
+        RouteStepService(s).route(tid, "some-agent-role")
         self.assertEqual(s.get_node(tid).state, "queued")
 
     def test_reclaim_is_queued(self):
@@ -499,8 +500,8 @@ class StoreContractBase:
         tid = self._step(s, "t", role="agent")
         claimed = s.claim_ready("agent")
         self.assertEqual(claimed.id, tid)
-        s.reassign(tid, "human")
-        s.reassign(tid, "agent")
+        RouteStepService(s).route(tid, "human")
+        RouteStepService(s).route(tid, "agent")
         reclaimed = s.claim_ready("agent")
         self.assertEqual(reclaimed.id, tid)
 
@@ -876,7 +877,7 @@ class StoreContractBase:
                 pending_tool_use={}, posted_turn_count=1,
                 posted_tool_usage={"Read": {"calls": 1, "bytes": 10}},
                 posted_input_tokens=5, posted_output_tokens=6, posted_cache_read_tokens=0,
-                posted_cache_creation_tokens=0, posted_cost_usd=1.0,
+                posted_cache_creation_tokens=0, posted_cost=Cost.from_usd(1.0),
             ),
             tid=tid, input_tokens=5, output_tokens=6, cache_read_tokens=0,
             cache_creation_tokens=0, cost_usd=1.0, cost_basis="list", thinking_tokens=None,
@@ -886,6 +887,7 @@ class StoreContractBase:
         self.assertEqual(state.offset, 100)
         self.assertEqual(state.message_ids, ["m1"])
         self.assertEqual(state.posted_input_tokens, 5)
+        self.assertEqual(state.posted_cost, Cost.from_usd(1.0))
         t = s.get_node(tid)
         self.assertEqual(t.usage_input_tokens, 5)
         self.assertEqual(t.turn_count, 1)
@@ -899,7 +901,7 @@ class StoreContractBase:
                 log_file="/l/x.log", offset=100, message_ids=["m1"],
                 pending_tool_use={}, posted_turn_count=1, posted_tool_usage={},
                 posted_input_tokens=5, posted_output_tokens=0, posted_cache_read_tokens=0,
-                posted_cache_creation_tokens=0, posted_cost_usd=0.0,
+                posted_cache_creation_tokens=0, posted_cost=Cost.from_usd(0.0),
             ),
             tid=tid, input_tokens=5, output_tokens=0, cache_read_tokens=0,
             cache_creation_tokens=0, cost_usd=0.0, cost_basis=None, thinking_tokens=None,
@@ -911,7 +913,7 @@ class StoreContractBase:
                 log_file="/l/x.log", offset=200, message_ids=["m1", "m2"],
                 pending_tool_use={}, posted_turn_count=1, posted_tool_usage={},
                 posted_input_tokens=10, posted_output_tokens=0, posted_cache_read_tokens=0,
-                posted_cache_creation_tokens=0, posted_cost_usd=0.0,
+                posted_cache_creation_tokens=0, posted_cost=Cost.from_usd(0.0),
             ),
             tid=tid, input_tokens=5, output_tokens=0, cache_read_tokens=0,
             cache_creation_tokens=0, cost_usd=0.0, cost_basis=None, thinking_tokens=None,
@@ -932,7 +934,7 @@ class StoreContractBase:
                 log_file="/l/x.log", offset=100, message_ids=[],
                 pending_tool_use={}, posted_turn_count=0, posted_tool_usage={},
                 posted_input_tokens=0, posted_output_tokens=0, posted_cache_read_tokens=0,
-                posted_cache_creation_tokens=0, posted_cost_usd=0.0,
+                posted_cache_creation_tokens=0, posted_cost=Cost.from_usd(0.0),
             ),
             tid=tid, input_tokens=0, output_tokens=0, cache_read_tokens=0,
             cache_creation_tokens=0, cost_usd=0.0, cost_basis=None, thinking_tokens=None,
@@ -1122,7 +1124,7 @@ class StoreContractBase:
     def test_waiting_history_returns_only_waiting_state_rows_across_all_nodes(self):
         s = self.make_store()
         parked = self._step(s, "parked", role="agent")
-        s.reassign(parked, "human")
+        RouteStepService(s).route(parked, "human")
         completed = self._step(s, "completed", role="agent")
         s.claim_ready("agent")
         s.complete_node(completed, "done")

@@ -242,20 +242,36 @@ class TestNoSpecLiteralInEngineCore(unittest.TestCase):
         self.assertEqual(offenders, [], "literal \"spec\" found in engine core: %s" % offenders)
 
 
+def _is_raw_fs_call(func):
+    if not isinstance(func, ast.Attribute):
+        return False
+    owner = func.value
+    if isinstance(owner, ast.Name) and owner.id in ("tempfile", "shutil"):
+        return True
+    return (
+        func.attr == "exists" and isinstance(owner, ast.Attribute) and owner.attr == "path"
+        and isinstance(owner.value, ast.Name) and owner.value.id == "os"
+    )
+
+
 class TestCliDoesNoRawFileIoOrProcessReplace(unittest.TestCase):
     def test_no_open_os_read_or_execvp_in_cli(self):
-        tree = ast.parse(CLI.read_text(), filename=str(CLI))
         offenders = []
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.Call):
-                continue
-            if isinstance(node.func, ast.Name) and node.func.id == "open":
-                offenders.append("cli.py:%d: open(...)" % node.lineno)
-            elif (
-                isinstance(node.func, ast.Attribute) and node.func.attr in ("read", "execvp")
-                and isinstance(node.func.value, ast.Name) and node.func.value.id == "os"
-            ):
-                offenders.append("cli.py:%d: os.%s(...)" % (node.lineno, node.func.attr))
+        for path in [CLI] + sorted((LIGHTCYCLE / "commands").glob("*.py")):
+            tree = ast.parse(path.read_text(), filename=str(path))
+            name = path.name
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                if isinstance(node.func, ast.Name) and node.func.id == "open":
+                    offenders.append("%s:%d: open(...)" % (name, node.lineno))
+                elif (
+                    isinstance(node.func, ast.Attribute) and node.func.attr in ("read", "execvp")
+                    and isinstance(node.func.value, ast.Name) and node.func.value.id == "os"
+                ):
+                    offenders.append("%s:%d: os.%s(...)" % (name, node.lineno, node.func.attr))
+                elif _is_raw_fs_call(node.func):
+                    offenders.append("%s:%d: raw filesystem call" % (name, node.lineno))
         self.assertEqual(offenders, [])
 
 

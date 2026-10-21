@@ -1,50 +1,35 @@
 import datetime
-import json
 import os
 import sqlite3
 import sys
 import time
 from contextlib import contextmanager
-from dataclasses import asdict
 
 from lightcycle.adapters.fsio import DB_FILENAME
-from lightcycle.domain.feedback import (
-    APPROVED,
-    DISPATCHED,
-    HELD,
-    RETRO_ORIGIN_LABEL,
-    RETROED_LABEL,
-    HeldComment,
-    can_transition,
+from lightcycle.adapters.sqlite.feedback import FeedbackAggregate
+from lightcycle.adapters.sqlite.goals import GoalsAggregate
+from lightcycle.adapters.sqlite.items import ItemsAggregate
+from lightcycle.adapters.sqlite.projects import ProjectsAggregate
+from lightcycle.adapters.sqlite.runs import RunsAggregate
+from lightcycle.adapters.sqlite.shared import (
+    _ITEM_COLUMNS,
+    _STEP_COLUMNS,
 )
+from lightcycle.adapters.sqlite.steps import StepsAggregate
+from lightcycle.adapters.sqlite.usage import UsageAggregate
 from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE, LEGACY_KNOWLEDGE_WORKSPACE
-from lightcycle.domain.goals import GOAL_DEFAULT_STATUS, Goal, GoalLogEntry
 from lightcycle.domain.money import Cost
-from lightcycle.domain.pool import ToolUsage, UsageResume
-from lightcycle.domain.runs import Pass, PhaseRun, RunState, run_id
 from lightcycle.domain.work.forwarded_note import parse_forwarded
-from lightcycle.domain.work.outputs import ArtifactRecord
 from lightcycle.domain.work import (
-    Artifact, DailySummary, Item, NodeView, Park, State, Step, default_kind_for, derive_state,
-    format_facets, format_step_id, merge_condition_note, role_state, unformat_facets,
+    Artifact, Item, Park, Step, derive_state,
+    format_step_id,
 )
 from lightcycle.domain.workspace.isolation import refuses_live_store
 from lightcycle.ports.store import (
-    ItemText,
-    NodeNotFoundError,
-    ProjectEntry,
     StoreError,
     StorePort,
 )
 
-_RAW_STORAGE_STATE = {
-    State.BACKLOGGED: "backlogged",
-    State.BLOCKED: "backlogged",
-    State.QUEUED: "ready",
-    State.WAITING: "ready",
-    State.RUNNING: "in_progress",
-    State.DONE: "done",
-}
 
 
 class LiveStoreRefused(Exception):
@@ -313,31 +298,12 @@ CREATE TABLE IF NOT EXISTS pr_pool_updates (
 );
 """
 
-_ITEM_COLUMNS = (
-    "id", "title", "description", "state", "repo", "workflow", "outcome", "disposition",
-    "note", "project", "created_at", "closed_at",
-)
 
-_STEP_COLUMNS = (
-    "id", "item", "stage", "pass_id", "role", "state", "assignee", "model",
-    "outcome", "notes", "watched_step",
-    "park_reason", "park_needs", "park_tried",
-    "created_at", "fired_at", "closed_at", "active_seconds",
-    "usage_input_tokens", "usage_output_tokens", "usage_cache_read_tokens",
-    "usage_cache_creation_tokens", "usage_cost_usd", "usage_cost_basis", "usage_rates_used",
-    "usage_thinking_tokens", "usage_api_calls", "turn_count", "previous_step", "report", "log_path",
-)
 
-_PARK_COLUMNS = {"needs": "park_needs", "reason": "park_reason", "tried": "park_tried"}
 
 _STEP_LABEL_COLUMNS = {"for": "role", "stage": "stage"}
 _ITEM_LABEL_COLUMNS = {"project": "project"}
 
-_RUN_SELECT = (
-    "SELECT id, item, pass_id, phase, branch, pr, content_pin, "
-    "comments_dispatched_through, comments_handled_through, state, opened_at, closed_at "
-    "FROM phase_runs"
-)
 
 
 class _ErrorTranslatingConnection:
@@ -366,7 +332,10 @@ class _ErrorTranslatingConnection:
             raise StoreError(str(e)) from e
 
 
-class SqliteStore(StorePort):
+class SqliteStore(
+    ItemsAggregate, StepsAggregate, RunsAggregate, UsageAggregate, FeedbackAggregate,
+    GoalsAggregate, ProjectsAggregate, StorePort,
+):
     def __init__(self, config, now=None, package_root=None, default_data_root=None):
         self._config = config
         self._now = now or (lambda: datetime.datetime.now().astimezone().isoformat())
@@ -869,1221 +838,143 @@ class SqliteStore(StorePort):
             (tid, row[0] + 1, str(state), self._now()),
         )
 
-    def item_artifacts(self, item_id):
-        rows = self._conn.execute(
-            "SELECT atype, value, label, internal, kind FROM artifacts "
-            "WHERE item_id = ? ORDER BY rowid",
-            (item_id,),
-        ).fetchall()
-        return [
-            Artifact(type=r[0], value=r[1], label=r[2], internal=bool(r[3]), kind=r[4])
-            for r in rows
-        ]
 
-    def default_kind_for(self, atype):
-        return default_kind_for(atype, context_types=self._config.context_artifact_types())
 
-    def _set_repo(self, item_id, value):
-        self._conn.execute("UPDATE items SET repo = ? WHERE id = ?", (value, item_id))
-        self._commit()
 
-    def add_artifact(self, item_id, atype, value, label=None, internal=False, kind=None):
-        if atype == "repo":
-            return self._set_repo(item_id, value)
-        resolved_kind = kind if kind is not None else self.default_kind_for(atype)
-        self._conn.execute(
-            "INSERT INTO artifacts (item_id, atype, value, label, internal, kind) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (item_id, atype, value, label, internal, resolved_kind),
-        )
-        self._commit()
 
-    def replace_artifact(self, item_id, atype, value, label=None, internal=False, kind=None):
-        if atype == "repo":
-            return self._set_repo(item_id, value)
-        resolved_kind = kind if kind is not None else self.default_kind_for(atype)
-        if label is None:
-            self._conn.execute(
-                "DELETE FROM artifacts WHERE item_id = ? AND atype = ? AND label IS NULL",
-                (item_id, atype),
-            )
-        else:
-            self._conn.execute(
-                "DELETE FROM artifacts WHERE item_id = ? AND atype = ? AND label = ?",
-                (item_id, atype, label),
-            )
-        self._conn.execute(
-            "INSERT INTO artifacts (item_id, atype, value, label, internal, kind) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (item_id, atype, value, label, internal, resolved_kind),
-        )
-        self._commit()
 
-    def all_nodes(self):
-        return self.all_steps() + self.all_items()
 
-    def all_nodes_including_done(self):
-        return self.all_steps_including_done() + self.all_items_including_done()
 
-    def all_items(self):
-        return self._select_items("state != 'done'")
 
-    def all_items_including_done(self):
-        return self._select_items("")
 
-    def items_with_label(self, label):
-        return self._select_items(
-            "id IN (SELECT node_id FROM labels WHERE label = ?)", (label,))
 
-    def all_steps_including_done(self):
-        return self._select_steps("")
 
-    def item_texts(self):
-        rows = self._conn.execute(
-            "SELECT id, title, description, NULL FROM items"
-        ).fetchall()
-        return [ItemText(*row) for row in rows]
 
-    def all_steps(self):
-        return self._select_steps("state != 'done'")
 
-    def type_of(self, tid):
-        try:
-            self.get_step(tid)
-            return "step"
-        except NodeNotFoundError:
-            pass
-        try:
-            self.get_item(tid)
-            return "item"
-        except NodeNotFoundError:
-            return None
 
-    def get_item(self, tid):
-        rows = self._select_items("id = ?", (tid,))
-        if not rows:
-            raise NodeNotFoundError("unknown item '%s'" % tid)
-        return rows[0]
 
-    def item_workflow(self, item_id):
-        row = self._conn.execute("SELECT workflow FROM items WHERE id = ?", (item_id,)).fetchone()
-        return row[0] if row else None
 
-    def get_step(self, tid):
-        rows = self._select_steps("id = ?", (tid,))
-        if not rows:
-            raise NodeNotFoundError("unknown step '%s'" % tid)
-        return rows[0]
 
-    def get_node(self, tid):
-        rows = self._select_steps("id = ?", (tid,))
-        if rows:
-            return rows[0]
-        return self.get_item(tid)
 
-    def node_view(self, tid):
-        t = self.get_node(tid)
-        item = getattr(t, "item", None) or t.id
-        arts = self.item_artifacts(item)
-        return NodeView(step=t, item_artifacts=list(arts))
 
-    def present_types(self, step):
-        item = getattr(step, "item", None) or step.id
-        present = {a.type for a in self.item_artifacts(item)}
-        if self.get_item(item).repo:
-            present.add("repo")
-        for run in self.open_runs_of(item):
-            if run.branch:
-                present.add("branch")
-            if run.pr:
-                present.add("pr")
-        return present
 
-    def reassign(self, tid, role):
-        cur = getattr(self.get_node(tid), "role", None)
-        if cur and cur != role:
-            self.label_remove(tid, "for:%s" % cur)
-        self.label_add(tid, "for:%s" % role)
-        self.update_state(tid, role_state(role))
-        self.assign(tid, "")
 
-    def closed_items(self):
-        return self._select_items("state = 'done'")
 
-    def snapshot_nodes(self):
-        result = []
-        for row in self._conn.execute(
-            "SELECT %s FROM items ORDER BY rowid" % ", ".join(_ITEM_COLUMNS)
-        ).fetchall():
-            d = dict(zip(_ITEM_COLUMNS, row))
-            result.append(dict(d, type="item", artifacts=[
-                a.as_dict() for a in self.item_artifacts(d["id"])
-            ], blocked_by=self._blockers_of(d["id"]), labels=self.labels_of(d["id"])))
-        for row in self._conn.execute(
-            "SELECT %s FROM steps ORDER BY rowid" % ", ".join(_STEP_COLUMNS)
-        ).fetchall():
-            d = dict(zip(_STEP_COLUMNS, row))
-            result.append(dict(d, type="step", blocked_by=self._blockers_of(d["id"]),
-                               labels=self.labels_of(d["id"])))
-        return result
 
-    def _blockers_of(self, tid):
-        return [
-            r[0] for r in self._conn.execute(
-                "SELECT blocked_by FROM deps WHERE node_id = ?", (tid,)
-            ).fetchall()
-        ]
-
-    def labels_of(self, tid):
-        return [
-            r[0] for r in self._conn.execute(
-                "SELECT label FROM labels WHERE node_id = ?", (tid,)
-            ).fetchall()
-        ]
 
     def ensure_ready(self):
         pass
 
-    def reclaim(self, tid):
-        try:
-            self._conn.execute(
-                "UPDATE %s SET state = ?, assignee = NULL WHERE id = ?"
-                % self._table_of(tid),
-                (_RAW_STORAGE_STATE.get(State.QUEUED, State.QUEUED), tid),
-            )
-            self._record_history(tid, State.QUEUED)
-            self._commit()
-        except Exception:
-            self._conn.rollback()
-            raise
-
-    def note(self, tid, text):
-        row = self._conn.execute("SELECT notes FROM steps WHERE id = ?", (tid,)).fetchone()
-        if row is None:
-            raise NodeNotFoundError("unknown node '%s'" % tid)
-        combined = (row[0] + "\n" + text) if row[0] else text
-        self._conn.execute("UPDATE steps SET notes = ? WHERE id = ?", (combined, tid))
-        self._commit()
-
-    def note_condition(self, tid, text):
-        row = self._conn.execute("SELECT notes FROM steps WHERE id = ?", (tid,)).fetchone()
-        if row is None:
-            raise NodeNotFoundError("unknown node '%s'" % tid)
-        combined = merge_condition_note(row[0] or "", text, self._now())
-        self._conn.execute("UPDATE steps SET notes = ? WHERE id = ?", (combined, tid))
-        self._commit()
-
-    def set_notes(self, tid, text):
-        row = self._conn.execute("SELECT 1 FROM steps WHERE id = ?", (tid,)).fetchone()
-        if row is None:
-            raise NodeNotFoundError("unknown node '%s'" % tid)
-        self._conn.execute("UPDATE steps SET notes = ? WHERE id = ?", (text or None, tid))
-        self._commit()
-
-    def reopen(self, tid):
-        self._conn.execute(
-            "UPDATE %s SET state = 'in_progress', outcome = NULL, closed_at = NULL "
-            "WHERE id = ? AND state = 'done'" % self._table_of(tid),
-            (tid,),
-        )
-        self._commit()
-
-    def complete_node(self, tid, reason, disposition=None, note=None):
-        table = self._table_of(tid)
-        if table == "items" and disposition is not None:
-            self._conn.execute(
-                "UPDATE items SET state = 'done', outcome = ?, disposition = ?, note = ?, "
-                "closed_at = ? WHERE id = ? AND state != 'done'",
-                (reason, disposition, note, self._now(), tid),
-            )
-        else:
-            self._conn.execute(
-                "UPDATE %s SET state = 'done', outcome = ?, closed_at = ? "
-                "WHERE id = ? AND state != 'done'" % table,
-                (reason, self._now(), tid),
-            )
-        self._record_history(tid, State.DONE)
-        self._commit()
-
-    def complete_step_atomic(self, step, outcome, expected_assignee, next_step_spec):
-        expected = expected_assignee or ""
-        cur = self._conn.execute(
-            "UPDATE steps SET state = 'done', outcome = ?, closed_at = ? "
-            "WHERE id = ? AND state != 'done' "
-            "AND (? = '' OR (COALESCE(assignee, '') = '' AND claim_epoch = 0) OR assignee = ?)",
-            (outcome, self._now(), step, expected, expected),
-        )
-        if cur.rowcount == 0:
-            self._conn.rollback()
-            return (False, None)
-        try:
-            self._record_history(step, State.DONE)
-            new_id = None
-            if next_step_spec is not None:
-                new_id = self._insert_step_nocommit(**next_step_spec.as_kwargs())
-            self._commit()
-        except Exception:
-            self._conn.rollback()
-            raise
-        return (True, new_id)
-
-    def release(self):
-        self._conn.close()
-
-    def update_metadata(self, tid, meta):
-        updates = {
-            _PARK_COLUMNS[k]: v for k, v in meta.items() if k in _PARK_COLUMNS
-        }
-        if not updates:
-            return
-        set_clause = ", ".join("%s = ?" % k for k in updates)
-        self._conn.execute(
-            "UPDATE steps SET %s WHERE id = ?" % set_clause, (*updates.values(), tid)
-        )
-        self._commit()
-
-    def set_model(self, tid, model):
-        self._conn.execute("UPDATE steps SET model = ? WHERE id = ?", (model, tid))
-        self._commit()
-
-    def label_add(self, tid, label):
-        if not self._apply_label(tid, label, True):
-            exists = self._conn.execute(
-                "SELECT 1 FROM labels WHERE node_id = ? AND label = ?", (tid, label)
-            ).fetchone()
-            if not exists:
-                self._conn.execute(
-                    "INSERT INTO labels (node_id, label) VALUES (?, ?)", (tid, label)
-                )
-        self._commit()
-
-    def label_remove(self, tid, label):
-        if not self._apply_label(tid, label, False):
-            self._conn.execute(
-                "DELETE FROM labels WHERE node_id = ? AND label = ?", (tid, label)
-            )
-        self._commit()
-
-    def update_state(self, tid, state):
-        self._conn.execute(
-            "UPDATE %s SET state = ? WHERE id = ?" % self._table_of(tid),
-            (_RAW_STORAGE_STATE.get(state, state), tid),
-        )
-        self._record_history(tid, state)
-        self._commit()
-
-    def assign(self, tid, assignee):
-        self._conn.execute(
-            "UPDATE steps SET assignee = ? WHERE id = ?", (assignee or None, tid)
-        )
-        self._commit()
-
-    def _dep_add_nocommit(self, node_id, blocked_by):
-        exists = self._conn.execute(
-            "SELECT 1 FROM deps WHERE node_id = ? AND blocked_by = ?", (node_id, blocked_by)
-        ).fetchone()
-        if not exists:
-            self._conn.execute(
-                "INSERT INTO deps (node_id, blocked_by) VALUES (?, ?)", (node_id, blocked_by)
-            )
-
-    def dep_add(self, node_id, blocked_by):
-        self._dep_add_nocommit(node_id, blocked_by)
-        self._commit()
-
-    def dep_remove(self, node_id, blocked_by):
-        cur = self._conn.execute(
-            "DELETE FROM deps WHERE node_id = ? AND blocked_by = ?", (node_id, blocked_by)
-        )
-        self._commit()
-        return cur.rowcount > 0
-
-    def ready_steps(self):
-        return self._select_steps(
-            "state = 'ready' AND NOT EXISTS ("
-            "  SELECT 1 FROM deps d LEFT JOIN steps b ON b.id = d.blocked_by "
-            "  LEFT JOIN items bi ON bi.id = d.blocked_by "
-            "  WHERE d.node_id = steps.id AND COALESCE(b.state, bi.state, 'ready') != 'done'"
-            ")"
-        )
-
-    def claim_ready(self, role, assignee=None, item=None, stage=None, exclude=()):
-        extra_sql = ""
-        params = [role]
-        excluded = list(exclude)
-        if excluded:
-            extra_sql += " AND id NOT IN (%s)" % ", ".join("?" * len(excluded))
-            params.extend(excluded)
-        if item is not None:
-            extra_sql += " AND item = ?"
-            params.append(item)
-        if stage is not None:
-            extra_sql += " AND stage = ?"
-            params.append(stage)
-        row = self._conn.execute(
-            "SELECT id FROM steps WHERE state = 'ready' "
-            "AND role = ?" + extra_sql + " AND NOT EXISTS ("
-            "  SELECT 1 FROM deps d LEFT JOIN steps b ON b.id = d.blocked_by "
-            "  LEFT JOIN items bi ON bi.id = d.blocked_by "
-            "  WHERE d.node_id = steps.id AND COALESCE(b.state, bi.state, 'ready') != 'done'"
-            ") LIMIT 1",
-            params,
-        ).fetchone()
-        if row is None:
-            return None
-        tid = row[0]
-        assignee = assignee or role
-        cur = self._conn.execute(
-            "UPDATE steps SET assignee = ?, state = 'in_progress', claim_epoch = claim_epoch + 1 "
-            "WHERE id = ? AND state = 'ready'",
-            (assignee, tid),
-        )
-        if cur.rowcount == 0:
-            self._commit()
-            return None
-        self._record_history(tid, State.RUNNING)
-        self._commit()
-        return self.get_node(tid)
-
-    def record_gh_calls(self, spawnid, step, calls):
-        self._conn.execute(
-            "INSERT INTO step_gh_calls (spawnid, step, calls) VALUES (?, ?, ?) "
-            "ON CONFLICT(spawnid) DO UPDATE SET step = excluded.step, calls = excluded.calls",
-            (spawnid, step, calls),
-        )
-        self._conn.execute(
-            "UPDATE steps SET usage_api_calls = "
-            "(SELECT SUM(calls) FROM step_gh_calls WHERE step = ?) WHERE id = ?",
-            (step, step),
-        )
-        self._commit()
-
-    def accrue_active_seconds(self, step_ids, seconds):
-        ids = list(step_ids)
-        if not ids:
-            return
-        placeholders = ", ".join("?" * len(ids))
-        self._conn.execute(
-            "UPDATE steps SET active_seconds = COALESCE(active_seconds, 0) + ? "
-            "WHERE id IN (%s)" % placeholders,
-            (seconds, *ids),
-        )
-        self._commit()
-
-    def _record_usage_nocommit(self, tid, input_tokens, output_tokens, cache_read_tokens,
-                                cache_creation_tokens, cost_usd, cost_basis, thinking_tokens,
-                                rates_used=None):
-        rates_used_json = json.dumps(asdict(rates_used)) if rates_used is not None else None
-        cursor = self._conn.execute(
-            "UPDATE steps SET "
-            "usage_input_tokens = usage_input_tokens + ?, "
-            "usage_output_tokens = usage_output_tokens + ?, "
-            "usage_cache_read_tokens = usage_cache_read_tokens + ?, "
-            "usage_cache_creation_tokens = usage_cache_creation_tokens + ?, "
-            "usage_cost_usd = usage_cost_usd + ?, "
-            "usage_cost_basis = COALESCE(?, usage_cost_basis), "
-            "usage_rates_used = COALESCE(?, usage_rates_used), "
-            "usage_thinking_tokens = CASE WHEN ? IS NULL THEN usage_thinking_tokens "
-            "ELSE COALESCE(usage_thinking_tokens, 0) + ? END "
-            "WHERE id = ?",
-            (input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
-             cost_usd, cost_basis, rates_used_json, thinking_tokens, thinking_tokens, tid),
-        )
-        return cursor.rowcount
-
-    def record_usage(self, tid, input_tokens, output_tokens, cache_read_tokens,
-                      cache_creation_tokens, cost_usd, cost_basis, thinking_tokens,
-                      rates_used=None):
-        self._record_usage_nocommit(
-            tid, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
-            cost_usd, cost_basis, thinking_tokens, rates_used=rates_used,
-        )
-        self._commit()
-
-    def _record_attribution_nocommit(self, tid, turn_count, tool_usage):
-        self._conn.execute(
-            "UPDATE steps SET turn_count = turn_count + ? WHERE id = ?", (turn_count, tid),
-        )
-        for tool, usage in tool_usage.items():
-            self._conn.execute(
-                "INSERT INTO step_tool_usage (step, tool, calls, bytes) VALUES (?, ?, ?, ?) "
-                "ON CONFLICT(step, tool) DO UPDATE SET "
-                "calls = calls + excluded.calls, bytes = bytes + excluded.bytes",
-                (tid, tool, usage.calls, usage.bytes),
-            )
-
-    def record_attribution(self, tid, turn_count, tool_usage):
-        self._record_attribution_nocommit(tid, turn_count, tool_usage)
-        self._commit()
-
-    def tool_usage_for(self, step_id):
-        rows = self._conn.execute(
-            "SELECT tool, calls, bytes FROM step_tool_usage WHERE step = ?", (step_id,)
-        ).fetchall()
-        return {tool: ToolUsage(calls=calls, bytes=bytes_) for tool, calls, bytes_ in rows}
-
-    def usage_backfilled_logs(self):
-        rows = self._conn.execute("SELECT log_file FROM usage_backfill_log").fetchall()
-        return {r[0] for r in rows}
-
-    def record_backfilled_usage(self, log_file, step_id, usage, attribution):
-        try:
-            cursor = self._conn.execute(
-                "INSERT OR IGNORE INTO usage_backfill_log "
-                "(log_file, step, ingested_at, had_result_line) VALUES (?, ?, ?, ?)",
-                (log_file, step_id, self._now(), 1 if usage.has_result_line else 0),
-            )
-            if cursor.rowcount == 0:
-                self._conn.rollback()
-                return False
-            stored = False
-            if step_id is not None:
-                rowcount = self._record_usage_nocommit(
-                    step_id, usage.input_tokens, usage.output_tokens, usage.cache_read_tokens,
-                    usage.cache_creation_tokens, usage.cost_usd.to_usd(), usage.cost_basis,
-                    usage.thinking_tokens, rates_used=usage.rates_used,
-                )
-                stored = rowcount > 0
-                if stored:
-                    self._record_attribution_nocommit(
-                        step_id, attribution.turn_count, attribution.tool_usage
-                    )
-            self._commit()
-            return stored
-        except Exception:
-            self._conn.rollback()
-            raise
-
-    def record_live_usage(
-        self, spawnid, resume,
-        tid, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
-        cost_usd, cost_basis, thinking_tokens, turn_count, tool_usage,
-        rates_used=None,
-    ):
-        try:
-            self._conn.execute(
-                "INSERT INTO usage_accrual_state ("
-                "spawnid, log_file, offset, message_ids, pending_tool_use, "
-                "posted_turn_count, posted_tool_usage, posted_input_tokens, "
-                "posted_output_tokens, posted_cache_read_tokens, "
-                "posted_cache_creation_tokens, posted_cost_usd"
-                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
-                "ON CONFLICT(spawnid) DO UPDATE SET "
-                "log_file = excluded.log_file, offset = excluded.offset, "
-                "message_ids = excluded.message_ids, "
-                "pending_tool_use = excluded.pending_tool_use, "
-                "posted_turn_count = excluded.posted_turn_count, "
-                "posted_tool_usage = excluded.posted_tool_usage, "
-                "posted_input_tokens = excluded.posted_input_tokens, "
-                "posted_output_tokens = excluded.posted_output_tokens, "
-                "posted_cache_read_tokens = excluded.posted_cache_read_tokens, "
-                "posted_cache_creation_tokens = excluded.posted_cache_creation_tokens, "
-                "posted_cost_usd = excluded.posted_cost_usd",
-                (
-                    spawnid, resume.log_file, resume.offset, json.dumps(resume.message_ids),
-                    json.dumps(resume.pending_tool_use), resume.posted_turn_count,
-                    json.dumps(resume.posted_tool_usage), resume.posted_input_tokens,
-                    resume.posted_output_tokens, resume.posted_cache_read_tokens,
-                    resume.posted_cache_creation_tokens, resume.posted_cost_usd,
-                ),
-            )
-            if input_tokens or output_tokens or cache_read_tokens or cache_creation_tokens:
-                self._record_usage_nocommit(
-                    tid, input_tokens, output_tokens, cache_read_tokens,
-                    cache_creation_tokens, cost_usd, cost_basis, thinking_tokens,
-                    rates_used=rates_used,
-                )
-            if turn_count or tool_usage:
-                self._record_attribution_nocommit(tid, turn_count, tool_usage)
-            self._commit()
-        except Exception:
-            self._conn.rollback()
-            raise
-
-    def usage_accrual_state(self, spawnid):
-        row = self._conn.execute(
-            "SELECT log_file, offset, message_ids, pending_tool_use, posted_turn_count, "
-            "posted_tool_usage, posted_input_tokens, posted_output_tokens, "
-            "posted_cache_read_tokens, posted_cache_creation_tokens, posted_cost_usd "
-            "FROM usage_accrual_state WHERE spawnid = ?",
-            (spawnid,),
-        ).fetchone()
-        if row is None:
-            return None
-        return UsageResume(
-            log_file=row[0],
-            offset=row[1],
-            message_ids=json.loads(row[2]),
-            pending_tool_use=json.loads(row[3]),
-            posted_turn_count=row[4],
-            posted_tool_usage=json.loads(row[5]),
-            posted_input_tokens=row[6],
-            posted_output_tokens=row[7],
-            posted_cache_read_tokens=row[8],
-            posted_cache_creation_tokens=row[9],
-            posted_cost_usd=row[10],
-        )
-
-    def clear_usage_accrual_state(self, spawnid):
-        self._conn.execute("DELETE FROM usage_accrual_state WHERE spawnid = ?", (spawnid,))
-        self._commit()
-
-    def _seed_unclassified_backfill_row(self, log_file, step_id):
-        self._conn.execute(
-            "INSERT INTO usage_backfill_log (log_file, step, ingested_at, had_result_line) "
-            "VALUES (?, ?, ?, NULL)",
-            (log_file, step_id, self._now()),
-        )
-        self._commit()
-
-    def unclassified_backfill_logs(self):
-        rows = self._conn.execute(
-            "SELECT log_file, step FROM usage_backfill_log WHERE had_result_line IS NULL"
-        ).fetchall()
-        return [(r[0], r[1]) for r in rows]
-
-    def reclassify_backfilled_log(self, log_file, step_id, usage, attribution):
-        recovered = False
-        if not usage.has_result_line and step_id is not None:
-            rowcount = self._record_usage_nocommit(
-                step_id, usage.input_tokens, usage.output_tokens, usage.cache_read_tokens,
-                usage.cache_creation_tokens, usage.cost_usd.to_usd(), usage.cost_basis,
-                usage.thinking_tokens, rates_used=usage.rates_used,
-            )
-            recovered = rowcount > 0
-        self._conn.execute(
-            "UPDATE usage_backfill_log SET had_result_line = ? WHERE log_file = ?",
-            (1 if usage.has_result_line else 0, log_file),
-        )
-        self._commit()
-        return recovered
-
-    def logs_for_step(self, step_id):
-        rows = self._conn.execute(
-            "SELECT log_file FROM usage_backfill_log WHERE step = ?", (step_id,)
-        ).fetchall()
-        return [r[0] for r in rows]
-
-    def overwrite_usage_and_attribution(self, step_id, usage_totals, turn_count, tool_usage_totals):
-        rates_used_json = (
-            json.dumps(asdict(usage_totals.rates_used)) if usage_totals.rates_used is not None else None
-        )
-        self._conn.execute(
-            "UPDATE steps SET "
-            "usage_input_tokens = ?, usage_output_tokens = ?, usage_cache_read_tokens = ?, "
-            "usage_cache_creation_tokens = ?, usage_cost_usd = ?, usage_cost_basis = ?, "
-            "usage_rates_used = ?, "
-            "usage_thinking_tokens = ?, turn_count = ? WHERE id = ?",
-            (usage_totals.input_tokens, usage_totals.output_tokens,
-             usage_totals.cache_read_tokens, usage_totals.cache_creation_tokens,
-             usage_totals.cost_usd.to_usd(), usage_totals.cost_basis, rates_used_json,
-             usage_totals.thinking_tokens, turn_count, step_id),
-        )
-        self._conn.execute("DELETE FROM step_tool_usage WHERE step = ?", (step_id,))
-        for tool, usage in tool_usage_totals.items():
-            self._conn.execute(
-                "INSERT INTO step_tool_usage (step, tool, calls, bytes) VALUES (?, ?, ?, ?)",
-                (step_id, tool, usage.calls, usage.bytes),
-            )
-        self._commit()
-
-    def _insert_step_nocommit(self, *, stage=None, role=None, item=None, deps=None,
-                              id=None, previous=None):
-        if item is None:
-            raise ValueError("create_step requires an item")
-        tid = self._mint_or_adopt(id, item)
-        self._conn.execute(
-            "INSERT INTO steps (id, item, stage, role, state, created_at, previous_step) "
-            "VALUES (?, ?, ?, ?, 'ready', ?, ?)",
-            (tid, item, stage, role, self._now(), previous),
-        )
-        if deps:
-            for dep in deps:
-                self._dep_add_nocommit(tid, dep)
-        return tid
-
-    def create_step(self, *, stage=None, role=None, item=None, deps=None,
-                    id=None, previous=None):
-        tid = self._insert_step_nocommit(
-            stage=stage, role=role, item=item, deps=deps, id=id, previous=previous)
-        self._commit()
-        return tid
-
-    def set_report(self, step, text):
-        if self._conn.execute(
-            "UPDATE steps SET report = ? WHERE id = ?", (text or None, step)
-        ).rowcount == 0:
-            raise NodeNotFoundError("unknown step '%s'" % step)
-        self._commit()
-
-    def set_log(self, step, path):
-        if self._conn.execute(
-            "UPDATE steps SET log_path = ? WHERE id = ?", (path or None, step)
-        ).rowcount == 0:
-            raise NodeNotFoundError("unknown step '%s'" % step)
-        self._commit()
-
-    def save_step_inputs(self, step, frozen_at, body):
-        self._conn.execute(
-            "INSERT INTO step_inputs (step, frozen_at, body) VALUES (?, ?, ?) "
-            "ON CONFLICT(step) DO UPDATE SET frozen_at = excluded.frozen_at, body = excluded.body",
-            (step, frozen_at, body),
-        )
-        self._commit()
-
-    def step_inputs(self, step):
-        row = self._conn.execute(
-            "SELECT frozen_at, body FROM step_inputs WHERE step = ?", (step,)
-        ).fetchone()
-        return None if row is None else (row[0], row[1])
-
-    def artifact_log(self, item_id):
-        rows = self._conn.execute(
-            "SELECT a.item_id, a.rowid, a.atype, a.value, a.label, a.internal, a.kind "
-            "FROM artifacts a WHERE a.item_id = ? "
-            "OR a.item_id IN (SELECT id FROM steps WHERE item = ?) ORDER BY a.rowid",
-            (item_id, item_id),
-        ).fetchall()
-        return [
-            ArtifactRecord(
-                node_id=r[0], seq=r[1],
-                artifact=Artifact(
-                    type=r[2], value=r[3], label=r[4], internal=bool(r[5]), kind=r[6]),
-            )
-            for r in rows
-        ]
-
-    def edit_node(self, tid, *, title=None, description=None, project=None,
-                  workflow=None):
-        table = self._table_of(tid)
-        allowed = () if table == "steps" else (
-            "title", "description", "project", "workflow"
-        )
-        updates = {}
-        for key, value in (("title", title), ("description", description),
-                           ("project", project), ("workflow", workflow)):
-            if value is not None and key in allowed:
-                updates[key] = value
-        if updates:
-            set_clause = ", ".join("%s = ?" % k for k in updates)
-            self._conn.execute(
-                "UPDATE %s SET %s WHERE id = ?" % (table, set_clause),
-                (*updates.values(), tid),
-            )
-        self._commit()
-        return tid
-
-    def create_item(self, title, description, *, project=None, workflow=None, id=None,
-                    shortcode=None):
-        tid = self._mint_or_adopt(id, None, shortcode=shortcode)
-        self._conn.execute(
-            "INSERT INTO items (id, title, description, state, project, workflow, created_at) "
-            "VALUES (?, ?, ?, 'backlogged', ?, ?, ?)",
-            (tid, title, description, project, workflow, self._now()),
-        )
-        self._commit()
-        return tid
-
-    def open_pass(self, item):
-        row = self._conn.execute(
-            "INSERT INTO passes (id, item, n, state, opened_at) "
-            "SELECT ? || '.p' || (COALESCE(MAX(n), 0) + 1), ?, COALESCE(MAX(n), 0) + 1, "
-            "'open', ? FROM passes WHERE item = ? "
-            "RETURNING id",
-            (item, item, self._now(), item),
-        ).fetchone()
-        self._commit()
-        return row[0]
-
-    def current_pass(self, item):
-        row = self._conn.execute(
-            "SELECT id, item, n, state, opened_at, closed_at FROM passes "
-            "WHERE item = ? AND state = 'open' ORDER BY n DESC LIMIT 1",
-            (item,),
-        ).fetchone()
-        return Pass(*row) if row else None
-
-    def get_pass(self, pid):
-        row = self._conn.execute(
-            "SELECT id, item, n, state, opened_at, closed_at FROM passes WHERE id = ?", (pid,)
-        ).fetchone()
-        return Pass(*row) if row else None
-
-    def passes_of(self, item):
-        rows = self._conn.execute(
-            "SELECT id, item, n, state, opened_at, closed_at FROM passes "
-            "WHERE item = ? ORDER BY n",
-            (item,),
-        ).fetchall()
-        return [Pass(*r) for r in rows]
-
-    def close_pass(self, pid):
-        self._conn.execute(
-            "UPDATE passes SET state = 'closed', closed_at = ? WHERE id = ? AND state = 'open'",
-            (self._now(), pid),
-        )
-        self._commit()
-
-    def open_run(self, item, pid, phase):
-        rid = run_id(pid, phase)
-        self._conn.execute(
-            "INSERT OR IGNORE INTO phase_runs (id, item, pass_id, phase, state, opened_at) "
-            "VALUES (?, ?, ?, ?, 'open', ?)",
-            (rid, item, pid, phase, self._now()),
-        )
-        self._commit()
-        return rid
-
-    def _run_row_to_record(self, row):
-        return PhaseRun(*row)
-
-    def get_run(self, rid):
-        row = self._conn.execute(
-            "%s WHERE id = ?" % _RUN_SELECT, (rid,)
-        ).fetchone()
-        return self._run_row_to_record(row) if row else None
-
-    def current_run(self, item, phase):
-        row = self._conn.execute(
-            "%s WHERE item = ? AND phase IS ? AND state = 'open' "
-            "ORDER BY opened_at DESC LIMIT 1" % _RUN_SELECT,
-            (item, phase),
-        ).fetchone()
-        return self._run_row_to_record(row) if row else None
-
-    def runs_of(self, item, pid=None):
-        if pid is None:
-            rows = self._conn.execute(
-                "%s WHERE item = ? ORDER BY opened_at" % _RUN_SELECT, (item,)
-            ).fetchall()
-        else:
-            rows = self._conn.execute(
-                "%s WHERE item = ? AND pass_id = ? ORDER BY opened_at" % _RUN_SELECT, (item, pid)
-            ).fetchall()
-        return [self._run_row_to_record(r) for r in rows]
-
-    def open_runs_of(self, item, pid=None):
-        return [r for r in self.runs_of(item, pid) if r.is_open]
-
-    def set_branch(self, rid, branch):
-        self._conn.execute(
-            "UPDATE phase_runs SET branch = ? WHERE id = ?", (branch, rid)
-        )
-        self._commit()
-
-    def set_pr(self, rid, pr):
-        self._conn.execute("UPDATE phase_runs SET pr = ? WHERE id = ?", (pr, rid))
-        self._commit()
-
-    def set_content_pin(self, rid, content_pin):
-        self._conn.execute(
-            "UPDATE phase_runs SET content_pin = ? WHERE id = ?", (content_pin, rid)
-        )
-        self._commit()
-
-    def record_pr_pin(self, rid, pr, content_pin):
-        self._conn.execute(
-            "UPDATE phase_runs SET pr = ?, content_pin = ? WHERE id = ?", (pr, content_pin, rid)
-        )
-        self._commit()
-
-    def set_comments_dispatched_through(self, rid, value):
-        self._conn.execute(
-            "UPDATE phase_runs SET comments_dispatched_through = ? WHERE id = ?", (value, rid)
-        )
-        self._commit()
-
-    _HOLD_COLUMNS = (
-        "run_id, key, author, body, path, line, created_at, state, item_id, step_id, decided_at"
-    )
-
-    def file_hold(self, run_id, key, author, body, path, line, created_at):
-        cur = self._conn.execute(
-            "INSERT OR IGNORE INTO held_comments "
-            "(run_id, key, author, body, path, line, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (run_id, key, author, body, path, line, created_at),
-        )
-        self._commit()
-        return cur.rowcount == 1
-
-    def attach_hold(self, run_id, key, item_id, step_id):
-        self._conn.execute(
-            "UPDATE held_comments SET item_id = ?, step_id = ? WHERE run_id = ? AND key = ?",
-            (item_id, step_id, run_id, key),
-        )
-        self._commit()
-
-    def hold(self, run_id, key):
-        row = self._conn.execute(
-            "SELECT %s FROM held_comments WHERE run_id = ? AND key = ?" % self._HOLD_COLUMNS,
-            (run_id, key),
-        ).fetchone()
-        return HeldComment(*row) if row else None
-
-    def hold_for_step(self, step_id):
-        row = self._conn.execute(
-            "SELECT %s FROM held_comments WHERE step_id = ?" % self._HOLD_COLUMNS, (step_id,)
-        ).fetchone()
-        return HeldComment(*row) if row else None
-
-    def _holds_in_state(self, run_id, state):
-        rows = self._conn.execute(
-            "SELECT %s FROM held_comments WHERE run_id = ? AND state = ? "
-            "ORDER BY created_at, key" % self._HOLD_COLUMNS,
-            (run_id, state),
-        ).fetchall()
-        return [HeldComment(*r) for r in rows]
-
-    def approved_holds(self, run_id):
-        return self._holds_in_state(run_id, APPROVED)
-
-    def open_holds(self, run_id):
-        return self._holds_in_state(run_id, HELD)
-
-    def _transition_hold(self, where, params, target):
-        row = self._conn.execute(
-            "SELECT state FROM held_comments WHERE %s" % where, params
-        ).fetchone()
-        if row is None:
-            raise StoreError("no held comment for %s" % (params,))
-        if not can_transition(row[0], target):
-            raise StoreError("held comment is %s; cannot become %s" % (row[0], target))
-        self._conn.execute(
-            "UPDATE held_comments SET state = ?, decided_at = ? WHERE %s" % where,
-            (target, self._now()) + tuple(params),
-        )
-        self._commit()
-
-    def decide_hold(self, step_id, state):
-        self._transition_hold("step_id = ?", (step_id,), state)
-
-    def mark_hold_dispatched(self, run_id, key):
-        self._transition_hold("run_id = ? AND key = ?", (run_id, key), DISPATCHED)
-
-    def set_comments_handled_through(self, rid, value):
-        self._conn.execute(
-            "UPDATE phase_runs SET comments_handled_through = ? WHERE id = ?", (value, rid)
-        )
-        self._commit()
-
-    def feedback_cutoff(self, pr):
-        row = self._conn.execute(
-            "SELECT cutoff, cutoff_head FROM pr_feedback_cutoffs WHERE pr = ?", (pr,)
-        ).fetchone()
-        return (row[0], row[1]) if row else None
-
-    def save_feedback_cutoff(self, pr, cutoff, cutoff_head):
-        self._conn.execute(
-            "INSERT OR REPLACE INTO pr_feedback_cutoffs (pr, cutoff, cutoff_head, updated_at) "
-            "VALUES (?, ?, ?, ?)",
-            (pr, cutoff, cutoff_head, self._now()),
-        )
-        self._commit()
-
-    def pool_updated_heads(self, pr):
-        rows = self._conn.execute(
-            "SELECT head_sha FROM pr_pool_updates WHERE pr = ? ORDER BY head_sha", (pr,)
-        ).fetchall()
-        return [r[0] for r in rows]
-
-    def record_pool_update(self, pr, head_sha):
-        self._conn.execute(
-            "INSERT OR IGNORE INTO pr_pool_updates (pr, head_sha, updated_at) VALUES (?, ?, ?)",
-            (pr, head_sha, self._now()),
-        )
-        self._commit()
-
-    def prune_pr_feedback_state(self, max_age_days):
-        threshold = (
-            datetime.datetime.fromisoformat(self._now()) - datetime.timedelta(days=max_age_days)
-        ).isoformat()
-        for table in ("pr_feedback_cutoffs", "pr_pool_updates"):
-            self._conn.execute("DELETE FROM %s WHERE updated_at < ?" % table, (threshold,))
-        self._commit()
-
-    def close_run(self, rid, state=RunState.MERGED):
-        self._conn.execute(
-            "UPDATE phase_runs SET state = ?, closed_at = ? WHERE id = ? AND state = 'open'",
-            (state, self._now(), rid),
-        )
-        self._commit()
-
-    def set_watched_step(self, tid, watched):
-        self._conn.execute("UPDATE steps SET watched_step = ? WHERE id = ?", (watched, tid))
-        self._commit()
-
-    def set_step_pass(self, tid, pid):
-        self._conn.execute("UPDATE steps SET pass_id = ? WHERE id = ?", (pid, tid))
-        self._commit()
-
-    def children(self, item_id):
-        return self._select_steps("item = ?", (item_id,))
-
-    def claimed_steps(self):
-        return self._select_steps("state = 'in_progress'")
-
-    def history(self, tid):
-        rows = self._conn.execute(
-            "SELECT state, ts FROM history WHERE node_id = ? ORDER BY seq ASC", (tid,)
-        ).fetchall()
-        return [(r[0], r[1]) for r in rows]
-
-    def waiting_history(self):
-        rows = self._conn.execute(
-            "SELECT node_id, ts FROM history WHERE state = 'waiting'"
-        ).fetchall()
-        return [(r[0], r[1]) for r in rows]
-
-    def day_summary(self, day):
-        row = self._conn.execute(
-            "SELECT day, summary, generated_at, summarized_count, dirty_since, step_id, "
-            "spawn_count FROM daily_summaries WHERE day = ?",
-            (day.isoformat(),),
-        ).fetchone()
-        if row is None:
-            return None
-        return DailySummary(
-            day=datetime.date.fromisoformat(row[0]), summary=row[1], generated_at=row[2],
-            summarized_count=row[3], dirty_since=row[4], step_id=row[5], spawn_count=row[6],
-        )
-
-    def mark_day_summary_dirty(self, day):
-        self._conn.execute(
-            "INSERT INTO daily_summaries (day, dirty_since) VALUES (?, ?) "
-            "ON CONFLICT(day) DO UPDATE SET dirty_since = excluded.dirty_since "
-            "WHERE daily_summaries.dirty_since IS NULL",
-            (day.isoformat(), self._now()),
-        )
-        self._commit()
-
-    def start_day_summary(self, day, step_id, spawn_count):
-        self._conn.execute(
-            "UPDATE daily_summaries SET step_id = ?, spawn_count = ? WHERE day = ?",
-            (step_id, spawn_count, day.isoformat()),
-        )
-        self._commit()
-
-    def finish_day_summary(self, day, summary, summarized_count, clear_dirty):
-        if clear_dirty:
-            self._conn.execute(
-                "UPDATE daily_summaries SET summary = ?, generated_at = ?, summarized_count = ?, "
-                "step_id = NULL, spawn_count = NULL, dirty_since = NULL WHERE day = ?",
-                (summary, self._now(), summarized_count, day.isoformat()),
-            )
-        else:
-            self._conn.execute(
-                "UPDATE daily_summaries SET summary = ?, generated_at = ?, summarized_count = ?, "
-                "step_id = NULL, spawn_count = NULL WHERE day = ?",
-                (summary, self._now(), summarized_count, day.isoformat()),
-            )
-        self._commit()
-
-    def release_day_summary(self, day):
-        self._conn.execute(
-            "UPDATE daily_summaries SET step_id = NULL, spawn_count = NULL WHERE day = ?",
-            (day.isoformat(),),
-        )
-        self._commit()
-
-    def summary_day_for_step(self, step_id):
-        row = self._conn.execute(
-            "SELECT day FROM daily_summaries WHERE step_id = ?", (step_id,)
-        ).fetchone()
-        return datetime.date.fromisoformat(row[0]) if row else None
-
-    def request_schedule_run(self, schedule_id):
-        self._conn.execute(
-            "INSERT OR IGNORE INTO schedule_run_requests (schedule_id, requested_at) VALUES (?, ?)",
-            (schedule_id, self._now()),
-        )
-        self._commit()
-
-    def schedule_run_requested(self, schedule_id):
-        row = self._conn.execute(
-            "SELECT 1 FROM schedule_run_requests WHERE schedule_id = ?", (schedule_id,)
-        ).fetchone()
-        return row is not None
-
-    def clear_schedule_run_request(self, schedule_id):
-        self._conn.execute(
-            "DELETE FROM schedule_run_requests WHERE schedule_id = ?", (schedule_id,)
-        )
-        self._commit()
-
-    def nodes_closed_since(self, since_date):
-        return self._select_steps(
-            "state = 'done' AND substr(closed_at, 1, 10) >= ?", (since_date,)
-        )
-
-    def closed_unretroed_items(self):
-        return self._select_items(
-            "state = 'done' "
-            "AND id NOT IN (SELECT node_id FROM labels WHERE label = ?) "
-            "AND id NOT IN (SELECT node_id FROM labels WHERE label = ?)",
-            (RETRO_ORIGIN_LABEL, RETROED_LABEL),
-        )
-
-    def closed_unretroed_passes(self):
-        rows = self._conn.execute(
-            "SELECT id, item, n, state, opened_at, closed_at FROM passes "
-            "WHERE state = 'closed' "
-            "AND item IN (SELECT id FROM items WHERE state != 'done') "
-            "AND id NOT IN (SELECT node_id FROM labels WHERE label = ?) "
-            "AND id NOT IN (SELECT node_id FROM labels WHERE label = ?)",
-            (RETRO_ORIGIN_LABEL, RETROED_LABEL),
-        ).fetchall()
-        return [Pass(*r) for r in rows]
-
-    def last_n_closed_items(self, n):
-        return self._select_items(
-            "state = 'done'", params=(n,), suffix="ORDER BY closed_at DESC LIMIT ?"
-        )
-
-    def steps_at_step(self, step):
-        return self._select_steps("stage = ?", (step,))
-
-    def delete(self, tid):
-        self._conn.execute("DELETE FROM steps WHERE id = ?", (tid,))
-        self._conn.execute("DELETE FROM step_gh_calls WHERE step = ?", (tid,))
-        self._conn.execute("DELETE FROM step_tool_usage WHERE step = ?", (tid,))
-        self._conn.execute("DELETE FROM items WHERE id = ?", (tid,))
-        self._conn.execute("DELETE FROM deps WHERE node_id = ? OR blocked_by = ?", (tid, tid))
-        self._conn.execute("DELETE FROM artifacts WHERE item_id = ?", (tid,))
-        self._conn.execute("DELETE FROM labels WHERE node_id = ?", (tid,))
-        self._conn.execute("DELETE FROM history WHERE node_id = ?", (tid,))
-        self._conn.execute("DELETE FROM goal_items WHERE item_id = ?", (tid,))
-        self._commit()
-
-    def create_goal(self, title, description="", project=""):
-        row = self._conn.execute(
-            "INSERT INTO counters (namespace, next) VALUES ('goal', 2) "
-            "ON CONFLICT(namespace) DO UPDATE SET next = next + 1 "
-            "RETURNING next - 1"
-        ).fetchone()
-        gid = "G-%d" % row[0]
-        now = self._now()
-        self._conn.execute(
-            "INSERT INTO goals (id, title, description, project, status, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (gid, title, description, project, GOAL_DEFAULT_STATUS, now, now),
-        )
-        self._commit()
-        return gid
-
-    def get_goal(self, goal_id):
-        row = self._conn.execute(
-            "SELECT id, title, description, project, status, created_at, updated_at "
-            "FROM goals WHERE id = ?",
-            (goal_id,),
-        ).fetchone()
-        return Goal(*row) if row else None
-
-    def list_goals(self):
-        rows = self._conn.execute(
-            "SELECT id, title, description, project, status, created_at, updated_at "
-            "FROM goals"
-        ).fetchall()
-        goals = [Goal(*r) for r in rows]
-        goals.sort(key=lambda g: int(g.id.split("-", 1)[1]))
-        return goals
-
-    def update_goal(self, goal_id, *, title=None, description=None, project=None, status=None):
-        fields = {
-            "title": title, "description": description, "project": project, "status": status,
-        }
-        sets = [(k, v) for k, v in fields.items() if v is not None]
-        if not sets:
-            return
-        assignments = ", ".join("%s = ?" % k for k, _ in sets)
-        self._conn.execute(
-            "UPDATE goals SET %s, updated_at = ? WHERE id = ?" % assignments,
-            [v for _, v in sets] + [self._now(), goal_id],
-        )
-        self._commit()
-
-    def add_goal_log(self, goal_id, title, body):
-        self._conn.execute(
-            "INSERT INTO goal_log (goal_id, title, body, created_at) VALUES (?, ?, ?, ?)",
-            (goal_id, title, body, self._now()),
-        )
-        self._commit()
-
-    def goal_log(self, goal_id):
-        rows = self._conn.execute(
-            "SELECT id, goal_id, title, body, created_at FROM goal_log "
-            "WHERE goal_id = ? ORDER BY id DESC",
-            (goal_id,),
-        ).fetchall()
-        return [GoalLogEntry(*r) for r in rows]
-
-    def link_goal_item(self, goal_id, item_id):
-        self._conn.execute(
-            "INSERT OR IGNORE INTO goal_items (goal_id, item_id, linked_at) VALUES (?, ?, ?)",
-            (goal_id, item_id, self._now()),
-        )
-        self._commit()
-
-    def unlink_goal_item(self, goal_id, item_id):
-        self._conn.execute(
-            "DELETE FROM goal_items WHERE goal_id = ? AND item_id = ?", (goal_id, item_id)
-        )
-        self._commit()
-
-    def goal_items(self, goal_id):
-        rows = self._conn.execute(
-            "SELECT item_id FROM goal_items WHERE goal_id = ? ORDER BY rowid", (goal_id,)
-        ).fetchall()
-        return [r[0] for r in rows]
-
-    def add_project(
-        self, identity, *, shortcode=None, local_path=None, remote=None, facets=None
-    ):
-        row = self._conn.execute(
-            "SELECT shortcode, local_path, remote, facets FROM projects WHERE identity = ?",
-            (identity,),
-        ).fetchone()
-        stored_facets = format_facets(facets) if facets is not None else None
-        if row is None:
-            self._conn.execute(
-                "INSERT INTO projects (identity, shortcode, local_path, remote, facets) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (identity, shortcode, local_path, remote, stored_facets or ""),
-            )
-        else:
-            merged = (
-                shortcode if shortcode is not None else row[0],
-                local_path if local_path is not None else row[1],
-                remote if remote is not None else row[2],
-                stored_facets if stored_facets is not None else row[3],
-            )
-            self._conn.execute(
-                "UPDATE projects SET shortcode = ?, local_path = ?, remote = ?, facets = ? "
-                "WHERE identity = ?",
-                (*merged, identity),
-            )
-        self._commit()
-
-    @staticmethod
-    def _project_entry(row):
-        return ProjectEntry(*row[:4], unformat_facets(row[4]))
-
-    def get_project(self, identity):
-        row = self._conn.execute(
-            "SELECT identity, shortcode, local_path, remote, facets FROM projects "
-            "WHERE identity = ?",
-            (identity,),
-        ).fetchone()
-        return self._project_entry(row) if row else None
-
-    def list_projects(self):
-        rows = self._conn.execute(
-            "SELECT identity, shortcode, local_path, remote, facets FROM projects "
-            "ORDER BY identity"
-        ).fetchall()
-        return [self._project_entry(row) for row in rows]
-
-    def remove_project(self, identity):
-        cur = self._conn.execute("DELETE FROM projects WHERE identity = ?", (identity,))
-        self._commit()
-        if cur.rowcount == 0:
-            raise KeyError("project not registered: %s" % identity)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

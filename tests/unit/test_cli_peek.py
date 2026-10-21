@@ -4,6 +4,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
 import lightcycle.cli as cli_mod
+import lightcycle.commands.inspect as inspect_cmds
 from lightcycle.application.errors import UseCaseError
 from lightcycle.cli import cmd_peek
 
@@ -23,8 +24,8 @@ class TestCmdPeek(unittest.TestCase):
     def test_prints_the_resolved_pin_and_body(self):
         cli_mod.set_container(FakeContainer())
         fake_resp = mock.Mock(pin="acme/build@sha-new", body="the step body")
-        with mock.patch.object(cli_mod, "_flow", lambda: object()), \
-                mock.patch.object(cli_mod, "PeekStepUseCase") as UseCase:
+        with mock.patch.object(inspect_cmds, "_flow", lambda: object()), \
+                mock.patch.object(inspect_cmds, "PeekStepUseCase") as UseCase:
             UseCase.return_value.execute.return_value = fake_resp
             out = io.StringIO()
             with redirect_stdout(out):
@@ -35,8 +36,8 @@ class TestCmdPeek(unittest.TestCase):
 
     def test_usecase_error_prints_to_stderr_and_returns_nonzero(self):
         cli_mod.set_container(FakeContainer())
-        with mock.patch.object(cli_mod, "_flow", lambda: object()), \
-                mock.patch.object(cli_mod, "PeekStepUseCase") as UseCase:
+        with mock.patch.object(inspect_cmds, "_flow", lambda: object()), \
+                mock.patch.object(inspect_cmds, "PeekStepUseCase") as UseCase:
             UseCase.return_value.execute.side_effect = UseCaseError(
                 "no workflow pin found for 'ITEM.1'")
             err = io.StringIO()
@@ -47,8 +48,8 @@ class TestCmdPeek(unittest.TestCase):
 
     def test_unknown_node_prints_to_stderr_and_returns_nonzero(self):
         cli_mod.set_container(FakeContainer())
-        with mock.patch.object(cli_mod, "_flow", lambda: object()), \
-                mock.patch.object(cli_mod, "PeekStepUseCase") as UseCase:
+        with mock.patch.object(inspect_cmds, "_flow", lambda: object()), \
+                mock.patch.object(inspect_cmds, "PeekStepUseCase") as UseCase:
             UseCase.return_value.execute.side_effect = KeyError("step not found: ITEM.1")
             err = io.StringIO()
             with redirect_stderr(err):

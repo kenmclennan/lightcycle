@@ -3,29 +3,12 @@ from pytest_bdd import given, parsers, scenarios, then, when
 
 from lightcycle.adapters.claude_stream import ClaudeStreamAdapter
 from lightcycle.application.pool.breaker_gate import BreakerGateUseCase
-from lightcycle.application.pool.no_op_gates import (
-    NoOpBackupGate,
-    NoOpFlowService,
-    NoOpGit,
-    NoOpHookCompletions,
-    NoOpGuidanceGate,
-    NoOpMemoryGate,
-    NoOpMonitor,
-    NoOpConfigReload,
-    NoOpLifecycleGate,
-    NoOpGhCallGate,
-    NoOpGithubBudget,
-    NoOpGithubPollGate,
-    NoOpScriptGate,
-    NoOpScheduleGate,
-    NoOpUsageGate,
-    NoOpWorktrees,
-)
-from lightcycle.application.pool.tick import TickInput, TickUseCase
+from lightcycle.application.pool.tick import TickInput
 from lightcycle.domain.pool import SpinLedger
 from lightcycle.domain.pool.worker import Worker
 from lightcycle.ports.breaker import BreakerPort
 from tests.support.fake_spin import FakeSpinPort
+from tests.support.tick_factory import make_tick
 from tests.support.fake_store import FakeStore
 from tests.support.step_factory import create_owned_step
 
@@ -285,20 +268,10 @@ def _pool_ticks(ctx):
         ctx["workers"], ctx["fs"], ctx["breaker_port"], ctx["config"],
         spin_port=ctx["spin_port"], store=ctx["store"], stream=ClaudeStreamAdapter())
     spawner = FakeSpawner()
-    tick = TickUseCase(
+    tick = make_tick(
         ctx["store"], ctx["workers"], spawner, ctx["config"],
-        monitor=NoOpMonitor(), breaker_gate=breaker_gate,
-        hook_completions=NoOpHookCompletions(), worktrees=NoOpWorktrees(), git=NoOpGit(),
-        backup_gate=NoOpBackupGate(), worker_log=ctx["fs"], flow_service=NoOpFlowService(),
-        spin_port=ctx["spin_port"], usage_gate=NoOpUsageGate(), stream=ClaudeStreamAdapter(),
-        memory_gate=NoOpMemoryGate(),
-        schedule_gate=NoOpScheduleGate(),
-        lifecycle_gate=NoOpLifecycleGate(),
-        script_gate=NoOpScriptGate(),
-        github_poll_gate=NoOpGithubPollGate(),
-        config_reload=NoOpConfigReload(),
-        guidance_gate=NoOpGuidanceGate(),
-        github_budget=NoOpGithubBudget(), gh_call_gate=NoOpGhCallGate(),
+        breaker_gate=breaker_gate, worker_log=ctx["fs"], spin_port=ctx["spin_port"],
+        stream=ClaudeStreamAdapter(),
     )
     ctx["tick_result"] = tick.execute(TickInput(now=ctx["now"]))
     ctx["spawner"] = spawner

@@ -6,6 +6,11 @@ from tests.support.fake_store import FakeStore
 from tests.support.step_factory import create_owned_step
 
 
+class _Config:
+    def max_title_length(self):
+        return 80
+
+
 def _store_with_app():
     store = FakeStore()
     store.add_project("acme/app", shortcode="APP")
@@ -16,7 +21,7 @@ class TestCreateItemUseCase(unittest.TestCase):
     def test_happy_path_returns_id_and_creates_a_backlogged_item(self):
         store = _store_with_app()
         b1 = create_owned_step(store, "backlog one", role="human")
-        resp = CreateItemUseCase(store).execute(
+        resp = CreateItemUseCase(store, _Config()).execute(
             CreateItemInput(title="an item", description="a description", project="app", backlog=[b1])
         )
         self.assertEqual(store.get_node(resp.id).state, "backlogged")
@@ -26,7 +31,7 @@ class TestCreateItemUseCase(unittest.TestCase):
 
     def test_a_successful_create_no_longer_reports_a_defaulted_flag(self):
         store = _store_with_app()
-        resp = CreateItemUseCase(store).execute(
+        resp = CreateItemUseCase(store, _Config()).execute(
             CreateItemInput(title="an item", description="a description", project="app")
         )
         self.assertFalse(hasattr(resp, "defaulted"))
@@ -34,7 +39,7 @@ class TestCreateItemUseCase(unittest.TestCase):
     def test_repo_attaches_a_repo_artifact(self):
         store = FakeStore()
         store.add_project("acme/lightcycle", shortcode="LC")
-        resp = CreateItemUseCase(store).execute(
+        resp = CreateItemUseCase(store, _Config()).execute(
             CreateItemInput(title="an item", description="a description", repo="lightcycle")
         )
         self.assertEqual(store.get_item(resp.id).repo, "lightcycle")
@@ -42,7 +47,7 @@ class TestCreateItemUseCase(unittest.TestCase):
     def test_either_project_spelling_stores_the_short_name_and_the_identity_as_repo(self):
         for spelling in ("app", "acme/app"):
             store = _store_with_app()
-            resp = CreateItemUseCase(store).execute(
+            resp = CreateItemUseCase(store, _Config()).execute(
                 CreateItemInput(title="an item", description="a description", project=spelling)
             )
             item = store.get_item(resp.id)
@@ -52,7 +57,7 @@ class TestCreateItemUseCase(unittest.TestCase):
     def test_explicit_repo_wins_over_the_project_identity(self):
         store = _store_with_app()
         store.add_project("acme/other", shortcode="OTH")
-        resp = CreateItemUseCase(store).execute(
+        resp = CreateItemUseCase(store, _Config()).execute(
             CreateItemInput(
                 title="an item", description="a description", project="app", repo="acme/other"
             )
@@ -65,7 +70,7 @@ class TestCreateItemUseCase(unittest.TestCase):
         store = _store_with_app()
         b1 = create_owned_step(store, "backlog one", role="human")
         b2 = create_owned_step(store, "backlog two", role="human")
-        resp = CreateItemUseCase(store).execute(
+        resp = CreateItemUseCase(store, _Config()).execute(
             CreateItemInput(
                 title="an item", description="a description", project="app", backlog=[b1, b2]
             )
@@ -75,9 +80,33 @@ class TestCreateItemUseCase(unittest.TestCase):
             [("resolves", b1), ("resolves", b2)],
         )
 
+    def test_an_over_length_title_is_refused(self):
+        with self.assertRaises(UseCaseError) as ctx:
+            CreateItemUseCase(FakeStore(), _Config()).execute(
+                CreateItemInput(title="x" * 81, description="a description")
+            )
+        self.assertIn("title exceeds 80 chars", str(ctx.exception))
+
+    def test_a_blank_description_is_refused(self):
+        store = FakeStore()
+        for blank in ("", "   ", None):
+            with self.assertRaises(UseCaseError) as ctx:
+                CreateItemUseCase(store, _Config()).execute(
+                    CreateItemInput(title="an item", description=blank)
+                )
+            self.assertIn("a description is required", str(ctx.exception))
+        self.assertEqual(store.all_nodes(), [])
+
+    def test_a_one_word_description_is_accepted(self):
+        store = _store_with_app()
+        resp = CreateItemUseCase(store, _Config()).execute(
+            CreateItemInput(title="an item", description="word", project="app")
+        )
+        self.assertTrue(resp.id)
+
     def _refused(self, store, **fields):
         with self.assertRaises(UseCaseError) as ctx:
-            CreateItemUseCase(store).execute(
+            CreateItemUseCase(store, _Config()).execute(
                 CreateItemInput(title="an item", description="a description", **fields)
             )
         return str(ctx.exception)
@@ -119,7 +148,7 @@ class TestCreateItemUseCase(unittest.TestCase):
     def test_registered_repo_with_no_project_derives_shortcode_and_project(self):
         store = FakeStore()
         store.add_project("kenmclennan/lightcycle", shortcode="LC")
-        resp = CreateItemUseCase(store).execute(
+        resp = CreateItemUseCase(store, _Config()).execute(
             CreateItemInput(
                 title="an item", description="a description", repo="kenmclennan/lightcycle"
             )
@@ -131,7 +160,7 @@ class TestCreateItemUseCase(unittest.TestCase):
         store = FakeStore()
         store.add_project("acme/app", shortcode="ACME")
         store.add_project("kenmclennan/lightcycle", shortcode="LC")
-        resp = CreateItemUseCase(store).execute(
+        resp = CreateItemUseCase(store, _Config()).execute(
             CreateItemInput(
                 title="an item", description="a description",
                 project="acme/app", repo="kenmclennan/lightcycle",

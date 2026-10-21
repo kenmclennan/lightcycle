@@ -1,1326 +1,331 @@
-from dataclasses import dataclass
-from typing import Optional
-
-from rich.console import Console
-from rich.text import Text
-from textual import events
-from textual.app import ComposeResult
-from textual.binding import Binding
-from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.geometry import Region
-from textual.screen import Screen
-from textual.widgets import DataTable, RichLog, Static
-from textual.widgets.data_table import CellDoesNotExist
-
 from lightcycle.adapters.log_parser import LogLineParser
 from lightcycle.adapters.tui.design_system import (
-    ACTIVE_GLYPH_FRAMES,
     ACTIVE_GLYPH_REST_INDEX,
-    ACTIVE_GLYPH_TICKS_PER_SECOND,
     COLOURS,
-    COLUMN_GRIDS,
-    DEPENDENCY_BLOCKED_EXTRA_GLYPH,
-    DONE_GLYPH,
-    Glyph,
     HUB_SHORTCUTS,
-    HEADING_STYLE,
-    HUMAN_STEP_GLYPH,
-    LIST_ARTIFACT_SHORTCUTS,
-    STATE_GLYPHS,
-    TEXT_ARTIFACT_SHORTCUTS,
-    next_active_glyph_frame,
 )
 from lightcycle.adapters.tui.footer import DashboardFooter
-from lightcycle.adapters.tui.prose_text import prose_text, resolve_titles
-from lightcycle.adapters.tui.row_grid import (
-    GLYPH_WIDTHS,
-    apply_widths,
-    compute_layout,
-    floor_message,
-    pad_atomic_field,
-    pad_field,
-    pad_field_right,
-    render_screen_row_budget,
-    screen_row_budget_for,
-    stacked_cell,
-    truncate_field,
-    wrap_continuation,
-)
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow import UnblockInput
 from lightcycle.application.pool import (
     BreakerStatusUseCase,
     PoolRunningUseCase,
-    TailLogInput,
-    TailLogUseCase,
 )
 from lightcycle.application.work import (
-    CostInput,
-    CostUseCase,
     HierarchyInput,
     HierarchyUseCase,
     OpenArtifactInput,
     OpenArtifactUseCase,
-    StepRunInput,
-    StepRunUseCase,
 )
-from lightcycle.application.work.current_step import current_step
-from lightcycle.application.work.item_context import ItemContextReader
-from lightcycle.application.work.item_output_rows import ItemOutputRows
 from lightcycle.application.work.step_context import (
-    SECTION_INPUTS, SECTION_OUTPUTS, SECTION_RECORDS, StepContext,
+    SECTION_INPUTS,
+    SECTION_OUTPUTS,
 )
-from lightcycle.application.work.step_detail import StepDetail
-from lightcycle.application.work.step_inputs import StepInputs
 from lightcycle.application.work.step_focus import (
     ResolveStepFocusInput,
     ResolveStepFocusUseCase,
 )
-from lightcycle.application.work.project_of import project_of, short_project_label
-from lightcycle.domain.feedback import Duration
-from lightcycle.domain.money import Cost
-from lightcycle.domain.runs import pass_number
-from lightcycle.domain.work import (
-    LogKind, State, is_human_step, item_active_seconds, item_cost, parse_timestamp,
-    row_bucket, step_cost,
-)
 from lightcycle.domain.work.detail import detail_value_is_url
-from lightcycle.domain.work.output_rows import output_lines
 from lightcycle.domain.work.step_focus import (
-    FOCUS_CONTEXT, FOCUS_DESCRIPTION, FOCUS_DETAIL, FOCUS_LOG, FOCUS_REASON, FOCUS_WORKFLOW,
+    FOCUS_CONTEXT,
+    FOCUS_DETAIL,
+    FOCUS_REASON,
 )
-from lightcycle.domain.workflows.identity import parse_pin
-from lightcycle.render import (
-    display_stage, format_elapsed, format_rate, format_tokens, format_usd,
-    format_wall_and_active,
+from rich.text import Text
+from textual import events
+from textual.app import ComposeResult
+from textual.binding import Binding
+from textual.screen import Screen
+from textual.widgets import (
+    DataTable,
+    Static,
 )
-
-POLL_INTERVAL_SECONDS = 10
-LOG_TAIL_INTERVAL_SECONDS = 1
-LOG_INITIAL_TAIL_BYTES = 256 * 1024
-LOG_LINES_MAX_RETAINED = 4000
-LOG_PANE_MAX_LINES = 20000
-LOG_NO_STREAM_MESSAGE = "Nothing live to stream."
-LOG_FINISHED_MESSAGE = "✓ step finished"
-LOG_CURSOR_GLYPH = "▌"
-OUTPUTS_EMPTY_MESSAGE = "This item has no outputs yet."
-DESCRIPTION_EMPTY_MESSAGE = "This item has no description to show."
-DETAIL_EMPTY_MESSAGE = "This step has nothing to show here yet."
-CONTEXT_EMPTY_MESSAGE = "This step has no context to show."
-CONTEXT_RECONSTRUCTED_NOTE = (
-    "Reconstructed from the item's current state; this step closed before inputs were frozen at claim."
+from lightcycle.adapters.tui.hub_render import (
+    CONTEXT_CONTINUATION_INDENT,
+    CONTEXT_EMPTY_MESSAGE,
+    CONTEXT_INPUTS_LIVE_TITLE,
+    CONTEXT_NONE_TEXT,
+    CONTEXT_RECONSTRUCTED_NOTE,
+    CONTEXT_SECTIONS,
+    CONTEXT_WORKFLOW_GAP,
+    COST_CACHE_HIT_RATE_DEFINITION,
+    COST_COLUMN_GAP,
+    COST_CONTINUATION_INDENT,
+    COST_EMPTY_MESSAGE,
+    COST_FIELD_LABELS,
+    COST_NOT_RECORDED,
+    COST_NOT_RUN_MESSAGE,
+    COST_NO_TOOLS_MESSAGE,
+    DESCRIPTION_EMPTY_MESSAGE,
+    DETAIL_BLOCK_THRESHOLD,
+    DETAIL_BODY_SUFFIX,
+    DETAIL_CONTINUATION_INDENT,
+    DETAIL_EMPTY_MESSAGE,
+    DETAIL_FIELD_LABELS,
+    ESCALATION_REASON_LINE_CAP,
+    ESCALATION_TAG,
+    HIERARCHY_CONTINUATION_BASE_INDENT,
+    HeaderData,
+    ITEM_COST_EMPTY_MESSAGE,
+    LOG_CURSOR_GLYPH,
+    LOG_FINISHED_MESSAGE,
+    LOG_INITIAL_TAIL_BYTES,
+    LOG_LINES_MAX_RETAINED,
+    LOG_NO_STREAM_MESSAGE,
+    LOG_PANE_MAX_LINES,
+    LOG_TAIL_INTERVAL_SECONDS,
+    OUTPUTS_CONTINUATION_INDENT,
+    OUTPUTS_EMPTY_MESSAGE,
+    POLL_INTERVAL_SECONDS,
+    STACKED_COLUMN_KEY,
+    TOAST_DURATION_SECONDS,
+    TOAST_EDITOR_DESTINATION,
+    TOAST_FAILURE_PREFIX,
+    TOAST_FILEPATH_DESTINATION,
+    TOAST_SUB_CAPTION_BY_TAB,
+    TOAST_SUCCESS_PREFIX,
+    TOAST_URL_SUB_SUFFIX,
+    WORKFLOW_UNRESOLVED,
+    _ITEM_TAB_ORDER,
+    _STEP_TAB_ORDER,
+    _TAB_BY_FOCUS,
+    _TAB_LABELS,
+    _capped_reason_lines,
+    _context_text,
+    _cost_breakdown_value,
+    _cost_field_label,
+    _cost_hit_rate_field,
+    _cost_pane_screen_row_budget,
+    _cost_row_text,
+    _cost_rows_for_item,
+    _cost_rows_for_step,
+    _cost_stage_atomic_text,
+    _cost_tool_atomic_text,
+    _dependency_escalation,
+    _detail_field_label,
+    _display_glyph,
+    _engine_wait_seconds,
+    _flow_for_bucket,
+    _format_item_cost,
+    _gate_wait_seconds,
+    _hierarchy_default_row_id,
+    _hierarchy_label,
+    _hierarchy_stacked_first_line,
+    _identity_text,
+    _item_cost_text,
+    _item_header,
+    _item_wall_active,
+    _output_name_text,
+    _output_value_style,
+    _owning_id,
+    _park_escalation_text,
+    _rates_used_text,
+    _reason_lines_text,
+    _row_node,
+    _stacked_block_cell,
+    _stacked_prose_cell,
+    _stage_cost_text,
+    _stat_line_item,
+    _stat_line_step,
+    _state_glyph,
+    _step_count_text,
+    _step_header,
+    _step_wall_active,
+    _tab_order,
+    _unpriced_suffix,
+    _workflow_selector_pin,
+    _workflow_text,
+    build_header,
+    context_row_cells,
+    context_row_key,
+    context_section_rows,
+    context_section_title,
+    detail_fields,
+    detail_row_cells,
+    detail_value_is_block,
+    display_role,
+    escalation_panel_text,
+    escalation_reason_text,
+    hierarchy_row_cells,
+    hierarchy_time_text,
+    hierarchy_usage_text,
+    item_cost_fields,
+    landing_tab,
+    log_tab_mode,
+    output_row_cells,
+    project_label,
+    resume_toast_text,
+    step_cost_fields,
+    toast_text,
 )
-DETAIL_BLOCK_THRESHOLD = 80
-TOAST_DURATION_SECONDS = 2.0
-TOAST_SUCCESS_PREFIX = "↗ "
-TOAST_FAILURE_PREFIX = "⚠ "
-TOAST_SUB_CAPTION_BY_TAB = {
-    "outputs": "back to the outputs list automatically",
-    "detail": "back to the step's detail automatically",
-    "context": "back to the step's context automatically",
-}
-TOAST_URL_SUB_SUFFIX = "nothing more to show here"
-TOAST_FILEPATH_DESTINATION = "in its default application"
-TOAST_EDITOR_DESTINATION = "in your editor"
-WORKFLOW_UNRESOLVED = "workflow unresolved"
-
-_ITEM_TAB_ORDER = ("description", "outputs", "workflow", "cost")
-_STEP_TAB_ORDER = ("detail", "context", "workflow", "log", "cost")
-_TAB_LABELS = {
-    "description": "Description", "workflow": "Workflow", "outputs": "Outputs",
-    "detail": "Detail", "context": "Context", "log": "Log", "cost": "Cost",
-    "overview": "Overview", "items": "Items",
-}
-
-
-def _tab_order(node):
-    if node.type == "item":
-        return _ITEM_TAB_ORDER
-    return _STEP_TAB_ORDER
-
-
-_TAB_BY_FOCUS = {
-    FOCUS_LOG: "log",
-    FOCUS_REASON: "detail",
-    FOCUS_DETAIL: "detail",
-    FOCUS_CONTEXT: "context",
-    FOCUS_WORKFLOW: "workflow",
-    FOCUS_DESCRIPTION: "description",
-}
-
-
-def landing_tab(focus):
-    return _TAB_BY_FOCUS[focus.kind]
-
-
-def display_role(role):
-    return role or "human"
-
-
-STACKED_COLUMN_KEY = "row"
-HIERARCHY_CONTINUATION_BASE_INDENT = GLYPH_WIDTHS["icon"]
-OUTPUTS_CONTINUATION_INDENT = 2
-DETAIL_CONTINUATION_INDENT = 2
-DETAIL_BODY_SUFFIX = "#body"
-CONTEXT_CONTINUATION_INDENT = 2
-CONTEXT_INPUTS_LIVE_TITLE = "INPUTS (live, not yet frozen)"
-CONTEXT_NONE_TEXT = "none"
-DETAIL_FIELD_LABELS = {
-    "pr": "PR", "spec-pr": "SPEC PR", "branch": "BRANCH", "worktree": "WORKTREE",
-    "spec": "SPEC", "ci-checks": "CI CHECKS",
-    "model": "MODEL", "claimed_by": "CLAIMED_BY", "session": "SESSION",
-    "outcome": "OUTCOME", "report": "REPORT",
-    "needs": "NEEDS", "reason": "REASON",
-}
-
-
-def _detail_field_label(key):
-    return DETAIL_FIELD_LABELS.get(key) or key.upper()
-
-COST_CONTINUATION_INDENT = 2
-COST_COLUMN_GAP = 2
-COST_NOT_RECORDED = "not recorded"
-COST_CACHE_HIT_RATE_DEFINITION = "cache-read ÷ (cache-read + cache-creation + input)"
-COST_EMPTY_MESSAGE = "This step has no cost to show."
-COST_NOT_RUN_MESSAGE = "This step hasn't run yet."
-COST_NO_TOOLS_MESSAGE = "No tool calls recorded for this step."
-ITEM_COST_EMPTY_MESSAGE = "This item has no usage to show yet."
-COST_FIELD_LABELS = {
-    "turns": "TURNS", "api_calls": "API CALLS", "input_tokens": "INPUT TOKENS", "output_tokens": "OUTPUT TOKENS",
-    "cache_read_tokens": "CACHE READ TOKENS", "cache_creation_tokens": "CACHE CREATION TOKENS",
-    "thinking_tokens": "THINKING TOKENS", "cache_hit_rate": "CACHE HIT RATE", "cost": "COST",
-    "cost_basis": "COST BASIS", "rates_used": "RATES USED",
-}
-
-
-def _cost_field_label(key):
-    return COST_FIELD_LABELS[key]
-
-
-def _cost_hit_rate_field(rate):
-    return "%s (%s)" % (format_rate(rate), COST_CACHE_HIT_RATE_DEFINITION)
-
-
-def _rates_used_text(rates_used):
-    return "%s in / %s out / %s cache-write / %s cache-read per MTok" % (
-        format_usd(Cost.from_usd(rates_used["input"])),
-        format_usd(Cost.from_usd(rates_used["output"])),
-        format_usd(Cost.from_usd(rates_used["cache_write"])),
-        format_usd(Cost.from_usd(rates_used["cache_read"])),
-    )
-
-
-def _unpriced_suffix(unpriced_count):
-    if not unpriced_count:
-        return ""
-    return " (%d unpriced)" % unpriced_count
-
-
-def step_cost_fields(cost):
-    fields = [
-        ("cost", format_usd(cost.cost_usd) if cost.recorded and cost.cost_usd else COST_NOT_RECORDED),
-    ]
-    fields.append(("cost_basis", cost.cost_basis if cost.recorded else COST_NOT_RECORDED))
-    if cost.cost_basis == "derived" and cost.rates_used:
-        fields.append(("rates_used", _rates_used_text(cost.rates_used)))
-    fields.append(("turns", format_tokens(cost.turn_count)))
-    if cost.api_calls is not None:
-        fields.append(("api_calls", format_tokens(cost.api_calls)))
-    fields.append(("input_tokens", format_tokens(cost.input_tokens)))
-    fields.append(("output_tokens", format_tokens(cost.output_tokens)))
-    fields.append(("cache_read_tokens", format_tokens(cost.cache_read_tokens)))
-    fields.append(("cache_creation_tokens", format_tokens(cost.cache_creation_tokens)))
-    if cost.thinking_tokens is not None:
-        fields.append(("thinking_tokens", format_tokens(cost.thinking_tokens)))
-    fields.append(("cache_hit_rate", _cost_hit_rate_field(cost.cache_hit_rate)))
-    return fields
-
-
-def item_cost_fields(cost):
-    cost_text = format_usd(cost.cost_usd) if cost.cost_usd else COST_NOT_RECORDED
-    fields = [("cost", cost_text + _unpriced_suffix(cost.unpriced_count))]
-    fields.append(("turns", format_tokens(cost.turn_count)))
-    if cost.api_calls is not None:
-        fields.append(("api_calls", format_tokens(cost.api_calls)))
-    fields.append(("input_tokens", format_tokens(cost.input_tokens)))
-    fields.append(("output_tokens", format_tokens(cost.output_tokens)))
-    fields.append(("cache_read_tokens", format_tokens(cost.cache_read_tokens)))
-    fields.append(("cache_creation_tokens", format_tokens(cost.cache_creation_tokens)))
-    if cost.thinking_tokens is not None:
-        fields.append(("thinking_tokens", format_tokens(cost.thinking_tokens)))
-    fields.append(("cache_hit_rate", _cost_hit_rate_field(cost.cache_hit_rate)))
-    return fields
-
-
-def _stage_cost_text(row):
-    suffix = _unpriced_suffix(row.unpriced_count)
-    if row.cost_usd:
-        return format_usd(row.cost_usd) + suffix
-    if row.turn_count > 0:
-        return COST_NOT_RECORDED + suffix
-    return format_usd(Cost())
-
-
-def _cost_tool_atomic_text(row):
-    return "%s calls" % format_tokens(row.calls), "%s bytes" % format_tokens(row.bytes)
-
-
-def _cost_stage_atomic_text(row):
-    steps_text = "%d step%s · %d turn%s" % (
-        row.step_count, "" if row.step_count == 1 else "s",
-        row.turn_count, "" if row.turn_count == 1 else "s",
-    )
-    return steps_text, _stage_cost_text(row)
-
-
-def _cost_breakdown_value(kind, row):
-    if kind == "step":
-        calls_text, bytes_text = _cost_tool_atomic_text(row)
-        return "%s · %s" % (calls_text, bytes_text)
-    steps_text, cost_text = _cost_stage_atomic_text(row)
-    return "%s · %s" % (steps_text, cost_text)
-
-
-def _cost_rows_for_step(cost):
-    rows = [(key, _cost_field_label(key), value) for key, value in step_cost_fields(cost)]
-    rows.append(("__divider__", None, ""))
-    if cost.tools:
-        for row in cost.tools:
-            rows.append(("tool:%s" % row.tool, row.tool, _cost_breakdown_value("step", row)))
-    else:
-        rows.append(("__no_tools__", None, COST_NO_TOOLS_MESSAGE))
-    return rows
-
-
-def _cost_rows_for_item(cost):
-    rows = [(key, _cost_field_label(key), value) for key, value in item_cost_fields(cost)]
-    rows.append(("__divider__", None, ""))
-    for row in cost.stages:
-        rows.append(("stage:%s" % row.stage, row.stage, _cost_breakdown_value("item", row)))
-    return rows
-
-
-def _owning_id(node):
-    return node.item if node.type == "step" else node.id
-
-
-def project_label(store, node):
-    return short_project_label(project_of(store, _owning_id(node)))
-
-
-def _hierarchy_default_row_id(store, node):
-    if node.type != "item" or node.blocked_by or node.state == State.DONE:
-        return node.id
-    cur = current_step(store, node.id)
-    return cur.id if cur is not None else node.id
-
-
-def detail_fields(entries):
-    return [(e.key, e.value if e.value is not None else "") for e in entries]
-
-
-def log_tab_mode(node):
-    if node is None:
-        return "no-log"
-    if getattr(node, "role", None) == "engine":
-        if getattr(node, "log_path", None) is None:
-            return "no-log"
-        return "live" if node.state == State.QUEUED else "historical"
-    if getattr(node, "role", None) in ("human", "engine"):
-        return "no-log"
-    if node.state == State.RUNNING:
-        return "live"
-    if node.state == State.DONE:
-        return "historical"
-    return "no-log"
-
-
-@dataclass(frozen=True)
-class HeaderData:
-    id: str
-    title: str
-    project: Optional[str]
-    stat_line: Optional[str]
-    workflow_text: Optional[str]
-    glyph: Glyph
-    dependency_blocked: bool
-    escalation_text: Optional[str]
-    escalation_target: Optional[str]
-
-
-def build_header(store, node, now, flow_service, pool_halted, pool_running):
-    project = project_label(store, node) or None
-    if node.type == "item":
-        return _item_header(store, node, now, project, flow_service, pool_halted, pool_running)
-    return _step_header(store, node, now, project, flow_service, pool_halted, pool_running)
-
-
-def _park_escalation_text(node):
-    if node.park.reason:
-        return "%s\n%s" % (node.park.needs, node.park.reason)
-    return node.park.needs
-
-
-def _dependency_escalation(node):
-    if node.state != State.BLOCKED or not node.blocked_by:
-        return None, None
-    target = sorted(node.blocked_by)[0]
-    return "Blocked · depends on %s" % target, target
-
-
-def _flow_for_bucket(node, flow_service):
-    if flow_service is None or getattr(node, "type", None) != "step":
-        return None
-    return flow_service.flow_for(node)
-
-
-def _step_count_text(children):
-    n = len(children)
-    return "%d step%s" % (n, "" if n == 1 else "s")
-
-
-def _format_item_cost(cost):
-    base = format_usd(cost.cost_usd) if cost.cost_usd else COST_NOT_RECORDED
-    return base + _unpriced_suffix(cost.unpriced_count)
-
-
-def _item_cost_text(children):
-    cost = item_cost(children)
-    if cost.turn_count == 0 and not cost.cost_usd:
-        return ""
-    return _format_item_cost(cost)
-
-
-def _item_wall_active(store, item, children, now):
-    start = Duration.earliest_claim(store.history(child.id) for child in children)
-    if start is None:
-        return None
-    end = item.closed_at if item.state == State.DONE and item.closed_at else now
-    wall = (
-        parse_timestamp(end) - parse_timestamp(start)
-    ).total_seconds()
-    active = item_active_seconds(children)
-    return wall, active
-
-
-def _workflow_selector_pin(flow_service, node):
-    selector, _source = flow_service.workflow_owner(node)
-    if selector is None:
-        return None, None
-    try:
-        return flow_service.resolve_selection(selector), None
-    except ValueError as error:
-        return None, str(error)
-
-
-def _workflow_text(flow_service, node):
-    pin, error = _workflow_selector_pin(flow_service, node)
-    if error is not None:
-        return WORKFLOW_UNRESOLVED
-    if pin is None:
-        return None
-    parsed = parse_pin(pin)
-    if parsed is None:
-        return pin
-    origin, name, sha = parsed
-    return "%s/%s (%s)" % (origin, name, sha[:8])
-
-
-def _stat_line_item(store, item, children, flow_service, now, pool_halted=False):
-    if item.blocked_by:
-        return None
-    if item.state == State.DONE:
-        lead = "Done"
-    else:
-        cur = current_step(store, item.id)
-        if cur is None or cur.state == State.BLOCKED:
-            return None
-        lead = display_stage(flow_service.display_for(cur), cur.stage)
-    segments = [lead, _step_count_text(children)]
-    wall_active = _item_wall_active(store, item, children, now)
-    if wall_active is not None:
-        segments.append(format_wall_and_active(*wall_active))
-    cost_text = _item_cost_text(children)
-    if cost_text:
-        segments.append(cost_text)
-    if item.state == State.QUEUED and pool_halted:
-        segments.append("pool halted")
-    return " · ".join(segments)
-
-
-def _gate_wait_seconds(store, node, now):
-    parked = Duration(store.history(node.id)).last_release()
-    start = parked or node.created_at
-    if not start:
-        return None
-    end = node.closed_at if node.state == State.DONE else now
-    return (
-        parse_timestamp(end) - parse_timestamp(start)
-    ).total_seconds()
-
-
-def _step_wall_active(store, node, now):
-    delta = Duration(store.history(node.id)).elapsed_since_last_claim(now)
-    if delta is None:
-        return None
-    return delta.total_seconds(), node.active_seconds or 0
-
-
-def _engine_wait_seconds(node, now):
-    if not node.created_at:
-        return None
-    end = node.closed_at if node.state == State.DONE else now
-    return (parse_timestamp(end) - parse_timestamp(node.created_at)).total_seconds()
-
-
-def _stat_line_step(store, node, flow_service, now, pool_halted=False):
-    phrase = display_stage(flow_service.display_for(node), node.stage)
-    role = display_role(getattr(node, "role", None))
-    if role == "human":
-        wait = _gate_wait_seconds(store, node, now)
-        if wait is None:
-            return phrase
-        label = "done" if node.state == State.DONE else "waiting"
-        return "%s · %s %s" % (phrase, label, format_elapsed(wait))
-    if role == "engine":
-        wait = _engine_wait_seconds(node, now)
-        if wait is None:
-            return phrase
-        label = "done" if node.state == State.DONE else "waiting"
-        return "%s · %s %s" % (phrase, label, format_elapsed(wait))
-    segments = [phrase]
-    if node.state == State.DONE:
-        segments.append("done")
-    wall_active = _step_wall_active(store, node, now)
-    if wall_active is not None:
-        segments.append(format_wall_and_active(*wall_active))
-    cost_text = hierarchy_usage_text(node)[1]
-    if cost_text:
-        segments.append(cost_text)
-    if node.state == State.QUEUED and pool_halted:
-        segments.append("pool halted")
-    return " · ".join(segments)
-
-
-def _item_header(store, node, now, project, flow_service, pool_halted, pool_running):
-    glyph_node, glyph_flow = node, None
-    children = store.children(node.id)
-
-    escalation_text, escalation_target = _dependency_escalation(node)
-    if escalation_text is None and node.state != State.DONE:
-        cur = current_step(store, node.id)
-        if cur is not None:
-            glyph_node, glyph_flow = cur, flow_service.flow_for(cur)
-            escalation_text, escalation_target = _dependency_escalation(cur)
-            if escalation_text is None and getattr(cur, "role", None) == "human" and cur.needs:
-                escalation_text = _park_escalation_text(cur)
-
-    stat_line = _stat_line_item(store, node, children, flow_service, now, pool_halted)
-
-    return HeaderData(
-        id=node.id, title=node.title, project=project,
-        stat_line=stat_line,
-        workflow_text=_workflow_text(flow_service, node),
-        glyph=_state_glyph(glyph_node, glyph_flow, pool_running),
-        dependency_blocked=bool(glyph_node.blocked_by),
-        escalation_text=escalation_text, escalation_target=escalation_target,
-    )
-
-
-def _step_header(store, node, now, project, flow_service, pool_halted, pool_running):
-    escalation_text, escalation_target = _dependency_escalation(node)
-    if escalation_text is None and getattr(node, "role", None) == "human" and getattr(node, "needs", None):
-        escalation_text = _park_escalation_text(node)
-
-    item = store.get_node(node.item)
-    flow = flow_service.flow_for(node)
-    stat_line = _stat_line_step(store, node, flow_service, now, pool_halted)
-    return HeaderData(
-        id=node.id, title=item.title, project=project,
-        stat_line=stat_line,
-        workflow_text=_workflow_text(flow_service, node),
-        glyph=_state_glyph(node, flow, pool_running),
-        dependency_blocked=bool(node.blocked_by),
-        escalation_text=escalation_text, escalation_target=escalation_target,
-    )
-
-
-def _state_glyph(node, flow, pool_running):
-    bucket = row_bucket(node, flow, pool_running)
-    if bucket == "done":
-        return HUMAN_STEP_GLYPH if is_human_step(node) else DONE_GLYPH
-    if bucket == "queued":
-        return HUMAN_STEP_GLYPH if is_human_step(node) else STATE_GLYPHS["queued"]
-    return STATE_GLYPHS[bucket]
-
-
-def _display_glyph(node, active_frame, flow, pool_running):
-    glyph = _state_glyph(node, flow, pool_running)
-    if active_frame is not None and row_bucket(node, flow, pool_running) == "active":
-        return glyph._replace(glyph=active_frame)
-    return glyph
-
-
-def hierarchy_usage_text(node):
-    if node.type != "step":
-        return "", ""
-    cost = step_cost(node, {})
-    if not cost.applicable or not cost.has_run:
-        return "", ""
-    n = cost.turn_count
-    turns_text = "%s turn%s" % (format_tokens(n), "" if n == 1 else "s")
-    cost_text = format_usd(cost.cost_usd) if cost.cost_usd else COST_NOT_RECORDED
-    return turns_text, cost_text
-
-
-def hierarchy_time_text(store, node, now):
-    if node.type != "step":
-        return ""
-    if is_human_step(node):
-        wait = _gate_wait_seconds(store, node, now)
-        return format_elapsed(wait) if wait is not None else ""
-    wall_active = _step_wall_active(store, node, now)
-    return format_wall_and_active(*wall_active) if wall_active is not None else ""
-
-
-def _hierarchy_stacked_first_line(
-    row, layout, row_budget, active_frame=None, flow_service=None, store=None, now=None,
-    pool_running=False,
-):
-    node = row.node
-    glyph = _display_glyph(node, active_frame, _flow_for_bucket(node, flow_service), pool_running)
-    icon_cell = Text(glyph.glyph, style=COLOURS[glyph.colour])
-    if node.blocked_by:
-        icon_cell = icon_cell + Text(
-            DEPENDENCY_BLOCKED_EXTRA_GLYPH.glyph, style=COLOURS[DEPENDENCY_BLOCKED_EXTRA_GLYPH.colour]
-        )
-    icon_field = pad_field(icon_cell, GLYPH_WIDTHS["icon"])
-    id_field = pad_atomic_field(node.id, layout.atomic_widths["id"])
-    turns_text, cost_text = hierarchy_usage_text(node)
-    turns_field = pad_atomic_field(Text(turns_text, style=COLOURS["dim"]), layout.atomic_widths["turns"])
-    time_field = pad_atomic_field(
-        Text(hierarchy_time_text(store, node, now), style=COLOURS["dim"]), layout.atomic_widths["time"]
-    )
-    content_so_far = icon_field + id_field + turns_field + time_field
-    cost_cell = Text(cost_text, style=COLOURS["dim"]) if cost_text else Text("")
-    cost_area = max(0, row_budget - len(content_so_far.plain))
-    return content_so_far + pad_field_right(cost_cell, cost_area)
-
-
-def _hierarchy_label(node, flow_service, multi_pass):
-    if node.type != "step":
-        return node.title
-    if flow_service is None:
-        base, phase = node.stage, None
-    else:
-        base, phase = flow_service.display_for(node) or node.stage, flow_service.phase_for(node)
-    n = pass_number(node.pass_id)
-    parts = (["pass %d" % n] if multi_pass else []) + ([phase] if phase else [])
-    return " · ".join(parts + [base]) if parts else base
-
-
-def _row_node(rows, row_id):
-    return next((r.node for r in rows if r.node.id == row_id), None)
-
-
-def hierarchy_row_cells(
-    row, layout=None, row_budget=None, active_frame=None, flow_service=None, multi_pass=False,
-    store=None, now=None, pool_running=False,
-):
-    node = row.node
-    if layout is not None and layout.stacked:
-        first_line = _hierarchy_stacked_first_line(
-            row, layout, row_budget, active_frame, flow_service, store, now, pool_running
-        )
-        indent = HIERARCHY_CONTINUATION_BASE_INDENT + row.depth
-        label = _hierarchy_label(node, flow_service, multi_pass)
-        return (stacked_cell(first_line, indent, label, row_budget),)
-    glyph = _display_glyph(node, active_frame, _flow_for_bucket(node, flow_service), pool_running)
-    icon_cell = Text(glyph.glyph, style=COLOURS[glyph.colour])
-    if node.blocked_by:
-        icon_cell = icon_cell + Text(
-            DEPENDENCY_BLOCKED_EXTRA_GLYPH.glyph, style=COLOURS[DEPENDENCY_BLOCKED_EXTRA_GLYPH.colour]
-        )
-    title_cell = ("  " * row.depth) + _hierarchy_label(node, flow_service, multi_pass)
-    turns_text, cost_text = hierarchy_usage_text(node)
-    turns_cell = Text(turns_text, style=COLOURS["dim"]) if turns_text else ""
-    time_text = hierarchy_time_text(store, node, now)
-    time_cell = Text(time_text, style=COLOURS["dim"]) if time_text else ""
-    cost_cell = Text(cost_text, style=COLOURS["dim"]) if cost_text else ""
-    return (icon_cell, node.id, title_cell, turns_cell, time_cell, cost_cell)
-
-
-def _output_name_text(line):
-    suffix = " +%d" % line.older if line.older else ""
-    return ("  " if line.is_history else "") + line.title + suffix
-
-
-def _output_value_style(line):
-    return COLOURS["dim"] if line.is_history else COLOURS["cyan"]
-
-
-def output_row_cells(line, layout=None, row_budget=None):
-    name = Text(_output_name_text(line), style=COLOURS["dim"] if line.is_history else COLOURS["text"])
-    step = Text(line.step or "", style=COLOURS["dim"])
-    pass_cell = Text(line.pass_text, style=COLOURS["dim"])
-    if layout is not None and layout.stacked:
-        first_line = (
-            pad_field(name, layout.atomic_widths["name"])
-            + pad_field(step, layout.atomic_widths["step"])
-            + pass_cell
-        )
-        return (
-            stacked_cell(
-                first_line, OUTPUTS_CONTINUATION_INDENT, line.value, row_budget,
-                prose_style=_output_value_style(line),
-            ),
-        )
-    return (name, Text(line.value, style=_output_value_style(line)), step, pass_cell)
-
-
-def detail_value_is_block(value):
-    return bool(value) and ("\n" in value or len(value) > DETAIL_BLOCK_THRESHOLD)
-
-
-def _stacked_block_cell(key_field, indent, body, row_budget, style):
-    cell = Text() + key_field
-    for paragraph in body.splitlines() or [""]:
-        for line in wrap_continuation(paragraph, row_budget - indent):
-            cell = cell + Text("\n" + " " * indent) + Text(line, style=style)
-    return cell
-
-
-def detail_row_cells(field, layout=None, row_budget=None, titles=None):
-    key, value = field
-    label = _detail_field_label(key)
-    style = COLOURS["cyan"] if key in ("pr", "spec-pr", "worktree", "ci-checks") else COLOURS["text"]
-    block = detail_value_is_block(value)
-    if layout is not None and layout.stacked:
-        key_field = pad_field(Text(label, style=COLOURS["dim"]), layout.atomic_widths["key"])
-        if block:
-            return [(key, (_stacked_block_cell(key_field, DETAIL_CONTINUATION_INDENT, value, row_budget, style),))]
-        return [(
-            key,
-            (stacked_cell(key_field, DETAIL_CONTINUATION_INDENT, value, row_budget, prose_style=style),),
-        )]
-    if block:
-        return [
-            (key, (Text(label, style=COLOURS["dim"]), Text(""))),
-            (key + DETAIL_BODY_SUFFIX, (Text(""), prose_text(value, titles or {}, style))),
-        ]
-    return [(key, (Text(label, style=COLOURS["dim"]), Text(value, style=style)))]
-
-
-def context_section_title(section, inputs_live):
-    if section == SECTION_INPUTS and inputs_live:
-        return CONTEXT_INPUTS_LIVE_TITLE
-    return section.upper()
-
-
-CONTEXT_SECTIONS = (SECTION_INPUTS, SECTION_OUTPUTS, SECTION_RECORDS)
-
-
-def context_section_rows(rows):
-    return {
-        section: [(str(i), r) for i, r in enumerate(rows) if r.section == section]
-        for section in CONTEXT_SECTIONS
-    }
-
-
-def context_row_key(row):
-    if row.pass_id:
-        return "%s (p%d)" % (row.key, pass_number(row.pass_id))
-    return row.key
-
-
-def _stacked_prose_cell(first, indent, prose, row_budget):
-    cell = Text() + first
-    console = Console(width=max(row_budget - indent, 1))
-    for line in prose.split("\n"):
-        for wrapped in line.wrap(console, max(row_budget - indent, 1)):
-            wrapped.rstrip_end(max(row_budget - indent, 1))
-            cell = cell + Text("\n" + " " * indent) + wrapped
-    return cell
-
-
-def context_row_cells(row, layout=None, row_budget=None, titles=None):
-    style = COLOURS["cyan"] if row.kind in ("url", "filepath") else COLOURS["text"]
-    prose = prose_text(row.value or "", titles or {}, style)
-    key = context_row_key(row)
-    if layout is not None and layout.stacked:
-        first = pad_field(Text(key, style=COLOURS["dim"]), layout.atomic_widths["key"])
-        return (_stacked_prose_cell(first, CONTEXT_CONTINUATION_INDENT, prose, row_budget),)
-    return (Text(key, style=COLOURS["dim"]), prose)
-
-
-def _cost_pane_screen_row_budget(pane, columns):
-    return pane.screen.size.width - pane.scrollbar_gutter.width - COST_COLUMN_GAP * (columns - 1)
-
-
-def _cost_row_text(label, value, layout, row_budget):
-    if not label:
-        return Text(value, style=COLOURS["dim"])
-    key_field = pad_field(Text(label, style=COLOURS["dim"]), layout.atomic_widths["key"])
-    if layout.stacked:
-        return stacked_cell(key_field, COST_CONTINUATION_INDENT, value, row_budget, prose_style=COLOURS["text"])
-    return key_field + Text("  ") + Text(value, style=COLOURS["text"])
-
-
-def toast_text(success, message, kind, value, tab="outputs"):
-    base_caption = TOAST_SUB_CAPTION_BY_TAB[tab]
-    prefix = TOAST_SUCCESS_PREFIX if success else TOAST_FAILURE_PREFIX
-    colour = COLOURS["cyan"] if success else COLOURS["red"]
-    main, sub = message, base_caption
-    if success and kind == "url":
-        sub = "%s - %s" % (base_caption, TOAST_URL_SUB_SUFFIX)
-    elif success and kind in ("filepath", "editor"):
-        main = "Opened %s" % value
-        destination = TOAST_EDITOR_DESTINATION if kind == "editor" else TOAST_FILEPATH_DESTINATION
-        sub = "%s - %s" % (destination, base_caption)
-    text = Text(prefix + main, style=colour)
-    text.append("\n")
-    text.append(sub, style=COLOURS["dim"])
-    return text
-
-
-def resume_toast_text(success, message):
-    prefix = TOAST_SUCCESS_PREFIX if success else TOAST_FAILURE_PREFIX
-    colour = COLOURS["cyan"] if success else COLOURS["red"]
-    return Text(prefix + message, style=colour)
-
-
-ESCALATION_TAG = "⚠ needs you"
-ESCALATION_REASON_LINE_CAP = 4
-
-
-def _capped_reason_lines(text, width):
-    paragraphs = text.split("\n")
-    lines = []
-    offsets = []
-    for paragraph_index, paragraph in enumerate(paragraphs):
-        consumed = 0
-        for line in wrap_continuation(paragraph, width):
-            consumed += len(line) + 1
-            lines.append(line)
-            offsets.append((paragraph_index, consumed))
-    if len(lines) <= ESCALATION_REASON_LINE_CAP:
-        return lines
-    kept = lines[: ESCALATION_REASON_LINE_CAP - 1]
-    cut_paragraph_index, cut_offset = offsets[ESCALATION_REASON_LINE_CAP - 2]
-    remaining_parts = [paragraphs[cut_paragraph_index][cut_offset:].lstrip()]
-    remaining_parts.extend(paragraphs[cut_paragraph_index + 1 :])
-    remaining_text = " ".join(part for part in remaining_parts if part)
-    kept.append(truncate_field(remaining_text, width))
-    return kept
-
-
-def _reason_lines_text(header, width):
-    result = Text()
-    for index, line in enumerate(_capped_reason_lines(header.escalation_text, width)):
-        if index:
-            result.append("\n")
-        line_text = Text(line, style=COLOURS["text"])
-        if header.escalation_target:
-            idx = line.find(header.escalation_target)
-            if idx != -1:
-                line_text.stylize(COLOURS["cyan"], idx, idx + len(header.escalation_target))
-        result.append_text(line_text)
-    return result
-
-
-def escalation_reason_text(header, width):
-    return _reason_lines_text(header, width)
-
-
-def escalation_panel_text():
-    return Text(ESCALATION_TAG, style="bold %s" % COLOURS["amber"])
-
-
-class EscalationPanel(Static):
-    def on_resize(self, event: events.Resize) -> None:
-        header = self.parent
-        if isinstance(header, HubHeader) and header._last_header is not None:
-            header._paint_escalation(header._last_header)
-
-
-def _identity_text(header):
-    text = Text(header.glyph.glyph, style=COLOURS[header.glyph.colour])
-    if header.dependency_blocked:
-        text.append(
-            DEPENDENCY_BLOCKED_EXTRA_GLYPH.glyph, style=COLOURS[DEPENDENCY_BLOCKED_EXTRA_GLYPH.colour]
-        )
-    text.append("  ")
-    text.append(header.id, style=COLOURS["cyan"])
-    if header.project:
-        text.append("  %s" % header.project, style=COLOURS["dim"])
-    text.append("  ")
-    text.append(header.title or "", style=COLOURS["text"])
-    return text
-
-
-CONTEXT_WORKFLOW_GAP = "    "
-
-
-def _context_text(header, width=None):
-    if not header.workflow_text:
-        return header.stat_line
-    if header.stat_line:
-        candidate = header.stat_line + CONTEXT_WORKFLOW_GAP + header.workflow_text
-    else:
-        candidate = header.workflow_text
-    if width is not None and len(candidate) > width:
-        return header.stat_line
-    return candidate
-
-
-class HubHeader(Vertical):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._last_header = None
-
-    def compose(self) -> ComposeResult:
-        yield Static(id="hub-identity")
-        yield Static(id="hub-context")
-        yield EscalationPanel(id="hub-escalation")
-
-    def update(self, header) -> None:
-        self.query_one("#hub-identity", Static).update(_identity_text(header))
-        context = self.query_one("#hub-context", Static)
-        text = _context_text(header, context.screen.size.width)
-        if text:
-            context.update(Text(text, style=COLOURS["dim"]))
-            context.display = True
-        else:
-            context.update("")
-            context.display = False
-
-        self._last_header = header
-        self._paint_escalation(header)
-
-    def _paint_escalation(self, header) -> None:
-        panel = self.query_one(EscalationPanel)
-        if header.escalation_text:
-            is_demand = header.escalation_target is None
-            width = max(1, panel.size.width)
-            painted = escalation_panel_text() if is_demand else escalation_reason_text(header, width)
-            panel.update(painted)
-            panel.display = True
-        else:
-            panel.update("")
-            panel.display = False
-
-
-class HubTabStrip(Horizontal):
-    def __init__(self, tabs, active, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._tabs = tabs
-        self._active = active
-
-    def compose(self) -> ComposeResult:
-        for tab in self._tabs:
-            classes = "tab-active" if tab == self._active else "tab-dim"
-            yield Static(_TAB_LABELS[tab], id="hub-tab-%s" % tab, classes=classes)
-
-    def set_active(self, active) -> None:
-        for tab in self._tabs:
-            widget = self.query_one("#hub-tab-%s" % tab, Static)
-            widget.set_class(tab == active, "tab-active")
-            widget.set_class(tab != active, "tab-dim")
-
-
-class LogPane(RichLog):
-    BINDINGS = [
-        Binding("up", "scroll_up", "Scroll up", show=False),
-        Binding("down", "scroll_down", "Scroll down", show=False),
-        Binding("ctrl+u", "page_up", "Page up", show=False),
-        Binding("ctrl+d", "page_down", "Page down", show=False),
-    ]
-
-    def __init__(self, *args, **kwargs):
-        kwargs.setdefault("wrap", True)
-        kwargs.setdefault("min_width", 0)
-        kwargs.setdefault("max_lines", LOG_PANE_MAX_LINES)
-        super().__init__(*args, **kwargs)
-        self.live = False
-
-    def watch_scroll_y(self, old, new) -> None:
-        super().watch_scroll_y(old, new)
-        self.auto_scroll = self.is_vertical_scroll_end
-
-    def write_entry(self, content) -> int:
-        before_deferred = len(self._deferred_renders)
-        before = len(self.lines) + self._start_line
-        self.write(content)
-        if len(self._deferred_renders) > before_deferred:
-            return 1
-        return len(self.lines) + self._start_line - before
-
-    def replace_last_entry(self, row_count, content) -> None:
-        for _ in range(row_count):
-            if self._deferred_renders:
-                self._deferred_renders.pop()
-            elif self.lines:
-                self.lines.pop()
-        self._line_cache.clear()
-        self.write(content, scroll_end=False)
-
-
-class HierarchyPagingTable(DataTable):
-    _BASE = [b for b in DataTable.BINDINGS if b.key not in ("left", "right")]
-
-    BINDINGS = _BASE + [
-        Binding("ctrl+u", "page_up", "Page up", show=False),
-        Binding("ctrl+d", "page_down", "Page down", show=False),
-        Binding("right", "select_cursor", "Open", show=False),
-        Binding("o", "jump_outputs", "Outputs", show=False),
-        Binding("l", "jump_log", "Log", show=False),
-    ]
-
-    def __init__(self, *args, **kwargs):
-        kwargs.setdefault("cursor_foreground_priority", "renderable")
-        super().__init__(*args, **kwargs)
-
-    def watch_scroll_y(self, old, new) -> None:
-        super().watch_scroll_y(old, new)
-        if isinstance(self.screen, NodeHubScreen):
-            self.screen.update_pinned_ancestor()
-
-    def watch_cursor_coordinate(self, old_coordinate, new_coordinate) -> None:
-        super().watch_cursor_coordinate(old_coordinate, new_coordinate)
-        if isinstance(self.screen, NodeHubScreen):
-            self.screen.update_pinned_ancestor()
-
-    def _highlighted_id(self):
-        if self.row_count == 0:
-            return None
-        try:
-            cell_key = self.coordinate_to_cell_key(self.cursor_coordinate)
-        except CellDoesNotExist:
-            return None
-        return cell_key.row_key.value
-
-    def action_jump_outputs(self) -> None:
-        row_id = self._highlighted_id()
-        if row_id is None or not isinstance(self.screen, NodeHubScreen):
-            return
-        node = _row_node(self.screen._last_rows, row_id)
-        if node is None or node.type != "item":
-            return
-        self.screen.switch_at(row_id, initial_tab="outputs")
-
-    def action_jump_log(self) -> None:
-        row_id = self._highlighted_id()
-        if row_id is None or not isinstance(self.screen, NodeHubScreen):
-            return
-        node = _row_node(self.screen._last_rows, row_id)
-        if node is None or node.type != "step":
-            return
-        if log_tab_mode(node) == "no-log":
-            return
-        self.screen.switch_at(row_id, initial_tab="log")
-
-    def on_resize(self, event: events.Resize) -> None:
-        screen = self.screen
-        if isinstance(screen, NodeHubScreen):
-            screen.refresh_hierarchy_width()
-
-    def _page_height(self) -> int:
-        height = self.scrollable_content_region.height - (
-            self.header_height if self.show_header else 0
-        )
-        if isinstance(self.screen, NodeHubScreen):
-            banner = self.screen.query_one("#pinned-ancestor", Static)
-            if banner.display:
-                height += 1
-        return height
-
-    def action_page_down(self) -> None:
-        self._set_hover_cursor(False)
-        if self.show_cursor and self.cursor_type in ("cell", "row"):
-            height = self._page_height()
-            offset = 0
-            rows_to_scroll = 0
-            row_index, _ = self.cursor_coordinate
-            for ordered_row in self.ordered_rows[row_index:]:
-                offset += ordered_row.height
-                rows_to_scroll += 1
-                if offset > height:
-                    break
-            target_row = row_index + rows_to_scroll - 1
-            self.scroll_relative(y=height, animate=False, force=True)
-            self.move_cursor(row=target_row, scroll=False)
-        else:
-            super().action_page_down()
-
-    def action_page_up(self) -> None:
-        self._set_hover_cursor(False)
-        if self.show_cursor and self.cursor_type in ("cell", "row"):
-            height = self._page_height()
-            offset = 0
-            rows_to_scroll = 0
-            row_index, _ = self.cursor_coordinate
-            for ordered_row in self.ordered_rows[: row_index + 1]:
-                offset += ordered_row.height
-                rows_to_scroll += 1
-                if offset > height:
-                    break
-            target_row = row_index - rows_to_scroll + 1
-            self.scroll_relative(y=-height, animate=False)
-            self.move_cursor(row=target_row, scroll=False)
-        else:
-            super().action_page_up()
-
-
-class OutputsTable(DataTable):
-    _BASE = [b for b in DataTable.BINDINGS if b.key not in ("left", "right")]
-
-    BINDINGS = _BASE + [
-        Binding("ctrl+u", "page_up", "Page up", show=False),
-        Binding("ctrl+d", "page_down", "Page down", show=False),
-        Binding("right", "select_cursor", "Open", show=False),
-        Binding("space", "toggle_history", "History", show=False),
-    ]
-
-    def __init__(self, *args, **kwargs):
-        kwargs.setdefault("cursor_foreground_priority", "renderable")
-        super().__init__(*args, **kwargs)
-
-    def action_toggle_history(self) -> None:
-        screen = self.screen
-        if isinstance(screen, NodeHubScreen):
-            screen.toggle_output_history()
-
-    def on_resize(self, event: events.Resize) -> None:
-        screen = self.screen
-        if isinstance(screen, NodeHubScreen):
-            screen.refresh_outputs_width()
-
-
-class DetailTable(DataTable):
-    _BASE = [b for b in DataTable.BINDINGS if b.key not in ("left", "right")]
-
-    BINDINGS = _BASE + [
-        Binding("ctrl+u", "page_up", "Page up", show=False),
-        Binding("ctrl+d", "page_down", "Page down", show=False),
-        Binding("right", "select_cursor", "Open", show=False),
-    ]
-
-    def __init__(self, *args, **kwargs):
-        kwargs.setdefault("cursor_foreground_priority", "renderable")
-        super().__init__(*args, **kwargs)
-
-    def on_resize(self, event: events.Resize) -> None:
-        screen = self.screen
-        if isinstance(screen, NodeHubScreen):
-            screen.refresh_detail_width()
-
-
-class ContextList(VerticalScroll, can_focus=False):
-    pass
-
-
-class ContextTable(DataTable):
-    _BASE = [b for b in DataTable.BINDINGS if b.key not in ("left", "right")]
-
-    BINDINGS = _BASE + [
-        Binding("ctrl+u", "page_up", "Page up", show=False),
-        Binding("ctrl+d", "page_down", "Page down", show=False),
-        Binding("right", "select_cursor", "Open", show=False),
-    ]
-
-    def __init__(self, *args, **kwargs):
-        kwargs.setdefault("cursor_foreground_priority", "renderable")
-        super().__init__(*args, **kwargs)
-
-    def action_cursor_down(self) -> None:
-        self.screen.step_context_cursor(1)
-
-    def action_cursor_up(self) -> None:
-        self.screen.step_context_cursor(-1)
-
-    def action_page_down(self) -> None:
-        self.screen.page_context_cursor(1)
-
-    def action_page_up(self) -> None:
-        self.screen.page_context_cursor(-1)
-
-    def action_scroll_home(self) -> None:
-        self.screen.jump_context_cursor(first=True)
-
-    def action_scroll_top(self) -> None:
-        self.screen.jump_context_cursor(first=True)
-
-    def action_scroll_end(self) -> None:
-        self.screen.jump_context_cursor(first=False)
-
-    def action_scroll_bottom(self) -> None:
-        self.screen.jump_context_cursor(first=False)
-
-    def on_resize(self, event: events.Resize) -> None:
-        screen = self.screen
-        if isinstance(screen, NodeHubScreen):
-            screen.refresh_context_width()
-
-
-class CostPane(RichLog):
-    BINDINGS = [
-        Binding("up", "scroll_up", "Scroll up", show=False),
-        Binding("down", "scroll_down", "Scroll down", show=False),
-        Binding("ctrl+u", "page_up", "Page up", show=False),
-        Binding("ctrl+d", "page_down", "Page down", show=False),
-    ]
-
-    def on_resize(self, event: events.Resize) -> None:
-        screen = self.screen
-        if isinstance(screen, NodeHubScreen):
-            screen.refresh_cost_width()
-
-
-class ArtifactTextBody(RichLog):
-    BINDINGS = [
-        Binding("up", "scroll_up", "Scroll up", show=False),
-        Binding("down", "scroll_down", "Scroll down", show=False),
-        Binding("ctrl+u", "page_up", "Page up", show=False),
-        Binding("ctrl+d", "page_down", "Page down", show=False),
-    ]
-
-
-class DescriptionPane(RichLog):
-    BINDINGS = [
-        Binding("up", "scroll_up", "Scroll up", show=False),
-        Binding("down", "scroll_down", "Scroll down", show=False),
-        Binding("ctrl+u", "page_up", "Page up", show=False),
-        Binding("ctrl+d", "page_down", "Page down", show=False),
-    ]
-
-    def on_resize(self, event: events.Resize) -> None:
-        screen = self.screen
-        if isinstance(screen, NodeHubScreen):
-            screen.refresh_description_width()
-
-
-def pane_text_width(pane) -> int:
-    if not pane.size.width:
-        return 0
-    return max(pane.size.width - pane.styles.scrollbar_size_vertical, 1)
-
-
-class ArtifactListTable(DataTable):
-    _BASE = [b for b in DataTable.BINDINGS if b.key not in ("left", "right")]
-
-    BINDINGS = _BASE + [
-        Binding("ctrl+u", "page_up", "Page up", show=False),
-        Binding("ctrl+d", "page_down", "Page down", show=False),
-    ]
-
-    def __init__(self, *args, **kwargs):
-        kwargs.setdefault("cursor_foreground_priority", "renderable")
-        super().__init__(*args, **kwargs)
-
-
-class ArtifactViewerHeader(Horizontal):
-    def compose(self) -> ComposeResult:
-        yield Static(id="artifact-viewer-kind")
-        yield Static(id="artifact-viewer-count")
-
-    def update(self, artifact_type, node_id, count_text) -> None:
-        kind_text = Text()
-        kind_text.append(artifact_type, style=COLOURS["cyan"])
-        kind_text.append(" · %s" % node_id, style=COLOURS["dim"])
-        self.query_one("#artifact-viewer-kind", Static).update(kind_text)
-        self.query_one("#artifact-viewer-count", Static).update(
-            Text(count_text, style=COLOURS["dim"]) if count_text else ""
-        )
-
-
-class ArtifactViewerScreen(Screen, inherit_bindings=False):
-    BINDINGS = [b for b in Screen.BINDINGS if b.key != "tab"] + [
-        Binding("escape", "close", "Back", show=False),
-        Binding("tab", "close", "Back", show=False),
-        Binding("left", "close", "Back", show=False),
-    ]
-
-    CSS = f"""
-    ArtifactViewerHeader {{
-        height: 2;
-        border-bottom: solid {COLOURS["border"]};
-    }}
-    #artifact-viewer-kind {{
-        width: auto;
-    }}
-    #artifact-viewer-count {{
-        width: 1fr;
-        content-align: right middle;
-    }}
-    """
-
-    def __init__(self, artifact, node_id):
-        super().__init__()
-        self._artifact = artifact
-        self._node_id = node_id
-
-    def on_mount(self) -> None:
-        self.app._refresh_status_bar()
-
-    def action_close(self) -> None:
-        self.app.pop_screen()
-
-
-class TextArtifactViewerScreen(ArtifactViewerScreen):
-    CSS = ArtifactViewerScreen.CSS + """
-    ArtifactTextBody {
-        height: 1fr;
-    }
-    """
-
-    def __init__(self, artifact, node_id, position, total):
-        super().__init__(artifact, node_id)
-        self._position = position
-        self._total = total
-
-    def compose(self) -> ComposeResult:
-        yield ArtifactViewerHeader(id="artifact-viewer-header")
-        yield ArtifactTextBody(id="artifact-viewer-body", highlight=False, markup=False, wrap=True)
-        yield DashboardFooter(id="artifact-viewer-footer", shortcuts=TEXT_ARTIFACT_SHORTCUTS)
-
-    def on_mount(self) -> None:
-        super().on_mount()
-        self.query_one(ArtifactViewerHeader).update(
-            self._artifact.type, self._node_id, "%d / %d" % (self._position, self._total)
-        )
-        body = self.query_one(ArtifactTextBody)
-        body.write(Text(self._artifact.value))
-        self.set_focus(body)
-
-
-class ListArtifactViewerScreen(ArtifactViewerScreen):
-    CSS = ArtifactViewerScreen.CSS + """
-    ArtifactListTable {
-        height: 1fr;
-    }
-    """
-
-    def compose(self) -> ComposeResult:
-        yield ArtifactViewerHeader(id="artifact-viewer-header")
-        yield ArtifactListTable(id="artifact-viewer-list")
-        yield DashboardFooter(id="artifact-viewer-footer", shortcuts=LIST_ARTIFACT_SHORTCUTS)
-
-    def on_mount(self) -> None:
-        super().on_mount()
-        table = self.query_one(ArtifactListTable)
-        table.cursor_type = "row"
-        table.show_header = False
-        items = [line for line in self._artifact.value.splitlines() if line.strip()]
-        self.query_one(ArtifactViewerHeader).update(
-            self._artifact.type,
-            self._node_id,
-            "%d item%s" % (len(items), "" if len(items) == 1 else "s"),
-        )
-        table.add_column("value", key="value")
-        for index, item in enumerate(items):
-            table.add_row(item, key=str(index))
-        if items:
-            self.set_focus(table)
+from lightcycle.adapters.tui.hub_widgets import (
+    HubScreenMarker,
+    ContextList,
+    ContextTable,
+    CostPane,
+    DescriptionPane,
+    DetailTable,
+    EscalationPanel,
+    HierarchyPagingTable,
+    HubHeader,
+    HubTabStrip,
+    LogPane,
+    OutputsTable,
+    pane_text_width,
+)
+from lightcycle.adapters.tui.artifact_viewer import (
+    ArtifactListTable,
+    ArtifactTextBody,
+    ArtifactViewerHeader,
+    ArtifactViewerScreen,
+    ListArtifactViewerScreen,
+    TextArtifactViewerScreen,
+)
+from lightcycle.adapters.tui.hub_tabs.log import LogTabMixin
+from lightcycle.adapters.tui.hub_tabs.hierarchy import HierarchyTabMixin
+from lightcycle.adapters.tui.hub_tabs.outputs import OutputsTabMixin
+from lightcycle.adapters.tui.hub_tabs.detail import DetailTabMixin
+from lightcycle.adapters.tui.hub_tabs.context import ContextTabMixin
+from lightcycle.adapters.tui.hub_tabs.cost import CostTabMixin
+from lightcycle.adapters.tui.hub_tabs.description import DescriptionTabMixin
+
+__all__ = [
+    "HubScreenMarker",
+    "ArtifactListTable",
+    "ArtifactTextBody",
+    "ArtifactViewerHeader",
+    "ArtifactViewerScreen",
+    "CONTEXT_CONTINUATION_INDENT",
+    "CONTEXT_EMPTY_MESSAGE",
+    "CONTEXT_INPUTS_LIVE_TITLE",
+    "CONTEXT_NONE_TEXT",
+    "CONTEXT_RECONSTRUCTED_NOTE",
+    "CONTEXT_SECTIONS",
+    "CONTEXT_WORKFLOW_GAP",
+    "COST_CACHE_HIT_RATE_DEFINITION",
+    "COST_COLUMN_GAP",
+    "COST_CONTINUATION_INDENT",
+    "COST_EMPTY_MESSAGE",
+    "COST_FIELD_LABELS",
+    "COST_NOT_RECORDED",
+    "COST_NOT_RUN_MESSAGE",
+    "COST_NO_TOOLS_MESSAGE",
+    "ContextList",
+    "ContextTable",
+    "CostPane",
+    "DESCRIPTION_EMPTY_MESSAGE",
+    "DETAIL_BLOCK_THRESHOLD",
+    "DETAIL_BODY_SUFFIX",
+    "DETAIL_CONTINUATION_INDENT",
+    "DETAIL_EMPTY_MESSAGE",
+    "DETAIL_FIELD_LABELS",
+    "DescriptionPane",
+    "DetailTable",
+    "ESCALATION_REASON_LINE_CAP",
+    "ESCALATION_TAG",
+    "EscalationPanel",
+    "HIERARCHY_CONTINUATION_BASE_INDENT",
+    "HeaderData",
+    "HierarchyPagingTable",
+    "HubHeader",
+    "HubTabStrip",
+    "ITEM_COST_EMPTY_MESSAGE",
+    "LOG_CURSOR_GLYPH",
+    "LOG_FINISHED_MESSAGE",
+    "LOG_INITIAL_TAIL_BYTES",
+    "LOG_LINES_MAX_RETAINED",
+    "LOG_NO_STREAM_MESSAGE",
+    "LOG_PANE_MAX_LINES",
+    "LOG_TAIL_INTERVAL_SECONDS",
+    "ListArtifactViewerScreen",
+    "LogPane",
+    "OUTPUTS_CONTINUATION_INDENT",
+    "OUTPUTS_EMPTY_MESSAGE",
+    "OutputsTable",
+    "POLL_INTERVAL_SECONDS",
+    "STACKED_COLUMN_KEY",
+    "TOAST_DURATION_SECONDS",
+    "TOAST_EDITOR_DESTINATION",
+    "TOAST_FAILURE_PREFIX",
+    "TOAST_FILEPATH_DESTINATION",
+    "TOAST_SUB_CAPTION_BY_TAB",
+    "TOAST_SUCCESS_PREFIX",
+    "TOAST_URL_SUB_SUFFIX",
+    "TextArtifactViewerScreen",
+    "WORKFLOW_UNRESOLVED",
+    "_ITEM_TAB_ORDER",
+    "_STEP_TAB_ORDER",
+    "_TAB_BY_FOCUS",
+    "_TAB_LABELS",
+    "_capped_reason_lines",
+    "_context_text",
+    "_cost_breakdown_value",
+    "_cost_field_label",
+    "_cost_hit_rate_field",
+    "_cost_pane_screen_row_budget",
+    "_cost_row_text",
+    "_cost_rows_for_item",
+    "_cost_rows_for_step",
+    "_cost_stage_atomic_text",
+    "_cost_tool_atomic_text",
+    "_dependency_escalation",
+    "_detail_field_label",
+    "_display_glyph",
+    "_engine_wait_seconds",
+    "_flow_for_bucket",
+    "_format_item_cost",
+    "_gate_wait_seconds",
+    "_hierarchy_default_row_id",
+    "_hierarchy_label",
+    "_hierarchy_stacked_first_line",
+    "_identity_text",
+    "_item_cost_text",
+    "_item_header",
+    "_item_wall_active",
+    "_output_name_text",
+    "_output_value_style",
+    "_owning_id",
+    "_park_escalation_text",
+    "_rates_used_text",
+    "_reason_lines_text",
+    "_row_node",
+    "_stacked_block_cell",
+    "_stacked_prose_cell",
+    "_stage_cost_text",
+    "_stat_line_item",
+    "_stat_line_step",
+    "_state_glyph",
+    "_step_count_text",
+    "_step_header",
+    "_step_wall_active",
+    "_tab_order",
+    "_unpriced_suffix",
+    "_workflow_selector_pin",
+    "_workflow_text",
+    "build_header",
+    "context_row_cells",
+    "context_row_key",
+    "context_section_rows",
+    "context_section_title",
+    "detail_fields",
+    "detail_row_cells",
+    "detail_value_is_block",
+    "display_role",
+    "escalation_panel_text",
+    "escalation_reason_text",
+    "hierarchy_row_cells",
+    "hierarchy_time_text",
+    "hierarchy_usage_text",
+    "item_cost_fields",
+    "landing_tab",
+    "log_tab_mode",
+    "output_row_cells",
+    "pane_text_width",
+    "project_label",
+    "resume_toast_text",
+    "step_cost_fields",
+    "toast_text",
+]
 
 
 HUB_TAB_STRIP_CSS = f"""
@@ -1337,7 +342,7 @@ HUB_TAB_STRIP_CSS = f"""
 """
 
 
-class NodeHubScreen(Screen, inherit_bindings=False):
+class NodeHubScreen(HubScreenMarker, LogTabMixin, HierarchyTabMixin, OutputsTabMixin, DetailTabMixin, ContextTabMixin, CostTabMixin, DescriptionTabMixin, Screen, inherit_bindings=False):
     BINDINGS = [b for b in Screen.BINDINGS if b.key != "tab"] + [
         Binding("escape", "close_hub", "Back", show=False),
         Binding("tab", "close_hub", "Back", show=False),
@@ -1616,111 +621,6 @@ class NodeHubScreen(Screen, inherit_bindings=False):
         if self._log_timer is not None:
             self._log_timer.resume()
 
-    def _setup_log_tab(self) -> None:
-        store = self._container.store
-        node = store.get_node(self._node_id)
-        log_node = node if node.type == "step" else None
-        mode = log_tab_mode(log_node)
-        self._log_mode = mode
-        self._log_parser = LogLineParser()
-        self._log_lines = []
-        self._show_thinking = True
-        empty = self.query_one("#hub-log-empty", Static)
-        if mode == "no-log":
-            empty.update(LOG_NO_STREAM_MESSAGE)
-            return
-        self._log_target = log_node.id
-        log_pane = self.query_one(LogPane)
-        log_pane.live = mode == "live"
-        log_pane.auto_scroll = mode == "live"
-        result = self._run_initial_tail()
-        if result.path is None:
-            self._log_mode = "no-log"
-            empty.update(LOG_NO_STREAM_MESSAGE)
-            return
-        self._apply_tail_result(result)
-        if self._log_mode == "live" and not self._log_finished:
-            self._log_timer = self.set_interval(LOG_TAIL_INTERVAL_SECONDS, self._tail_tick)
-
-    def _run_initial_tail(self):
-        use_case = TailLogUseCase(
-            self._container.store, self._container.workers, self._container.worker_log,
-            self._container.fs, self._container.config
-        )
-        return use_case.execute(TailLogInput(target=self._log_target, max_bytes=LOG_INITIAL_TAIL_BYTES))
-
-    def _run_tail(self, offset):
-        use_case = TailLogUseCase(
-            self._container.store, self._container.workers, self._container.worker_log,
-            self._container.fs, self._container.config
-        )
-        return use_case.execute(TailLogInput(target=self._log_target, offset=offset))
-
-    def _tail_tick(self) -> None:
-        self._apply_tail_result(self._run_tail(self._log_offset))
-
-    def _apply_tail_result(self, result) -> None:
-        self._log_offset = result.offset
-        log_pane = self.query_one(LogPane)
-        new_lines = self._log_parser.feed(result.data) if result.data else []
-        if new_lines:
-            self._log_lines = (self._log_lines + new_lines)[-LOG_LINES_MAX_RETAINED:]
-            retained_new = new_lines[max(0, len(new_lines) - LOG_LINES_MAX_RETAINED):]
-            self._write_tail_data(log_pane, retained_new)
-        if self._log_mode == "live" and not result.live and not self._log_finished:
-            self._clear_log_cursor(log_pane)
-            self._log_finished = True
-            log_pane.live = False
-            log_pane.write(Text(LOG_FINISHED_MESSAGE, style=COLOURS["cyan"]))
-            if self._log_timer is not None:
-                self._log_timer.stop()
-
-    def _visible_log_lines(self, lines):
-        if self._show_thinking:
-            return list(lines)
-        return [line for line in lines if line.kind != LogKind.THINKING]
-
-    def _render_log_line(self, line) -> Text:
-        prefix = line.timestamp.astimezone().strftime("%H:%M:%S ") if line.timestamp else ""
-        return Text(prefix + line.text, style=COLOURS["text"])
-
-    def _paint_log_lines(self, log_pane, lines, live) -> None:
-        for index, line in enumerate(lines):
-            content = self._render_log_line(line)
-            if live and index == len(lines) - 1:
-                cursor_content = Text.assemble(content, (LOG_CURSOR_GLYPH, COLOURS["cyan"]))
-                self._log_cursor_row_count = log_pane.write_entry(cursor_content)
-                self._log_cursor_text = content
-                self._log_cursor_active = True
-            else:
-                log_pane.write_entry(content)
-
-    def _write_tail_data(self, log_pane, lines) -> None:
-        visible = self._visible_log_lines(lines)
-        if not visible:
-            return
-        live = self._log_mode == "live" and not self._log_finished
-        if live:
-            self._clear_log_cursor(log_pane)
-        self._paint_log_lines(log_pane, visible, live)
-
-    def _clear_log_cursor(self, log_pane) -> None:
-        if not self._log_cursor_active:
-            return
-        log_pane.replace_last_entry(self._log_cursor_row_count, self._log_cursor_text)
-        self._log_cursor_active = False
-
-    def action_toggle_thinking(self) -> None:
-        if self._active_tab != "log" or self._log_mode == "no-log":
-            return
-        self._show_thinking = not self._show_thinking
-        log_pane = self.query_one(LogPane)
-        log_pane.clear()
-        self._log_cursor_active = False
-        visible = self._visible_log_lines(self._log_lines)
-        live = self._log_mode == "live" and not self._log_finished
-        self._paint_log_lines(log_pane, visible, live)
-
     def _initial_refresh(self) -> None:
         self._refresh(initial=True)
         self._focus_active_tab()
@@ -1759,341 +659,6 @@ class NodeHubScreen(Screen, inherit_bindings=False):
     def _refresh_footer(self) -> None:
         self.app._refresh_status_bar()
 
-    def _hierarchy_layout(self, table, rows):
-        store = self._container.store
-        now = self._now().isoformat()
-        step_rows = [r for r in rows if r.node.type == "step"]
-        usage = [hierarchy_usage_text(r.node) for r in step_rows]
-        atomic_values = {
-            "id": [r.node.id for r in rows],
-            "turns": [turns_text for turns_text, _cost_text in usage],
-            "time": [hierarchy_time_text(store, r.node, now) for r in step_rows],
-            "cost": [cost_text for _turns_text, cost_text in usage],
-        }
-        row_budget = screen_row_budget_for(table, len(COLUMN_GRIDS["workflow"]))
-        max_depth = max((r.depth for r in rows), default=0)
-        indent = HIERARCHY_CONTINUATION_BASE_INDENT + max_depth
-        return compute_layout(row_budget, ["icon"], atomic_values, indent)
-
-    def refresh_hierarchy_width(self) -> None:
-        table = self.query_one(HierarchyPagingTable)
-        if not self._last_rows:
-            return
-        layout = self._hierarchy_layout(table, self._last_rows)
-        if layout.floor != self._hierarchy_floor or layout.stacked != self._hierarchy_stacked or layout.stacked:
-            self._render_hierarchy(self._last_rows, self._last_multi_pass, initial=True)
-            self._apply_tab_visibility()
-            return
-        if layout.floor:
-            self.query_one("#hierarchy-floor", Static).update(
-                Text(floor_message(layout, table, len(COLUMN_GRIDS["workflow"])), style=COLOURS["dim"])
-            )
-            return
-        widths = {
-            "icon": GLYPH_WIDTHS["icon"],
-            "id": layout.atomic_widths["id"],
-            "title": layout.flexible_width,
-            "turns": layout.atomic_widths["turns"],
-            "time": layout.atomic_widths["time"],
-            "cost": layout.atomic_widths["cost"],
-        }
-        apply_widths(table, widths)
-
-    def refresh_outputs_width(self) -> None:
-        table = self.query_one(OutputsTable)
-        if not self._last_outputs:
-            return
-        layout = self._outputs_layout(table, self._last_outputs)
-        if layout.floor != self._outputs_floor or layout.stacked != self._outputs_stacked or layout.stacked:
-            self._render_output_lines(self._last_outputs, initial=True)
-            self._apply_tab_visibility()
-            return
-        if layout.floor:
-            self.query_one("#outputs-floor", Static).update(
-                Text(floor_message(layout, table, len(COLUMN_GRIDS["outputs"])), style=COLOURS["dim"])
-            )
-            return
-        apply_widths(table, {
-            "name": layout.atomic_widths["name"], "value": layout.flexible_width,
-            "step": layout.atomic_widths["step"], "pass": layout.atomic_widths["pass"],
-        })
-
-    def refresh_detail_width(self) -> None:
-        table = self.query_one(DetailTable)
-        if not self._last_detail_fields:
-            return
-        layout = self._detail_layout(table, self._last_detail_fields)
-        if layout.floor != self._detail_floor or layout.stacked != self._detail_stacked or layout.stacked:
-            self._render_detail_fields(self._last_detail_fields, initial=True)
-            self._apply_tab_visibility()
-            return
-        if layout.floor:
-            self.query_one("#detail-floor", Static).update(
-                Text(floor_message(layout, table, len(COLUMN_GRIDS["detail"])), style=COLOURS["dim"])
-            )
-            return
-        apply_widths(table, {"key": layout.atomic_widths["key"], "value": layout.flexible_width})
-
-    def _selected_id(self, table):
-        if table.row_count == 0:
-            return None
-        try:
-            cell_key = table.coordinate_to_cell_key(table.cursor_coordinate)
-        except CellDoesNotExist:
-            return None
-        return cell_key.row_key.value
-
-    def _render_hierarchy(self, rows, multi_pass, initial) -> None:
-        self._last_rows = rows
-        self._last_multi_pass = multi_pass
-        self._sync_active_glyph_animation()
-        table = self.query_one(HierarchyPagingTable)
-        shape = tuple(r.node.id for r in rows)
-        layout = self._hierarchy_layout(table, rows)
-        if (
-            shape == self._last_hierarchy_shape
-            and not initial
-            and not self._hierarchy_needs_rebuild
-            and layout.stacked == self._hierarchy_stacked
-        ):
-            self._update_hierarchy_cells(table, rows, multi_pass)
-            return
-
-        self._hierarchy_floor = bool(rows) and layout.floor
-        self._hierarchy_stacked = layout.stacked
-        if self._hierarchy_floor:
-            self._hierarchy_needs_rebuild = True
-            self.query_one("#hierarchy-floor", Static).update(
-                Text(floor_message(layout, table, len(COLUMN_GRIDS["workflow"])), style=COLOURS["dim"])
-            )
-            return
-        self._hierarchy_needs_rebuild = False
-
-        selected_id = self._selected_id(table) or self._hierarchy_target_id
-        table.clear(columns=True)
-        row_budget = render_screen_row_budget(table, layout, len(COLUMN_GRIDS["workflow"]))
-        self._hierarchy_layout_cache = layout
-        self._hierarchy_row_budget_cache = row_budget
-        store = self._container.store
-        now = self._now().isoformat()
-        if layout.stacked:
-            table.add_column(STACKED_COLUMN_KEY, width=row_budget, key=STACKED_COLUMN_KEY)
-        else:
-            widths = {
-                "icon": GLYPH_WIDTHS["icon"],
-                "id": layout.atomic_widths["id"],
-                "title": layout.flexible_width,
-                "turns": layout.atomic_widths["turns"],
-                "time": layout.atomic_widths["time"],
-                "cost": layout.atomic_widths["cost"],
-            }
-            for key in COLUMN_GRIDS["workflow"]:
-                table.add_column(key, width=widths[key], key=key)
-
-        ids = [r.node.id for r in rows]
-        index = ids.index(selected_id) if selected_id in ids else 0
-        active_frame = self._active_glyph_char()
-        for row in rows:
-            table.add_row(
-                *hierarchy_row_cells(
-                    row, layout, row_budget, active_frame=active_frame,
-                    flow_service=self._flow_service, multi_pass=multi_pass,
-                    store=store, now=now, pool_running=self._pool_running,
-                ),
-                height=None, key=row.node.id
-            )
-
-        self._last_hierarchy_shape = shape
-        if rows:
-            table.move_cursor(row=index)
-        self.update_pinned_ancestor()
-
-    def _update_hierarchy_cells(self, table, rows, multi_pass) -> None:
-        table_ = self.query_one(HierarchyPagingTable)
-        layout = self._hierarchy_layout(table_, rows)
-        row_budget = render_screen_row_budget(table_, layout, len(COLUMN_GRIDS["workflow"]))
-        self._hierarchy_layout_cache = layout
-        self._hierarchy_row_budget_cache = row_budget
-        store = self._container.store
-        now = self._now().isoformat()
-        active_frame = self._active_glyph_char()
-        for row in rows:
-            cells = hierarchy_row_cells(
-                row, layout, row_budget, active_frame=active_frame,
-                flow_service=self._flow_service, multi_pass=multi_pass,
-                store=store, now=now, pool_running=self._pool_running,
-            )
-            if layout.stacked:
-                table.update_cell(row.node.id, STACKED_COLUMN_KEY, cells[0])
-                continue
-            for key, value in zip(COLUMN_GRIDS["workflow"], cells):
-                table.update_cell(row.node.id, key, value)
-
-    def _active_glyph_char(self) -> str:
-        return ACTIVE_GLYPH_FRAMES[self._active_glyph_frame]
-
-    def _active_glyph_ids(self):
-        return tuple(
-            r.node.id for r in self._last_rows
-            if row_bucket(r.node, _flow_for_bucket(r.node, self._flow_service), self._pool_running) == "active"
-        )
-
-    def _sync_active_glyph_animation(self) -> None:
-        should_run = (
-            self._active_tab == "workflow"
-            and self.is_current
-            and bool(self._active_glyph_ids())
-            and not self._hierarchy_floor
-        )
-        if should_run and self._active_glyph_timer is None:
-            self._active_glyph_timer = self.set_interval(
-                1 / ACTIVE_GLYPH_TICKS_PER_SECOND, self._tick_active_glyph
-            )
-        elif not should_run and self._active_glyph_timer is not None:
-            self._active_glyph_timer.stop()
-            self._active_glyph_timer = None
-            self._active_glyph_frame = ACTIVE_GLYPH_REST_INDEX
-
-    def _tick_active_glyph(self) -> None:
-        self._active_glyph_frame = next_active_glyph_frame(self._active_glyph_frame)
-        active_ids = self._active_glyph_ids()
-        if not active_ids or self._hierarchy_layout_cache is None:
-            return
-        table = self.query_one(HierarchyPagingTable)
-        frame = self._active_glyph_char()
-        layout = self._hierarchy_layout_cache
-        row_budget = self._hierarchy_row_budget_cache
-        store = self._container.store
-        now = self._now().isoformat()
-        rows_by_id = {r.node.id: r for r in self._last_rows}
-        for node_id in active_ids:
-            row = rows_by_id.get(node_id)
-            if row is None:
-                continue
-            cells = hierarchy_row_cells(
-                row, layout, row_budget, active_frame=frame, flow_service=self._flow_service,
-                multi_pass=self._last_multi_pass, store=store, now=now,
-                pool_running=self._pool_running,
-            )
-            try:
-                if layout.stacked:
-                    table.update_cell(node_id, STACKED_COLUMN_KEY, cells[0])
-                else:
-                    table.update_cell(node_id, "icon", cells[0])
-            except CellDoesNotExist:
-                pass
-        self.update_pinned_ancestor()
-
-    def _outputs_layout(self, table, lines):
-        gap = "  "
-        atomic_values = {
-            "name": [_output_name_text(line) + gap for line in lines],
-            "step": [(line.step or "") + gap for line in lines],
-            "pass": [line.pass_text for line in lines],
-        }
-        row_budget = screen_row_budget_for(table, len(COLUMN_GRIDS["outputs"]))
-        return compute_layout(row_budget, [], atomic_values, indent=OUTPUTS_CONTINUATION_INDENT)
-
-    def _detail_layout(self, table, fields):
-        atomic_values = {"key": [_detail_field_label(key) for key, _value in fields]}
-        row_budget = screen_row_budget_for(table, len(COLUMN_GRIDS["detail"]))
-        return compute_layout(row_budget, [], atomic_values, indent=DETAIL_CONTINUATION_INDENT)
-
-    def _selected_output_index(self, table):
-        if table.row_count == 0:
-            return None
-        try:
-            cell_key = table.coordinate_to_cell_key(table.cursor_coordinate)
-        except CellDoesNotExist:
-            return None
-        value = cell_key.row_key.value
-        return int(value) if value is not None else None
-
-    def _render_outputs(self, rows, initial) -> None:
-        self._output_rows = rows
-        self._render_output_lines(
-            output_lines(rows, self._expanded_outputs), initial
-        )
-
-    def _render_output_lines(self, lines, initial, select_key=None) -> None:
-        self._last_outputs = lines
-        self._has_outputs = bool(lines)
-        table = self.query_one(OutputsTable)
-        layout = self._outputs_layout(table, lines)
-        if (
-            tuple(lines) == self._last_outputs_shape
-            and not initial
-            and not self._outputs_needs_rebuild
-            and layout.stacked == self._outputs_stacked
-        ):
-            self._last_outputs_shape = tuple(lines)
-            self._update_output_cells(table, lines)
-            return
-
-        self._outputs_floor = bool(lines) and layout.floor
-        self._outputs_stacked = layout.stacked
-        if self._outputs_floor:
-            self._outputs_needs_rebuild = True
-            self.query_one("#outputs-floor", Static).update(
-                Text(floor_message(layout, table, len(COLUMN_GRIDS["outputs"])), style=COLOURS["dim"])
-            )
-            return
-        self._outputs_needs_rebuild = False
-
-        selected_index = self._selected_output_index(table)
-        table.clear(columns=True)
-        row_budget = render_screen_row_budget(table, layout, len(COLUMN_GRIDS["outputs"]))
-        if layout.stacked:
-            table.add_column(STACKED_COLUMN_KEY, width=row_budget, key=STACKED_COLUMN_KEY)
-        else:
-            widths = {
-                "name": layout.atomic_widths["name"], "value": layout.flexible_width,
-                "step": layout.atomic_widths["step"], "pass": layout.atomic_widths["pass"],
-            }
-            for key in COLUMN_GRIDS["outputs"]:
-                table.add_column(key, width=widths[key], key=key)
-
-        for index, line in enumerate(lines):
-            table.add_row(*output_row_cells(line, layout, row_budget), height=None, key=str(index))
-
-        self._last_outputs_shape = tuple(lines)
-        if lines:
-            if select_key is not None:
-                selected_index = next(
-                    (i for i, line in enumerate(lines) if line.row_key == select_key), None
-                )
-            has_selection = selected_index is not None and selected_index < len(lines)
-            table.move_cursor(row=selected_index if has_selection else 0)
-
-    def toggle_output_history(self) -> None:
-        table = self.query_one(OutputsTable)
-        index = self._selected_output_index(table)
-        if index is None or index >= len(self._last_outputs):
-            return
-        line = self._last_outputs[index]
-        owner = next((r for r in self._output_rows if r.key == line.row_key), None)
-        if owner is None or not owner.history:
-            return
-        self._expanded_outputs.symmetric_difference_update({line.row_key})
-        self._render_output_lines(
-            output_lines(self._output_rows, self._expanded_outputs), initial=True,
-            select_key=line.row_key,
-        )
-
-    def _update_output_cells(self, table, lines) -> None:
-        layout = self._outputs_layout(table, lines)
-        row_budget = render_screen_row_budget(table, layout, len(COLUMN_GRIDS["outputs"]))
-        for index, line in enumerate(lines):
-            cells = output_row_cells(line, layout, row_budget)
-            if layout.stacked:
-                table.update_cell(str(index), STACKED_COLUMN_KEY, cells[0])
-                continue
-            for key, value in zip(COLUMN_GRIDS["outputs"], cells):
-                table.update_cell(str(index), key, value)
-
-    def _item_output_rows(self, store, item):
-        return ItemOutputRows(store, self._flow_service).for_item(item)
-
     def _land_cursor(self) -> None:
         if self._landed:
             return
@@ -2116,402 +681,6 @@ class NodeHubScreen(Screen, inherit_bindings=False):
                             self._activate_context_table(table)
                             table.move_cursor(row=position)
                             return
-
-    def _fields_for(self, store, step, flow_service):
-        run = StepRunUseCase(store, flow_service).execute(StepRunInput(step=step.id))
-        step_inputs = StepInputs(store, flow_service)
-        entries, _presents = StepDetail(store, flow_service).resolve(
-            step, step_inputs.read(step), step_inputs.entry_dicts_for_step(step), run=run,
-            worktree=self._worktree_path_for(run, flow_service))
-        return detail_fields(entries)
-
-    def _render_detail(self, store, step, initial) -> None:
-        fields = self._fields_for(store, step, self._flow_service)
-        self._detail_empty = not any(value for _key, value in fields)
-        self._render_detail_fields(fields, initial)
-
-    def _worktree_path_for(self, run, flow_service):
-        if not run.branch:
-            return None
-        try:
-            return self._container.worktrees(flow=flow_service).path_for_run(run)
-        except UseCaseError:
-            return None
-
-    def _detail_rows(self, fields, layout, row_budget):
-        blocks = "\n".join(value for _key, value in fields if detail_value_is_block(value))
-        titles = resolve_titles(self._container.store, blocks)
-        rows = []
-        for field in fields:
-            rows.extend(detail_row_cells(field, layout, row_budget, titles))
-        return rows
-
-    def _render_detail_fields(self, fields, initial) -> None:
-        self._last_detail_fields = fields
-        table = self.query_one(DetailTable)
-        layout = self._detail_layout(table, fields)
-        row_budget = render_screen_row_budget(table, layout, len(COLUMN_GRIDS["detail"]))
-        rows = self._detail_rows(fields, layout, row_budget)
-        shape = tuple(k for k, _cells in rows)
-        if (
-            shape == self._last_detail_shape
-            and not initial
-            and not self._detail_needs_rebuild
-            and layout.stacked == self._detail_stacked
-        ):
-            self._update_detail_cells(table, rows)
-            return
-
-        self._detail_floor = bool(fields) and layout.floor
-        self._detail_stacked = layout.stacked
-        if self._detail_floor:
-            self._detail_needs_rebuild = True
-            self.query_one("#detail-floor", Static).update(
-                Text(floor_message(layout, table, len(COLUMN_GRIDS["detail"])), style=COLOURS["dim"])
-            )
-            return
-        self._detail_needs_rebuild = False
-
-        selected_key = self._selected_detail_key(table)
-        table.clear(columns=True)
-        if layout.stacked:
-            table.add_column(STACKED_COLUMN_KEY, width=row_budget, key=STACKED_COLUMN_KEY)
-        else:
-            widths = {"key": layout.atomic_widths["key"], "value": layout.flexible_width}
-            for key in COLUMN_GRIDS["detail"]:
-                table.add_column(key, width=widths[key], key=key)
-
-        for row_key, cells in rows:
-            table.add_row(*cells, height=None, key=row_key)
-
-        self._last_detail_shape = shape
-        if rows:
-            keys = [row_key for row_key, _cells in rows]
-            index = keys.index(selected_key) if selected_key in keys else 0
-            table.move_cursor(row=index)
-
-    def _selected_detail_key(self, table):
-        if table.row_count == 0:
-            return None
-        try:
-            cell_key = table.coordinate_to_cell_key(table.cursor_coordinate)
-        except CellDoesNotExist:
-            return None
-        return cell_key.row_key.value
-
-    def _update_detail_cells(self, table, rows) -> None:
-        columns = (STACKED_COLUMN_KEY,) if self._detail_stacked else COLUMN_GRIDS["detail"]
-        for row_key, cells in rows:
-            for key, value in zip(columns, cells):
-                table.update_cell(row_key, key, value)
-
-    def _context_tables(self):
-        return list(self.query(ContextTable))
-
-    def _visible_context_tables(self):
-        return [t for t in self._context_tables() if t.row_count]
-
-    def _context_entries(self):
-        return [(t, row) for t in self._visible_context_tables() for row in range(t.row_count)]
-
-    def _active_context_table(self):
-        for table in self._visible_context_tables():
-            if table.name == self._context_active:
-                return table
-        return None
-
-    def _context_focus_target(self):
-        return self._active_context_table() or next(iter(self._visible_context_tables()), None)
-
-    def _activate_context_table(self, table) -> None:
-        self._context_active = table.name
-        for other in self._context_tables():
-            other.show_cursor = other is table
-
-    def on_descendant_focus(self, event: events.DescendantFocus) -> None:
-        widget = event.widget
-        if isinstance(widget, ContextTable) and widget.name != self._context_active:
-            self._activate_context_table(widget)
-
-    def _context_position(self):
-        table = self._active_context_table()
-        if table is None:
-            return None
-        return self._context_entries().index((table, table.cursor_coordinate.row))
-
-    def step_context_cursor(self, delta) -> None:
-        position = self._context_position()
-        if position is not None:
-            self._goto_context(position + delta)
-
-    def jump_context_cursor(self, first) -> None:
-        self._goto_context(0 if first else len(self._context_entries()) - 1)
-
-    def page_context_cursor(self, direction) -> None:
-        position = self._context_position()
-        if position is None:
-            return
-        entries = self._context_entries()
-        viewport = max(self.query_one(ContextList).size.height, 1)
-        travelled = 0
-        target = position
-        while 0 <= target + direction < len(entries) and travelled < viewport:
-            target += direction
-            table, row = entries[target]
-            travelled += table.ordered_rows[row].height
-        self._goto_context(target)
-
-    def _goto_context(self, index) -> None:
-        entries = self._context_entries()
-        if not entries:
-            return
-        index = max(0, min(index, len(entries) - 1))
-        table, row = entries[index]
-        was_context_focus = isinstance(self.focused, ContextTable)
-        self._activate_context_table(table)
-        table.move_cursor(row=row, animate=False, scroll=False)
-        if was_context_focus and self.focused is not table:
-            self.set_focus(table, scroll_visible=False)
-        self._scroll_context_to(table, row, index)
-
-    def _scroll_context_to(self, table, row, index) -> None:
-        context_list = self.query_one(ContextList)
-        if index == 0:
-            context_list.scroll_home(animate=False, immediate=True)
-            return
-        top = table.virtual_region.y + sum(r.height for r in table.ordered_rows[:row])
-        bottom = top + table.ordered_rows[row].height
-        if row == 0:
-            top = self.query_one("#hub-context-header-%s" % table.name, Static).virtual_region.y
-        context_list.scroll_to_region(
-            Region(0, top, max(context_list.size.width, 1), bottom - top),
-            animate=False,
-            immediate=True,
-        )
-
-    def _context_layout(self, table, sections):
-        data = [r for members in sections.values() for _key, r in members]
-        atomic_values = {
-            "key": [context_row_key(r) for r in data],
-        }
-        row_budget = screen_row_budget_for(table, len(COLUMN_GRIDS["context"]))
-        return compute_layout(row_budget, [], atomic_values, indent=CONTEXT_CONTINUATION_INDENT)
-
-    def _render_context(self, store, step, initial) -> None:
-        view = StepContext(store, self._flow_service).read(step)
-        self._last_context_rows = list(view.rows)
-        self._has_context = any(r.value is not None or r.section != SECTION_INPUTS for r in view.rows)
-        self._context_inputs_live = view.inputs_live
-        self._context_reconstructed = view.reconstructed
-        self._paint_context(initial)
-
-    def refresh_context_width(self) -> None:
-        if self._last_context_rows and self.size.width != self._context_width:
-            self._paint_context(True)
-            self._apply_tab_visibility()
-
-    def _selected_context_key(self):
-        table = self._active_context_table()
-        return self._selected_detail_key(table) if table is not None else None
-
-    def _paint_context(self, initial) -> None:
-        sizing = self.query_one("#hub-context-table-%s" % SECTION_INPUTS, ContextTable)
-        sections = context_section_rows(self._last_context_rows)
-        layout = self._context_layout(sizing, sections)
-        row_budget = render_screen_row_budget(sizing, layout, len(COLUMN_GRIDS["context"]))
-        titles = resolve_titles(
-            self._container.store, "\n".join(r.value or "" for r in self._last_context_rows)
-        )
-        cells = {
-            section: [
-                (key, context_row_cells(row, layout, row_budget, titles)) for key, row in members
-            ]
-            for section, members in sections.items()
-        }
-        shape = (
-            tuple(
-                (section, tuple((k, tuple(c.plain for c in cs)) for k, cs in rows))
-                for section, rows in cells.items()
-            ),
-            layout.stacked,
-            self._context_inputs_live,
-        )
-        if shape == self._last_context_shape and not initial and not self._context_needs_rebuild:
-            return
-        self._context_floor = layout.floor
-        self._context_stacked = layout.stacked
-        if self._context_floor:
-            self._context_needs_rebuild = True
-            self.query_one("#context-floor", Static).update(
-                Text(floor_message(layout, sizing, len(COLUMN_GRIDS["context"])), style=COLOURS["dim"])
-            )
-            self._apply_tab_visibility()
-            return
-        self._context_needs_rebuild = False
-        self._context_width = self.size.width
-        selected_key = self._selected_context_key()
-        for section in CONTEXT_SECTIONS:
-            table = self.query_one("#hub-context-table-%s" % section, ContextTable)
-            header = self.query_one("#hub-context-header-%s" % section, Static)
-            none = self.query_one("#hub-context-none-%s" % section, Static)
-            rows = cells[section]
-            header.update(Text(context_section_title(section, self._context_inputs_live), style=HEADING_STYLE))
-            header.set_class(section == SECTION_INPUTS, "first-visible")
-            table.set_class(not rows, "hidden")
-            none.set_class(bool(rows), "hidden")
-            table.clear(columns=True)
-            if layout.stacked:
-                table.add_column(STACKED_COLUMN_KEY, width=row_budget, key=STACKED_COLUMN_KEY)
-            else:
-                widths = {
-                    "key": layout.atomic_widths["key"],
-                    "value": layout.flexible_width,
-                }
-                for key in COLUMN_GRIDS["context"]:
-                    table.add_column(key, width=widths[key], key=key)
-            for row_key, row_cells in rows:
-                table.add_row(*row_cells, height=None, key=row_key)
-        self._last_context_shape = shape
-        self._restore_context_cursor(selected_key)
-
-    def _restore_context_cursor(self, selected_key) -> None:
-        tables = self._visible_context_tables()
-        if not tables:
-            return
-        target, index = tables[0], 0
-        for table in tables:
-            keys = [row.key.value for row in table.ordered_rows]
-            if selected_key in keys:
-                target, index = table, keys.index(selected_key)
-                break
-        was_context_focus = isinstance(self.focused, ContextTable)
-        self._activate_context_table(target)
-        target.move_cursor(row=index, animate=False, scroll=False)
-        if was_context_focus and self.focused is not target:
-            self.set_focus(target, scroll_visible=False)
-
-    def _cost_layout(self, pane, rows):
-        atomic_values = {"key": [label for _key, label, _value in rows if label]}
-        row_budget = _cost_pane_screen_row_budget(pane, 2)
-        return compute_layout(row_budget, [], atomic_values, indent=COST_CONTINUATION_INDENT)
-
-    def _cost_floor_message(self, layout, pane):
-        chrome = pane.screen.outer_size.width - pane.screen.size.width
-        needed = layout.floor_width + COST_COLUMN_GAP + chrome + pane.scrollbar_gutter.width
-        return "Widen the terminal to at least %d columns to show this list." % needed
-
-    def _render_cost(self, store, node, initial) -> None:
-        cost = CostUseCase(store).execute(CostInput(node=node.id))
-        if node.type == "step":
-            self._render_step_cost(cost, initial)
-        else:
-            self._render_item_cost(cost, initial)
-
-    def _set_cost_whole_empty(self, message, initial) -> None:
-        self._cost_whole_empty_message = message
-        self.query_one("#hub-cost-empty", Static).update(message)
-        self._render_cost_pane([], initial)
-
-    def _render_step_cost(self, cost, initial) -> None:
-        if not cost.applicable:
-            self._set_cost_whole_empty(COST_EMPTY_MESSAGE, initial)
-            return
-        if not cost.has_run:
-            self._set_cost_whole_empty(COST_NOT_RUN_MESSAGE, initial)
-            return
-        self._cost_whole_empty_message = None
-        self._render_cost_pane(_cost_rows_for_step(cost), initial)
-
-    def _render_item_cost(self, cost, initial) -> None:
-        if cost.turn_count == 0:
-            self._set_cost_whole_empty(ITEM_COST_EMPTY_MESSAGE, initial)
-            return
-        self._cost_whole_empty_message = None
-        self._render_cost_pane(_cost_rows_for_item(cost), initial)
-
-    def _render_cost_pane(self, rows, initial) -> None:
-        self._last_cost_rows = rows
-        if not rows:
-            self._last_cost_shape = None
-            self._cost_floor = False
-            return
-        pane = self.query_one(CostPane)
-        shape = tuple(rows)
-        if shape == self._last_cost_shape and not initial:
-            return
-
-        layout = self._cost_layout(pane, rows)
-        self._cost_floor = layout.floor
-        self._cost_stacked = layout.stacked
-        pane.clear()
-        if self._cost_floor:
-            self.query_one("#cost-floor", Static).update(
-                Text(self._cost_floor_message(layout, pane), style=COLOURS["dim"])
-            )
-            self._last_cost_shape = shape
-            return
-
-        row_budget = (
-            _cost_pane_screen_row_budget(pane, 1) if layout.stacked else _cost_pane_screen_row_budget(pane, 2)
-        )
-        for _key, label, value in rows:
-            pane.write(_cost_row_text(label, value, layout, row_budget))
-        self._last_cost_shape = shape
-
-    def refresh_cost_width(self) -> None:
-        rows = self._last_cost_rows
-        if not rows:
-            return
-        self._render_cost_pane(rows, initial=True)
-        self._apply_tab_visibility()
-
-    def _description_block(self, item):
-        context = ItemContextReader(self._container.store).read(item)
-        rows = []
-        if context.repo:
-            rows.append(("repo", context.repo))
-        if context.workflow:
-            rows.append(("workflow", context.workflow))
-        for goal_id, title in context.goals:
-            rows.append(("goal", "%s (%s)" % (title, goal_id)))
-        for ref_id, title in context.resolves:
-            rows.append(("resolves", "%s (%s)" % (title, ref_id) if title else "%s (not found)" % ref_id))
-        if context.note:
-            rows.append(("note", context.note))
-        return tuple(rows)
-
-    def refresh_description_width(self) -> None:
-        self._render_description(self._description_item)
-
-    def _render_description(self, item) -> None:
-        self._description_item = item
-        if item is None:
-            return
-        description = item.description
-        block = self._description_block(item)
-        titles = resolve_titles(self._container.store, description)
-        self._has_description = bool(description) or bool(block)
-        pane = self.query_one(DescriptionPane)
-        width = pane_text_width(pane)
-        if not width:
-            return
-        key = (description, block, tuple(sorted(titles.items())), width)
-        if key == self._last_description:
-            return
-        self._last_description = key
-        pane.clear()
-        if block:
-            label_width = max(len(label) for label, _value in block)
-            for label, value in block:
-                pane.write(
-                    Text("%s  %s" % (label.ljust(label_width), value), style=COLOURS["dim"]),
-                    width=width,
-                )
-            if description:
-                pane.write(Text(""), width=width)
-                pane.write(Text("─" * width, style=COLOURS["dim"]), width=width)
-        if description:
-            pane.write(prose_text(description, titles), width=width)
 
     def update_pinned_ancestor(self) -> None:
         banner = self.query_one("#pinned-ancestor", Static)

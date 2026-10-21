@@ -5,9 +5,9 @@ from rich.text import Text
 from textual import events
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal
 from textual.css.query import NoMatches
-from textual.screen import ModalScreen, Screen
+from textual.screen import Screen
 from textual.widgets import DataTable, Input, Static
 from textual.widgets.data_table import CellDoesNotExist
 
@@ -24,7 +24,6 @@ from lightcycle.adapters.tui.design_system import (
     BACKLOG_SEARCH_SHORTCUTS,
     BACKLOG_SHORTCUTS,
     COLOURS,
-    COLUMN_GRIDS,
     CURSOR_GLYPH,
     DEPENDENCY_BLOCKED_EXTRA_GLYPH,
     DONE_EMPTY_SHORTCUTS,
@@ -37,22 +36,19 @@ from lightcycle.adapters.tui.design_system import (
     GLOBAL_SHORTCUTS,
     GOALS_EMPTY_SHORTCUTS,
     GOALS_SHORTCUTS,
-    MODAL_OVERLAY_ALPHA,
     REPORT_SHORTCUTS,
     ROW_SPACER,
     SEARCH_BAR_CSS,
     next_active_glyph_frame,
 )
 from lightcycle.adapters.tui.done_list import build_done_rows
-from lightcycle.adapters.tui.filter_row import FILTER_ROW_GAP, flow_filter_row, segment_width
 from lightcycle.adapters.tui.footer import DashboardFooter, ShortcutBar, StatusBar
 from lightcycle.adapters.tui.goal_hub import GoalHubScreen
-from lightcycle.adapters.tui.hub import NodeHubScreen, _format_item_cost
+from lightcycle.adapters.tui.hub import NodeHubScreen
 from lightcycle.adapters.tui.priority_list import assemble_rows, build_priority_rows_from_selection
 from lightcycle.adapters.tui.row_grid import (
     GLYPH_WIDTHS,
     apply_widths,
-    atomic_column_width,
     compute_layout,
     floor_message,
     pad_atomic_field,
@@ -87,97 +83,88 @@ from lightcycle.application.work import (
     StatusUseCase,
 )
 from lightcycle.application.work.priority_rows import select_priority_rows
-from lightcycle.application.work.project_of import short_project_label
-from lightcycle.render import format_elapsed
+from lightcycle.adapters.tui.views.tables import STACKED_COLUMN_KEY, FilterLineRest, FilterBlock, _update_cell_if_changed, PagingTable, CursorGlyphTable, _repaint_stacked_cursor
+from lightcycle.adapters.tui.views.backlog import BACKLOG_COLUMNS, BACKLOG_CONTINUATION_INDENT, BacklogTable, _backlog_stacked_first_line, _backlog_title_prose, _backlog_title_cell, _backlog_row_cells, _backlog_stacked_cell_builder, BacklogFilterInput, BacklogView
+from lightcycle.adapters.tui.views.done import DONE_COLUMNS, DONE_CONTINUATION_INDENT, DoneTable, _done_stacked_first_line, _done_row_cells, _done_stacked_cell_builder, DoneFilterInput, DoneView
+from lightcycle.adapters.tui.views.report import REPORT_COLUMNS, REPORT_CONTINUATION_INDENT, _report_rows, _report_row_cells, ReportTable, ReportView
+from lightcycle.adapters.tui.views.goals import GOALS_EMPTY_MESSAGE, GoalsTable, GoalsView
+from lightcycle.adapters.tui.views.automation import AUTOMATION_EMPTY_MESSAGE, AutomationTable, AutomationView, _automation_tally_text
+from lightcycle.adapters.tui.modals import PICKER_CANCELLED, POOL_PROMPT_CANCELLED, POOL_PROMPT_STOP, POOL_PROMPT_DRAIN, POOL_PROMPT_QUIT_LEAVE, POOL_PROMPT_QUIT_STOP, POOL_PROMPT_MIN_WIDTH, PICKER_MIN_WIDTH, PICKER_BORDER_WIDTH, PICKER_PADDING_WIDTH, PICKER_CURSOR_PREFIX_WIDTH, PICKER_COLUMN_GAP, ProjectFilterPicker, PoolPromptScreen, pool_prompt_body, PickerOption
+
+__all__ = [
+    "STACKED_COLUMN_KEY",
+    "FilterLineRest",
+    "FilterBlock",
+    "_update_cell_if_changed",
+    "PagingTable",
+    "CursorGlyphTable",
+    "_repaint_stacked_cursor",
+    "BACKLOG_COLUMNS",
+    "BACKLOG_CONTINUATION_INDENT",
+    "BacklogTable",
+    "_backlog_stacked_first_line",
+    "_backlog_title_prose",
+    "_backlog_title_cell",
+    "_backlog_row_cells",
+    "_backlog_stacked_cell_builder",
+    "BacklogFilterInput",
+    "BacklogView",
+    "DONE_COLUMNS",
+    "DONE_CONTINUATION_INDENT",
+    "DoneTable",
+    "_done_stacked_first_line",
+    "_done_row_cells",
+    "_done_stacked_cell_builder",
+    "DoneFilterInput",
+    "DoneView",
+    "REPORT_COLUMNS",
+    "REPORT_CONTINUATION_INDENT",
+    "_report_rows",
+    "_report_row_cells",
+    "ReportTable",
+    "ReportView",
+    "GOALS_EMPTY_MESSAGE",
+    "GoalsTable",
+    "GoalsView",
+    "AUTOMATION_EMPTY_MESSAGE",
+    "AutomationTable",
+    "AutomationView",
+    "_automation_tally_text",
+    "PICKER_CANCELLED",
+    "POOL_PROMPT_CANCELLED",
+    "POOL_PROMPT_STOP",
+    "POOL_PROMPT_DRAIN",
+    "POOL_PROMPT_QUIT_LEAVE",
+    "POOL_PROMPT_QUIT_STOP",
+    "POOL_PROMPT_MIN_WIDTH",
+    "PICKER_MIN_WIDTH",
+    "PICKER_BORDER_WIDTH",
+    "PICKER_PADDING_WIDTH",
+    "PICKER_CURSOR_PREFIX_WIDTH",
+    "PICKER_COLUMN_GAP",
+    "ProjectFilterPicker",
+    "PoolPromptScreen",
+    "pool_prompt_body",
+    "PickerOption",
+]
+
 
 POLL_INTERVAL_SECONDS = 10
 POOL_TRANSITION_POLL_SECONDS = 1
 POOL_START_TIMEOUT_SECONDS = 15
 
 DATA_COLUMNS = ("cursor", "icon", "id", "project", "title", "step", "cost", "time")
-BACKLOG_COLUMNS = ("cursor", "id", "project", "title")
-DONE_COLUMNS = ("cursor", "id", "project", "title", "cost", "time")
-REPORT_COLUMNS = COLUMN_GRIDS["report"]
 
 EMPTY_STATE_MESSAGE = "Nothing needs attention. Nothing's active. Nothing's queued."
 
-PICKER_CANCELLED = object()
 
-POOL_PROMPT_CANCELLED = object()
-POOL_PROMPT_STOP = "stop"
-POOL_PROMPT_DRAIN = "drain"
-POOL_PROMPT_QUIT_LEAVE = "quit-leave"
-POOL_PROMPT_QUIT_STOP = "quit-stop"
-POOL_PROMPT_MIN_WIDTH = 52
 
 _VIEW_CYCLE = ("goals", "priority", "backlog", "done", "report", "automation")
 
-GOALS_EMPTY_MESSAGE = "No goals yet."
-AUTOMATION_EMPTY_MESSAGE = "No automation has run yet."
 
-STACKED_COLUMN_KEY = "row"
 PRIORITY_CONTINUATION_INDENT = GLYPH_WIDTHS["cursor"] + GLYPH_WIDTHS["icon"]
-BACKLOG_CONTINUATION_INDENT = GLYPH_WIDTHS["cursor"]
-DONE_CONTINUATION_INDENT = GLYPH_WIDTHS["cursor"]
-REPORT_CONTINUATION_INDENT = 2
 
 
-
-class FilterLineRest(Static):
-    pass
-
-
-class FilterBlock(Vertical):
-    def __init__(self, prefix, search_input, **kwargs) -> None:
-        super().__init__(**kwargs)
-        self._prefix = prefix
-        self._search_input = search_input
-
-    def compose(self) -> ComposeResult:
-        yield Horizontal(
-            Static("SEARCH", id=f"{self._prefix}-search-label", classes="filter-row-label"),
-            self._search_input,
-            Static(id=f"{self._prefix}-filter-line-one", classes="filter-line-one"),
-            id=f"{self._prefix}-search-bar",
-            classes="search-bar",
-        )
-        yield FilterLineRest(id=f"{self._prefix}-filter-line-rest")
-
-    def reflow(self, segments, count_text) -> None:
-        width = self.screen.size.width
-        layout = flow_filter_row(width, segments, count_text)
-        first, *rest = layout.lines
-        line_one = Text()
-        for segment in first.segments:
-            line_one.append(" " * FILTER_ROW_GAP)
-            self._append_segment(line_one, segment)
-        if first.count:
-            line_one.append(" " * FILTER_ROW_GAP)
-            line_one.append(first.count, style=COLOURS["text"])
-        self.query_one(f"#{self._prefix}-filter-line-one", Static).update(line_one)
-        line_rest = Text()
-        for index, line in enumerate(rest):
-            if index:
-                line_rest.append("\n")
-            used = 0
-            for position, segment in enumerate(line.segments):
-                if position:
-                    line_rest.append(" " * FILTER_ROW_GAP)
-                    used += FILTER_ROW_GAP
-                self._append_segment(line_rest, segment)
-                used += segment_width(segment)
-            if line.count:
-                line_rest.append(" " * max(width - used - len(line.count), 0))
-                line_rest.append(line.count, style=COLOURS["text"])
-        self.query_one(FilterLineRest).update(line_rest)
-        self.query_one(FilterLineRest).display = bool(rest)
-
-    @staticmethod
-    def _append_segment(text, segment) -> None:
-        label, value = segment
-        text.append(label, style=COLOURS["dim"])
-        text.append(" ")
-        text.append(value, style=COLOURS["text"])
 
 
 class TabStrip(Horizontal):
@@ -207,25 +194,6 @@ class TabStrip(Horizontal):
             widget.set_class(key == view, "tab-active")
             widget.set_class(key != view, "tab-dim")
 
-
-def _update_cell_if_changed(table, row_key, column_key, value) -> None:
-    if table.get_cell(row_key, column_key) == value:
-        return
-    table.update_cell(row_key, column_key, value)
-
-
-class PagingTable(DataTable):
-    _BASE_BINDINGS = [b for b in DataTable.BINDINGS if b.key != "right"]
-
-    BINDINGS = _BASE_BINDINGS + [
-        Binding("ctrl+u", "page_up", "Page up", show=False),
-        Binding("ctrl+d", "page_down", "Page down", show=False),
-        Binding("right", "select_cursor", "Open", show=False),
-    ]
-
-    def __init__(self, *args, **kwargs):
-        kwargs.setdefault("cursor_foreground_priority", "renderable")
-        super().__init__(*args, **kwargs)
 
 
 class PriorityTable(PagingTable):
@@ -261,1092 +229,6 @@ class PriorityTable(PagingTable):
             pass
 
 
-class BacklogTable(PagingTable):
-    def on_resize(self, event: events.Resize) -> None:
-        view = self.parent
-        if isinstance(view, BacklogView):
-            view.refresh_column_width()
-
-    def on_show(self, event: events.Show) -> None:
-        view = self.parent
-        if isinstance(view, BacklogView):
-            view.refresh_column_width()
-
-    def watch_cursor_coordinate(self, old_coordinate, new_coordinate) -> None:
-        super().watch_cursor_coordinate(old_coordinate, new_coordinate)
-        if old_coordinate.row != new_coordinate.row:
-            self._paint_cursor_glyph(old_coordinate.row, False)
-            self._paint_cursor_glyph(new_coordinate.row, True)
-
-    def _paint_cursor_glyph(self, row_index, show) -> None:
-        if row_index < 0 or row_index >= len(self.ordered_rows):
-            return
-        row_key = self.ordered_rows[row_index].key
-        if getattr(self, "_stacked_mode", False):
-            _repaint_stacked_cursor(self, row_key, show)
-            return
-        value = Text(CURSOR_GLYPH.glyph, style=COLOURS[CURSOR_GLYPH.colour]) if show else ""
-        try:
-            _update_cell_if_changed(self, row_key, "cursor", value)
-        except CellDoesNotExist:
-            pass
-
-
-class CursorGlyphTable(PagingTable):
-    def watch_cursor_coordinate(self, old_coordinate, new_coordinate) -> None:
-        super().watch_cursor_coordinate(old_coordinate, new_coordinate)
-        if old_coordinate.row != new_coordinate.row:
-            self._paint_cursor_glyph(old_coordinate.row, False)
-            self._paint_cursor_glyph(new_coordinate.row, True)
-
-    def _paint_cursor_glyph(self, row_index, show) -> None:
-        if row_index < 0 or row_index >= len(self.ordered_rows):
-            return
-        row_key = self.ordered_rows[row_index].key
-        if getattr(self, "_stacked_mode", False):
-            _repaint_stacked_cursor(self, row_key, show)
-            return
-        value = Text(CURSOR_GLYPH.glyph, style=COLOURS[CURSOR_GLYPH.colour]) if show else ""
-        try:
-            _update_cell_if_changed(self, row_key, "cursor", value)
-        except CellDoesNotExist:
-            pass
-
-
-class DoneTable(CursorGlyphTable):
-    def on_resize(self, event: events.Resize) -> None:
-        view = self.parent
-        if isinstance(view, DoneView):
-            view.refresh_column_width()
-
-    def on_show(self, event: events.Show) -> None:
-        view = self.parent
-        if isinstance(view, DoneView):
-            view.refresh_column_width()
-
-
-class AutomationTable(CursorGlyphTable):
-    def on_resize(self, event: events.Resize) -> None:
-        view = self.parent
-        if isinstance(view, AutomationView):
-            view.refresh_column_width()
-
-    def on_show(self, event: events.Show) -> None:
-        view = self.parent
-        if isinstance(view, AutomationView):
-            view.refresh_column_width()
-
-
-def _repaint_stacked_cursor(table, row_key, show) -> None:
-    entry = getattr(table, "_stacked_rows", {}).get(row_key.value)
-    if entry is None:
-        return
-    row, icon_override = entry
-    cells = table._stacked_cell_builder(
-        row, table._stacked_layout, table._stacked_row_budget, show, icon_override
-    )
-    try:
-        _update_cell_if_changed(table, row_key, STACKED_COLUMN_KEY, cells[0])
-    except CellDoesNotExist:
-        pass
-
-
-def _backlog_stacked_first_line(row, cursor, layout):
-    cursor_field = pad_field(
-        Text(CURSOR_GLYPH.glyph, style=COLOURS[CURSOR_GLYPH.colour]) if cursor else Text(""),
-        GLYPH_WIDTHS["cursor"],
-    )
-    id_field = pad_atomic_field(row.id, layout.atomic_widths["id"])
-    project_cell = Text(row.project, style=COLOURS["cyan"]) if row.project else Text("")
-    project_field = pad_atomic_field(project_cell, layout.atomic_widths["project"])
-    return cursor_field + id_field + project_field
-
-
-def _backlog_title_prose(row):
-    if not row.blocked_by:
-        return row.title
-    return "%s %s" % (DEPENDENCY_BLOCKED_EXTRA_GLYPH.glyph, row.title)
-
-
-def _backlog_title_cell(row):
-    if not row.blocked_by:
-        return row.title
-    glyph = Text(
-        DEPENDENCY_BLOCKED_EXTRA_GLYPH.glyph + " ", style=COLOURS[DEPENDENCY_BLOCKED_EXTRA_GLYPH.colour]
-    )
-    return glyph + Text(row.title)
-
-
-def _backlog_row_cells(row, layout, row_budget, cursor=False):
-    if layout.stacked:
-        first_line = _backlog_stacked_first_line(row, cursor, layout)
-        return (
-            stacked_cell(
-                first_line, BACKLOG_CONTINUATION_INDENT, _backlog_title_prose(row), row_budget
-            ),
-        )
-    cursor_cell = Text(CURSOR_GLYPH.glyph, style=COLOURS[CURSOR_GLYPH.colour]) if cursor else ""
-    project_cell = Text(row.project, style=COLOURS["cyan"]) if row.project else ""
-    return (cursor_cell, row.id, project_cell, _backlog_title_cell(row))
-
-
-def _backlog_stacked_cell_builder(row, layout, row_budget, cursor, icon_override):
-    return _backlog_row_cells(row, layout, row_budget, cursor=cursor)
-
-
-def _done_stacked_first_line(row, cursor, layout, row_budget):
-    cursor_field = pad_field(
-        Text(CURSOR_GLYPH.glyph, style=COLOURS[CURSOR_GLYPH.colour]) if cursor else Text(""),
-        GLYPH_WIDTHS["cursor"],
-    )
-    id_field = pad_atomic_field(row.id, layout.atomic_widths["id"])
-    project_cell = Text(row.project, style=COLOURS["cyan"]) if row.project else Text("")
-    project_field = pad_atomic_field(project_cell, layout.atomic_widths["project"])
-    cost_field = pad_atomic_field(
-        Text(row.cost, style=COLOURS["dim"]) if row.cost else Text(""), layout.atomic_widths["cost"]
-    )
-    content_so_far = cursor_field + id_field + project_field + cost_field
-    time_cell = Text(row.time, style=COLOURS["dim"]) if row.time else Text("")
-    time_area = max(0, row_budget - len(content_so_far.plain))
-    return content_so_far + pad_field_right(time_cell, time_area)
-
-
-def _done_row_cells(row, layout, row_budget, cursor=False):
-    if layout.stacked:
-        first_line = _done_stacked_first_line(row, cursor, layout, row_budget)
-        return (stacked_cell(first_line, DONE_CONTINUATION_INDENT, row.title, row_budget),)
-    cursor_cell = Text(CURSOR_GLYPH.glyph, style=COLOURS[CURSOR_GLYPH.colour]) if cursor else ""
-    project_cell = Text(row.project, style=COLOURS["cyan"]) if row.project else ""
-    cost_cell = Text(row.cost, style=COLOURS["dim"]) if row.cost else ""
-    time_cell = Text(row.time, style=COLOURS["dim"]) if row.time else ""
-    return (cursor_cell, row.id, project_cell, row.title, cost_cell, time_cell)
-
-
-def _done_stacked_cell_builder(row, layout, row_budget, cursor, icon_override):
-    return _done_row_cells(row, layout, row_budget, cursor=cursor)
-
-
-class BacklogFilterInput(Input):
-    BINDINGS = [
-        Binding("escape", "leave_filter", "Back", show=False),
-        Binding("tab", "leave_filter", "Back", show=False),
-        Binding("down", "leave_filter", "Results", show=False),
-        Binding("up", "leave_filter", "Results", show=False),
-        Binding("enter", "open_result", "Open", show=False),
-    ]
-
-    def action_leave_filter(self) -> None:
-        if self.app._backlog_filter_timer is not None:
-            self.app._backlog_filter_timer.stop()
-            self.app._backlog_filter_timer = None
-        self.app.set_focus(self.app.query_one(BacklogTable))
-        self.app.stylesheet.update(self.app.screen, animate=False)
-        self.app._sync_footer_shortcuts()
-
-    def action_open_result(self) -> None:
-        self.app.query_one(BacklogTable).action_select_cursor()
-
-
-class BacklogView(Vertical):
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self._rows = ()
-        self._floor = False
-        self._total = 0
-        self._project_filter = None
-        self._text_filter = None
-        self._last_shape = None
-        self._backlog_needs_rebuild = False
-        self._backlog_stacked = False
-
-    def compose(self) -> ComposeResult:
-        yield FilterBlock(
-            "backlog",
-            BacklogFilterInput(id="backlog-filter-text", classes="search-input"),
-            id="backlog-filter-block",
-        )
-        yield BacklogTable(id="backlog-table")
-        yield Static(id="backlog-floor")
-        yield Static(id="backlog-empty-overall")
-        yield Static(id="backlog-empty-filtered-message")
-        yield Static(id="backlog-empty-filtered-hint")
-
-    def on_mount(self) -> None:
-        table = self.query_one(BacklogTable)
-        table.cursor_type = "row"
-        table.show_header = False
-
-    def apply_rows(self, rows, total, project_filter, text_filter) -> None:
-        shape = (tuple(r.id for r in rows), total, project_filter, text_filter)
-        self._render_filter_bar(project_filter, len(rows))
-        table = self.query_one(BacklogTable)
-        layout = self._layout(table)
-        if (
-            shape == self._last_shape
-            and not self._backlog_needs_rebuild
-            and layout.stacked == self._backlog_stacked
-        ):
-            self._update_cells(rows)
-        else:
-            self._rebuild_table(rows)
-            self._last_shape = shape
-        self._rows = rows
-        self._total = total
-        self._project_filter = project_filter
-        self._text_filter = text_filter
-        self._toggle_state(total, len(rows), project_filter, text_filter)
-
-    def refresh_column_width(self) -> None:
-        self._rebuild_table(self._rows)
-        self._render_filter_bar(self._project_filter, len(self._rows))
-        self._toggle_state(self._total, len(self._rows), self._project_filter, self._text_filter)
-
-    def _render_filter_bar(self, project_filter, count) -> None:
-        self.query_one("#backlog-filter-block", FilterBlock).reflow(
-            [("PROJECT", project_filter or "All")], "%d items" % count
-        )
-
-    def _selected_row_id(self, table):
-        if table.row_count == 0:
-            return None
-        try:
-            cell_key = table.coordinate_to_cell_key(table.cursor_coordinate)
-        except CellDoesNotExist:
-            return None
-        return cell_key.row_key.value
-
-    def _layout(self, table):
-        atomic_values = {
-            "id": [row.id for row in self._rows],
-            "project": [row.project for row in self._rows],
-        }
-        row_budget = screen_row_budget_for(table, len(BACKLOG_COLUMNS))
-        indent = BACKLOG_CONTINUATION_INDENT
-        return compute_layout(row_budget, ["cursor"], atomic_values, indent)
-
-    def _rebuild_table(self, rows) -> None:
-        table = self.query_one(BacklogTable)
-        layout = self._layout(table)
-        self._backlog_stacked = layout.stacked
-        self._floor = bool(rows) and layout.floor
-        floor_widget = self.query_one("#backlog-floor", Static)
-        if self._floor:
-            self._backlog_needs_rebuild = True
-            floor_widget.update(
-                Text(floor_message(layout, table, len(BACKLOG_COLUMNS)), style=COLOURS["dim"])
-            )
-            return
-        self._backlog_needs_rebuild = False
-        selected_id = self._selected_row_id(table)
-
-        table.clear(columns=True)
-        row_budget = render_screen_row_budget(table, layout, len(BACKLOG_COLUMNS))
-        if layout.stacked:
-            table.add_column(STACKED_COLUMN_KEY, width=row_budget, key=STACKED_COLUMN_KEY)
-        else:
-            widths = {
-                "cursor": GLYPH_WIDTHS["cursor"],
-                "id": layout.atomic_widths["id"],
-                "project": layout.atomic_widths["project"],
-                "title": layout.flexible_width,
-            }
-            for key in BACKLOG_COLUMNS:
-                table.add_column(key, width=widths[key], key=key)
-
-        ids = [row.id for row in rows]
-        new_index = ids.index(selected_id) if selected_id in ids else 0
-        table._stacked_mode = layout.stacked
-        table._stacked_layout = layout
-        table._stacked_row_budget = row_budget
-        table._stacked_cell_builder = _backlog_stacked_cell_builder
-        stacked_rows = {}
-        for index, row in enumerate(rows):
-            is_cursor = index == new_index
-            cells = _backlog_row_cells(row, layout, row_budget, cursor=is_cursor)
-            if layout.stacked:
-                stacked_rows[row.id] = (row, None)
-            table.add_row(*cells, height=None, key=row.id)
-        table._stacked_rows = stacked_rows
-        if rows:
-            table.move_cursor(row=new_index)
-
-    def _update_cells(self, rows) -> None:
-        table = self.query_one(BacklogTable)
-        layout = self._layout(table)
-        row_budget = render_screen_row_budget(table, layout, len(BACKLOG_COLUMNS))
-        selected_id = self._selected_row_id(table)
-        for row in rows:
-            cells = _backlog_row_cells(row, layout, row_budget, cursor=(row.id == selected_id))
-            if layout.stacked:
-                _update_cell_if_changed(table, row.id, STACKED_COLUMN_KEY, cells[0])
-                continue
-            for key, value in zip(BACKLOG_COLUMNS, cells):
-                if key == "cursor":
-                    continue
-                _update_cell_if_changed(table, row.id, key, value)
-
-    def _toggle_state(self, total, filtered_count, project_filter, text_filter) -> None:
-        overall_empty = total == 0
-        filtered_empty = not overall_empty and filtered_count == 0
-        table = self.query_one(BacklogTable)
-        showing_floor = self._floor and filtered_count > 0
-        table.display = filtered_count > 0 and not showing_floor
-        self.query_one("#backlog-floor", Static).display = showing_floor
-        overall_widget = self.query_one("#backlog-empty-overall", Static)
-        message_widget = self.query_one("#backlog-empty-filtered-message", Static)
-        hint_widget = self.query_one("#backlog-empty-filtered-hint", Static)
-        overall_widget.display = overall_empty
-        message_widget.display = filtered_empty
-        hint_widget.display = filtered_empty
-        if overall_empty:
-            overall_widget.update(Text("Nothing in the backlog.", style=COLOURS["dim"]))
-        elif filtered_empty:
-            message = Text("No backlog items", style=COLOURS["dim"])
-            hints = []
-            if project_filter:
-                message.append(" for ", style=COLOURS["dim"])
-                message.append(project_filter, style=COLOURS["text"])
-                hints.append("f to check All")
-            if text_filter:
-                message.append(' matching "', style=COLOURS["dim"])
-                message.append(text_filter, style=COLOURS["text"])
-                message.append('"', style=COLOURS["dim"])
-                hints.append("backspace to clear the search")
-            message.append(".", style=COLOURS["dim"])
-            message_widget.update(message)
-            hint_widget.update(Text("Press %s." % ", or ".join(hints), style=COLOURS["dim"]))
-
-
-class DoneFilterInput(Input):
-    BINDINGS = [
-        Binding("escape", "leave_filter", "Back", show=False),
-        Binding("tab", "leave_filter", "Back", show=False),
-        Binding("down", "leave_filter", "Results", show=False),
-        Binding("up", "leave_filter", "Results", show=False),
-        Binding("enter", "open_result", "Open", show=False),
-    ]
-
-    def action_leave_filter(self) -> None:
-        if self.app._done_filter_timer is not None:
-            self.app._done_filter_timer.stop()
-            self.app._done_filter_timer = None
-        self.app.set_focus(self.app.query_one(DoneTable))
-        self.app.stylesheet.update(self.app.screen, animate=False)
-        self.app._sync_footer_shortcuts()
-
-    def action_open_result(self) -> None:
-        self.app.query_one(DoneTable).action_select_cursor()
-
-
-class DoneView(Vertical):
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self._rows = ()
-        self._floor = False
-        self._total = 0
-        self._project_filter = None
-        self._text_filter = None
-        self._day_filter = None
-        self._last_shape = None
-        self._backlog_needs_rebuild = False
-        self._backlog_stacked = False
-
-    def compose(self) -> ComposeResult:
-        yield FilterBlock(
-            "done",
-            DoneFilterInput(id="done-filter-text", classes="search-input"),
-            id="done-filter-block",
-        )
-        yield DoneTable(id="done-table")
-        yield Static(id="done-floor")
-        yield Static(id="done-empty-overall")
-        yield Static(id="done-empty-filtered-message")
-        yield Static(id="done-empty-filtered-hint")
-
-    def on_mount(self) -> None:
-        table = self.query_one(DoneTable)
-        table.cursor_type = "row"
-        table.show_header = False
-
-    def apply_rows(self, rows, total, project_filter, text_filter, day_filter) -> None:
-        shape = (tuple(r.id for r in rows), total, project_filter, text_filter, day_filter)
-        self._render_filter_bar(project_filter, day_filter, len(rows))
-        table = self.query_one(DoneTable)
-        layout = self._layout(table)
-        if (
-            shape == self._last_shape
-            and not self._backlog_needs_rebuild
-            and layout.stacked == self._backlog_stacked
-        ):
-            self._update_cells(rows)
-        else:
-            self._rebuild_table(rows)
-            self._last_shape = shape
-        self._rows = rows
-        self._total = total
-        self._project_filter = project_filter
-        self._text_filter = text_filter
-        self._day_filter = day_filter
-        self._toggle_state(total, len(rows), project_filter, text_filter, day_filter)
-
-    def refresh_column_width(self) -> None:
-        self._rebuild_table(self._rows)
-        self._render_filter_bar(self._project_filter, self._day_filter, len(self._rows))
-        self._toggle_state(
-            self._total, len(self._rows), self._project_filter, self._text_filter, self._day_filter
-        )
-
-    def _render_filter_bar(self, project_filter, day_filter, count) -> None:
-        self.query_one("#done-filter-block", FilterBlock).reflow(
-            [
-                ("PROJECT", project_filter or "All"),
-                ("DAY", day_filter.isoformat() if day_filter else "All"),
-            ],
-            "%d items" % count,
-        )
-
-    def _selected_row_id(self, table):
-        if table.row_count == 0:
-            return None
-        try:
-            cell_key = table.coordinate_to_cell_key(table.cursor_coordinate)
-        except CellDoesNotExist:
-            return None
-        return cell_key.row_key.value
-
-    def _layout(self, table):
-        atomic_values = {
-            "id": [row.id for row in self._rows],
-            "project": [row.project for row in self._rows],
-            "cost": [row.cost for row in self._rows],
-            "time": [row.time for row in self._rows],
-        }
-        row_budget = screen_row_budget_for(table, len(DONE_COLUMNS))
-        indent = DONE_CONTINUATION_INDENT
-        return compute_layout(row_budget, ["cursor"], atomic_values, indent)
-
-    def _rebuild_table(self, rows) -> None:
-        table = self.query_one(DoneTable)
-        layout = self._layout(table)
-        self._backlog_stacked = layout.stacked
-        self._floor = bool(rows) and layout.floor
-        floor_widget = self.query_one("#done-floor", Static)
-        if self._floor:
-            self._backlog_needs_rebuild = True
-            floor_widget.update(
-                Text(floor_message(layout, table, len(DONE_COLUMNS)), style=COLOURS["dim"])
-            )
-            return
-        self._backlog_needs_rebuild = False
-        selected_id = self._selected_row_id(table)
-
-        table.clear(columns=True)
-        row_budget = render_screen_row_budget(table, layout, len(DONE_COLUMNS))
-        if layout.stacked:
-            table.add_column(STACKED_COLUMN_KEY, width=row_budget, key=STACKED_COLUMN_KEY)
-        else:
-            widths = {
-                "cursor": GLYPH_WIDTHS["cursor"],
-                "id": layout.atomic_widths["id"],
-                "project": layout.atomic_widths["project"],
-                "title": layout.flexible_width,
-                "cost": layout.atomic_widths["cost"],
-                "time": layout.atomic_widths["time"],
-            }
-            for key in DONE_COLUMNS:
-                table.add_column(key, width=widths[key], key=key)
-
-        ids = [row.id for row in rows]
-        new_index = ids.index(selected_id) if selected_id in ids else 0
-        table._stacked_mode = layout.stacked
-        table._stacked_layout = layout
-        table._stacked_row_budget = row_budget
-        table._stacked_cell_builder = _done_stacked_cell_builder
-        stacked_rows = {}
-        for index, row in enumerate(rows):
-            is_cursor = index == new_index
-            cells = _done_row_cells(row, layout, row_budget, cursor=is_cursor)
-            if layout.stacked:
-                stacked_rows[row.id] = (row, None)
-            table.add_row(*cells, height=None, key=row.id)
-        table._stacked_rows = stacked_rows
-        if rows:
-            table.move_cursor(row=new_index)
-
-    def _update_cells(self, rows) -> None:
-        table = self.query_one(DoneTable)
-        layout = self._layout(table)
-        row_budget = render_screen_row_budget(table, layout, len(DONE_COLUMNS))
-        selected_id = self._selected_row_id(table)
-        for row in rows:
-            cells = _done_row_cells(row, layout, row_budget, cursor=(row.id == selected_id))
-            if layout.stacked:
-                _update_cell_if_changed(table, row.id, STACKED_COLUMN_KEY, cells[0])
-                continue
-            for key, value in zip(DONE_COLUMNS, cells):
-                if key == "cursor":
-                    continue
-                _update_cell_if_changed(table, row.id, key, value)
-
-    def _toggle_state(self, total, filtered_count, project_filter, text_filter, day_filter) -> None:
-        overall_empty = total == 0
-        filtered_empty = not overall_empty and filtered_count == 0
-        table = self.query_one(DoneTable)
-        showing_floor = self._floor and filtered_count > 0
-        table.display = filtered_count > 0 and not showing_floor
-        self.query_one("#done-floor", Static).display = showing_floor
-        overall_widget = self.query_one("#done-empty-overall", Static)
-        message_widget = self.query_one("#done-empty-filtered-message", Static)
-        hint_widget = self.query_one("#done-empty-filtered-hint", Static)
-        overall_widget.display = overall_empty
-        message_widget.display = filtered_empty
-        hint_widget.display = filtered_empty
-        if overall_empty:
-            overall_widget.update(Text("Nothing is done yet.", style=COLOURS["dim"]))
-        elif filtered_empty:
-            message = Text("No done items", style=COLOURS["dim"])
-            hints = []
-            if project_filter:
-                message.append(" for ", style=COLOURS["dim"])
-                message.append(project_filter, style=COLOURS["text"])
-                hints.append("f to check All")
-            if text_filter:
-                message.append(' matching "', style=COLOURS["dim"])
-                message.append(text_filter, style=COLOURS["text"])
-                message.append('"', style=COLOURS["dim"])
-                hints.append("backspace to clear the search")
-            if day_filter:
-                message.append(" on ", style=COLOURS["dim"])
-                message.append(day_filter.isoformat(), style=COLOURS["text"])
-                hints.append("d to check All days")
-            message.append(".", style=COLOURS["dim"])
-            message_widget.update(message)
-            hint_widget.update(Text("Press %s." % ", or ".join(hints), style=COLOURS["dim"]))
-
-
-def _report_rows(response):
-    delta = response.backlog_delta
-    delta_text = "+%d" % delta if delta >= 0 else str(delta)
-    slow_rows = tuple(
-        (slow.step.id, "%s - %s active - %s" % (slow.step.stage, format_elapsed(slow.active_seconds), slow.kind))
-        for slow in response.slow_steps
-    )
-    return (
-        ("Items Completed", str(response.completed)),
-        ("Items Closed", str(response.completed + response.abandoned)),
-        ("Spend", _format_item_cost(response.spend)),
-        ("Automation Items", str(response.automation_count)),
-        ("Automation Spend", _format_item_cost(response.automation_spend)),
-        ("Escalations", str(response.escalations)),
-        ("Slow Steps", str(len(response.slow_steps))),
-    ) + slow_rows + (
-        ("Starting Backlog Size", str(response.backlog_start)),
-        ("Closing Backlog Size", str(response.backlog_close)),
-        ("Backlog Delta", delta_text),
-    )
-
-
-def _report_row_cells(field, layout, row_budget):
-    key, value = field
-    if layout.stacked:
-        key_field = pad_field(Text(key, style=COLOURS["dim"]), layout.atomic_widths["key"])
-        return (
-            stacked_cell(key_field, REPORT_CONTINUATION_INDENT, value, row_budget, prose_style=COLOURS["text"]),
-        )
-    return (Text(key, style=COLOURS["dim"]), Text(value, style=COLOURS["text"]))
-
-
-class ReportTable(PagingTable):
-    def on_resize(self, event: events.Resize) -> None:
-        view = self.parent
-        if isinstance(view, ReportView):
-            view.refresh_column_width()
-
-    def on_show(self, event: events.Show) -> None:
-        view = self.parent
-        if isinstance(view, ReportView):
-            view.refresh_column_width()
-
-
-class GoalsTable(PagingTable):
-    pass
-
-
-class GoalsView(Vertical):
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self._last_shape = None
-        self._count = 0
-
-    def compose(self) -> ComposeResult:
-        goals_table = GoalsTable(id="goals-table")
-        goals_table.display = False
-        yield goals_table
-        yield Static(GOALS_EMPTY_MESSAGE, id="goals-empty")
-
-    def on_mount(self) -> None:
-        table = self.query_one(GoalsTable)
-        table.cursor_type = "row"
-        table.show_header = False
-        table.add_column("project", key="project")
-        table.add_column("title", key="title")
-        table.add_column("status", key="status")
-
-    @property
-    def count(self) -> int:
-        return self._count
-
-    def apply_goals(self, goals) -> None:
-        shape = tuple((g.id, g.project, g.title, g.status) for g in goals)
-        table = self.query_one(GoalsTable)
-        if shape != self._last_shape:
-            self._last_shape = shape
-            previous = None
-            if table.row_count and table.cursor_row < len(table.ordered_rows):
-                previous = table.ordered_rows[table.cursor_row].key.value
-            table.clear()
-            for goal in goals:
-                project = short_project_label(goal.project)
-                done = goal.status == "done"
-                title_style = "%s strike" % COLOURS["dim"] if done else COLOURS["text"]
-                table.add_row(
-                    Text(project, style=COLOURS["cyan"]),
-                    Text(goal.title, style=title_style),
-                    Text(goal.status, style=COLOURS["dim"]),
-                    key=goal.id,
-                )
-            if previous is not None:
-                for index, row in enumerate(table.ordered_rows):
-                    if row.key.value == previous:
-                        table.move_cursor(row=index)
-                        break
-        self._count = len(goals)
-        table.display = bool(goals)
-        self.query_one("#goals-empty", Static).display = not goals
-
-
-class ReportView(Vertical):
-    can_focus = True
-
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self._day = None
-        self._rows = ()
-        self._floor = False
-        self._report_stacked = False
-
-    def compose(self) -> ComposeResult:
-        yield Horizontal(
-            Static("DAY", id="report-day-filter-label", classes="filter-row-label"),
-            Static(id="report-day-filter-left"),
-            Static(id="report-day-filter-right"),
-            id="report-day-filter-bar",
-        )
-        yield ReportTable(id="report-table")
-        yield Static(id="report-floor")
-        yield Static(id="report-summary")
-
-    def on_mount(self) -> None:
-        table = self.query_one(ReportTable)
-        table.cursor_type = "none"
-        table.show_header = False
-        table.display = False
-        self.query_one("#report-summary", Static).display = False
-
-    def apply_report(self, response) -> None:
-        self._day = response.day
-        self.query_one("#report-day-filter-left", Static).update(
-            Text(response.day.isoformat(), style=COLOURS["text"])
-        )
-        self.query_one("#report-day-filter-right", Static).display = False
-        summary_widget = self.query_one("#report-summary", Static)
-        if response.summary:
-            summary_widget.update(Text(response.summary, style=COLOURS["text"]))
-            summary_widget.display = True
-        else:
-            summary_widget.display = False
-        self._rebuild_table(_report_rows(response))
-
-    def refresh_column_width(self) -> None:
-        self._rebuild_table(self._rows)
-
-    def _layout(self, table):
-        atomic_values = {"key": [key for key, _value in self._rows]}
-        row_budget = screen_row_budget_for(table, len(REPORT_COLUMNS))
-        return compute_layout(row_budget, [], atomic_values, indent=REPORT_CONTINUATION_INDENT)
-
-    def _rebuild_table(self, rows) -> None:
-        table = self.query_one(ReportTable)
-        self._rows = rows
-        layout = self._layout(table)
-        self._report_stacked = layout.stacked
-        self._floor = layout.floor
-        floor_widget = self.query_one("#report-floor", Static)
-        if self._floor:
-            table.display = False
-            floor_widget.display = True
-            floor_widget.update(
-                Text(floor_message(layout, table, len(REPORT_COLUMNS)), style=COLOURS["dim"])
-            )
-            return
-        table.display = True
-        floor_widget.display = False
-
-        table.clear(columns=True)
-        row_budget = render_screen_row_budget(table, layout, len(REPORT_COLUMNS))
-        if layout.stacked:
-            table.add_column(STACKED_COLUMN_KEY, width=row_budget, key=STACKED_COLUMN_KEY)
-        else:
-            widths = {"key": layout.atomic_widths["key"], "value": layout.flexible_width}
-            for key in REPORT_COLUMNS:
-                table.add_column(key, width=widths[key], key=key)
-
-        for field in rows:
-            table.add_row(*_report_row_cells(field, layout, row_budget), height=None, key=field[0])
-
-
-class AutomationView(Vertical):
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self._rows = ()
-        self._floor = False
-        self._last_shape = None
-        self._needs_rebuild = False
-        self._stacked = False
-
-    def compose(self) -> ComposeResult:
-        yield Static(id="automation-tally")
-        yield AutomationTable(id="automation-table")
-        yield Static(id="automation-floor")
-        yield Static(AUTOMATION_EMPTY_MESSAGE, id="automation-empty")
-
-    def on_mount(self) -> None:
-        table = self.query_one(AutomationTable)
-        table.cursor_type = "row"
-        table.show_header = False
-
-    def apply_response(self, response, rows) -> None:
-        self.query_one("#automation-tally", Static).update(_automation_tally_text(response))
-        shape = tuple(r.id for r in rows)
-        layout = self._layout(self.query_one(AutomationTable), rows)
-        if shape == self._last_shape and not self._needs_rebuild and layout.stacked == self._stacked:
-            self._rows = rows
-            self._update_cells(rows)
-        else:
-            self._rebuild_table(rows)
-            self._last_shape = shape
-        self._toggle_state()
-
-    def refresh_column_width(self) -> None:
-        self._rebuild_table(self._rows)
-        self._toggle_state()
-
-    def _selected_row_id(self, table):
-        if table.row_count == 0:
-            return None
-        try:
-            cell_key = table.coordinate_to_cell_key(table.cursor_coordinate)
-        except CellDoesNotExist:
-            return None
-        return cell_key.row_key.value
-
-    def _layout(self, table, rows):
-        atomic_values = {
-            "id": [row.id for row in rows],
-            "project": [row.project for row in rows],
-            "cost": [row.cost for row in rows],
-            "time": [row.time for row in rows],
-        }
-        row_budget = screen_row_budget_for(table, len(DONE_COLUMNS))
-        return compute_layout(row_budget, ["cursor"], atomic_values, DONE_CONTINUATION_INDENT)
-
-    def _rebuild_table(self, rows) -> None:
-        self._rows = rows
-        table = self.query_one(AutomationTable)
-        layout = self._layout(table, rows)
-        self._stacked = layout.stacked
-        self._floor = bool(rows) and layout.floor
-        if self._floor:
-            self._needs_rebuild = True
-            self.query_one("#automation-floor", Static).update(
-                Text(floor_message(layout, table, len(DONE_COLUMNS)), style=COLOURS["dim"])
-            )
-            return
-        self._needs_rebuild = False
-        selected_id = self._selected_row_id(table)
-
-        table.clear(columns=True)
-        row_budget = render_screen_row_budget(table, layout, len(DONE_COLUMNS))
-        if layout.stacked:
-            table.add_column(STACKED_COLUMN_KEY, width=row_budget, key=STACKED_COLUMN_KEY)
-        else:
-            widths = {
-                "cursor": GLYPH_WIDTHS["cursor"],
-                "id": layout.atomic_widths["id"],
-                "project": layout.atomic_widths["project"],
-                "title": layout.flexible_width,
-                "cost": layout.atomic_widths["cost"],
-                "time": layout.atomic_widths["time"],
-            }
-            for key in DONE_COLUMNS:
-                table.add_column(key, width=widths[key], key=key)
-
-        ids = [row.id for row in rows]
-        new_index = ids.index(selected_id) if selected_id in ids else 0
-        table._stacked_mode = layout.stacked
-        table._stacked_layout = layout
-        table._stacked_row_budget = row_budget
-        table._stacked_cell_builder = _done_stacked_cell_builder
-        stacked_rows = {}
-        for index, row in enumerate(rows):
-            cells = _done_row_cells(row, layout, row_budget, cursor=index == new_index)
-            if layout.stacked:
-                stacked_rows[row.id] = (row, None)
-            table.add_row(*cells, height=None, key=row.id)
-        table._stacked_rows = stacked_rows
-        if rows:
-            table.move_cursor(row=new_index)
-
-    def _update_cells(self, rows) -> None:
-        table = self.query_one(AutomationTable)
-        layout = self._layout(table, rows)
-        row_budget = render_screen_row_budget(table, layout, len(DONE_COLUMNS))
-        selected_id = self._selected_row_id(table)
-        for row in rows:
-            cells = _done_row_cells(row, layout, row_budget, cursor=(row.id == selected_id))
-            if layout.stacked:
-                _update_cell_if_changed(table, row.id, STACKED_COLUMN_KEY, cells[0])
-                continue
-            for key, value in zip(DONE_COLUMNS, cells):
-                if key == "cursor":
-                    continue
-                _update_cell_if_changed(table, row.id, key, value)
-
-    def _toggle_state(self) -> None:
-        empty = not self._rows
-        showing_floor = self._floor
-        self.query_one(AutomationTable).display = not empty and not showing_floor
-        self.query_one("#automation-floor", Static).display = showing_floor
-        self.query_one("#automation-empty", Static).display = empty
-
-    @property
-    def row_count(self) -> int:
-        return len(self._rows)
-
-
-def _automation_tally_text(response):
-    lines = list(response.tallies) + [response.total]
-    label_width = max(len(t.label) for t in lines)
-    count_width = max(len(str(t.count)) for t in lines)
-    text = Text()
-    for index, tally in enumerate(lines):
-        if index:
-            text.append("\n")
-        text.append(tally.label.ljust(label_width), style=COLOURS["dim"])
-        text.append("  ")
-        text.append(str(tally.count).rjust(count_width), style=COLOURS["text"])
-        text.append("  ")
-        text.append(_format_item_cost(tally.spend), style=COLOURS["text"])
-    return text
-
-
-PICKER_MIN_WIDTH = 40
-PICKER_BORDER_WIDTH = 2
-PICKER_PADDING_WIDTH = 2
-PICKER_CURSOR_PREFIX_WIDTH = 2
-PICKER_COLUMN_GAP = 1
-
-
-class ProjectFilterPicker(ModalScreen):
-    CSS = f"""
-    ProjectFilterPicker {{
-        align: center top;
-        background: {COLOURS["bg"]} {int(MODAL_OVERLAY_ALPHA * 100)}%;
-        border: none;
-    }}
-    #picker {{
-        width: {PICKER_MIN_WIDTH};
-        height: auto;
-        margin-top: 4;
-        background: {COLOURS["panel"]};
-        border: solid {COLOURS["cyan"]};
-    }}
-    #picker-head {{
-        height: 2;
-        padding: 0 1;
-        color: {COLOURS["cyan"]};
-        border-bottom: solid {COLOURS["border"]};
-    }}
-    .picker-option {{
-        height: 1;
-        padding: 0 1;
-    }}
-    #picker-option-label {{
-        width: 1fr;
-    }}
-    .picker-option-count {{
-        content-align: right middle;
-        color: {COLOURS["dim"]};
-    }}
-    .picker-option-selected {{
-        background: {COLOURS["selected-bg"]};
-    }}
-    #picker-foot {{
-        height: 2;
-        padding: 0 1;
-        color: {COLOURS["dim"]};
-        border-top: solid {COLOURS["border"]};
-    }}
-    """
-
-    BINDINGS = [
-        Binding("up", "move_up", "Up", show=False),
-        Binding("down", "move_down", "Down", show=False),
-        Binding("enter", "apply", "Apply", show=False),
-        Binding("escape", "cancel", "Cancel", show=False),
-    ]
-
-    def __init__(self, options, heading="Filter by project"):
-        super().__init__()
-        self._options = options
-        self._heading = heading
-        self._index = 0
-        self._count_width = max(
-            1, atomic_column_width([str(count) for _, _, count in options])
-        )
-        label_width = atomic_column_width([label for _, label, _ in options])
-        computed_width = (
-            PICKER_BORDER_WIDTH
-            + PICKER_PADDING_WIDTH
-            + PICKER_CURSOR_PREFIX_WIDTH
-            + label_width
-            + PICKER_COLUMN_GAP
-            + self._count_width
-        )
-        self._picker_width = max(computed_width, PICKER_MIN_WIDTH)
-
-    def compose(self) -> ComposeResult:
-        with Vertical(id="picker"):
-            yield Static(self._heading, id="picker-head")
-            for index, (_, label, count) in enumerate(self._options):
-                yield PickerOption(label, count, self._count_width, id="picker-option-%d" % index)
-            yield Static("↑↓ move · enter apply · esc cancel", id="picker-foot")
-
-    def on_mount(self) -> None:
-        self.query_one("#picker").styles.width = self._picker_width
-        self._paint_highlight()
-
-    def _paint_highlight(self) -> None:
-        for index, option in enumerate(self.query(PickerOption)):
-            option.set_highlighted(index == self._index)
-
-    def action_move_down(self) -> None:
-        self._index = min(self._index + 1, len(self._options) - 1)
-        self._paint_highlight()
-
-    def action_move_up(self) -> None:
-        self._index = max(self._index - 1, 0)
-        self._paint_highlight()
-
-    def action_apply(self) -> None:
-        self.dismiss(self._options[self._index][0])
-
-    def action_cancel(self) -> None:
-        self.dismiss(PICKER_CANCELLED)
-
-
-class PoolPromptScreen(ModalScreen):
-    CSS = f"""
-    PoolPromptScreen {{
-        align: center top;
-        background: {COLOURS["bg"]} {int(MODAL_OVERLAY_ALPHA * 100)}%;
-        border: none;
-    }}
-    #pool-prompt {{
-        width: {POOL_PROMPT_MIN_WIDTH};
-        height: auto;
-        margin-top: 4;
-        background: {COLOURS["panel"]};
-        border: solid {COLOURS["cyan"]};
-    }}
-    #pool-prompt-head {{
-        height: 1;
-        padding: 0 1;
-        color: {COLOURS["cyan"]};
-    }}
-    #pool-prompt-body {{
-        height: auto;
-        padding: 0 1;
-        color: {COLOURS["text"]};
-        border-bottom: solid {COLOURS["border"]};
-    }}
-    .pool-prompt-option {{
-        height: 1;
-        padding: 0 1;
-    }}
-    .pool-prompt-option-selected {{
-        background: {COLOURS["selected-bg"]};
-    }}
-    #pool-prompt-foot {{
-        height: 2;
-        padding: 0 1;
-        color: {COLOURS["dim"]};
-        border-top: solid {COLOURS["border"]};
-    }}
-    """
-
-    BINDINGS = [
-        Binding("up", "move_up", "Up", show=False),
-        Binding("down", "move_down", "Down", show=False),
-        Binding("enter", "apply", "Apply", show=False),
-        Binding("escape", "cancel", "Cancel", show=False),
-    ]
-
-    def __init__(self, heading, body, options):
-        super().__init__()
-        self._heading = heading
-        self._body = body
-        self._options = options
-        self._index = 0
-
-    def compose(self) -> ComposeResult:
-        with Vertical(id="pool-prompt"):
-            yield Static(self._heading, id="pool-prompt-head")
-            yield Static(self._body, id="pool-prompt-body")
-            for index, (_, label) in enumerate(self._options):
-                yield Static(label, classes="pool-prompt-option", id="pool-prompt-option-%d" % index)
-            yield Static("↑↓ move · enter apply · esc cancel", id="pool-prompt-foot")
-
-    def on_mount(self) -> None:
-        self._paint_highlight()
-
-    def _paint_highlight(self) -> None:
-        for index, option in enumerate(self.query(".pool-prompt-option")):
-            option.set_class(index == self._index, "pool-prompt-option-selected")
-            option.update("%s %s" % (
-                CURSOR_GLYPH.glyph if index == self._index else " ", self._options[index][1]))
-
-    def action_move_down(self) -> None:
-        self._index = min(self._index + 1, len(self._options) - 1)
-        self._paint_highlight()
-
-    def action_move_up(self) -> None:
-        self._index = max(self._index - 1, 0)
-        self._paint_highlight()
-
-    def action_apply(self) -> None:
-        self.dismiss(self._options[self._index][0])
-
-    def action_cancel(self) -> None:
-        self.dismiss(POOL_PROMPT_CANCELLED)
-
-
-def pool_prompt_body(worker_count):
-    if worker_count == 0:
-        return "No workers are running."
-    return "%d worker%s running; %s steps will be reclaimed and re-run." % (
-        worker_count, "" if worker_count == 1 else "s",
-        "its" if worker_count == 1 else "their")
 
 
 def _tui_metric_line(wall_seconds, rss_kb, now):
@@ -1355,27 +237,6 @@ def _tui_metric_line(wall_seconds, rss_kb, now):
     return "%s  %-7s  wall_ms=%d rss_kb=%s\n" % (ts, "tui", round(wall_seconds * 1000), rss)
 
 
-class PickerOption(Horizontal):
-    def __init__(self, label, count, count_width, *, id=None):
-        super().__init__(id=id, classes="picker-option")
-        self.label_text = label
-        self.count = count
-        self.count_width = count_width
-
-    def compose(self) -> ComposeResult:
-        yield Static(id="picker-option-label")
-        yield Static(str(self.count), classes="picker-option-count")
-
-    def on_mount(self) -> None:
-        self.query_one(".picker-option-count", Static).styles.width = self.count_width
-
-    def set_highlighted(self, highlighted) -> None:
-        cursor = Text(
-            "%s " % CURSOR_GLYPH.glyph, style=COLOURS[CURSOR_GLYPH.colour]
-        ) if highlighted else Text("  ")
-        label = cursor + Text(self.label_text, style=COLOURS["text"])
-        self.query_one("#picker-option-label", Static).update(label)
-        self.set_class(highlighted, "picker-option-selected")
 
 
 class MainScreen(Screen, inherit_bindings=False):
@@ -2540,3 +1401,4 @@ class LightcycleApp(App):
 
 def run(container):
     LightcycleApp(container).run()
+

@@ -97,10 +97,6 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def reassign(self, tid, role):
-        pass
-
-    @abstractmethod
     def closed_items(self):
         pass
 

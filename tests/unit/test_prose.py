@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from lightcycle import cli
+from lightcycle.commands import inspect as inspect_cmds
 from lightcycle.application.inspect.resolve_references import ResolveReferencesUseCase
 from lightcycle.domain.prose import (
     BODY,
@@ -140,6 +141,6 @@ class TestCliStaysRaw(unittest.TestCase):
 
     def test_show_json_carries_the_description_unchanged(self):
         out = io.StringIO()
-        with patch.object(cli, "_flow", return_value=MagicMock(step_skill=lambda s: None, workflow_owner=lambda s: (None, None))), redirect_stdout(out):
+        with patch.object(inspect_cmds, "_flow", return_value=MagicMock(step_skill=lambda s: None, workflow_owner=lambda s: (None, None))), redirect_stdout(out):
             cli.cmd_show([self.item])
         self.assertEqual(json.loads(out.getvalue())["description"], "## x\n\nsee [[LC-1]]")

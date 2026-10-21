@@ -3,6 +3,8 @@ import io
 import json
 import unittest
 
+from lightcycle.domain.money import Cost
+
 from lightcycle.adapters.claude_stream import ClaudeStreamAdapter
 from lightcycle.application.pool.breaker_gate import BreakerGateUseCase
 from lightcycle.domain.pool import ModelRates, UsageResume
@@ -843,7 +845,7 @@ class TestBreakerGatePoolWideSpin(unittest.TestCase):
                 pending_tool_use={}, posted_turn_count=1,
                 posted_tool_usage={"Read": {"calls": 1, "bytes": len(b"hello")}},
                 posted_input_tokens=40, posted_output_tokens=20, posted_cache_read_tokens=4,
-                posted_cache_creation_tokens=2, posted_cost_usd=0.4,
+                posted_cache_creation_tokens=2, posted_cost=Cost.from_usd(0.4),
             ),
             tid=tid, input_tokens=0, output_tokens=0, cache_read_tokens=0,
             cache_creation_tokens=0, cost_usd=0.0, cost_basis=None, thinking_tokens=None,
@@ -885,7 +887,7 @@ class TestBreakerGatePoolWideSpin(unittest.TestCase):
                 log_file="/l/1.log", offset=0, message_ids=[],
                 pending_tool_use={}, posted_turn_count=0, posted_tool_usage={},
                 posted_input_tokens=150, posted_output_tokens=0, posted_cache_read_tokens=0,
-                posted_cache_creation_tokens=0, posted_cost_usd=0.9,
+                posted_cache_creation_tokens=0, posted_cost=Cost.from_usd(0.9),
             ),
             tid=tid, input_tokens=0, output_tokens=0, cache_read_tokens=0,
             cache_creation_tokens=0, cost_usd=0.0, cost_basis=None, thinking_tokens=None,

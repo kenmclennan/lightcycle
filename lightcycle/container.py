@@ -1,4 +1,6 @@
 import os
+import shutil
+import tempfile
 import time
 
 from lightcycle.adapters.backup import SqliteBackupAdapter
@@ -12,6 +14,11 @@ from lightcycle.adapters.github_budget_status import GithubBudgetStatusAdapter
 from lightcycle.adapters.gitio import GitAdapter
 from lightcycle.adapters.launcher import LauncherAdapter
 from lightcycle.adapters.lifecycle_runner import LifecycleRunnerAdapter
+from lightcycle.application.pool.accrual_gates import AccrualGatesUseCase
+from lightcycle.application.pool.cadence_gates import CadenceGatesUseCase
+from lightcycle.application.pool.stop_pool import StopPoolUseCase
+from lightcycle.application.workflows.script_tooling import WorkflowScripts
+from lightcycle.application.workflows.simulate import WorkflowSimulateUseCase
 from lightcycle.application.pool.gh_call_accrual import GhCallAccrualUseCase
 from lightcycle.application.pool.github_budget import GithubBudgetUseCase
 from lightcycle.application.pool.github_poll import GithubPollUseCase
@@ -28,6 +35,7 @@ from lightcycle.adapters.memory_gate_status import MemoryGateStatusAdapter
 from lightcycle.adapters.scaffold import ScaffoldAdapter
 from lightcycle.adapters.spawner import SpawnerAdapter
 from lightcycle.adapters.spin import SpinAdapter
+from lightcycle.adapters.simulate import ScriptedGitHub
 from lightcycle.adapters.sqlite_store import SqliteStore
 from lightcycle.adapters.upgrade import UpgradeAdapter
 from lightcycle.adapters.worker_log import WorkerLogAdapter
@@ -151,20 +159,6 @@ class Container:
                 ci_ceiling_seconds=self.config.ci_check_ceiling_seconds, ci_wall_clock=time.time,
                 ci_views=snapshot,
             ),
-            schedule_gate=ScheduleCadenceUseCase(
-                self.store, self.config, flow, self.workflow_source, self.git,
-                ActivateItemUseCase(
-                    self.store, flow, self.git, self.config, self.scaffold),
-                self.script_runner, self.workflow_lifecycle(),
-            ),
-            script_gate=ScriptStageUseCase(
-                self.store, flow, self.config, self.workflow_source, self.workflow_lifecycle(),
-                self.script_runner, ParkStepUseCase(self.store), complete, worktrees,
-            ),
-            lifecycle_gate=LifecycleCadenceUseCase(
-                self.store, self.config, self.workflow_source, self.workflow_lifecycle(),
-                self.lifecycle_runner, self.config.audit_shortcode,
-            ),
             breaker_gate=BreakerGateUseCase(
                 self.workers, self.worker_log, self.breaker, self.config, self.claude_stream,
                 spin_port=self.spin, store=self.store,
@@ -173,38 +167,59 @@ class Container:
                 snapshot, self.github, self.github_poll_runner, self.config, writes,
                 self.github_budget_status, time.time, self.worker_log, self.store),
             hook_completions=HookCompletionsUseCase(self.store, flow),
-            worktrees=worktrees,
-            git=self.git,
             backup_gate=BackupUseCase(self.backup, self.config),
-            worker_log=self.worker_log,
             flow_service=flow,
-            spin_port=self.spin,
-            usage_gate=LiveUsageAccrualUseCase(
-                self.store, self.worker_log, self.workers, self.config, self.claude_stream,
-            ),
-            stream=self.claude_stream,
             memory_gate=MemoryGateUseCase(self.machine, self.config, self.memory_gate_status),
             guidance_gate=GuidanceSyncUseCase(
                 self.store, self.git, self.fs, self.guidance_sync_status, self.config,
             ),
+            github_budget=self.github_budget(flow),
             config_reload=ReloadConfigUseCase(
                 self.config, self.config_reload_status, os.getpid()),
-            github_budget=self.github_budget(flow),
-            gh_call_gate=GhCallAccrualUseCase(
-                self.store, self.worker_log, self.workers, self.config),
+            sweep=self.sweep(flow=flow, worktrees=worktrees),
+            cadence=CadenceGatesUseCase(
+                ScheduleCadenceUseCase(
+                    self.store, self.config, flow, self.workflow_source, self.git,
+                    ActivateItemUseCase(
+                        self.store, flow, self.git, self.config, self.scaffold),
+                    self.script_runner, self.workflow_lifecycle(),
+                ),
+                LifecycleCadenceUseCase(
+                    self.store, self.config, self.workflow_source, self.workflow_lifecycle(),
+                    self.lifecycle_runner, self.config.audit_shortcode,
+                ),
+                ScriptStageUseCase(
+                    self.store, flow, self.config, self.workflow_source,
+                    self.workflow_lifecycle(), self.script_runner, ParkStepUseCase(self.store),
+                    complete, worktrees,
+                ),
+            ),
+            accrual=AccrualGatesUseCase(
+                LiveUsageAccrualUseCase(
+                    self.store, self.worker_log, self.workers, self.config, self.claude_stream,
+                ),
+                GhCallAccrualUseCase(self.store, self.worker_log, self.workers, self.config),
+            ),
+            worker_log=self.worker_log,
         )
 
-    def sweep(self, flow=None):
+    def sweep(self, flow=None, worktrees=None):
         from lightcycle.application.pool.sweep import SweepUseCase
 
         flow = flow if flow is not None else self.flow_service()
         return SweepUseCase(
             self.store, self.workers,
-            worktrees=worktrees_for(self, flow=flow),
+            worktrees=worktrees if worktrees is not None else worktrees_for(self, flow=flow),
             git=self.git, worker_log=self.worker_log,
             spin_port=self.spin, spin_cap=self.config.spin_cap(),
             stream=self.claude_stream,
         )
+
+    def stop_pool(self, flow=None):
+        return StopPoolUseCase(self.workers, self.sweep(flow=flow))
+
+    def simulation(self):
+        return _Simulation(self)
 
     def unblock_step_use_case(self, flow=None):
         from lightcycle.application.flow.unblock_step import UnblockStepUseCase
@@ -234,6 +249,33 @@ def worktrees_for(container, flow=None):
     return make_worktrees(
         container.store, container.git, container.fs, container.config, flow, container.scaffold,
     )
+
+
+class _Simulation:
+    def __init__(self, container):
+        self._container = container
+        self._scratch = None
+
+    def __enter__(self):
+        container = self._container
+        self._scratch = tempfile.mkdtemp(prefix="lc-simulate-")
+        try:
+            sim = SimulationContainer(container, self._scratch)
+            return WorkflowSimulateUseCase(
+                sim.store, sim.flow, sim.worktrees, sim.claim, sim.complete, sim.projects_root,
+                sim.git, lifecycle=container.workflow_lifecycle(),
+                scripts=WorkflowScripts(
+                    container.workflow_bundle, container.fs, container.config),
+                source=container.workflow_source, scaffold=sim.scaffold,
+                github_factory=ScriptedGitHub, config=sim.config,
+            )
+        except BaseException:
+            self.__exit__(None, None, None)
+            raise
+
+    def __exit__(self, exc_type, exc, tb):
+        shutil.rmtree(self._scratch, ignore_errors=True)
+        return False
 
 
 class SimulationContainer:

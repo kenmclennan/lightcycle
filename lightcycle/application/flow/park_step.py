@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from lightcycle.application.errors import UseCaseError
+from lightcycle.application.flow.route_step import RouteStepService
 from lightcycle.domain.work.park import Park
 
 
@@ -30,7 +31,7 @@ class ParkStepUseCase:
         with self._store.transaction():
             self._store.update_metadata(input.step, {k: v for k, v in park.as_dict().items() if v})
             self._store.note(input.step, park.as_blocked_note())
-            self._store.reassign(input.step, "human")
+            RouteStepService(self._store).route(input.step, "human")
 
     def execute_once(self, input: ParkInput) -> None:
         park = self._store.get_node(input.step).park

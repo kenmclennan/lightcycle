@@ -4,6 +4,7 @@ from contextlib import redirect_stdout
 from unittest import mock
 
 import lightcycle.cli as cli_mod
+import lightcycle.commands.inspect as inspect_cmds
 from lightcycle.cli import cmd_status
 from tests.support.fake_drain import FakeDrain
 from tests.support.fake_spin import FakeSpinPort
@@ -41,8 +42,8 @@ class TestCmdStatusDisplayPhrase(unittest.TestCase):
         store.create_item("an item", "a description", id="i-1")
         cli_mod.set_container(FakeContainer(store=store, spin=spin))
         fake_resp = mock.Mock(lanes=lanes)
-        with mock.patch.object(cli_mod, "StatusUseCase") as UseCase, \
-                mock.patch.object(cli_mod, "_flow", lambda: flow_service):
+        with mock.patch.object(inspect_cmds, "StatusUseCase") as UseCase, \
+                mock.patch.object(inspect_cmds, "_flow", lambda: flow_service):
             UseCase.return_value.execute.return_value = fake_resp
             out = io.StringIO()
             with redirect_stdout(out):
@@ -95,7 +96,7 @@ class TestCmdStatusDraining(unittest.TestCase):
             workers=workers,
         ))
         out = io.StringIO()
-        with mock.patch.object(cli_mod, "_flow", lambda: _FixedFlowService({})), \
+        with mock.patch.object(inspect_cmds, "_flow", lambda: _FixedFlowService({})), \
                 redirect_stdout(out):
             rc = cmd_status(list(argv))
         return rc, out.getvalue()

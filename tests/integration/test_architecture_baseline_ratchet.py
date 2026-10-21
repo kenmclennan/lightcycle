@@ -32,6 +32,7 @@ LAYER_POLICY_EXEMPTIONS = {
     ("tests/**", "SIM115"),
     ("lightcycle/adapters/**", "BLE001"),
     ("lightcycle/cli.py", "BLE001"),
+    ("lightcycle/commands/**", "BLE001"),
     ("lightcycle/container.py", "BLE001"),
     ("lightcycle/config.py", "BLE001"),
     ("lightcycle/render.py", "BLE001"),

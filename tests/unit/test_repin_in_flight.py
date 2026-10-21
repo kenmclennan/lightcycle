@@ -294,17 +294,17 @@ class TestRepinReowns(unittest.TestCase):
         self.assertEqual(after.role, "engine")
         self.assertEqual((after.state, after.park), (before.state, before.park))
 
-    def test_failing_reassign_on_the_second_step_leaves_the_pin_and_first_step_unchanged(self):
+    def test_failing_route_on_the_second_step_leaves_the_pin_and_first_step_unchanged(self):
         first = self._step("review", "agent")
         second = self._step("write", "human")
-        real = self.store.reassign
+        real = self.store.assign
 
-        def flaky(tid, role):
+        def flaky(tid, assignee):
             if tid == second:
                 raise RuntimeError("boom")
-            real(tid, role)
+            real(tid, assignee)
 
-        self.store.reassign = flaky
+        self.store.assign = flaky
         with self.assertRaises(RuntimeError):
             self._run()
         self.assertEqual(self.store.get_node(first).role, "agent")

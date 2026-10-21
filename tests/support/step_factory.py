@@ -1,3 +1,6 @@
+from lightcycle.application.flow.route_step import RouteStepService
+
+
 def create_owned_step(store, title, **kw):
     if kw.get("item") is None:
         kw["item"] = store.create_item(title, "an owning item", shortcode="OWN")
@@ -6,4 +9,4 @@ def create_owned_step(store, title, **kw):
 
 def route_to_human(store, tid, note):
     store.note(tid, note)
-    store.reassign(tid, "human")
+    RouteStepService(store).route(tid, "human")

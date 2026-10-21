@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from typing import List
 
 from lightcycle.application.errors import UseCaseError
+from lightcycle.application.flow.route_step import RouteStepService
 from lightcycle.application.work.edit_node import EditNodeInput, EditNodeUseCase
 from lightcycle.application.work.resolve_workflow_selection import (
     ResolveWorkflowSelectionInput,
@@ -65,7 +66,7 @@ class RepinInFlightItemsUseCase:
                 self._store.label_remove(step.id, "for:%s" % step.role)
             self._store.label_add(step.id, "for:%s" % owner)
         else:
-            self._store.reassign(step.id, owner)
+            RouteStepService(self._store).route(step.id, owner)
         return "%s  %-7s  %s\n" % (
             time.strftime("%H:%M:%S", time.localtime()), "repin",
             "%s step %s (%s) owner %s -> %s" % (step.item, step.id, step.stage, step.role, owner))

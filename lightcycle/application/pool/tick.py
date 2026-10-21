@@ -13,8 +13,8 @@ from lightcycle.application.pool.monitor_prs import MonitorPrsResponse
 from lightcycle.application.pool.reload_config import ReloadConfigResponse
 from lightcycle.application.pool.schedule_cadence import ScheduleCadenceResponse
 from lightcycle.application.pool.script_stages import ScriptStagesResponse
-from lightcycle.application.pool.sweep import SweepResponse, SweepUseCase
-from lightcycle.config import RELOAD_RELOADED, RELOAD_REJECTED, ConfigError
+from lightcycle.application.pool.sweep import SweepResponse
+from lightcycle.config import RELOAD_RELOADED, RELOAD_REJECTED
 from lightcycle.domain.pool import PoolPlan, ReadyQueue, WorkerPool
 from lightcycle.ports.git import GitReadError
 from lightcycle.ports.workers import RegistryUnreadable
@@ -71,36 +71,28 @@ class TickResponse:
 class TickUseCase:
     def __init__(
         self, store, workers, spawner, config, monitor, breaker_gate,
-        hook_completions, worktrees, git, backup_gate, worker_log, flow_service, spin_port, usage_gate,
-        stream, memory_gate, guidance_gate,
-        schedule_gate, config_reload, lifecycle_gate, script_gate, github_poll_gate,
-        github_budget, gh_call_gate,
+        hook_completions, backup_gate, flow_service, memory_gate, guidance_gate,
+        github_poll_gate, github_budget, config_reload, sweep, cadence, accrual, worker_log,
     ):
         self._store = store
         self._workers = workers
         self._spawner = spawner
         self._config = config
-        self._sweep = SweepUseCase(
-            store, workers, worktrees, git, worker_log,
-            spin_port=spin_port, spin_cap=config.spin_cap(), stream=stream,
-        )
+        self._sweep = sweep
         self._monitor = monitor
         self._worker_log = worker_log
         self._logged_refusals = {}
         self._github_poll_gate = github_poll_gate
-        self._schedule_gate = schedule_gate
-        self._lifecycle_gate = lifecycle_gate
-        self._script_gate = script_gate
+        self._cadence = cadence
+        self._accrual = accrual
         self._config_reload = config_reload
         self._breaker_gate = breaker_gate
         self._hook_completions = hook_completions
         self._backup_gate = backup_gate
         self._flow_service = flow_service
-        self._usage_gate = usage_gate
         self._memory_gate = memory_gate
         self._guidance_gate = guidance_gate
         self._github_budget = github_budget
-        self._gh_call_gate = gh_call_gate
         self._budget_low = False
 
     def _log_refusals(self, refused, now):
@@ -119,33 +111,10 @@ class TickUseCase:
             sys.stderr.write("warning: guidance sync failed: %s\n" % e)
             return None
 
-    def _schedules(self, now):
-        try:
-            return self._schedule_gate.execute(now)
-        except (OSError, GitReadError, ValueError) as e:
-            sys.stderr.write("warning: schedule check failed: %s\n" % e)
-            return None
-
-    def _lifecycle(self, now):
-        try:
-            return self._lifecycle_gate.execute(now)
-        except (OSError, GitReadError, ValueError, ConfigError) as e:
-            sys.stderr.write("warning: lifecycle check failed: %s\n" % e)
-            return None
-
-    def _scripts(self, now):
-        try:
-            return self._script_gate.execute(now)
-        except (OSError, GitReadError, ValueError, ConfigError) as e:
-            sys.stderr.write("warning: script stage check failed: %s\n" % e)
-            return None
-
     def _reload_config(self):
         result = self._config_reload.execute()
         if result.outcome == RELOAD_RELOADED:
-            self._schedule_gate.reset()
-            self._lifecycle_gate.reset()
-            self._script_gate.reset()
+            self._cadence.reset()
         elif result.outcome == RELOAD_REJECTED:
             sys.stderr.write(
                 "warning: config reload rejected: %s - keeping the last good config\n"
@@ -163,9 +132,10 @@ class TickUseCase:
         self._workers.reap()
         monitor_result = self._monitor.execute()
         self._github_poll_gate.execute(input.now)
-        schedules_result = self._schedules(input.now)
-        lifecycle_result = self._lifecycle(input.now)
-        scripts_result = self._scripts(input.now)
+        cadence_result = self._cadence.execute(input.now)
+        schedules_result = cadence_result.schedules
+        lifecycle_result = cadence_result.lifecycle
+        scripts_result = cadence_result.scripts
         self._log_refusals(
             monitor_result.refused + (scripts_result.refused if scripts_result else []),
             input.now)
@@ -173,8 +143,7 @@ class TickUseCase:
         breaker = breaker_result.breaker
         backup_result = self._backup_gate.execute(input.now)
         guidance_result = self._guidance_sync(input.now)
-        self._usage_gate.execute(input.now)
-        self._gh_call_gate.execute()
+        self._accrual.execute(input.now)
         swept = self._sweep.execute(
             input.now, self._config.max_boot_seconds(), self._config.stall_seconds()
         )

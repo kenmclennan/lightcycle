@@ -2,9 +2,12 @@ import unittest
 
 from lightcycle.application.pool.backup import BackupResponse
 from lightcycle.application.pool.breaker_gate import BreakerGateResponse
+from lightcycle.application.pool.cadence_gates import CadenceGatesResponse
 from lightcycle.application.pool.hook_completions import HookCompletionsResponse
 from lightcycle.application.pool.monitor_prs import MonitorPrsResponse
 from lightcycle.application.pool.no_op_gates import (
+    NoOpAccrualGates,
+    NoOpCadenceGates,
     NoOpBackupGate,
     NoOpBreakerGate,
     NoOpFlowService,
@@ -20,6 +23,18 @@ from lightcycle.application.pool.no_op_gates import (
 from lightcycle.domain.pool import Breaker
 from lightcycle.domain.pool.spin_ledger import SpinLedger
 from lightcycle.ports.git import GitReadError
+
+
+class TestNoOpCadenceGates(unittest.TestCase):
+    def test_execute_returns_an_empty_response_and_reset_is_inert(self):
+        gates = NoOpCadenceGates()
+        self.assertEqual(gates.execute(1.0), CadenceGatesResponse())
+        self.assertIsNone(gates.reset())
+
+
+class TestNoOpAccrualGates(unittest.TestCase):
+    def test_execute_returns_none(self):
+        self.assertIsNone(NoOpAccrualGates().execute(1.0))
 
 
 class TestNoOpMonitor(unittest.TestCase):
