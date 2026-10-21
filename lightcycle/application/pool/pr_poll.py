@@ -39,7 +39,9 @@ class PrPoll:
                 by_repo.setdefault(repo, []).append(pr)
         failed = set()
         for repo, prs in by_repo.items():
-            failed |= self._poll_repo(repo, prs)
+            repo_failed = self._poll_repo(repo, prs)
+            failed |= repo_failed
+            self._snapshot.confirm([pr for pr in prs if pr not in repo_failed], wanted.epoch)
         self._compare_files(wanted.files)
         self._read_checks(wanted.checks)
         self._snapshot.retain(wanted.prs, wanted.checks)

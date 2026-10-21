@@ -101,7 +101,7 @@ class TestCiStageIssuesNoGitCall(unittest.TestCase):
         plant_pr(store, item, _PR, branch="feat/thing")
         step = store.create_step(step="poll-ci", role="engine", parent=item)
         flow = _FlowAdapter(_FLOW)
-        monitor = _CiMonitor(ResolveCiUseCase(store, snapshot, flow, CompleteStepUseCase(store, flow), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, wall_clock=lambda: 10000.0))
+        monitor = _CiMonitor(ResolveCiUseCase(store, snapshot, flow, CompleteStepUseCase(store, flow), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, wall_clock=lambda: 10000.0, views=snapshot))
         git = FakeGit()
         tick = make_tick(
             store, FakeWorkers(), FakeSpawner(), _Config(), monitor=monitor,
@@ -125,7 +125,7 @@ def _ci_pool(hold_view):
     item = store.create_item("building a thing", "a description")
     plant_pr(store, item, _PR, branch="feat/thing")
     flow = _FlowAdapter(_FLOW)
-    monitor = _CiMonitor(ResolveCiUseCase(store, snapshot, flow, CompleteStepUseCase(store, flow), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, wall_clock=lambda: 10000.0))
+    monitor = _CiMonitor(ResolveCiUseCase(store, snapshot, flow, CompleteStepUseCase(store, flow), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, wall_clock=lambda: 10000.0, views=snapshot))
     tick = make_tick(
         store, FakeWorkers(), FakeSpawner(), _Config(), monitor=monitor,
         github_poll_gate=_gate(snapshot, github, InlineGithubPollRunner()),
@@ -191,7 +191,7 @@ def _rebase_clears_conflict(github):
     github.touch(_PR, 200.0)
 
 
-def _head_change_pool(before_move):
+def _head_change_pool(before_move, settle=True):
     github = FakeGitHub(
         updated_ats={_PR: 100.0},
         head_shas={_PR: "sha0"},
@@ -204,7 +204,7 @@ def _head_change_pool(before_move):
     monitor = _CiMonitor(ResolveCiUseCase(
         store, snapshot, flow, CompleteStepUseCase(store, flow),
         clock=time.monotonic, poll_seconds=lambda: _POLL,
-        ci_ceiling_seconds=lambda: 3600, wall_clock=lambda: 10000.0))
+        ci_ceiling_seconds=lambda: 3600, wall_clock=lambda: 10000.0, views=snapshot))
     tick = make_tick(
         store, FakeWorkers(), FakeSpawner(), _Config(), monitor=monitor,
         github_poll_gate=_gate(snapshot, github, InlineGithubPollRunner()),
@@ -224,7 +224,8 @@ def _head_change_pool(before_move):
     assert store.get_node(first).state.value == "done"
     for event in before_move:
         event(github)
-        run(_POLL + _TICK)
+        if settle:
+            run(_POLL + _TICK)
     return github, store, item, snapshot, run, clock
 
 
@@ -257,6 +258,54 @@ class TestCiJudgementAfterHeadChange(unittest.TestCase):
 
     def test_a_rework_push_is_judged_on_the_new_head(self):
         self._assert_judged_on_new_head([_rework_push])
+
+
+def _concluded(github, clock):
+    github._check_runs_by_sha[(_PR, "sha1")] = (CheckRun("ci", "completed", "success"),)
+    github.touch(_PR, 1000.0 + clock[0])
+    return clock[0]
+
+
+def _run_until_done(store, step, run, clock, concluded_at):
+    while clock[0] <= concluded_at + 4 * _POLL:
+        run(_TICK)
+        if store.get_node(step).state.value == "done":
+            return clock[0] - _TICK
+    raise AssertionError("poll-ci was never judged")
+
+
+class TestCiJudgementWaitsForAConfirmingPoll(unittest.TestCase):
+    def test_a_step_created_between_a_push_and_the_next_poll_does_not_judge_the_old_head(self):
+        github, store, item, snapshot, run, clock = _head_change_pool([_rework_push], settle=False)
+        second = store.create_step(step="poll-ci", role="engine", parent=item)
+        run(3 * _TICK)
+        self.assertEqual(store.get_node(second).state.value, "queued")
+        self.assertEqual([a for a in store.item_artifacts(second) if a.type == "ci-judged-sha"], [])
+
+        concluded_at = _concluded(github, clock)
+        judged_at = _run_until_done(store, second, run, clock, concluded_at)
+
+        self.assertLessEqual(judged_at - concluded_at, _POLL + _TICK)
+        judged = [a.value for a in store.item_artifacts(second) if a.type == "ci-judged-sha"]
+        self.assertEqual(judged, ["sha1"])
+        self.assertIn("sha1", store.get_node(second).report)
+        self.assertIn((_PR, "sha0"), github._check_runs_by_sha)
+
+    def test_a_step_first_seen_on_a_poll_tick_is_judged_on_the_following_tick(self):
+        github, store, item, snapshot, run, clock = _head_change_pool([_rework_push], settle=False)
+        concluded_at = _concluded(github, clock)
+        while clock[0] % _POLL != 0:
+            run(_TICK)
+        second = store.create_step(step="poll-ci", role="engine", parent=item)
+
+        run(_TICK)
+        self.assertEqual(store.get_node(second).state.value, "queued")
+        run(_TICK)
+
+        self.assertEqual(store.get_node(second).state.value, "done")
+        self.assertLessEqual(clock[0] - _TICK - concluded_at, _POLL + _TICK)
+        judged = [a.value for a in store.item_artifacts(second) if a.type == "ci-judged-sha"]
+        self.assertEqual(judged, ["sha1"])
 
 
 class TestColdStart(unittest.TestCase):
@@ -431,7 +480,7 @@ class _Rig:
         self.monitor = MonitorPrsUseCase(
             self.store, self.snapshot, FakeWorktrees(), flow, CompleteStepUseCase(self.store, flow),
             trusted_authors=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
-            writes=self.writes, ci_clock=time.monotonic, ci_poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_wall_clock=lambda: 10000.0)
+            writes=self.writes, ci_clock=time.monotonic, ci_poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_wall_clock=lambda: 10000.0, ci_views=self.snapshot)
         self.poll = GithubPollUseCase(self.snapshot, self.github, runner, _Config(), self.writes, FakeGithubBudgetStatus(), time.time, FakeFs())
 
     def notes(self):

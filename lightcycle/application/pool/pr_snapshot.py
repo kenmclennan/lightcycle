@@ -22,6 +22,7 @@ class Wanted:
     prs: frozenset = frozenset()
     files: frozenset = frozenset()
     checks: frozenset = frozenset()
+    epoch: int = 0
 
 
 @dataclass
@@ -40,6 +41,8 @@ class PrSnapshot(GitHubEventsPort):
         self._checks = {}
         self._required = {}
         self._pending = _Pending()
+        self._epoch = 0
+        self._confirmed = {}
 
     def _entry(self, pr):
         with self._lock:
@@ -57,10 +60,25 @@ class PrSnapshot(GitHubEventsPort):
     def take_wanted(self):
         with self._lock:
             pending, self._pending = self._pending, _Pending()
+            self._epoch += 1
+            epoch = self._epoch
         return Wanted(
             prs=frozenset(pending.prs), files=frozenset(pending.files),
-            checks=frozenset(pending.checks),
+            checks=frozenset(pending.checks), epoch=epoch,
         )
+
+    def poll_epoch(self):
+        with self._lock:
+            return self._epoch
+
+    def confirm(self, prs, epoch):
+        with self._lock:
+            for pr in prs:
+                self._confirmed[pr] = max(epoch, self._confirmed.get(pr, 0))
+
+    def confirmed_after(self, pr, epoch):
+        with self._lock:
+            return self._confirmed.get(pr, 0) > epoch
 
     def publish(self, pr, entry):
         with self._lock:
@@ -93,6 +111,7 @@ class PrSnapshot(GitHubEventsPort):
     def retain(self, prs, check_prs):
         with self._lock:
             self._entries = {pr: e for pr, e in self._entries.items() if pr in prs}
+            self._confirmed = {pr: e for pr, e in self._confirmed.items() if pr in prs}
             self._files = {k: v for k, v in self._files.items() if k[0] in prs}
             self._checks = {
                 k: v for k, v in self._checks.items() if k[0] in prs and k[0] in check_prs

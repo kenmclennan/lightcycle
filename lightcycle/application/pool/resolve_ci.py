@@ -29,6 +29,7 @@ def _reason(call, failure):
 class ResolveCiUseCase:
     def __init__(
         self, store, github, flow_service, complete, *, clock, poll_seconds, ci_ceiling_seconds, wall_clock,
+        views,
     ):
         self._store = store
         self._github = github
@@ -38,7 +39,9 @@ class ResolveCiUseCase:
         self._poll_seconds = poll_seconds
         self._ci_ceiling_seconds = ci_ceiling_seconds
         self._wall_clock = wall_clock
+        self._views = views
         self._unread = {}
+        self._first_epoch = {}
         ci_ceiling_seconds()
 
     def _note_unread(self, step, reason, failure, still_unread, ci_unread):
@@ -61,6 +64,7 @@ class ResolveCiUseCase:
         ci_resolved = []
         ci_unread = []
         still_unread = set()
+        seen = set()
         for step in self._store.all_nodes():
             if step.type != "step" or step.state == State.DONE or step.role != "engine":
                 continue
@@ -73,6 +77,14 @@ class ResolveCiUseCase:
             run = run_of(self._store, self._flow_service, step)
             pr_value = run.pr if run else None
             if not pr_value:
+                continue
+            epoch = self._first_epoch.setdefault(step.id, self._views.poll_epoch())
+            seen.add(step.id)
+            if not self._views.confirmed_after(pr_value, epoch):
+                held_sha = self._github.head_sha(pr_value)
+                if held_sha and not isinstance(held_sha, ReadFailure):
+                    self._github.check_runs(pr_value, held_sha)
+                self._note_unread(step, "view-not-confirmed", None, still_unread, ci_unread)
                 continue
             sha = self._github.head_sha(pr_value)
             if isinstance(sha, ReadFailure):
@@ -121,4 +133,6 @@ class ResolveCiUseCase:
                 ci_resolved.append(step.item)
         for step_id in [k for k in self._unread if k not in still_unread]:
             del self._unread[step_id]
+        for step_id in [k for k in self._first_epoch if k not in seen]:
+            del self._first_epoch[step_id]
         return ResolveCiResponse(ci_resolved=ci_resolved, ci_unread=ci_unread)

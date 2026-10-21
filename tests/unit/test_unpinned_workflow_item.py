@@ -6,6 +6,7 @@ from lightcycle.application.pool.check_content_pin import CheckContentPinUseCase
 from lightcycle.application.pool.resolve_ci import ResolveCiUseCase
 from lightcycle.application.pool.resolve_merged_prs import ResolveMergedPrsUseCase
 from lightcycle.application.services.flow import FlowService
+from tests.support.fake_view_freshness import AlwaysConfirmed
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_github import FakeGitHub
 from tests.support.fake_store import FakeStore
@@ -81,7 +82,7 @@ class TestUnpinnedWorkflowOnOneItem(unittest.TestCase):
 
     def test_ci_monitor_notes_the_bad_item_and_does_not_raise(self):
         engine_step = self.store.create_step(step="await-merge", role="engine", parent=self.bad)
-        uc = ResolveCiUseCase(self.store, FakeGitHub(), self.flow, self._complete(), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, wall_clock=lambda: 10000.0)
+        uc = ResolveCiUseCase(self.store, FakeGitHub(), self.flow, self._complete(), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, wall_clock=lambda: 10000.0, views=AlwaysConfirmed())
 
         uc.execute()
 

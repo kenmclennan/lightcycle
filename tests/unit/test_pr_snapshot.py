@@ -114,3 +114,37 @@ class TestReadPr(unittest.TestCase):
         self.assertEqual(self.snap.authenticated_login(), "operator")
         self.assertIsNone(self.snap.update_branch(_PR, "h1"))
         self.assertEqual(self.github.update_calls, [(_PR, "h1")])
+
+
+class TestPollEpoch(unittest.TestCase):
+    def setUp(self):
+        self.snap = PrSnapshot(FakeGitHub())
+
+    def test_take_wanted_advances_the_epoch_and_reports_it(self):
+        before = self.snap.poll_epoch()
+
+        wanted = self.snap.take_wanted()
+
+        self.assertEqual(wanted.epoch, before + 1)
+        self.assertEqual(self.snap.poll_epoch(), before + 1)
+
+    def test_a_pr_is_confirmed_after_only_epochs_below_its_confirmed_one(self):
+        self.snap.confirm([_PR], 3)
+
+        self.assertTrue(self.snap.confirmed_after(_PR, 2))
+        self.assertFalse(self.snap.confirmed_after(_PR, 3))
+        self.assertFalse(self.snap.confirmed_after(_PR, 4))
+
+    def test_confirming_one_pr_leaves_another_unconfirmed(self):
+        other = "https://github.com/acme/widget/pull/2"
+
+        self.snap.confirm([_PR], 5)
+
+        self.assertFalse(self.snap.confirmed_after(other, 0))
+
+    def test_retain_drops_confirmations_of_unwanted_prs(self):
+        self.snap.confirm([_PR], 5)
+
+        self.snap.retain(frozenset(), frozenset())
+
+        self.assertFalse(self.snap.confirmed_after(_PR, 0))
