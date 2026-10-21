@@ -3,6 +3,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
+from lightcycle.application.services.engine_fragments import with_engine_fragments
 from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
 from lightcycle.domain.schedule.guards import is_script_guard, script_guard_path
@@ -63,14 +64,16 @@ def stage_structure_problems(stage, meta, step_def, outcomes):
 
 
 class WorkflowScripts:
-    def __init__(self, bundle, fs):
+    def __init__(self, bundle, fs, config):
         self._bundle = bundle
         self._fs = fs
+        self._config = config
 
     def _step_metas(self, directory):
         metas = {}
+        roots = with_engine_fragments(directory, self._config)
         for role in self._bundle.step_roles(directory):
-            parsed = self._bundle.parse_step(role, directory)
+            parsed = self._bundle.parse_step(role, roots)
             metas[role] = parsed.meta if parsed else {}
         return metas
 
@@ -81,14 +84,17 @@ class WorkflowScripts:
         return []
 
     def _stages(self, directory, name):
+        try:
+            return self._declared_stages(directory, name)
+        except ValueError:
+            return []
+
+    def _declared_stages(self, directory, name):
         text = self._bundle.workflow_text(name, directory)
         if text is None:
             return []
-        try:
-            graph = parse_graph(text)
-            metas = self._step_metas(directory)
-        except ValueError:
-            return []
+        graph = parse_graph(text)
+        metas = self._step_metas(directory)
         flow = Flow.from_graph(graph, metas)
         stages = []
         for stage in flow.steps():
@@ -132,7 +138,17 @@ class WorkflowScripts:
         except ValueError as e:
             raise ValueError("fixture %s: %s" % (rel, e))
 
+    def _step_parse_problem(self, directory):
+        try:
+            self._step_metas(directory)
+        except ValueError as e:
+            return str(e)
+        return None
+
     def problems(self, directory, name):
+        parse_problem = self._step_parse_problem(directory)
+        if parse_problem:
+            return ["cannot check script stages: %s" % parse_problem]
         decls = self.declarations(directory, name)
         found = []
         for decl in decls.stages:

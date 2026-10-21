@@ -251,7 +251,7 @@ class SimulateTestCase(unittest.TestCase):
         use_case = WorkflowSimulateUseCase(
             store, flow, worktrees, claim, complete, projects_root, git,
             lifecycle=c.workflow_lifecycle(),
-            scripts=WorkflowScripts(c.workflow_bundle, c.fs), source=c.workflow_source,
+            scripts=WorkflowScripts(c.workflow_bundle, c.fs, c.config), source=c.workflow_source,
             scaffold=c.scaffold, github_factory=ScriptedGitHub, config=sim_config,
         )
         resp = use_case.execute(SimulateInput(workflow=selector))

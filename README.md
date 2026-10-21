@@ -155,7 +155,7 @@ The mutating CLI is a small set of generic primitives over nodes; the read views
 | `lc active` / `lc queue [N]` / `lc ps` | steps running now / next N agent steps / running workers |
 | `lc logs <step\|stage\|run> [-f]` | tail a worker's or the loop's log |
 | `lc trace <item> [--json]` | an item end to end: artifacts + child steps + logs |
-| `lc workflow check [--json] [--dir <bundle-dir>]` | print + check the assembled flow (stages, routes, contracts, composition); `--dir` checks an uncommitted bundle without pinning it |
+| `lc workflow check [--json] [--dir <bundle-dir>]` | print + check the assembled flow (stages, routes, contracts, composition); `--dir` checks an uncommitted bundle without pinning it, script stages included (script exists and is executable, fixture has an entry for every declared outcome) |
 | `lc sweep` | release orphaned claims (dead worker -> step reclaimable) |
 
 ## Steps and performers

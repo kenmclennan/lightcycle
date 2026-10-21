@@ -28,7 +28,7 @@ class CheckTestCase(unittest.TestCase):
     def problems(self, **kwargs):
         shutil.rmtree(self.root, ignore_errors=True)
         write_script_bundle(self.root, **kwargs)
-        return WorkflowScripts(self.bundle, self.fs).problems(self.root, "build")
+        return WorkflowScripts(self.bundle, self.fs, _Config()).problems(self.root, "build")
 
     def assertOneProblem(self, found, *needles):
         self.assertEqual(len(found), 1, found)
@@ -69,7 +69,7 @@ class TestScriptChecks(CheckTestCase):
         with open(path, "w") as f:
             f.write(text)
 
-        found = WorkflowScripts(self.bundle, self.fs).problems(self.root, "build")
+        found = WorkflowScripts(self.bundle, self.fs, _Config()).problems(self.root, "build")
 
         self.assertOneProblem(found, "ci_success")
 
@@ -82,7 +82,7 @@ class TestScriptChecks(CheckTestCase):
         with open(path, "w") as f:
             f.write(text)
 
-        found = WorkflowScripts(self.bundle, self.fs).problems(self.root, "build")
+        found = WorkflowScripts(self.bundle, self.fs, _Config()).problems(self.root, "build")
 
         self.assertTrue(any("declares no outcome" in p for p in found), found)
 
@@ -111,19 +111,46 @@ class TestScriptChecks(CheckTestCase):
         with open(os.path.join(self.root, "scripts", "tests", "test_poll.sh"), "w") as f:
             f.write("x")
 
-        self.assertEqual(WorkflowScripts(self.bundle, self.fs).problems(self.root, "build"), [])
+        self.assertEqual(WorkflowScripts(self.bundle, self.fs, _Config()).problems(self.root, "build"), [])
 
 
 class TestRequiresEngine(CheckTestCase):
     def _check(self, **kwargs):
         write_script_bundle(self.root, **kwargs)
-        return CheckWorkflowDirUseCase(self.bundle, self.fs, "0.6.332").execute(self.root, None)
+        return CheckWorkflowDirUseCase(self.bundle, self.fs, "0.6.332", _Config()).execute(self.root, None)
 
     def test_a_bundle_using_scripts_without_requires_engine_is_reported(self):
         resp = self._check(requires_engine=False)
 
         messages = [m for ms in resp.lifecycle_problems.values() for m in ms]
         self.assertTrue(any("requires-engine" in m for m in messages), messages)
+
+    def test_dir_check_passes_a_correct_script_stage(self):
+        resp = self._check()
+
+        self.assertEqual(resp.problems, [])
+        self.assertEqual(resp.lifecycle_problems, {})
+
+    def test_dir_check_names_a_script_stage_missing_its_fixture(self):
+        resp = self._check(stage_fixture=None)
+
+        messages = resp.lifecycle_problems["build"]
+        self.assertEqual(len(messages), 1, messages)
+        self.assertIn("fixtures/poll.sh.json", messages[0])
+
+    def test_dir_check_names_a_non_executable_script_stage_script(self):
+        resp = self._check(poll_executable=False)
+
+        messages = resp.lifecycle_problems["build"]
+        self.assertEqual(len(messages), 1, messages)
+        self.assertIn("not executable", messages[0])
+
+    def test_dir_check_names_a_fixture_lacking_a_declared_outcome(self):
+        resp = self._check(stage_fixture={"found": STAGE_FIXTURE["found"]})
+
+        messages = resp.lifecycle_problems["build"]
+        self.assertEqual(len(messages), 1, messages)
+        self.assertIn("no entry for outcome none", messages[0])
 
     def test_with_requires_engine_nothing_about_it_is_reported(self):
         resp = self._check()

@@ -183,7 +183,7 @@ class DoctorUseCase:
                 for message in directory_lifecycle_problems(
                         self._workflow_bundle, self._fs, directory, name):
                     contract.append(Problem("contract", "%s/%s: %s" % (origin, name, message)))
-                for message in WorkflowScripts(self._workflow_bundle, self._fs).problems(
+                for message in WorkflowScripts(self._workflow_bundle, self._fs, self._config).problems(
                         directory, name):
                     contract.append(Problem("contract", "%s/%s: %s" % (origin, name, message)))
                 declared, _ = directory_lifecycle(self._workflow_bundle, directory, name)
