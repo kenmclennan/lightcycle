@@ -1,13 +1,13 @@
 Feature: The Detail tab
-  A step's Detail tab shows the list the step's stage declares with a
-  `detail:` front matter key, or the default list when it declares none. The
-  default list is the step's outcome and report, its PR when it has a run, and
-  its needs and reason when it is parked. Entries are resolved by the engine,
+  A step in a run always leads its Detail tab with the run rows - its PR,
+  branch and worktree - and a step's `detail:` front matter list adds to them,
+  a name in both shown once, leading. A step with no run shows the list its
+  stage declares, or the default list of its outcome and report when it
+  declares none, with its needs and reason when it is parked. Entries are resolved by the engine,
   so the tab carries no field list of its own, and an entry shows its recorded
   value or stays blank. A step's PR is shown as unambiguously its own, never
-  naming "phase run" or "pass". A declared entry for the branch or worktree
-  can appear too; opening the worktree, unlike the PR, hands it to the
-  configured editor rather than a browser. An item has no step record of its
+  naming "phase run" or "pass". Opening the worktree, unlike the PR,
+  hands it to the configured editor rather than a browser. An item has no step record of its
   own, so it has no Detail tab. A parked step can also be resumed from here
   with a dedicated keypress; it succeeds only when the step's stage is
   workflow-declared agent-owned, and surfaces failure rather than crashing
@@ -18,10 +18,10 @@ Feature: The Detail tab
     When I open its Detail tab
     Then its outcome and its report are shown, in that order, at the top
 
-  Scenario: A step whose phase run has a PR shows it after the outcome and report
+  Scenario: A step whose phase run has a PR leads with the run rows before the outcome and report
     Given a step whose phase run has a branch and a PR
     When I open its Detail tab
-    Then the PR is shown after the outcome and the report
+    Then the run rows lead, followed by the outcome and the report
     And neither the words "phase run" nor "pass" appear anywhere on the tab
 
   Scenario Outline: Confirming a step's PR opens it, the same keypress the Artifacts list uses for a URL
@@ -51,19 +51,19 @@ Feature: The Detail tab
     When I open its Detail tab
     Then no PR field is shown
 
-  Scenario: The default list leaves out the branch and the worktree
+  Scenario: The default list for a step in a run shows the branch and the worktree
     Given a step whose phase run has a branch, in a resolvable repo
     When I open its Detail tab
-    Then no branch field is shown
-    And no worktree field is shown
-
-  Scenario: A step declaring its own detail list shows exactly those entries in order
-    Given a step declaring the detail list branch, worktree and pr, whose phase run has a branch and a PR, in a resolvable repo
-    When I open its Detail tab
-    Then its Detail entries are branch, worktree and pr, in that order
+    Then a branch field is shown
     And the worktree is shown
 
-  Scenario: A declared worktree entry is blank when its repo cannot be resolved
+  Scenario: A step declaring its own detail list gets the run rows first and the declared entries after
+    Given a step declaring the detail list branch, worktree and pr, whose phase run has a branch and a PR, in a resolvable repo
+    When I open its Detail tab
+    Then its Detail entries are pr, branch and worktree, in that order
+    And the worktree is shown
+
+  Scenario: The worktree entry is blank when its repo cannot be resolved
     Given a step declaring the detail list branch and worktree, whose phase run has a branch, in an unresolvable repo
     When I open its Detail tab
     Then the worktree entry is shown blank

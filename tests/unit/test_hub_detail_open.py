@@ -46,3 +46,24 @@ class TestOpeningDetailRows(unittest.TestCase):
 
         self.assertEqual(self.launcher.opened_urls, [])
         self.assertEqual(self.launcher.edited_detached[1], "/tmp/wt")
+
+    def test_the_spec_pr_and_ci_checks_rows_open_in_the_browser(self):
+        self._select([("spec-pr", "https://example.test/pull/2")], "spec-pr")
+        self._select([("ci-checks", "https://example.test/pull/1/checks?sha=abc")], "ci-checks")
+
+        self.assertEqual(
+            self.launcher.opened_urls,
+            ["https://example.test/pull/2", "https://example.test/pull/1/checks?sha=abc"])
+
+    def test_the_spec_row_opens_as_a_path(self):
+        self._select([("spec", "/tmp/wt")], "spec")
+
+        self.assertEqual(self.launcher.opened_urls, [])
+        self.assertEqual(self.launcher.edited_detached[1], "/tmp/wt")
+
+    def test_every_leading_run_row_has_a_label(self):
+        from lightcycle.adapters.tui.hub import DETAIL_FIELD_LABELS
+        from lightcycle.domain.work.detail import leading_run_names
+
+        for key in leading_run_names(True, True, True):
+            self.assertIn(key, DETAIL_FIELD_LABELS)

@@ -1,9 +1,17 @@
 from lightcycle.application.work.step_run import StepRunInput, StepRunUseCase
 from lightcycle.domain.work.detail import (
+    CI_CHECKS_ROW,
+    CI_JUDGED_SHA,
     IN_PREFIX,
+    SPEC_PHASE,
+    SPEC_PR_ROW,
+    SPEC_ROW,
+    ci_checks_url,
     default_detail,
     detail_presents,
+    leading_run_names,
     resolve_detail,
+    with_leading,
     with_park,
 )
 
@@ -20,18 +28,27 @@ class StepDetail:
         parked = bool(step.park.reason or step.park.needs)
         pr = run.pr or self._phase_pr(step)
         has_run = bool(pr or run.branch)
-        names = with_park(
-            step_def.detail or default_detail(has_run, step_def.presents), parked)
-        if pr and "pr" not in names:
-            names = names + ("pr",)
-        session = next(
-            (a.value for a in self._store.item_artifacts(step.id) if a.type == "session-id"),
+        names = step_def.detail or default_detail(has_run, step_def.presents)
+        spec_run = self._spec_run(run)
+        spec = next(
+            (a.value for a in self._store.item_artifacts(step.item) if a.kind == "filepath"),
             None,
         )
+        ci_sha = self._latest_artifact(step.id, CI_JUDGED_SHA) or (
+            self._latest_artifact(step.previous_step, CI_JUDGED_SHA)
+            if step.previous_step else None)
+        if has_run:
+            leading = leading_run_names(spec_run is not None, bool(spec), bool(ci_sha))
+            names = with_leading(leading, names)
+        names = with_park(names, parked)
+        session = self._latest_artifact(step.id, "session-id")
         fields = {
             "pr": pr,
+            SPEC_PR_ROW: spec_run.pr if spec_run is not None else None,
             "branch": run.branch,
             "worktree": worktree,
+            SPEC_ROW: spec,
+            CI_CHECKS_ROW: ci_checks_url(pr, ci_sha),
             "outcome": step.outcome,
             "report": step.report,
             "claimed_by": step.claimed_by,
@@ -54,6 +71,21 @@ class StepDetail:
         if not runs:
             return None
         return max(runs, key=lambda r: r.opened_at or "").pr
+
+    def _spec_run(self, run):
+        if not run.pass_id or run.phase == SPEC_PHASE:
+            return None
+        return next(
+            (r for r in self._store.runs_of(run.item, run.pass_id) if r.phase == SPEC_PHASE),
+            None,
+        )
+
+    def _latest_artifact(self, node_id, atype):
+        found = None
+        for artifact in self._store.item_artifacts(node_id):
+            if artifact.type == atype:
+                found = artifact.value
+        return found
 
     @staticmethod
     def _input_values(names, inputs):
