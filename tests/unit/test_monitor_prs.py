@@ -349,3 +349,85 @@ class TestMonitorPrsUseCaseComposesAllThreeJobs(unittest.TestCase):
         self.assertEqual(result.reworked, [feedback_item])
         self.assertEqual(result.ci_resolved, [ci_item])
 
+
+class TestTeardownRefusalRunLog(unittest.TestCase):
+    URL = "https://github.com/x/y/pull/9"
+
+    def _world(self):
+        from lightcycle.application.services.worktree import WorktreeService
+        from tests.support.fake_fs import FakeFs
+        from tests.support.fake_git import FakeGit
+        from tests.unit.test_close_item_teardown_guard import BRANCH, REPO, _Cfg
+
+        git = FakeGit(branches={(REPO, BRANCH)}, ref="origin/main")
+        store = FakeStore()
+        item = store.create_item("refused", "a description")
+        store.add_artifact(item, "repo", REPO)
+        plant_pr(store, item, self.URL, branch=BRANCH)
+        store.create_step(step="ready-merge", role="human", parent=item)
+        worktrees = WorktreeService(store, git, fs=None, config=_Cfg())
+        path = worktrees.path_for_run(store.open_runs_of(item)[0])
+        git._registered = {path}
+        git._uncommitted = {path: ["x.py"]}
+        github = FakeGitHub(merged_prs={self.URL})
+        monitor = MonitorPrsUseCase(
+            store, github, worktrees, _FlowAdapter(_FLOW),
+            trusted_authors=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
+            writes=InlinePrWrites(github, time.monotonic), ci_clock=time.monotonic,
+            ci_poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600,
+            ci_wall_clock=lambda: 10000.0, ci_views=AlwaysConfirmed(),
+        )
+        return store, item, monitor, FakeFs(), git
+
+    def _lines(self, fs):
+        raw = fs._files.get("logs/run.log", b"").decode("utf-8")
+        return [line for line in raw.splitlines() if line]
+
+    def test_refusal_appends_one_line_naming_the_item_and_a_second_tick_appends_none(self):
+        store, item, monitor, fs, _ = self._world()
+        tick = make_tick(
+            store, FakeWorkers(), FakeSpawner(), FakeConfig(), monitor=monitor, worker_log=fs
+        )
+
+        tick.execute(TickInput(now=1000.0))
+        tick.execute(TickInput(now=1060.0))
+
+        lines = self._lines(fs)
+        self.assertEqual(len(lines), 1)
+        self.assertIn(item, lines[0])
+        self.assertIn("refused", lines[0])
+
+
+class TestScriptStageRefusalRunLog(unittest.TestCase):
+    def test_both_sources_share_one_dedupe_so_neither_relogs_the_other(self):
+        from tests.support.fake_fs import FakeFs
+        from lightcycle.application.pool.script_stages import ScriptStagesResponse
+        from lightcycle.application.pool.monitor_prs import MonitorPrsResponse
+
+        class Monitor:
+            def execute(self):
+                return MonitorPrsResponse(merged=[], refused=[("APP-1", "APP-1 refused: dirty")])
+
+            def reset(self):
+                return None
+
+        class Gate:
+            def execute(self, now):
+                return ScriptStagesResponse(refused=[("APP-2", "APP-2 refused: unmerged")])
+
+            def reset(self):
+                return None
+
+        fs = FakeFs()
+        tick = make_tick(
+            FakeStore(), FakeWorkers(), FakeSpawner(), FakeConfig(),
+            monitor=Monitor(), script_gate=Gate(), worker_log=fs)
+
+        tick.execute(TickInput(now=1000.0))
+        tick.execute(TickInput(now=1060.0))
+
+        raw = fs._files.get("logs/run.log", b"").decode("utf-8")
+        lines = [line for line in raw.splitlines() if line]
+        self.assertEqual(len(lines), 2)
+        self.assertIn("APP-1", lines[0])
+        self.assertIn("APP-2", lines[1])

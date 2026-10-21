@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Tuple
 
 from lightcycle.application.flow.complete_step import CompleteInput
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
@@ -21,6 +21,7 @@ from lightcycle.domain.runs import RunState
 class ResolveMergedPrsResponse:
     merged: List[str] = field(default_factory=list)
     abandoned: List[str] = field(default_factory=list)
+    refused: List[Tuple[str, str]] = field(default_factory=list)
 
 
 class ResolveMergedPrsUseCase:
@@ -98,17 +99,17 @@ class ResolveMergedPrsUseCase:
 
     def _close_run_and_complete(self, run, state, step, outcome):
         if self._release_refused(run, step):
-            return False
+            return None
         with self._store.transaction():
             self._expire_holds(run)
             self._store.close_run(run.id, state)
-            self._complete.execute(CompleteInput(step=step.id, outcome=outcome))
+            resp = self._complete.execute(CompleteInput(step=step.id, outcome=outcome))
         if self._worktrees is not None:
             self._worktrees.release_run(run)
-        return True
+        return resp
 
     def execute(self) -> ResolveMergedPrsResponse:
-        merged, abandoned = [], []
+        merged, abandoned, refused = [], [], []
         close = CloseItemUseCase(self._store, self._worktrees)
         for item in self._store.all_nodes():
             if item.type != "item":
@@ -140,10 +141,14 @@ class ResolveMergedPrsUseCase:
                         step = active_step_at(self._store, item.id, stage)
                         if step is None:
                             continue
-                        if self._close_run_and_complete(
+                        resp = self._close_run_and_complete(
                             run, RunState.MERGED, step, merge_outcome
-                        ):
-                            merged.append(item.id)
+                        )
+                        if resp is None:
+                            continue
+                        if resp.teardown_refusal:
+                            refused.append((item.id, resp.teardown_refusal))
+                        merged.append(item.id)
                     else:
                         if self._at_another_gate(item, flow, stage):
                             continue
@@ -158,7 +163,8 @@ class ResolveMergedPrsUseCase:
                                     merged_prs=frozenset(p for p, m in merged_by_pr.items() if m),
                                 )
                             )
-                        except TeardownRefused:
+                        except TeardownRefused as e:
+                            refused.append((item.id, str(e)))
                             break
                         resolved = True
                         merged.append(item.id)
@@ -168,10 +174,14 @@ class ResolveMergedPrsUseCase:
                         step = active_step_at(self._store, item.id, stage)
                         if step is None:
                             continue
-                        if self._close_run_and_complete(
+                        resp = self._close_run_and_complete(
                             run, RunState.ABANDONED, step, close_outcome
-                        ):
-                            abandoned.append(item.id)
+                        )
+                        if resp is None:
+                            continue
+                        if resp.teardown_refusal:
+                            refused.append((item.id, resp.teardown_refusal))
+                        abandoned.append(item.id)
                     else:
                         if self._at_another_gate(item, flow, stage):
                             continue
@@ -186,10 +196,11 @@ class ResolveMergedPrsUseCase:
                                     merged_prs=frozenset(p for p, m in merged_by_pr.items() if m),
                                 )
                             )
-                        except TeardownRefused:
+                        except TeardownRefused as e:
+                            refused.append((item.id, str(e)))
                             break
                         resolved = True
                         abandoned.append(item.id)
                 if resolved:
                     break
-        return ResolveMergedPrsResponse(merged=merged, abandoned=abandoned)
+        return ResolveMergedPrsResponse(merged=merged, abandoned=abandoned, refused=refused)
