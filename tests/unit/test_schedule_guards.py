@@ -166,3 +166,55 @@ class TestUnknownGuard(unittest.TestCase):
         _, g = guards()
         with self.assertRaises(GuardUnreadable):
             g.evaluate("shell", {}, [], NOW)
+
+
+class TestReposActive(unittest.TestCase):
+    def _close(self, store, id, project, closed_at):
+        item = store.create_item("work", "d", id=id, project=project)
+        store.complete_node(item, "merged")
+        store._records[item]["closed_at"] = closed_at
+
+    def test_skips_when_no_registered_repo_has_a_recent_close(self):
+        store, g = guards()
+        store.add_project("acme/app", local_path="/w/app")
+        self._close(store, "LC-1", "acme/app", "2026-09-01T12:00:00+00:00")
+
+        result = g.evaluate("repos-active", {}, [], NOW)
+
+        self.assertFalse(result.passed)
+
+    def test_first_run_lists_each_active_repo_with_its_checkout(self):
+        store, g = guards()
+        store.add_project("acme/app", local_path="/w/app")
+        store.add_project("acme/idle", local_path="/w/idle")
+        self._close(store, "LC-1", "acme/app", "2026-10-12T12:00:00+00:00")
+
+        result = g.evaluate("repos-active", {}, [], NOW)
+
+        self.assertTrue(result.passed)
+        self.assertEqual(
+            result.description,
+            "since: 2026-10-07\nprevious: none\nrepo: acme/app /w/app")
+
+    def test_window_starts_at_the_previous_firing_and_names_it(self):
+        store = FakeStore()
+        prior = firing(store, "since: 2026-10-07")
+        _, g = guards(store)
+        store.add_project("acme/app", local_path="/w/app")
+        self._close(store, "LC-1", "acme/app", "2026-10-09T12:00:00+00:00")
+        self._close(store, "LC-2", "acme/app", "2026-10-11T12:00:00+00:00")
+        store.add_project("acme/old", local_path="/w/old")
+        self._close(store, "LC-3", "acme/old", "2026-10-09T12:00:00+00:00")
+
+        result = g.evaluate("repos-active", {}, [prior], NOW)
+
+        self.assertEqual(
+            result.description,
+            "since: 2026-10-10\nprevious: %s\nrepo: acme/app /w/app" % prior.id)
+
+    def test_a_repo_without_a_checkout_path_is_not_listed(self):
+        store, g = guards()
+        store.add_project("acme/app")
+        self._close(store, "LC-1", "acme/app", "2026-10-12T12:00:00+00:00")
+
+        self.assertFalse(g.evaluate("repos-active", {}, [], NOW).passed)

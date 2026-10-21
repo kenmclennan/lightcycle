@@ -1,6 +1,7 @@
 import datetime
 from dataclasses import dataclass
 
+from lightcycle.application.work import automation
 from lightcycle.application.work.closed_count import closed_count
 from lightcycle.application.work.done import DoneInput, DoneUseCase
 from lightcycle.application.work.pending_reflections import (
@@ -12,16 +13,19 @@ from lightcycle.domain.schedule.guards import (
     DAY_UNSUMMARISED,
     MATERIALS_CHANGED,
     PENDING_REFLECTIONS,
+    REPOS_ACTIVE,
 )
 from lightcycle.domain.schedule.state import (
     SCHEDULE_STATE_ARTIFACT,
     parse_batch_state,
     parse_day_state,
 )
-from lightcycle.domain.work import node_id_key, parse_timestamp
+from lightcycle.domain.work.project_identity import ProjectIdentity
+from lightcycle.domain.work import State, node_id_key, parse_timestamp
 from lightcycle.ports.git import GitReadError
 from lightcycle.ports.workflow_source import WorkflowSourceError
 
+_FIRST_SWEEP_WINDOW_DAYS = 7
 _MIN_TIMESTAMP = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
 
 
@@ -75,6 +79,8 @@ class ScheduleGuards:
                 return self._materials_changed(states)
             if guard == DAY_UNSUMMARISED:
                 return self._day_unsummarised(states, now_local)
+            if guard == REPOS_ACTIVE:
+                return self._repos_active(states, now_local)
         except (GitReadError, WorkflowSourceError, OSError) as e:
             raise GuardUnreadable("guard %s could not read its inputs: %s" % (guard, e))
         raise GuardUnreadable("guard %s is not one the engine has" % guard)
@@ -149,3 +155,36 @@ class ScheduleGuards:
                     description=_describe_day(self._store, day),
                     state="day: %s count: %d" % (day.isoformat(), count))
         return GuardResult(False, "every recent day is summarised")
+
+    def _repos_active(self, states, now_local):
+        last_item = states[-1][0] if states else None
+        if last_item is not None:
+            since = parse_timestamp(last_item.created_at).date()
+        else:
+            since = now_local.date() - datetime.timedelta(days=_FIRST_SWEEP_WINDOW_DAYS)
+        closed_projects = set()
+        for item in self._store.all_items_including_done():
+            if item.state != State.DONE or not item.project:
+                continue
+            closed = parse_timestamp(item.closed_at)
+            if closed is None or closed.date() < since:
+                continue
+            if automation.AUTOMATION_LABELS.intersection(self._store.labels_of(item.id)):
+                continue
+            closed_projects.add(item.project)
+        repos = [
+            p for p in self._store.list_projects()
+            if p.local_path and p.identity != GUIDANCE_WORKSPACE
+            and (p.identity in closed_projects
+                 or ProjectIdentity.short_name(p.identity) in closed_projects)
+        ]
+        if not repos:
+            return GuardResult(False, "no registered repo has an item closed since %s" % since.isoformat())
+        lines = ["since: %s" % since.isoformat(),
+                 "previous: %s" % (last_item.id if last_item else "none")]
+        lines += ["repo: %s %s" % (p.identity, p.local_path) for p in repos]
+        return GuardResult(
+            True, "%d active repos since %s" % (len(repos), since.isoformat()),
+            title="Ratchet sweep of %d active repos" % len(repos),
+            description="\n".join(lines),
+            state="since: %s" % since.isoformat())

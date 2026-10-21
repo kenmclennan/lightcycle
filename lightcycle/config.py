@@ -162,6 +162,13 @@ schedule-daily-summary:
   shortcode: SUM
   cron: 0 7 * * *
   guard: day-unsummarised
+schedule-ratchet-sweep:
+  enabled: true
+  workflow: lightcycle/ratchet-sweep
+  project: guidance
+  shortcode: AUD
+  cron: 0 9 * * 1
+  guard: repos-active
 """
 
 _NUMERIC_RANGES = {

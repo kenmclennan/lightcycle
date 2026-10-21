@@ -17,10 +17,10 @@ def full_block(**overrides):
 
 
 class TestGuardSchemas(unittest.TestCase):
-    def test_the_engine_has_exactly_three_guards(self):
+    def test_the_engine_has_exactly_four_guards(self):
         self.assertEqual(
             set(guard_names()),
-            {"pending-reflections", "materials-changed", "day-unsummarised"})
+            {"pending-reflections", "materials-changed", "day-unsummarised", "repos-active"})
 
     def test_an_unknown_guard_is_refused(self):
         with self.assertRaisesRegex(ValueError, "unknown guard"):
