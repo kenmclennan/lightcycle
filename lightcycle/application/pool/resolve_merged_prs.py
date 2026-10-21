@@ -11,7 +11,9 @@ from lightcycle.application.pool.pr_lookups import (
     latest_step,
     skip_unpinned,
 )
-from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
+from lightcycle.application.work.close_item import (
+    CloseItemInput, CloseItemUseCase, TeardownRefused,
+)
 from lightcycle.domain.runs import RunState
 
 
@@ -126,11 +128,15 @@ class ResolveMergedPrsUseCase:
                         if disposition is None:
                             continue
                         self._expire_holds(run)
-                        close.execute(
-                            CloseItemInput(
-                                item=item.id, reason=merge_outcome, disposition=disposition
+                        try:
+                            close.execute(
+                                CloseItemInput(
+                                    item=item.id, reason=merge_outcome, disposition=disposition,
+                                    merged_prs=frozenset(p for p, m in merged_by_pr.items() if m),
+                                )
                             )
-                        )
+                        except TeardownRefused:
+                            break
                         resolved = True
                         merged.append(item.id)
                 elif close_outcome and false_on_failure(self._github.is_closed_unmerged(pr_value)):
@@ -148,11 +154,15 @@ class ResolveMergedPrsUseCase:
                         if disposition is None:
                             continue
                         self._expire_holds(run)
-                        close.execute(
-                            CloseItemInput(
-                                item=item.id, reason=close_outcome, disposition=disposition
+                        try:
+                            close.execute(
+                                CloseItemInput(
+                                    item=item.id, reason=close_outcome, disposition=disposition,
+                                    merged_prs=frozenset(p for p, m in merged_by_pr.items() if m),
+                                )
                             )
-                        )
+                        except TeardownRefused:
+                            break
                         resolved = True
                         abandoned.append(item.id)
                 if resolved:

@@ -12,7 +12,9 @@ from lightcycle.application.flow.next_step import NextStepResolver
 from lightcycle.application.flow.passes import PassBook
 from lightcycle.application.flow.schedule_completion import ScheduleCompletion
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
-from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
+from lightcycle.application.work.close_item import (
+    CloseItemInput, CloseItemUseCase, TeardownRefused,
+)
 from lightcycle.application.work.closed_count import closed_count
 from lightcycle.application.work.has_feedback import has_feedback
 from lightcycle.application.work.item_outputs import ItemOutputs
@@ -35,6 +37,7 @@ class CompleteInput:
 @dataclass(frozen=True)
 class CompleteResponse:
     next_step: Optional[str]
+    teardown_refusal: Optional[str] = None
 
 
 class CompleteStepUseCase:
@@ -87,8 +90,8 @@ class CompleteStepUseCase:
         self._store.note(input.step, "outcome: %s" % input.outcome)
         if input.note:
             self._store.set_report(input.step, input.note)
-        self._cascade_close(t.item)
-        return CompleteResponse(next_step=None)
+        refusal = self._cascade_close(t.item)
+        return CompleteResponse(next_step=None, teardown_refusal=refusal)
 
     def _is_held_comment_origin(self, t):
         return HELD_COMMENT_ORIGIN_LABEL in self._store.labels_of(t.item)
@@ -104,8 +107,8 @@ class CompleteStepUseCase:
         self._store.note(input.step, "outcome: %s" % input.outcome)
         if input.note:
             self._store.set_report(input.step, input.note)
-        self._cascade_close(t.item)
-        return CompleteResponse(next_step=None)
+        refusal = self._cascade_close(t.item)
+        return CompleteResponse(next_step=None, teardown_refusal=refusal)
 
     def _is_retro_origin(self, t):
         return RETRO_ORIGIN_LABEL in self._store.labels_of(t.item)
@@ -165,8 +168,8 @@ class CompleteStepUseCase:
             self._store.set_report(input.step, input.note)
         if new and transition and transition.to_role == "human":
             self._inputs.freeze(self._store.get_node(new))
-        self._cascade_close(t.item)
-        return CompleteResponse(next_step=new)
+        refusal = self._cascade_close(t.item)
+        return CompleteResponse(next_step=new, teardown_refusal=refusal)
 
     def _complete_engine_audit(
         self, t, input: CompleteInput, mark_retroed: bool,
@@ -186,8 +189,8 @@ class CompleteStepUseCase:
         if fid is not None:
             self._store.note(fid, "findings: lc show %s" % input.step)
             self._store.note(fid, input.note)
-        self._cascade_close(t.item)
-        return CompleteResponse(next_step=None)
+        refusal = self._cascade_close(t.item)
+        return CompleteResponse(next_step=None, teardown_refusal=refusal)
 
     def _complete_findings(self, t, input: CompleteInput) -> CompleteResponse:
         won, _ = self._store.complete_step_atomic(
@@ -197,8 +200,8 @@ class CompleteStepUseCase:
         self._store.note(input.step, "outcome: %s" % input.outcome)
         if input.note:
             self._store.set_report(input.step, input.note)
-        self._cascade_close(t.item)
-        return CompleteResponse(next_step=None)
+        refusal = self._cascade_close(t.item)
+        return CompleteResponse(next_step=None, teardown_refusal=refusal)
 
     def _complete_daily_summary(self, t, input: CompleteInput) -> CompleteResponse:
         won, _ = self._store.complete_step_atomic(
@@ -223,8 +226,8 @@ class CompleteStepUseCase:
                 )
             else:
                 self._store.release_day_summary(day)
-        self._cascade_close(t.item)
-        return CompleteResponse(next_step=None)
+        refusal = self._cascade_close(t.item)
+        return CompleteResponse(next_step=None, teardown_refusal=refusal)
 
     def _mark_retroed(self):
         for item in self._store.closed_unretroed_items():
@@ -243,6 +246,10 @@ class CompleteStepUseCase:
             return
         if node.type != "item":
             return
-        CloseItemUseCase(self._store, self._worktrees).execute(
-            CloseItemInput(item=node_id, reason=_AUTO_CLOSE_REASON, disposition="completed")
-        )
+        try:
+            CloseItemUseCase(self._store, self._worktrees).execute(
+                CloseItemInput(item=node_id, reason=_AUTO_CLOSE_REASON, disposition="completed")
+            )
+        except TeardownRefused as e:
+            return str(e)
+        return None

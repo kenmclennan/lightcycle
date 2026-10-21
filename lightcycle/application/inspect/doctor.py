@@ -7,6 +7,7 @@ from typing import Dict, List
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.engine_steps import LIFECYCLE_ORIGIN_LABEL
+from lightcycle.application.work.close_item import TEARDOWN_REFUSED_ARTIFACT
 from lightcycle.application.pool.schedule_resolution import ScheduleResolver
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.workflows.engine_requirement_check import bundle_conflict_messages
@@ -94,7 +95,7 @@ class DoctorUseCase:
             "config": (
                 self._config_problems() + self._retired_job_problems()
                 + self._schedule_problems() + self._reload_problems() + lifecycle_config),
-            "orphans": self._orphan_problems(),
+            "orphans": self._orphan_problems() + self._teardown_refusal_problems(),
             "facets": self._guidance_registration_problems() + self._facet_problems(),
             "guidance": self._guidance_problems() + self._guidance_shortcode_problems(),
             "github": github_problems,
@@ -583,6 +584,22 @@ class DoctorUseCase:
                         "with `lc project set %s --facets <remaining>`"
                         % (project.identity, facet, facet, project.identity),
                     ))
+        return problems
+
+    def _teardown_refusal_problems(self):
+        problems = []
+        for node in self._store.all_nodes():
+            if node.type != "item":
+                continue
+            for artifact in self._store.item_artifacts(node.id):
+                if artifact.type != TEARDOWN_REFUSED_ARTIFACT:
+                    continue
+                problems.append(Problem(
+                    "orphans",
+                    "item %s close was refused: %s" % (node.id, artifact.value),
+                    node_id=node.id,
+                    fix="resolve the work named, then close the item again",
+                ))
         return problems
 
     def _orphan_problems(self):

@@ -1,5 +1,6 @@
 import io
 import unittest
+from unittest import mock
 from contextlib import redirect_stderr, redirect_stdout
 
 from lightcycle import cli
@@ -88,6 +89,54 @@ class TestCmdCloseDefaults(unittest.TestCase):
         rc, out, err = call(cli.cmd_close, item, "--note", "worth", "keeping")
         self.assertEqual(rc, 0, err)
         self.assertEqual(self.store.get_node(item).note, "worth keeping")
+
+
+class _RefusingWorktrees:
+    def teardown_refusals(self, item, merged_prs=frozenset()):
+        return ["worktree /w has uncommitted paths: a.py"]
+
+    def remove(self, item):
+        raise AssertionError("a refused close removed a worktree")
+
+
+class _RunLog:
+    def __init__(self):
+        self.lines = []
+
+    def append_run_log(self, text):
+        self.lines.append(text)
+
+
+class _RefusingContainer(_Container):
+    def __init__(self, store):
+        super().__init__(store)
+        self.worker_log = _RunLog()
+
+
+class TestCmdCloseRefusedByTheTeardownGuard(unittest.TestCase):
+    def setUp(self):
+        self.store = FakeStore()
+        self.container = _RefusingContainer(self.store)
+        cli.set_container(self.container)
+        patcher = mock.patch.object(cli, "_worktrees", lambda: _RefusingWorktrees())
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_close_exits_one_names_the_path_and_logs_to_run_log(self):
+        item = self.store.create_item("an item", "a description")
+        rc, out, err = call(cli.cmd_close, item)
+        self.assertEqual(rc, 1)
+        self.assertIn("a.py", err)
+        self.assertNotEqual(self.store.get_node(item).state, "done")
+        self.assertEqual(len(self.container.worker_log.lines), 1)
+        self.assertIn("a.py", self.container.worker_log.lines[0])
+
+    def test_done_on_an_item_exits_one_and_logs(self):
+        item = self.store.create_item("an item", "a description")
+        rc, out, err = call(cli.cmd_done, item, "done", "--disposition", "completed")
+        self.assertEqual(rc, 1)
+        self.assertIn("a.py", err)
+        self.assertEqual(len(self.container.worker_log.lines), 1)
 
 
 if __name__ == "__main__":

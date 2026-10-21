@@ -139,6 +139,9 @@ _ROUTES_TO_STAGE_FLOW = flow_from_metas(
 
 
 class FakeWorktrees:
+    def teardown_refusals(self, item, merged_prs=frozenset()):
+        return []
+
     def release_run(self, run, delete_remote=True):
         self.released = getattr(self, "released", [])
         self.released.append(run.id)
@@ -1036,3 +1039,43 @@ class TestSharedPhaseGatesResolveOnlyTheGateTheItemIsAt(unittest.TestCase):
 
         self.assertEqual(result.abandoned, [item])
         self.assertEqual(store.get_node(item).state, State.DONE)
+
+
+class _RefusingWorktrees(FakeWorktrees):
+    def __init__(self):
+        super().__init__()
+        self.merged_prs_seen = []
+
+    def teardown_refusals(self, item, merged_prs=frozenset()):
+        self.merged_prs_seen.append(merged_prs)
+        return ["worktree /w has uncommitted paths: a.py"]
+
+
+class TestTeardownRefusalSkipsTheItemForTheTick(unittest.TestCase):
+    def test_two_ticks_leave_the_item_open_with_one_park_note(self):
+        from lightcycle.domain.flow import Flow
+        from lightcycle.domain.flow.graph import parse_graph
+
+        metas = {"await-merge": {"step": "await-merge"}, "coder": {"model": "sonnet"}}
+        flow = Flow.from_graph(parse_graph(_TWO_GATES_ONE_PHASE), metas)
+        store = FakeStore()
+        item = store.create_item("spec item", "a description")
+        url = "https://github.com/x/y/pull/9"
+        plant_pr(store, item, url, "spec")
+        step = store.create_step(step="nochange-await-merge", role="human", parent=item)
+        gh = FakeGitHub(merged_prs={url})
+        adapter = _FlowAdapter(flow)
+        worktrees = _RefusingWorktrees()
+        uc = ResolveMergedPrsUseCase(
+            store, gh, worktrees, adapter, CompleteStepUseCase(store, adapter),
+            CheckContentPinUseCase(store, gh, adapter, trusted_authors=lambda: frozenset({"review-code"})),
+        )
+
+        first = uc.execute()
+        second = uc.execute()
+
+        self.assertEqual(first.merged, [])
+        self.assertEqual(second.merged, [])
+        self.assertNotEqual(store.get_node(item).state, State.DONE)
+        self.assertEqual((store.get_node(step).notes or "").count("BLOCKED:"), 1)
+        self.assertEqual(worktrees.merged_prs_seen[0], frozenset({url}))

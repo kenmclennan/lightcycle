@@ -144,3 +144,7 @@ class GitPort(ABC):
     @abstractmethod
     def uncommitted_paths(self, root):
         pass
+
+    @abstractmethod
+    def commits_beyond(self, root, base, branch):
+        pass
