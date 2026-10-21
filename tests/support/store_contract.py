@@ -18,6 +18,16 @@ class StoreContractBase:
     def make_store_with_context_artifact_types(self, types):
         raise NotImplementedError
 
+    def test_item_workflow_returns_the_pin_none_for_unpinned_unknown_and_step_ids(self):
+        s = self.make_store()
+        pinned = s.create_item("p", "d", shortcode="LC", workflow="wf")
+        unpinned = s.create_item("u", "d", shortcode="LC")
+        step = s.create_step(step="gate", role="human", parent=pinned)
+        self.assertEqual(s.item_workflow(pinned), "wf")
+        self.assertIsNone(s.item_workflow(unpinned))
+        self.assertIsNone(s.item_workflow("nope"))
+        self.assertIsNone(s.item_workflow(step))
+
     def test_schedule_run_request_is_recorded_idempotently_and_cleared(self):
         s = self.make_store()
         self.assertFalse(s.schedule_run_requested("weekly"))
