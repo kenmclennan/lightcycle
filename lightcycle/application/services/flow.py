@@ -22,12 +22,14 @@ class FlowService:
         self._graph_for_cache = {}
         self._flow_for_cache = {}
         self._step_cache = {}
+        self._flow_cache = {}
 
     def clear_cache(self):
         self._graph_cache = {}
         self._graph_for_cache = {}
         self._flow_for_cache = {}
         self._step_cache = {}
+        self._flow_cache = {}
 
     def _parse_step(self, role, roots):
         key = (tuple(roots) if isinstance(roots, (list, tuple)) else roots, role)
@@ -85,10 +87,15 @@ class FlowService:
         return format_pin(origin, new_name, sha)
 
     def _graph_and_root(self, name):
+        graph, root, _key = self._graph_root_key(name)
+        return graph, root
+
+    def _graph_root_key(self, name):
         wfname, root = self._resolve(name)
         cache_key = (wfname, root)
         if cache_key in self._graph_cache:
-            return self._graph_cache[cache_key]
+            graph, root = self._graph_cache[cache_key]
+            return graph, root, cache_key
         text = self._workflow_bundle.workflow_text(wfname, root)
         if text is None:
             if wfname is None:
@@ -98,7 +105,7 @@ class FlowService:
         else:
             result = parse_graph(text), root
         self._graph_cache[cache_key] = result
-        return result
+        return result[0], result[1], cache_key
 
     def _with_engine_fragments(self, root):
         return with_engine_fragments(root, self._config)
@@ -156,8 +163,10 @@ class FlowService:
         return self._graph_and_root(name)[0]
 
     def load_flow(self, name=None):
-        graph, root = self._graph_and_root(name)
-        return Flow.from_graph(graph, self._role_metas_in(root))
+        graph, root, key = self._graph_root_key(name)
+        if key not in self._flow_cache:
+            self._flow_cache[key] = Flow.from_graph(graph, self._role_metas_in(root))
+        return self._flow_cache[key]
 
     def graph_for(self, node):
         selection = self.workflow_for(node)
