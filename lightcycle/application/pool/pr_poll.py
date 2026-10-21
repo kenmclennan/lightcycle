@@ -88,6 +88,7 @@ class PrPoll:
         for pr in unmoved:
             if pr not in base_moved and self._needs_reread(pr, refresh_polls):
                 base_moved.append(pr)
+        baselined = {}
         for pr in moved:
             row = listed.get(pr)
             if row is not None and row.state == "closed":
@@ -98,11 +99,12 @@ class PrPoll:
                 failed.add(pr)
             elif views_newest is None or seen > views_newest:
                 views_newest = seen
+            if seen is not None and cutoff is None:
+                self._baseline_tip(repo, pr, baselined)
+        base_moved.extend(baselined.values())
         for pr in base_moved:
             if not self._refresh_view(pr):
                 failed.add(pr)
-        if cutoff is None:
-            self._record_tips(repo, prs)
         if cutoff is None and views_newest is not None:
             self._cutoffs[repo] = views_newest
         elif cutoff is not None and not failed:
@@ -139,18 +141,19 @@ class PrPoll:
                 moved.extend(prs)
         return moved
 
-    def _record_tips(self, repo, prs):
-        bases = set()
-        for pr in prs:
-            entry = self._snapshot.entry_of(pr)
-            if entry is not None and entry.view is not None:
-                bases.add(entry.view.base_ref)
-        for base in bases:
-            tip = self._github.branch_tip(repo, base)
-            if isinstance(tip, ReadFailure):
-                self._log_failure("branch_tip", "%s@%s" % (repo, base), tip)
-            else:
-                self._tips[(repo, base)] = tip
+    def _baseline_tip(self, repo, pr, baselined):
+        entry = self._snapshot.entry_of(pr)
+        if entry is None or entry.view is None:
+            return
+        base = entry.view.base_ref
+        if base in baselined:
+            return
+        tip = self._github.branch_tip(repo, base)
+        if isinstance(tip, ReadFailure):
+            self._log_failure("branch_tip", "%s@%s" % (repo, base), tip)
+            return
+        self._tips[(repo, base)] = tip
+        baselined[base] = pr
 
     def _refresh_view(self, pr):
         view = self._github.pr_view(pr)

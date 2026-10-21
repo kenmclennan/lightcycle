@@ -391,7 +391,7 @@ class TestColdStart(unittest.TestCase):
         names = pool.names()
         self.assertNotIn("list_prs", names)
         self.assertNotIn("repo_inline_comments", names)
-        self.assertEqual(names.count("pr_view"), 16)
+        self.assertEqual(names.count("pr_view"), 18)
         self.assertEqual(pool.snapshot.head_sha(_A[0]), "h-" + _A[0][-8:])
         pool.reset()
 
