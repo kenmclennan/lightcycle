@@ -5,6 +5,7 @@ PR_CONFLICT = "pr_conflict"
 PR_HEAD_MOVED = "pr_head_moved"
 PR_CONFLICT_CAP = "pr_conflict_cap"
 PR_CONFLICT_ESCALATE = "pr_conflict_escalate"
+PR_CONFLICT_TOTAL_CAP = "pr_conflict_total_cap"
 CI_FAILED_CAP = "ci_failed_cap"
 CI_SUCCESS = "ci_success"
 CI_FAILURE = "ci_failure"
@@ -19,6 +20,7 @@ HOOK_MIN_ARITY = {
     PR_HEAD_MOVED: 2,
     PR_CONFLICT_CAP: 2,
     PR_CONFLICT_ESCALATE: 2,
+    PR_CONFLICT_TOTAL_CAP: 2,
     CI_FAILED_CAP: 4,
     CI_SUCCESS: 2,
     CI_FAILURE: 2,

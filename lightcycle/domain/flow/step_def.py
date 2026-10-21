@@ -13,6 +13,7 @@ from lightcycle.domain.flow.hooks import (
     PR_HEAD_MOVED,
     PR_CONFLICT_CAP,
     PR_CONFLICT_ESCALATE,
+    PR_CONFLICT_TOTAL_CAP,
     PR_FEEDBACK,
     PR_MERGE,
     REVIEW_ROUNDS_CAP,
@@ -46,6 +47,7 @@ class StepDef:
     pr_head_moved: Optional[str] = None
     pr_conflict_cap: Optional[int] = None
     pr_conflict_escalate: Optional[str] = None
+    pr_conflict_total_cap: Optional[int] = None
     ci_success: Optional[str] = None
     ci_failure: Optional[str] = None
     mention_token: Optional[str] = None
@@ -83,6 +85,11 @@ class StepDef:
             if occ[0] == stage and len(occ) >= HOOK_MIN_ARITY[PR_CONFLICT_CAP]:
                 pr_conflict_cap = int(occ[1])
 
+        pr_conflict_total_cap = None
+        for occ in graph.hook_occurrences(PR_CONFLICT_TOTAL_CAP):
+            if occ[0] == stage and len(occ) >= HOOK_MIN_ARITY[PR_CONFLICT_TOTAL_CAP]:
+                pr_conflict_total_cap = int(occ[1])
+
         review_rounds_cap = None
         for occ in graph.hook_occurrences(REVIEW_ROUNDS_CAP):
             if occ[0] == stage and len(occ) >= HOOK_MIN_ARITY[REVIEW_ROUNDS_CAP]:
@@ -104,6 +111,7 @@ class StepDef:
             pr_head_moved=first(PR_HEAD_MOVED),
             pr_conflict_cap=pr_conflict_cap,
             pr_conflict_escalate=first(PR_CONFLICT_ESCALATE),
+            pr_conflict_total_cap=pr_conflict_total_cap,
             ci_success=first(CI_SUCCESS),
             ci_failure=first(CI_FAILURE),
             mention_token=first(MENTION_TOKEN),

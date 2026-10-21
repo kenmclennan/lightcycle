@@ -3,6 +3,8 @@ from dataclasses import replace
 from lightcycle.domain.flow.hooks import (
     CI_FAILED_CAP,
     HOOK_MIN_ARITY,
+    PR_CONFLICT_CAP,
+    PR_CONFLICT_TOTAL_CAP,
     PR_FEEDBACK,
     REVIEW_ROUNDS_CAP,
 )
@@ -14,6 +16,7 @@ SPECS_WORKSPACE = "specs"
 GUIDANCE_WORKSPACE = "guidance"
 LEGACY_KNOWLEDGE_WORKSPACE = "knowledge"
 PROJECT_WORKSPACE = "project"
+PR_CONFLICT_TOTAL_CAP_MULTIPLIER = 3
 
 
 def consecutive_outcome_count(history, outcome):
@@ -25,6 +28,12 @@ def consecutive_outcome_count(history, outcome):
 
 def total_outcome_count(history, outcome):
     return sum(1 for s in history if s.outcome == outcome)
+
+
+def pr_conflict_failures(prior_tips, current_tip, escalated):
+    seq = list(prior_tips) + [current_tip]
+    pairs = sum(1 for a, b in zip(seq, seq[1:]) if a and b and a == b)
+    return escalated + pairs
 
 
 class Flow:
@@ -157,11 +166,28 @@ class Flow:
             to_terminal=self.step_def(cap.target).owner is None,
         )
 
-    def pr_conflict_transition(self, step, conflict_outcome, prior_count):
+    def pr_conflict_total_cap(self, step):
+        sd = self.step_def(step)
+        if sd.pr_conflict_total_cap is not None:
+            return sd.pr_conflict_total_cap
+        if sd.pr_conflict_cap is None:
+            return None
+        return PR_CONFLICT_TOTAL_CAP_MULTIPLIER * sd.pr_conflict_cap
+
+    def pr_conflict_cap_fired(self, step, failures, prior_conflicts):
         sd = self.step_def(step)
         if sd.pr_conflict_cap is None or not sd.pr_conflict_escalate:
+            return None
+        if failures >= sd.pr_conflict_cap:
+            return PR_CONFLICT_CAP
+        if prior_conflicts >= self.pr_conflict_total_cap(step):
+            return PR_CONFLICT_TOTAL_CAP
+        return None
+
+    def pr_conflict_transition(self, step, conflict_outcome, failures, prior_conflicts):
+        if self.pr_conflict_cap_fired(step, failures, prior_conflicts) is None:
             return conflict_outcome
-        return sd.pr_conflict_escalate if prior_count >= sd.pr_conflict_cap else conflict_outcome
+        return self.step_def(step).pr_conflict_escalate
 
     def hook_steps(self):
         return [s for s, sd in sorted(self._steps.items()) if sd.hooks and sd.owner]

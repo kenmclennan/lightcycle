@@ -1,6 +1,7 @@
 import unittest
+from pathlib import Path
 
-from lightcycle.domain.flow.flow import Flow
+from lightcycle.domain.flow.flow import Flow, pr_conflict_failures
 from lightcycle.domain.flow.graph import parse_graph
 from lightcycle.domain.flow.step_def import CiCap, ReviewRoundsCap, StepDef
 
@@ -158,23 +159,89 @@ class TestDisplay(unittest.TestCase):
 
 
 class TestConflictTransition(unittest.TestCase):
-    def _flow(self):
+    def _flow(self, total=None):
         return Flow({
             "resolve": StepDef(
-                pr_conflict="conflicted", pr_conflict_cap=2, pr_conflict_escalate="give-up"
+                pr_conflict="conflicted", pr_conflict_cap=2, pr_conflict_escalate="give-up",
+                pr_conflict_total_cap=total,
             )
         })
 
-    def test_below_cap_passes_the_conflict_outcome(self):
-        self.assertEqual(self._flow().pr_conflict_transition("resolve", "conflicted", 0), "conflicted")
-        self.assertEqual(self._flow().pr_conflict_transition("resolve", "conflicted", 1), "conflicted")
+    def _transition(self, flow, failures, prior):
+        return flow.pr_conflict_transition("resolve", "conflicted", failures, prior)
 
-    def test_at_or_past_cap_escalates(self):
-        self.assertEqual(self._flow().pr_conflict_transition("resolve", "conflicted", 2), "give-up")
+    def test_below_cap_passes_the_conflict_outcome(self):
+        self.assertEqual(self._transition(self._flow(), 0, 0), "conflicted")
+        self.assertEqual(self._transition(self._flow(), 1, 1), "conflicted")
+
+    def test_failures_at_or_past_cap_escalate(self):
+        self.assertEqual(self._transition(self._flow(), 2, 0), "give-up")
+        self.assertEqual(self._transition(self._flow(), 3, 0), "give-up")
+
+    def test_prior_conflicts_alone_below_total_cap_do_not_escalate(self):
+        self.assertEqual(self._transition(self._flow(), 0, 5), "conflicted")
+
+    def test_prior_conflicts_at_derived_total_cap_escalate(self):
+        self.assertEqual(self._transition(self._flow(), 0, 6), "give-up")
+
+    def test_declared_total_cap_overrides_the_derived_one(self):
+        flow = self._flow(total=4)
+        self.assertEqual(self._transition(flow, 0, 3), "conflicted")
+        self.assertEqual(self._transition(flow, 0, 4), "give-up")
 
     def test_no_cap_passes_through(self):
         flow = Flow({"resolve": StepDef()})
-        self.assertEqual(flow.pr_conflict_transition("resolve", "conflicted", 9), "conflicted")
+        self.assertEqual(flow.pr_conflict_transition("resolve", "conflicted", 9, 9), "conflicted")
+
+    def test_no_escalate_outcome_never_escalates(self):
+        flow = Flow({"resolve": StepDef(pr_conflict_cap=1)})
+        self.assertEqual(flow.pr_conflict_transition("resolve", "conflicted", 9, 9), "conflicted")
+
+    def test_failure_cap_is_named_when_both_trip(self):
+        self.assertEqual(self._flow().pr_conflict_cap_fired("resolve", 2, 6), "pr_conflict_cap")
+        self.assertEqual(
+            self._flow().pr_conflict_cap_fired("resolve", 0, 6), "pr_conflict_total_cap")
+        self.assertIsNone(self._flow().pr_conflict_cap_fired("resolve", 1, 1))
+
+    def test_total_cap_is_three_times_the_failure_cap_unless_declared(self):
+        self.assertEqual(self._flow().pr_conflict_total_cap("resolve"), 6)
+        self.assertEqual(self._flow(total=5).pr_conflict_total_cap("resolve"), 5)
+        self.assertIsNone(Flow({"resolve": StepDef()}).pr_conflict_total_cap("resolve"))
+
+
+class TestCommittedBundleTotalCap(unittest.TestCase):
+    def test_spec_driven_declares_no_total_cap_and_derives_nine(self):
+        library = Path(__file__).resolve().parents[1] / "support" / "library"
+        graph = parse_graph((library / "workflows" / "spec-driven.md").read_text())
+        stage = "code-await-merge"
+        flow = Flow({stage: StepDef.from_graph(graph, stage)})
+
+        self.assertIsNone(flow.step_def(stage).pr_conflict_total_cap)
+        self.assertEqual(flow.pr_conflict_total_cap(stage), 9)
+
+
+class TestPrConflictFailures(unittest.TestCase):
+    def test_empty_history_has_no_failures(self):
+        self.assertEqual(pr_conflict_failures([], "A", 0), 0)
+
+    def test_one_prior_step_on_the_same_tip_is_one_failure(self):
+        self.assertEqual(pr_conflict_failures(["A"], "A", 0), 1)
+
+    def test_one_prior_step_on_a_moved_tip_is_clean(self):
+        self.assertEqual(pr_conflict_failures(["A"], "B", 0), 0)
+
+    def test_unknown_entries_never_count(self):
+        self.assertEqual(pr_conflict_failures(["A", "A", None], "A", 0), 1)
+        self.assertEqual(pr_conflict_failures([None, None], None, 0), 0)
+
+    def test_unknown_current_tip_is_clean(self):
+        self.assertEqual(pr_conflict_failures(["A", "A"], None, 0), 1)
+
+    def test_escalated_resolutions_add_to_the_count(self):
+        self.assertEqual(pr_conflict_failures(["A"], "A", 2), 3)
+
+    def test_unmoved_then_moved_then_unmoved_base(self):
+        self.assertEqual(pr_conflict_failures(["A", "A", "B", "B"], "B", 0), 3)
 
 
 if __name__ == "__main__":

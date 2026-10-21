@@ -242,7 +242,7 @@ class ScriptedGitHub(GitHubEventsPort):
         return frozenset()
 
     def branch_tip(self, repo, base):
-        return ReadFailure(-1, "branch tips are not simulated")
+        return "sim-base-tip"
 
     def pr_view(self, pr):
         return ReadFailure(-1, "pr views are not simulated")

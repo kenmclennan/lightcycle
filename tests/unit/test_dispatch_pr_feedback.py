@@ -1,8 +1,12 @@
 import unittest
 
 from lightcycle.application.flow import CompleteStepUseCase
+from lightcycle.application.flow.complete_step import CompleteInput
 from lightcycle.application.pool.check_content_pin import CheckContentPinUseCase
-from lightcycle.application.pool.dispatch_pr_feedback import DispatchPrFeedbackUseCase
+from lightcycle.application.pool.dispatch_pr_feedback import (
+    CONFLICT_BASE_TIP,
+    DispatchPrFeedbackUseCase,
+)
 from lightcycle.application.pool.resolve_merged_prs import ResolveMergedPrsUseCase
 from lightcycle.domain.feedback import LC_MARKER
 from lightcycle.domain.work import State
@@ -142,7 +146,7 @@ _CONFLICT_FLOW = flow_from_metas({
     "fixer": {
         "model": "sonnet",
         "step": "fix-step",
-        "routes": {"resolved": "watch-step"},
+        "routes": {"resolved": "watch-step", "escalate": "escalate-step"},
     },
 })
 
@@ -690,7 +694,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
 
 class TestMonitorPrsConflict(unittest.TestCase):
 
-    def _setup(self, pr_url, github, flow=None, prior_conflicts=0):
+    def _setup(self, pr_url, github, flow=None, prior_conflicts=0, prior_tip="tip-0"):
         f = flow or _CONFLICT_FLOW
         store = FakeStore()
         item = store.create_item("conflicting feature", "a description")
@@ -698,6 +702,8 @@ class TestMonitorPrsConflict(unittest.TestCase):
         for _ in range(prior_conflicts):
             old = store.create_step(step="watch-step",
                                     role="agent", parent=item)
+            if prior_tip is not None:
+                store.add_artifact(old, CONFLICT_BASE_TIP, prior_tip, internal=True)
             store.complete_node(old, "conflicted")
         step = store.create_step(step="watch-step",
                                  role="agent", parent=item)
@@ -810,6 +816,15 @@ class TestMonitorPrsConflict(unittest.TestCase):
         self.assertEqual(result.conflicted, [item])
         self.assertEqual(store.get_node(step).outcome, "gave-up")
 
+    def test_prior_conflicts_with_no_recorded_tip_are_clean_rounds(self):
+        url = "https://github.com/x/y/pull/61"
+        store, item, step, _, uc = self._setup(
+            url, FakeGitHub(conflicted_prs={url}), prior_conflicts=2, prior_tip=None)
+
+        uc.execute()
+
+        self.assertEqual(store.get_node(step).outcome, "conflicted")
+
     def test_under_cap_uses_conflict_outcome(self):
         url = "https://github.com/x/y/pull/56"
         store, item, step, _, uc = self._setup(
@@ -843,7 +858,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
         opened = [t for t in store.all_nodes() if t.id != step and t.type == "step"
                   and t.state != "done"][0]
         notes = store.get_node(opened.id).notes
-        self.assertIn("pr_conflict_cap reached: 2 conflicts at", notes)
+        self.assertIn("pr_conflict_cap reached: 2 failed resolutions in 3 conflicts at", notes)
         self.assertIn(store.get_node(step).stage, notes)
         self.assertIn("`lc done %s resolved`" % opened.id, notes)
 
@@ -937,3 +952,160 @@ class TestMonitorPrsConflict(unittest.TestCase):
 
 
 
+
+
+class TestConflictCapCountsFailuresNotConflicts(unittest.TestCase):
+    URL = "https://github.com/x/y/pull/70"
+
+    def _flow(self, failure_cap=3, total_cap=None):
+        gate = {
+            "model": "sonnet",
+            "step": "watch-step",
+            "routes": {"conflicted": "fix-step", "gave-up": "escalate-step"},
+            "on_pr_conflict": "conflicted",
+            "on_pr_conflict_cap": failure_cap,
+            "on_pr_conflict_escalate": "gave-up",
+        }
+        if total_cap is not None:
+            gate["on_pr_conflict_total_cap"] = total_cap
+        return flow_from_metas({
+            "watcher": gate,
+            "fixer": {
+                "model": "sonnet",
+                "step": "fix-step",
+                "routes": {"resolved": "watch-step", "escalate": "escalate-step"},
+            },
+        })
+
+    def _start(self, flow):
+        self.gh = FakeGitHub(conflicted_prs={self.URL})
+        self.store = FakeStore()
+        self.item = self.store.create_item("conflicting feature", "a description")
+        plant_pr(self.store, self.item, self.URL)
+        self.store.create_step(step="watch-step", role="agent", parent=self.item)
+        self.complete = CompleteStepUseCase(self.store, _FlowAdapter(flow))
+        self.uc = DispatchPrFeedbackUseCase(
+            self.store, self.gh, _FlowAdapter(flow), self.complete, **_TRUST)
+
+    def _open(self, stage):
+        return next(
+            t for t in self.store.all_nodes()
+            if t.type == "step" and t.stage == stage and t.state != State.DONE
+        )
+
+    def _round(self, move_base, resolve_outcome="resolved"):
+        self.uc.execute()
+        if move_base:
+            self.gh.advance_base("acme/widget", "main")
+        self.complete.execute(
+            CompleteInput(step=self._open("fix-step").id, outcome=resolve_outcome))
+
+    def _gate_outcomes(self):
+        return [t.outcome for t in self._done_gates()]
+
+    def _done_gates(self):
+        return [t for t in self.store.steps_at_step("watch-step") if t.state == State.DONE]
+
+    def _escalation_note(self):
+        return self.store.get_node(self._open("escalate-step").id).notes
+
+    def test_nine_clean_conflicts_do_not_escalate_and_the_tenth_does_on_the_total_cap(self):
+        self._start(self._flow())
+        for _ in range(9):
+            self._round(move_base=True)
+        self.assertEqual(self._gate_outcomes(), ["conflicted"] * 9)
+
+        self.uc.execute()
+
+        self.assertEqual(self._gate_outcomes()[-1], "gave-up")
+        self.assertTrue(
+            self._escalation_note().startswith(
+                "pr_conflict_total_cap reached: 10 conflicts (0 failed resolutions) at watch-step"),
+            self._escalation_note())
+
+    def test_third_failed_resolution_escalates_on_the_fourth_conflict(self):
+        self._start(self._flow())
+        for _ in range(3):
+            self._round(move_base=False)
+        self.assertEqual(self._gate_outcomes(), ["conflicted"] * 3)
+
+        self.uc.execute()
+
+        self.assertEqual(self._gate_outcomes()[-1], "gave-up")
+        self.assertTrue(
+            self._escalation_note().startswith(
+                "pr_conflict_cap reached: 3 failed resolutions in 4 conflicts at watch-step"),
+            self._escalation_note())
+
+    def test_two_failed_resolutions_do_not_escalate(self):
+        self._start(self._flow())
+        self._round(move_base=False)
+        self._round(move_base=False)
+
+        self.uc.execute()
+
+        self.assertEqual(self._gate_outcomes(), ["conflicted"] * 3)
+
+    def test_a_conflict_on_the_same_base_after_a_resolution_counts_as_one_failure(self):
+        self._start(self._flow(failure_cap=1))
+        self._round(move_base=False)
+
+        self.uc.execute()
+
+        self.assertEqual(self._gate_outcomes(), ["conflicted", "gave-up"])
+        self.assertIn("1 failed resolutions in 2 conflicts", self._escalation_note())
+
+    def test_a_conflict_on_a_moved_base_after_a_resolution_is_not_a_failure(self):
+        self._start(self._flow(failure_cap=1))
+        self._round(move_base=True)
+
+        self.uc.execute()
+
+        self.assertEqual(self._gate_outcomes(), ["conflicted", "conflicted"])
+
+    def test_each_conflict_records_the_base_tip_it_saw(self):
+        self._start(self._flow())
+        self._round(move_base=True)
+        self._round(move_base=True)
+
+        tips = [
+            [a.value for a in self.store.item_artifacts(t.id) if a.type == CONFLICT_BASE_TIP]
+            for t in self._done_gates()
+        ]
+
+        self.assertEqual(tips, [["tip-0"], ["tip-1"]])
+
+    def test_a_failed_base_tip_read_is_a_clean_round_but_the_total_cap_still_bounds_it(self):
+        self._start(self._flow())
+        self.gh._failing_calls = {"branch_tip"}
+        for _ in range(9):
+            self._round(move_base=False)
+        self.assertEqual(self._gate_outcomes(), ["conflicted"] * 9)
+
+        self.uc.execute()
+
+        self.assertEqual(self._gate_outcomes()[-1], "gave-up")
+        self.assertIn("pr_conflict_total_cap reached: 10 conflicts", self._escalation_note())
+
+    def test_escalated_resolutions_each_add_one_failure(self):
+        self._start(self._flow(failure_cap=2))
+        for _ in range(2):
+            fix = self.store.create_step(step="fix-step", role="agent", parent=self.item)
+            self.store.complete_node(fix, "escalate")
+
+        self.uc.execute()
+
+        self.assertEqual(self._gate_outcomes(), ["gave-up"])
+        self.assertIn("pr_conflict_cap reached: 2 failed resolutions in 1 conflicts",
+                      self._escalation_note())
+
+    def test_a_declared_total_cap_escalates_the_sixth_conflict(self):
+        self._start(self._flow(total_cap=5))
+        for _ in range(5):
+            self._round(move_base=True)
+        self.assertEqual(self._gate_outcomes(), ["conflicted"] * 5)
+
+        self.uc.execute()
+
+        self.assertEqual(self._gate_outcomes()[-1], "gave-up")
+        self.assertIn("pr_conflict_total_cap reached: 6 conflicts", self._escalation_note())
