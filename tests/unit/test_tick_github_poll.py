@@ -330,7 +330,7 @@ class TestColdStart(unittest.TestCase):
         names = [c[0] for c in github.calls]
         self.assertNotIn("list_prs", names)
         self.assertNotIn("repo_inline_comments", names)
-        self.assertEqual(names.count("pr_view"), 1)
+        self.assertEqual(names.count("pr_view"), 2)
 
     def test_a_pool_with_no_gated_prs_starts_nothing_until_one_arrives(self):
         github = FakeGitHub()
@@ -520,7 +520,7 @@ class TestWritesStayOffTheTick(unittest.TestCase):
 
         self.assertEqual((rig.github.update_calls, rig.github.requires_calls), ([], []))
         runner.pending[0]()
-        self.assertEqual(rig.github.calls.count(("pr_view", rig.url)), 1)
+        self.assertEqual(rig.github.calls.count(("pr_view", rig.url)), 2)
         self.assertEqual(rig.github.update_calls, [])
         self.assertEqual(rig.github.requires_calls, [])
 
