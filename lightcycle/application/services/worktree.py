@@ -223,11 +223,11 @@ class WorktreeService:
             for run in self._releasable_runs(item)
         ]
 
-    def _run_findings(self, item, run, proven_merged, fetched):
+    def _run_findings(self, item, run, proven_merged, fetched, check_dirty=True):
         target = self._target_for_phase(item, run.phase)
         if not self._git.is_git_repo(target):
             return []
-        findings = self._dirty_findings(target, self.path_for_run(run))
+        findings = self._dirty_findings(target, self.path_for_run(run)) if check_dirty else []
         if proven_merged:
             return findings
         if target not in fetched:
@@ -236,11 +236,17 @@ class WorktreeService:
         return findings + self._unmerged_findings(target, run.branch)
 
     def teardown_refusals(self, item, merged_prs=frozenset()):
+        return self._refusals(item, merged_prs, check_dirty=True)
+
+    def unmerged_refusals(self, item, merged_prs=frozenset()):
+        return self._refusals(item, merged_prs, check_dirty=False)
+
+    def _refusals(self, item, merged_prs, check_dirty):
         findings = []
         fetched = set()
         for run in self._releasable_runs(item):
             proven = run.state == RunState.MERGED or bool(run.pr and run.pr in merged_prs)
-            findings += self._run_findings(item, run, proven, fetched)
+            findings += self._run_findings(item, run, proven, fetched, check_dirty)
         return findings
 
     def pass_release_refusals(self, item, runs):

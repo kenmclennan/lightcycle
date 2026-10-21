@@ -135,7 +135,7 @@ The mutating CLI is a small set of generic primitives over nodes; the read views
 | `lc show <id>` | one node as JSON (artifacts, resume-state) |
 | `lc done <id> [<outcome>]` | close a node; a **step** done-with-outcome advances the flow; an item force-closes its open steps |
 | `lc close <item> [--outcome/--disposition/--note]` | end an **item** outright; `--outcome` is free-form text (default `closed`), `--disposition` defaults to `completed`; refuses a **step** - use `lc done` for one |
-| `lc rm <id>` | delete a node |
+| `lc rm <id> [--force]` | delete a node; refuses on a live worker, a dirty worktree, or a branch with commits not merged into the base (a run recorded `merged` counts as merged); `--force` overrides the dirty worktree, the unmerged branch and stale claims |
 | `lc attach <id> <type> <value> [--label/--replace/--file]` | attach an artifact to an **item** (`spec`, `repo`, `brief`, `blueprint`, ...). `pr`, `branch` and `comments-handled` are not artifacts - they route onto the item's current phase run. `reflection` routes to the retro |
 | `lc dep <id> --needs <id>` | link one node as a blocker of another |
 | `lc claim agent` | (agents) atomically claim the next ready agent step, whatever its stage |
