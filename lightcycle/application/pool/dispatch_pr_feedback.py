@@ -41,6 +41,7 @@ def _is_conflicted(sync):
 class _Feedback:
     admitted: List[HeldComment] = field(default_factory=list)
     approved: List[HeldComment] = field(default_factory=list)
+    cutoff: float = 0.0
 
     def __bool__(self):
         return bool(self.admitted or self.approved)
@@ -139,7 +140,8 @@ class DispatchPrFeedbackUseCase:
             for held in self._keyed(step, run, kind, items):
                 self._hold.execute(run, origin, pr, held)
 
-        return _Feedback(admitted=admitted, approved=self._store.approved_holds(run.id))
+        return _Feedback(
+            admitted=admitted, approved=self._store.approved_holds(run.id), cutoff=since)
 
     def _open_feedback_step(self, step, flow, feedback_step, run, outstanding):
         role = flow.step_def(feedback_step).owner
@@ -147,6 +149,7 @@ class DispatchPrFeedbackUseCase:
         self._store.set_watched_step(tid, step.id)
         keys = [h.key for h in outstanding.admitted + outstanding.approved]
         self._store.add_artifact(tid, "admitted-comments", "\n".join(keys), internal=True)
+        self._store.add_artifact(tid, "feedback-cutoff", str(outstanding.cutoff), internal=True)
         for held in outstanding.approved:
             self._store.mark_hold_dispatched(run.id, held.key)
         if outstanding.admitted:
