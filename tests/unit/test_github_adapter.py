@@ -382,52 +382,73 @@ class TestComments(unittest.TestCase):
         self.assertIsInstance(comments, ReadFailure)
 
 
+def _head_then(*later):
+    return MagicMock(side_effect=[_proc(json.dumps({"headRefOid": "headsha"})), *later])
+
+
 class TestLastPushTime(unittest.TestCase):
     def setUp(self):
         self.adapter = GitHubEventsAdapter()
 
     def test_constructed_jq_requests_only_committer_date(self):
-        with patch(
-            "lightcycle.adapters.github.subprocess.run", return_value=_proc("")
-        ) as mock_run:
+        mock_run = _head_then(_proc(""))
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
             self.adapter.last_push_time(_PR)
 
         args = mock_run.call_args.args[0]
         jq = _jq_arg(mock_run)
-        self.assertEqual(jq, ".[-1].commit.committer.date // empty")
+        self.assertEqual(jq, ".commit.committer.date // empty")
         self.assertNotIn("-r", args)
 
+    def test_reads_the_head_commit_not_the_commits_list(self):
+        mock_run = _head_then(_proc("2024-01-02T00:00:00Z\n"))
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            self.adapter.last_push_time(_PR)
+
+        args = mock_run.call_args.args[0]
+        self.assertIn("/repos/x/y/commits/headsha", args)
+        self.assertFalse(any("pulls/7/commits" in a for a in args))
+
     def test_populated_commit_returns_parsed_timestamp(self):
-        with patch(
-            "lightcycle.adapters.github.subprocess.run",
-            return_value=_proc("2024-01-02T00:00:00Z\n"),
-        ):
+        mock_run = _head_then(_proc("2024-01-02T00:00:00Z\n"))
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
             result = self.adapter.last_push_time(_PR)
 
         self.assertGreater(result, 0.0)
 
-    def test_no_commits_returns_read_failure(self):
+    def test_head_sha_failure_is_returned(self):
         with patch(
-            "lightcycle.adapters.github.subprocess.run", return_value=_proc("")
+            "lightcycle.adapters.github.subprocess.run",
+            return_value=_proc("", returncode=1, stderr="gh: auth error"),
         ):
+            result = self.adapter.last_push_time(_PR)
+
+        self.assertEqual(result, ReadFailure(1, "gh: auth error"))
+
+    def test_empty_head_sha_returns_read_failure(self):
+        mock_run = MagicMock(return_value=_proc(json.dumps({"headRefOid": ""})))
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            result = self.adapter.last_push_time(_PR)
+
+        self.assertIsInstance(result, ReadFailure)
+
+    def test_no_commits_returns_read_failure(self):
+        with patch("lightcycle.adapters.github.subprocess.run", _head_then(_proc(""))):
             result = self.adapter.last_push_time(_PR)
 
         self.assertIsInstance(result, ReadFailure)
 
     def test_unparseable_date_returns_read_failure(self):
         with patch(
-            "lightcycle.adapters.github.subprocess.run",
-            return_value=_proc("not-a-date\n"),
+            "lightcycle.adapters.github.subprocess.run", _head_then(_proc("not-a-date\n"))
         ):
             result = self.adapter.last_push_time(_PR)
 
         self.assertIsInstance(result, ReadFailure)
 
     def test_command_failure_returns_a_distinguishable_read_failure(self):
-        with patch(
-            "lightcycle.adapters.github.subprocess.run",
-            return_value=_proc("", returncode=1, stderr="gh: auth error"),
-        ):
+        mock_run = _head_then(_proc("", returncode=1, stderr="gh: auth error"))
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
             result = self.adapter.last_push_time(_PR)
 
         self.assertEqual(result, ReadFailure(1, "gh: auth error"))
@@ -523,8 +544,10 @@ class TestCheckRuns(unittest.TestCase):
     def setUp(self):
         self.adapter = GitHubEventsAdapter()
 
-    def _run(self, payload):
-        return MagicMock(return_value=_proc(json.dumps(payload)))
+    def _run(self, payload, total=None):
+        total = len(payload) if total is None else total
+        lines = "\n".join(json.dumps({**c, "total": total}) for c in payload)
+        return MagicMock(return_value=_proc(lines))
 
     def test_parses_check_runs_into_tuples(self):
         mock_run = self._run([
@@ -580,6 +603,36 @@ class TestCheckRuns(unittest.TestCase):
 
     def test_invalid_json_returns_read_failure(self):
         mock_run = MagicMock(return_value=_proc("not json", returncode=0))
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            runs = self.adapter.check_runs(_PR, "sha1")
+
+        self.assertIsInstance(runs, ReadFailure)
+
+    def test_every_run_across_pages_is_returned(self):
+        payload = [
+            {"name": "job-%d" % i, "status": "completed", "conclusion": "success"}
+            for i in range(150)
+        ]
+        mock_run = self._run(payload)
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            runs = self.adapter.check_runs(_PR, "sha1")
+
+        self.assertEqual(len(runs), 150)
+        self.assertEqual(runs[-1].name, "job-149")
+
+    def test_requests_paginated_pages_of_100(self):
+        mock_run = self._run([])
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            self.adapter.check_runs(_PR, "sha1")
+
+        args = mock_run.call_args.args[0]
+        self.assertIn("--paginate", args)
+        self.assertIn("/repos/x/y/commits/sha1/check-runs?per_page=100", args)
+
+    def test_total_count_above_runs_returned_is_a_read_failure(self):
+        mock_run = self._run(
+            [{"name": "a", "status": "completed", "conclusion": "success"}], total=31
+        )
         with patch("lightcycle.adapters.github.subprocess.run", mock_run):
             runs = self.adapter.check_runs(_PR, "sha1")
 
