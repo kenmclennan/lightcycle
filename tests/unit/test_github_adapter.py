@@ -1116,6 +1116,14 @@ class TestBranchTipAndPrView(unittest.TestCase):
     def setUp(self):
         self.adapter = GitHubEventsAdapter()
 
+    def test_authenticated_login_with_empty_stdout_is_a_read_failure(self):
+        with patch("lightcycle.adapters.github.subprocess.run", return_value=_proc("")):
+            self.assertIsInstance(self.adapter.authenticated_login(), ReadFailure)
+
+    def test_authenticated_login_returns_the_login(self):
+        with patch("lightcycle.adapters.github.subprocess.run", return_value=_proc("octocat\n")):
+            self.assertEqual(self.adapter.authenticated_login(), "octocat")
+
     def test_branch_tip_returns_the_sha(self):
         with patch("lightcycle.adapters.github.subprocess.run", return_value=_proc("abc123\n")):
             self.assertEqual(self.adapter.branch_tip("x/y", "main"), "abc123")

@@ -4,6 +4,7 @@ import unittest
 from unittest import mock
 
 from lightcycle.adapters import spawner
+from lightcycle.adapters import workers as workers_adapter
 from lightcycle.adapters.workers import workers_path, workers_state
 from lightcycle.config import Config, ConfigError
 
@@ -117,3 +118,31 @@ class TestSpawnWorkerExportsPoolCap(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSpawnWorkerTracksItsChild(unittest.TestCase):
+    def setUp(self):
+        workers_adapter._TRACKED_CHILDREN.clear()
+        self.addCleanup(workers_adapter._TRACKED_CHILDREN.clear)
+
+    def _spawn(self, environ):
+        with tempfile.TemporaryDirectory() as root:
+            config = Config(environ=dict(environ, LC_HOME=root, LC_MAX_AGENTS="5"))
+            proc = FakeProc(pid=4242)
+            with mock.patch(
+                "lightcycle.adapters.spawner.subprocess.Popen", return_value=proc
+            ), mock.patch(
+                "lightcycle.adapters.spawner.capture_pid_started", return_value=None
+            ):
+                spawner.spawn_worker(config, "agent")
+        return proc
+
+    def test_default_branch_tracks_the_worker_popen(self):
+        proc = self._spawn({})
+
+        self.assertIs(workers_adapter._TRACKED_CHILDREN[4242], proc)
+
+    def test_override_branch_tracks_the_worker_popen(self):
+        proc = self._spawn({"LC_SPAWN_CMD": "exec sleep 30"})
+
+        self.assertIs(workers_adapter._TRACKED_CHILDREN[4242], proc)

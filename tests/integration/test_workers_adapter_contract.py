@@ -19,6 +19,8 @@ class TestWorkersAdapterContract(WorkersContractBase, unittest.TestCase):
             [sys.executable, "-c", "import time; time.sleep(60)"]
         )
         self.addCleanup(self._stop_alive_proc)
+        wk.track_child(self._alive_proc)
+        self.addCleanup(wk._TRACKED_CHILDREN.clear)
 
         dead = subprocess.Popen([sys.executable, "-c", "pass"])
         dead.wait(timeout=5)
