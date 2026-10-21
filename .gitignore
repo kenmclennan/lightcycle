@@ -18,3 +18,4 @@ specs/*.md
 
 dist/
 *.egg-info/
+mutants/
