@@ -1,11 +1,15 @@
 import unittest
 
-from lightcycle.domain.pool import ci_outcome, failing_check
+from lightcycle.domain.pool import ci_outcome, failing_check, judged_checks, timed_out_check
 from lightcycle.ports.github import CheckRun
 
 
-def _run(name="build", status="completed", conclusion="success"):
-    return CheckRun(name=name, status=status, conclusion=conclusion)
+def _run(name="build", status="completed", conclusion="success", started_at=0.0):
+    return CheckRun(name=name, status=status, conclusion=conclusion, started_at=started_at)
+
+
+def _running(name, started_at):
+    return _run(name=name, status="in_progress", conclusion=None, started_at=started_at)
 
 
 class TestCiOutcome(unittest.TestCase):
@@ -49,3 +53,56 @@ class TestFailingCheck(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+_REQUIRED = frozenset({"build", "test"})
+
+
+def _outcome(checks, required=_REQUIRED):
+    return ci_outcome(checks, required, 10000.0, 3600)
+
+
+class TestRequiredAndCeiling(unittest.TestCase):
+    def test_non_required_check_in_progress_is_not_judged(self):
+        checks = (_run("build"), _run("test"), _running("codacy", 1000.0))
+        self.assertEqual(_outcome(checks), "success")
+
+    def test_required_check_in_progress_under_ceiling_is_pending(self):
+        checks = (_running("build", 9000.0), _run("test"), _run("codacy"))
+        self.assertEqual(_outcome(checks), "pending")
+
+    def test_required_check_exactly_at_ceiling_is_pending(self):
+        self.assertEqual(_outcome((_running("build", 6400.0),)), "pending")
+
+    def test_required_check_over_ceiling_is_timeout(self):
+        checks = (_running("build", 6399.0),)
+        self.assertEqual(_outcome(checks), "timeout")
+        self.assertEqual(timed_out_check(checks, 10000.0, 3600).name, "build")
+
+    def test_no_required_set_judges_all_so_a_hung_check_times_out(self):
+        self.assertEqual(_outcome((_running("codacy", 1000.0),), required=None), "timeout")
+
+    def test_nothing_matching_the_set_judges_all(self):
+        self.assertEqual(_outcome((_running("codacy", 9900.0),), required=frozenset({"build"})), "pending")
+
+    def test_required_failure_with_others_in_progress_is_failure(self):
+        checks = (_run("build", conclusion="failure"), _run("test"), _running("codacy", 9900.0))
+        self.assertEqual(_outcome(checks), "failure")
+
+    def test_running_required_check_defers_a_failure(self):
+        checks = (_run("build", conclusion="failure"), _running("test", 9900.0))
+        self.assertEqual(_outcome(checks), "pending")
+
+    def test_failing_non_required_check_is_not_judged(self):
+        checks = (_run("build"), _run("test"), _run("codacy", conclusion="failure"))
+        self.assertEqual(_outcome(checks), "success")
+
+    def test_unknown_start_never_times_out(self):
+        self.assertIsNone(timed_out_check((_running("build", 0.0),), 10000.0, 3600))
+
+    def test_no_ceiling_disables_timeout(self):
+        self.assertIsNone(timed_out_check((_running("build", 1.0),), 10000.0, None))
+
+    def test_judged_checks_with_no_set_is_everything(self):
+        checks = (_run("build"), _run("codacy"))
+        self.assertEqual(judged_checks(checks, None), checks)

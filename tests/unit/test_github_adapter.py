@@ -552,6 +552,18 @@ class TestCheckRuns(unittest.TestCase):
 
         self.assertEqual(runs[0].url, "https://github.com/x/y/actions/runs/1/job/2")
 
+    def test_started_at_parses_to_epoch_and_missing_is_zero(self):
+        mock_run = self._run([
+            {"name": "a", "status": "completed", "conclusion": "success",
+             "started_at": "2026-10-20T13:57:15Z"},
+            {"name": "b", "status": "queued", "conclusion": None, "started_at": None},
+        ])
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            runs = self.adapter.check_runs(_PR, "sha1")
+
+        self.assertEqual(runs[0].started_at, 1792504635.0)
+        self.assertEqual(runs[1].started_at, 0.0)
+
     def test_empty_check_runs_list(self):
         mock_run = self._run([])
         with patch("lightcycle.adapters.github.subprocess.run", mock_run):
@@ -839,6 +851,66 @@ class TestRequiresUpToDate(unittest.TestCase):
             self.assertIsInstance(
                 self.adapter.requires_up_to_date("x/y@main"), ReadFailure
             )
+
+
+class TestRequiredChecks(unittest.TestCase):
+    def setUp(self):
+        self.adapter = GitHubEventsAdapter()
+
+    def _run(self, *procs):
+        return patch("lightcycle.adapters.github.subprocess.run",
+                     MagicMock(side_effect=list(procs)))
+
+    def _ruleset(self, *contexts):
+        return _proc(json.dumps([
+            {"type": "deletion"},
+            {"type": "required_status_checks",
+             "parameters": {"required_status_checks": [{"context": c} for c in contexts]}},
+        ]))
+
+    def _not_protected(self):
+        return _proc("", returncode=1, stderr="gh: Branch not protected (HTTP 404)")
+
+    def test_ruleset_contexts(self):
+        with self._run(self._ruleset("build", "test"), self._not_protected()):
+            result = self.adapter.required_checks("x/y@main")
+
+        self.assertEqual(result, frozenset({"build", "test"}))
+
+    def test_protection_contexts_and_checks(self):
+        payload = json.dumps({"contexts": ["build"], "checks": [{"context": "test", "app_id": 1}]})
+        with self._run(_proc("[]"), _proc(payload)) as run:
+            result = self.adapter.required_checks("x/y@main")
+
+        self.assertEqual(result, frozenset({"build", "test"}))
+        self.assertIn("timeout", run.call_args[1])
+
+    def test_both_sources_union(self):
+        with self._run(self._ruleset("build"), _proc(json.dumps({"contexts": ["test"]}))):
+            result = self.adapter.required_checks("x/y@main")
+
+        self.assertEqual(result, frozenset({"build", "test"}))
+
+    def test_neither_gives_none(self):
+        with self._run(_proc("[]"), self._not_protected()):
+            self.assertIsNone(self.adapter.required_checks("x/y@main"))
+
+    def test_empty_union_gives_none(self):
+        with self._run(self._ruleset(), _proc(json.dumps({"contexts": [], "checks": []}))):
+            self.assertIsNone(self.adapter.required_checks("x/y@main"))
+
+    def test_ruleset_with_failing_protection_is_read_failure(self):
+        with self._run(self._ruleset("build"), _proc("", returncode=1, stderr="HTTP 403")):
+            self.assertIsInstance(self.adapter.required_checks("x/y@main"), ReadFailure)
+
+    def test_rules_failures_and_timeouts(self):
+        for first in (_proc("", returncode=1, stderr="HTTP 500"), _proc("not json")):
+            with self._run(first):
+                self.assertIsInstance(self.adapter.required_checks("x/y@main"), ReadFailure)
+        with self._run(_proc("[]"), _timeout()):
+            self.assertIsInstance(self.adapter.required_checks("x/y@main"), ReadFailure)
+        with self._run(_proc("[]"), _proc("not json")):
+            self.assertIsInstance(self.adapter.required_checks("x/y@main"), ReadFailure)
 
 
 class TestRateLimit(unittest.TestCase):

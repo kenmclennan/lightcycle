@@ -18,6 +18,7 @@ _ENV_OVERRIDE_VARS = {
     "max-boot-seconds": "LC_MAX_BOOT_SECONDS",
     "max-session-seconds": "LC_MAX_SESSION_SECONDS",
     "stall-seconds": "LC_STALL_SECONDS",
+    "ci-check-ceiling-seconds": "LC_CI_CHECK_CEILING_SECONDS",
     "probe-cooldown-seconds": "LC_PROBE_COOLDOWN_SECONDS",
     "spin-cap": "LC_SPIN_CAP",
     "poll-seconds": "LC_POLL_SECONDS",
@@ -86,6 +87,7 @@ _SEED_KEYS = [
     ("max-boot-seconds", "120"),
     ("max-session-seconds", "1800"),
     ("stall-seconds", "1800"),
+    ("ci-check-ceiling-seconds", "3600"),
     ("probe-cooldown-seconds", "1800"),
     ("spin-cap", "3"),
     ("poll-seconds", "5"),
@@ -175,6 +177,7 @@ _NUMERIC_RANGES = {
     "max-boot-seconds": (0, None),
     "max-session-seconds": (0, None),
     "stall-seconds": (0, None),
+    "ci-check-ceiling-seconds": (1, None),
     "probe-cooldown-seconds": (0, None),
     "tui-upgrade-check-seconds": (0, None),
     "pool-upgrade-check-seconds": (0, None),
@@ -570,6 +573,11 @@ class Config:
         env = self._env_int("LC_STALL_SECONDS", None)
         value = env if env is not None else self._required_int("stall-seconds")
         return self._check_range("stall-seconds", value)
+
+    def ci_check_ceiling_seconds(self):
+        env = self._env_int("LC_CI_CHECK_CEILING_SECONDS", None)
+        value = env if env is not None else self._required_int("ci-check-ceiling-seconds")
+        return self._check_range("ci-check-ceiling-seconds", value)
 
     def probe_cooldown_seconds(self):
         env = self._env_int("LC_PROBE_COOLDOWN_SECONDS", None)

@@ -3,9 +3,9 @@ from typing import List
 
 from lightcycle.application.flow.complete_step import CompleteInput
 from lightcycle.application.pool.pr_lookups import flow_for, run_of, skip_unpinned
-from lightcycle.domain.pool import ci_outcome, failing_check
+from lightcycle.domain.pool import ci_outcome, failing_check, judged_checks, timed_out_check
 from lightcycle.domain.work import State
-from lightcycle.ports.github import NotYetRead, ReadFailure
+from lightcycle.ports.github import NotYetRead, PrSync, ReadFailure
 
 
 @dataclass(frozen=True)
@@ -27,14 +27,19 @@ def _reason(call, failure):
 
 
 class ResolveCiUseCase:
-    def __init__(self, store, github, flow_service, complete, *, clock, poll_seconds):
+    def __init__(
+        self, store, github, flow_service, complete, *, clock, poll_seconds, ci_ceiling_seconds, wall_clock,
+    ):
         self._store = store
         self._github = github
         self._flow_service = flow_service
         self._complete = complete
         self._clock = clock
         self._poll_seconds = poll_seconds
+        self._ci_ceiling_seconds = ci_ceiling_seconds
+        self._wall_clock = wall_clock
         self._unread = {}
+        ci_ceiling_seconds()
 
     def _note_unread(self, step, reason, failure, still_unread, ci_unread):
         now = self._clock()
@@ -44,6 +49,13 @@ class ResolveCiUseCase:
             logged = reason
             ci_unread.append(CiUnread(step.id, reason, getattr(failure, "stderr", "") or ""))
         self._unread[step.id] = (since, reason, logged)
+
+    def _required(self, pr_value):
+        sync = self._github.pr_sync_state(pr_value)
+        if not isinstance(sync, PrSync):
+            return None
+        value = self._github.required_checks(sync.base_key)
+        return None if isinstance(value, ReadFailure) else value
 
     def execute(self) -> ResolveCiResponse:
         ci_resolved = []
@@ -72,7 +84,10 @@ class ResolveCiUseCase:
             if isinstance(checks, ReadFailure):
                 self._note_unread(step, _reason("checks", checks), checks, still_unread, ci_unread)
                 continue
-            outcome = ci_outcome(checks)
+            required = self._required(pr_value)
+            ceiling = self._ci_ceiling_seconds()
+            now = self._wall_clock()
+            outcome = ci_outcome(checks, required, now, ceiling)
             if outcome == "pending":
                 continue
             if outcome == "success" and sd.ci_success:
@@ -81,11 +96,23 @@ class ResolveCiUseCase:
                     step=step.id, outcome=sd.ci_success, note="CI succeeded on %s." % sha,
                 ))
                 ci_resolved.append(step.item)
+            elif outcome == "timeout" and sd.ci_failure:
+                if self._github.head_sha(pr_value) != sha:
+                    continue
+                self._store.add_artifact(step.id, "ci-judged-sha", sha, internal=True)
+                hung = timed_out_check(judged_checks(checks, required), now, ceiling)
+                url = " %s" % hung.url if hung.url else ""
+                note = (
+                    "CI timed out on %s: check '%s'%s still in progress after %ds, past the "
+                    "ceiling of %ds (ci-check-ceiling-seconds), PR %s."
+                ) % (sha, hung.name, url, int(now - hung.started_at), ceiling, pr_value)
+                self._complete.execute(CompleteInput(step=step.id, outcome=sd.ci_failure, note=note))
+                ci_resolved.append(step.item)
             elif outcome == "failure" and sd.ci_failure:
                 if self._github.head_sha(pr_value) != sha:
                     continue
                 self._store.add_artifact(step.id, "ci-judged-sha", sha, internal=True)
-                fc = failing_check(checks)
+                fc = failing_check(judged_checks(checks, required))
                 url = " %s" % fc.url if fc and fc.url else ""
                 note = "CI failed on %s: check '%s'%s, PR %s." % (
                     sha, fc.name if fc else "unknown", url, pr_value,

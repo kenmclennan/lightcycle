@@ -7,7 +7,7 @@ class FakeGitHub(GitHubEventsPort):
                  timed_comments=None, timed_reviews=None, head_shas=None, files_by_sha=None,
                  check_runs_by_sha=None, failing_calls=(), issue_states=None,
                  behind_prs=(), strict_bases=(), base_keys=None, login="operator",
-                 updated_ats=None, failing_prs=()):
+                 updated_ats=None, failing_prs=(), required_by_base=None):
         self._login = login
         self._merged = set(merged_prs)
         self._closed = set(closed_prs)
@@ -24,6 +24,7 @@ class FakeGitHub(GitHubEventsPort):
         self.issue_state_calls = []
         self._behind = set(behind_prs)
         self._strict_bases = set(strict_bases)
+        self._required_by_base = dict(required_by_base or {})
         self._base_keys = base_keys or {}
         self.update_calls = []
         self.requires_calls = []
@@ -182,6 +183,14 @@ class FakeGitHub(GitHubEventsPort):
         if "requires_up_to_date" in self._failing_calls:
             return ReadFailure(1, "boom")
         return base_key in self._strict_bases
+
+    def required_checks(self, base_key):
+        self._record("required_checks", base_key)
+        if "required_checks" in self._failing_calls:
+            return ReadFailure(1, "boom")
+        if base_key in self._required_by_base:
+            return frozenset(self._required_by_base[base_key]) or None
+        return None
 
     def update_branch(self, pr, expected_head_sha):
         self.update_calls.append((pr, expected_head_sha))

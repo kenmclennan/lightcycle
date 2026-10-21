@@ -1339,3 +1339,28 @@ class TestWorkflowLifecycleConfig(unittest.TestCase):
         c, _ = _file_config_with(
             "workflow-acme-build:\n  api-token: tok\nworkflow-stray: 1\nscheduler-thing: 1\n")
         self.assertEqual(c.obsolete_config_keys(), ("workflow-stray", "scheduler-thing"))
+
+
+class TestCiCheckCeilingConfig(unittest.TestCase):
+    def test_seeded_default_is_3600(self):
+        seeds = dict(_SEED_KEYS)
+        self.assertEqual(seeds["ci-check-ceiling-seconds"], "3600")
+        c = _cfg(ci_check_ceiling_seconds=seeds["ci-check-ceiling-seconds"])
+        self.assertEqual(c.ci_check_ceiling_seconds(), 3600)
+
+    def test_env_override_wins(self):
+        c = _cfg({"LC_CI_CHECK_CEILING_SECONDS": "10"}, ci_check_ceiling_seconds="3600")
+        self.assertEqual(c.ci_check_ceiling_seconds(), 10)
+
+    def test_zero_and_negative_are_refused(self):
+        for bad in ("0", "-1"):
+            with self.assertRaises(ConfigError) as ctx:
+                _cfg(ci_check_ceiling_seconds=bad).ci_check_ceiling_seconds()
+            self.assertIn("ci-check-ceiling-seconds", str(ctx.exception))
+        with self.assertRaises(ConfigError):
+            _cfg({"LC_CI_CHECK_CEILING_SECONDS": "0"}).ci_check_ceiling_seconds()
+
+    def test_missing_key_names_it(self):
+        with self.assertRaises(ConfigError) as ctx:
+            _cfg().ci_check_ceiling_seconds()
+        self.assertIn("ci-check-ceiling-seconds", str(ctx.exception))

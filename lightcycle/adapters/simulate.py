@@ -257,6 +257,9 @@ class ScriptedGitHub(GitHubEventsPort):
     def requires_up_to_date(self, base_key):
         return False
 
+    def required_checks(self, base_key):
+        return None
+
     def update_branch(self, pr, expected_head_sha):
         return ReadFailure(-1, "branch updates are not simulated")
 

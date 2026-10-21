@@ -34,6 +34,14 @@ class TestUnreadPr(unittest.TestCase):
             self.assertIsInstance(read, ReadFailure)
         self.assertEqual(self.github.calls, [])
 
+    def test_required_checks_is_not_yet_read_until_published(self):
+        self.assertIsInstance(self.snap.required_checks("acme/widget@main"), NotYetRead)
+        self.snap.publish_required("acme/widget@main", frozenset({"build"}))
+        self.assertEqual(self.snap.required_checks("acme/widget@main"), frozenset({"build"}))
+        self.snap.publish_required("acme/widget@main", None)
+        self.assertIsNone(self.snap.required_checks("acme/widget@main"))
+        self.assertEqual(self.github.calls, [])
+
     def test_reads_register_the_pr_and_the_wanted_pairs(self):
         self.snap.pr_sync_state(_PR)
         self.snap.changed_files(_PR, "h1")

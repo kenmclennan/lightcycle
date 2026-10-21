@@ -189,6 +189,7 @@ class WorkflowSimulateUseCase:
                 held_shortcode=lambda: "HLD",
                 writes=InlinePrWrites(github, time.monotonic),
                 ci_clock=time.monotonic, ci_poll_seconds=lambda: 60,
+                ci_ceiling_seconds=self._config.ci_check_ceiling_seconds, ci_wall_clock=time.time,
             )
             violations += self._drive(item_id, pin, graph, walk, github, monitor, trace, index)
         violations += self._run_script_guards(pin, guards, trace)

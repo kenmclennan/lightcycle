@@ -120,7 +120,7 @@ class TestResolveCiJudgedSha(unittest.TestCase):
             (_URL, "sha1"): (CheckRun(name="build", status=conclusion[0], conclusion=conclusion[1]),)
         })
         flow = _FlowAdapter(_FLOW)
-        ResolveCiUseCase(store, gh, flow, CompleteStepUseCase(store, flow), clock=time.monotonic, poll_seconds=lambda: 60).execute()
+        ResolveCiUseCase(store, gh, flow, CompleteStepUseCase(store, flow), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, wall_clock=lambda: 10000.0).execute()
         return [a.value for a in store.item_artifacts(step) if a.type == "ci-judged-sha"]
 
     def test_success_writes_the_judged_sha(self):
@@ -157,7 +157,7 @@ class TestResolveCiConfirmsHeadBeforeFailed(unittest.TestCase):
         step = store.create_step(step="poll-ci", role="engine", parent=item)
 
         flow = _FlowAdapter(_FLOW)
-        uc = ResolveCiUseCase(store, github, flow, CompleteStepUseCase(store, flow), clock=time.monotonic, poll_seconds=lambda: 60)
+        uc = ResolveCiUseCase(store, github, flow, CompleteStepUseCase(store, flow), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, wall_clock=lambda: 10000.0)
         return store, item, step, uc
 
     def _judged(self, store, step):
@@ -239,7 +239,7 @@ class TestResolveCiUseCase(unittest.TestCase):
         step = store.create_step(step="poll-ci", role="engine", parent=item)
 
         complete = CompleteStepUseCase(store, _FlowAdapter(flow))
-        uc = ResolveCiUseCase(store, github, _FlowAdapter(flow), complete, clock=time.monotonic, poll_seconds=lambda: 60)
+        uc = ResolveCiUseCase(store, github, _FlowAdapter(flow), complete, clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, wall_clock=lambda: 10000.0)
         return store, item, step, uc
 
     def test_ci_still_pending_does_not_complete(self):
@@ -352,7 +352,8 @@ class TestCiUnreadDiagnostics(unittest.TestCase):
         clock = _Clock()
         uc = ResolveCiUseCase(
             store, github, flow, CompleteStepUseCase(store, flow),
-            clock=clock, poll_seconds=lambda: 60)
+            clock=clock, poll_seconds=lambda: 60,
+            ci_ceiling_seconds=lambda: 3600, wall_clock=lambda: 10000.0)
         return store, item, step, uc, clock
 
     def _run(self, uc, clock, at):
@@ -444,7 +445,8 @@ class TestCiUnreadDiagnostics(unittest.TestCase):
         split = _Split("sha1", _GREEN)
         uc = ResolveCiUseCase(
             store, split, flow, CompleteStepUseCase(store, flow),
-            clock=clock, poll_seconds=lambda: 60)
+            clock=clock, poll_seconds=lambda: 60,
+            ci_ceiling_seconds=lambda: 3600, wall_clock=lambda: 10000.0)
         clock.now = 0.0
         first = uc.execute()
         clock.now = 61.0
@@ -453,3 +455,159 @@ class TestCiUnreadDiagnostics(unittest.TestCase):
         self.assertEqual(first.ci_resolved, [ok_item])
         self.assertEqual(store.get_node(fine).state, State.DONE)
         self.assertEqual([u.step for u in second.ci_unread], [stuck])
+
+
+def _ci_setup(github):
+    store = FakeStore()
+    item = store.create_item("building a thing", "a description")
+    plant_pr(store, item, _URL, branch=_BRANCH)
+    step = store.create_step(step="poll-ci", role="engine", parent=item)
+    flow = _FlowAdapter(_FLOW)
+    uc = ResolveCiUseCase(
+        store, github, flow, CompleteStepUseCase(store, flow),
+        clock=time.monotonic, poll_seconds=lambda: 60,
+        ci_ceiling_seconds=lambda: 3600, wall_clock=lambda: 10000.0,
+    )
+    return store, item, step, uc
+
+
+def _gh(runs, required=None, failing=(), **kw):
+    by_base = {"acme/widget@main": required} if required is not None else None
+    return FakeGitHub(
+        head_shas={_URL: "sha1"}, check_runs_by_sha={(_URL, "sha1"): tuple(runs)},
+        required_by_base=by_base, failing_calls=failing, **kw,
+    )
+
+
+def _ok(name):
+    return CheckRun(name=name, status="completed", conclusion="success")
+
+
+def _hung(name, started_at, url=""):
+    return CheckRun(name=name, status="in_progress", conclusion=None, url=url, started_at=started_at)
+
+
+class TestRequiredChecksAndCeiling(unittest.TestCase):
+    def test_required_green_with_a_non_required_in_progress_succeeds(self):
+        gh = _gh([_ok("build"), _ok("test"), _hung("codacy", 9900.0)], required={"build", "test"})
+        store, item, step, uc = _ci_setup(gh)
+
+        uc.execute()
+
+        node = store.get_node(step)
+        self.assertEqual(node.outcome, "succeeded")
+        self.assertEqual([a.value for a in store.item_artifacts(step) if a.type == "ci-judged-sha"], ["sha1"])
+
+    def test_required_in_progress_under_ceiling_keeps_waiting(self):
+        gh = _gh([_hung("build", 9900.0), _ok("test")], required={"build", "test"})
+        store, item, step, uc = _ci_setup(gh)
+
+        uc.execute()
+
+        self.assertEqual(store.get_node(step).state, State.QUEUED)
+
+    def test_check_exactly_at_the_ceiling_keeps_waiting(self):
+        gh = _gh([_hung("build", 6400.0)], required={"build"})
+        store, item, step, uc = _ci_setup(gh)
+
+        uc.execute()
+
+        self.assertEqual(store.get_node(step).state, State.QUEUED)
+
+    def test_check_past_the_ceiling_fails_naming_check_and_ceiling(self):
+        gh = _gh([_hung("build", 6399.0, url="http://x/1")], required={"build"})
+        store, item, step, uc = _ci_setup(gh)
+
+        uc.execute()
+
+        node = store.get_node(step)
+        self.assertEqual(node.outcome, "failed")
+        self.assertIn("check 'build' http://x/1", node.report)
+        self.assertIn("3601s", node.report)
+        self.assertIn("ceiling of 3600s", node.report)
+        self.assertEqual([a.value for a in store.item_artifacts(step) if a.type == "ci-judged-sha"], ["sha1"])
+
+    def test_no_required_set_keeps_today_rule_under_ceiling(self):
+        gh = _gh([_hung("codacy", 9900.0)])
+        store, item, step, uc = _ci_setup(gh)
+
+        uc.execute()
+
+        self.assertEqual(store.get_node(step).state, State.QUEUED)
+
+    def test_no_required_set_green_succeeds(self):
+        store, item, step, uc = _ci_setup(_gh([_ok("build")]))
+
+        uc.execute()
+
+        self.assertEqual(store.get_node(step).outcome, "succeeded")
+
+    def test_no_required_set_hung_over_ceiling_times_out(self):
+        store, item, step, uc = _ci_setup(_gh([_hung("codacy", 1000.0)]))
+
+        uc.execute()
+
+        self.assertEqual(store.get_node(step).outcome, "failed")
+        self.assertIn("codacy", store.get_node(step).report)
+
+    def test_failed_required_read_judges_all_checks(self):
+        gh = _gh([_ok("build"), _hung("codacy", 1000.0)], required={"build"}, failing={"required_checks"})
+        store, item, step, uc = _ci_setup(gh)
+
+        uc.execute()
+
+        self.assertEqual(store.get_node(step).outcome, "failed")
+
+    def test_unpublished_sync_state_judges_all_checks(self):
+        gh = _gh([_ok("build"), _hung("codacy", 1000.0)], required={"build"}, failing={"pr_sync_state"})
+        store, item, step, uc = _ci_setup(gh)
+
+        uc.execute()
+
+        self.assertEqual(store.get_node(step).outcome, "failed")
+
+    def test_failing_non_required_check_is_not_named(self):
+        gh = _gh([_ok("build"), CheckRun("codacy", "completed", "failure")], required={"build"})
+        store, item, step, uc = _ci_setup(gh)
+
+        uc.execute()
+
+        self.assertEqual(store.get_node(step).outcome, "succeeded")
+
+    def test_failed_required_check_is_named(self):
+        gh = _gh([CheckRun("build", "completed", "failure"), _ok("codacy")], required={"build"})
+        store, item, step, uc = _ci_setup(gh)
+
+        uc.execute()
+
+        self.assertIn("check 'build'", store.get_node(step).report)
+
+    def test_timeout_skips_when_head_moved(self):
+        class _Moving(FakeGitHub):
+            def __init__(self, **kw):
+                super().__init__(**kw)
+                self._n = 0
+
+            def head_sha(self, pr):
+                self._n += 1
+                return "sha1" if self._n == 1 else "sha2"
+
+        gh = _Moving(
+            head_shas={_URL: "sha1"},
+            check_runs_by_sha={(_URL, "sha1"): (_hung("build", 1000.0),)},
+        )
+        store, item, step, uc = _ci_setup(gh)
+
+        uc.execute()
+
+        self.assertEqual(store.get_node(step).state, State.QUEUED)
+
+    def test_constructor_fails_naming_a_missing_ceiling(self):
+        def _missing():
+            raise ValueError("ci-check-ceiling-seconds")
+
+        with self.assertRaises(ValueError):
+            ResolveCiUseCase(
+                FakeStore(), FakeGitHub(), None, None, clock=time.monotonic, poll_seconds=lambda: 60,
+                ci_ceiling_seconds=_missing, wall_clock=lambda: 0.0,
+            )

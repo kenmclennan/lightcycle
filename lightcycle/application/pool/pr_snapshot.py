@@ -38,6 +38,7 @@ class PrSnapshot(GitHubEventsPort):
         self._entries = {}
         self._files = {}
         self._checks = {}
+        self._required = {}
         self._pending = _Pending()
 
     def _entry(self, pr):
@@ -73,6 +74,10 @@ class PrSnapshot(GitHubEventsPort):
         with self._lock:
             self._checks[(pr, sha)] = runs
 
+    def publish_required(self, base_key, value):
+        with self._lock:
+            self._required[base_key] = value
+
     def mark_stale(self, pr):
         with self._lock:
             current = self._entries.get(pr)
@@ -101,6 +106,12 @@ class PrSnapshot(GitHubEventsPort):
 
     def requires_up_to_date(self, base_key):
         return self._github.requires_up_to_date(base_key)
+
+    def required_checks(self, base_key):
+        with self._lock:
+            if base_key in self._required:
+                return self._required[base_key]
+        return NotYetRead()
 
     def update_branch(self, pr, expected_head_sha):
         return self._github.update_branch(pr, expected_head_sha)

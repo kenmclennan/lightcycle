@@ -103,7 +103,9 @@ class TestContainerTickGithubPoll(unittest.TestCase):
     def test_tick_without_github_poll_seconds_fails_naming_the_key(self):
         from lightcycle.config import ConfigError
 
-        container = Container(store=object(), config=self._config(spin_cap="3"))
+        container = Container(
+            store=object(),
+            config=self._config(spin_cap="3", ci_check_ceiling_seconds="3600"))
 
         with self.assertRaises(ConfigError) as ctx:
             container.tick(flow=object())
@@ -116,17 +118,32 @@ class TestContainerTickGithubPoll(unittest.TestCase):
         container = Container(
             store=object(), github=object(),
             config=self._config(
-                spin_cap="3", github_poll_seconds="60", github_reserve_calls="750"))
+                spin_cap="3", github_poll_seconds="60", github_reserve_calls="750",
+                ci_check_ceiling_seconds="3600"))
 
         tick = container.tick(flow=object())
 
         self.assertIsInstance(tick._monitor._github, PrSnapshot)
 
+    def test_tick_without_ci_check_ceiling_fails_naming_the_key(self):
+        from lightcycle.config import ConfigError
+
+        container = Container(
+            store=object(),
+            config=self._config(
+                spin_cap="3", github_poll_seconds="60", github_reserve_calls="750"))
+
+        with self.assertRaises(ConfigError) as ctx:
+            container.tick(flow=object())
+
+        self.assertIn("ci-check-ceiling-seconds", str(ctx.exception))
+
     def test_tick_without_github_reserve_calls_fails_naming_the_key(self):
         from lightcycle.config import ConfigError
 
         container = Container(
-            store=object(), config=self._config(spin_cap="3", github_poll_seconds="60"))
+            store=object(), config=self._config(
+                spin_cap="3", github_poll_seconds="60", ci_check_ceiling_seconds="3600"))
 
         with self.assertRaises(ConfigError) as ctx:
             container.tick(flow=object())

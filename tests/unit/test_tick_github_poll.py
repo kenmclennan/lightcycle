@@ -101,7 +101,7 @@ class TestCiStageIssuesNoGitCall(unittest.TestCase):
         plant_pr(store, item, _PR, branch="feat/thing")
         step = store.create_step(step="poll-ci", role="engine", parent=item)
         flow = _FlowAdapter(_FLOW)
-        monitor = _CiMonitor(ResolveCiUseCase(store, snapshot, flow, CompleteStepUseCase(store, flow), clock=time.monotonic, poll_seconds=lambda: 60))
+        monitor = _CiMonitor(ResolveCiUseCase(store, snapshot, flow, CompleteStepUseCase(store, flow), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, wall_clock=lambda: 10000.0))
         git = FakeGit()
         tick = make_tick(
             store, FakeWorkers(), FakeSpawner(), _Config(), monitor=monitor,
@@ -125,7 +125,7 @@ def _ci_pool(hold_view):
     item = store.create_item("building a thing", "a description")
     plant_pr(store, item, _PR, branch="feat/thing")
     flow = _FlowAdapter(_FLOW)
-    monitor = _CiMonitor(ResolveCiUseCase(store, snapshot, flow, CompleteStepUseCase(store, flow), clock=time.monotonic, poll_seconds=lambda: 60))
+    monitor = _CiMonitor(ResolveCiUseCase(store, snapshot, flow, CompleteStepUseCase(store, flow), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, wall_clock=lambda: 10000.0))
     tick = make_tick(
         store, FakeWorkers(), FakeSpawner(), _Config(), monitor=monitor,
         github_poll_gate=_gate(snapshot, github, InlineGithubPollRunner()),
@@ -203,7 +203,8 @@ def _head_change_pool(before_move):
     flow = _FlowAdapter(_FLOW)
     monitor = _CiMonitor(ResolveCiUseCase(
         store, snapshot, flow, CompleteStepUseCase(store, flow),
-        clock=time.monotonic, poll_seconds=lambda: _POLL))
+        clock=time.monotonic, poll_seconds=lambda: _POLL,
+        ci_ceiling_seconds=lambda: 3600, wall_clock=lambda: 10000.0))
     tick = make_tick(
         store, FakeWorkers(), FakeSpawner(), _Config(), monitor=monitor,
         github_poll_gate=_gate(snapshot, github, InlineGithubPollRunner()),
@@ -430,7 +431,7 @@ class _Rig:
         self.monitor = MonitorPrsUseCase(
             self.store, self.snapshot, FakeWorktrees(), flow, CompleteStepUseCase(self.store, flow),
             trusted_authors=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
-            writes=self.writes, ci_clock=time.monotonic, ci_poll_seconds=lambda: 60)
+            writes=self.writes, ci_clock=time.monotonic, ci_poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_wall_clock=lambda: 10000.0)
         self.poll = GithubPollUseCase(self.snapshot, self.github, runner, _Config(), self.writes, FakeGithubBudgetStatus(), time.time, FakeFs())
 
     def notes(self):

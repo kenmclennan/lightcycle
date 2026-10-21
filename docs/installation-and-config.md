@@ -64,6 +64,7 @@ This table documents every `_SEED_KEYS` entry - `tests/unit/test_docs_reference_
 | `branch-prefix` | prefix for worktree branches |
 | `max-boot-seconds` / `max-session-seconds` | worker boot and session caps; both must be `>= 0` |
 | `stall-seconds` | how long a claimed worker's log can go without growing before the pool kills it and reclaims its step; must be `>= 0` |
+| `ci-check-ceiling-seconds` | seeded at `3600`: how long a judged CI check may stay `in_progress` before `poll-ci` calls it timed out and routes `failed` naming it; override with `LC_CI_CHECK_CEILING_SECONDS`; must be `>= 1` |
 | `probe-cooldown-seconds` | how long the breaker waits before allowing another probe after the previous one stalled; must be `>= 0` |
 | `spin-cap` | consecutive no-work worker deaths, on one step or pool-wide, before the pool parks the step / caps itself to one worker |
 | `backups-dir` / `backup-interval-minutes` / `backup-retention` | store snapshot location, cadence, and retention |

@@ -25,6 +25,7 @@ class PrWrites:
         self._queue = {}
         self._outcomes = {}
         self._rules = {}
+        self._required = {}
 
     def request_update(self, pr, head_sha, base_key):
         with self._lock:
@@ -69,6 +70,18 @@ class PrWrites:
             self._rules[base_key] = (value, self._clock() + RULE_TTL_SECONDS)
         return value
 
+    def required_checks(self, github, base_key):
+        with self._lock:
+            cached = self._required.get(base_key)
+        if cached is not None and self._clock() < cached[1]:
+            return cached[0]
+        value = github.required_checks(base_key)
+        if isinstance(value, ReadFailure):
+            return value
+        with self._lock:
+            self._required[base_key] = (value, self._clock() + RULE_TTL_SECONDS)
+        return value
+
 
 class InlinePrWrites(PrWrites):
     def __init__(self, github, clock):
@@ -78,3 +91,4 @@ class InlinePrWrites(PrWrites):
     def request_update(self, pr, head_sha, base_key):
         super().request_update(pr, head_sha, base_key)
         self.perform(self._github)
+
