@@ -2223,9 +2223,18 @@ def cmd_project(argv):
             print("removed %s" % a.identity)
             return 0
         if a.sub == "scan":
-            candidates = ScanProjectsUseCase(c.store, c.git, c.config, c.fs).execute(a.dir)
+            result = ScanProjectsUseCase(c.store, c.git, c.config, c.fs).execute(a.dir)
+            candidates = result.candidates
             if a.json:
-                print(json.dumps([dict(cand._asdict()) for cand in candidates], indent=2))
+                print(json.dumps([
+                    {
+                        **{k: v for k, v in cand._asdict().items() if k != "suggested_facets"},
+                        "suggested_facets": [
+                            {"facet": facet, "file": file} for facet, file in cand.suggested_facets
+                        ],
+                    }
+                    for cand in candidates
+                ], indent=2))
                 return 0
             for cand in candidates:
                 if cand.status == "unreadable":
@@ -2239,6 +2248,10 @@ def cmd_project(argv):
                     ))
                 else:
                     print("new\t%s\t%s\tshortcode %s" % (cand.identity, cand.path, cand.shortcode))
+                for facet, file in cand.suggested_facets:
+                    print("  facet\t%s\t%s" % (facet, file))
+            if result.no_suggestions_reason:
+                print("no facet suggestions: %s" % result.no_suggestions_reason)
             return 0
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)

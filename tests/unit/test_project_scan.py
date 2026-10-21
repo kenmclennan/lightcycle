@@ -4,6 +4,7 @@ import unittest
 
 from lightcycle.adapters.fsio import FsAdapter
 from lightcycle.application.setup.project_scan import ScanProjectsUseCase
+from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_git import FakeGit
 from tests.support.fake_store import FakeStore
@@ -22,13 +23,13 @@ class TestScanProjects(unittest.TestCase):
         root = "/tree"
         fs = FakeFs(dirs={root: ["a", "b"]})
         uc = ScanProjectsUseCase(FakeStore(), FakeGit(repos=()), _Cfg("/nonexistent"), fs)
-        self.assertEqual(uc.execute(root), [])
+        self.assertEqual(uc.execute(root).candidates, [])
 
     def test_repo_with_ssh_remote_is_new(self):
         root = "/tree/x"
         git = FakeGit(repos={root}, origin={root: "git@github.com:acme/x.git"})
         uc = ScanProjectsUseCase(FakeStore(), git, _Cfg("/nonexistent"), FakeFs())
-        [cand] = uc.execute(root)
+        [cand] = uc.execute(root).candidates
         self.assertEqual(cand.identity, "acme/x")
         self.assertEqual(cand.shortcode, "X")
         self.assertEqual(cand.status, "new")
@@ -38,14 +39,14 @@ class TestScanProjects(unittest.TestCase):
             root = "/tree/x"
             git = FakeGit(repos={root}, origin={root: remote})
             uc = ScanProjectsUseCase(FakeStore(), git, _Cfg("/nonexistent"), FakeFs())
-            [cand] = uc.execute(root)
+            [cand] = uc.execute(root).candidates
             self.assertEqual(cand.identity, "acme/x")
 
     def test_repo_with_no_origin_is_no_remote(self):
         root = "/tree/x"
         git = FakeGit(repos={root})
         uc = ScanProjectsUseCase(FakeStore(), git, _Cfg("/nonexistent"), FakeFs())
-        [cand] = uc.execute(root)
+        [cand] = uc.execute(root).candidates
         self.assertEqual(cand.status, "no-remote")
         self.assertIsNone(cand.identity)
         self.assertIsNone(cand.remote)
@@ -54,7 +55,7 @@ class TestScanProjects(unittest.TestCase):
         root = "/tree/x"
         git = FakeGit(repos={root}, origin={root: "git@gitlab.com:acme/x.git"})
         uc = ScanProjectsUseCase(FakeStore(), git, _Cfg("/nonexistent"), FakeFs())
-        [cand] = uc.execute(root)
+        [cand] = uc.execute(root).candidates
         self.assertEqual(cand.status, "no-remote")
         self.assertIsNone(cand.identity)
         self.assertEqual(cand.remote, "git@gitlab.com:acme/x.git")
@@ -69,7 +70,7 @@ class TestScanProjects(unittest.TestCase):
             remote_unreadable={broken},
         )
         uc = ScanProjectsUseCase(FakeStore(), git, _Cfg("/nonexistent"), fs)
-        candidates = uc.execute(root)
+        candidates = uc.execute(root).candidates
         by_path = {c.path: c for c in candidates}
         self.assertEqual(len(candidates), 2)
         self.assertEqual(by_path[broken].status, "unreadable")
@@ -82,7 +83,7 @@ class TestScanProjects(unittest.TestCase):
         store.add_project("acme/x", shortcode="OLD", local_path="/elsewhere")
         git = FakeGit(repos={root}, origin={root: "git@github.com:acme/x.git"})
         uc = ScanProjectsUseCase(store, git, _Cfg("/nonexistent"), FakeFs())
-        [cand] = uc.execute(root)
+        [cand] = uc.execute(root).candidates
         self.assertEqual(cand.status, "already-registered")
         self.assertEqual(cand.path, root)
         self.assertEqual(cand.registered_path, "/elsewhere")
@@ -94,7 +95,7 @@ class TestScanProjects(unittest.TestCase):
         fs = FakeFs(dirs={root: ["sub"]})
         git = FakeGit(repos={root, sub})
         uc = ScanProjectsUseCase(FakeStore(), git, _Cfg("/nonexistent"), fs)
-        candidates = uc.execute(root)
+        candidates = uc.execute(root).candidates
         self.assertEqual(len(candidates), 1)
         self.assertEqual(candidates[0].path, root)
 
@@ -105,7 +106,7 @@ class TestScanProjects(unittest.TestCase):
         fs = FakeFs(dirs={root: [".hidden"], hidden: ["repo"]})
         git = FakeGit(repos={nested})
         uc = ScanProjectsUseCase(FakeStore(), git, _Cfg("/nonexistent"), fs)
-        self.assertEqual(uc.execute(root), [])
+        self.assertEqual(uc.execute(root).candidates, [])
 
     def test_node_modules_is_skipped_the_same_way(self):
         root = "/tree"
@@ -114,7 +115,7 @@ class TestScanProjects(unittest.TestCase):
         fs = FakeFs(dirs={root: ["node_modules"], nm: ["repo"]})
         git = FakeGit(repos={nested})
         uc = ScanProjectsUseCase(FakeStore(), git, _Cfg("/nonexistent"), fs)
-        self.assertEqual(uc.execute(root), [])
+        self.assertEqual(uc.execute(root).candidates, [])
 
     def test_configured_data_home_is_skipped_even_mid_tree(self):
         root = "/tree"
@@ -124,7 +125,7 @@ class TestScanProjects(unittest.TestCase):
         fs = FakeFs(dirs={root: ["state", "app"], app: []})
         git = FakeGit(repos={nested})
         uc = ScanProjectsUseCase(FakeStore(), git, _Cfg(state), fs)
-        self.assertEqual(uc.execute(root), [])
+        self.assertEqual(uc.execute(root).candidates, [])
 
     def test_multiple_nested_candidates_mixed_statuses(self):
         root = "/tree"
@@ -142,7 +143,7 @@ class TestScanProjects(unittest.TestCase):
             },
         )
         uc = ScanProjectsUseCase(store, git, _Cfg("/nonexistent"), fs)
-        candidates = uc.execute(root)
+        candidates = uc.execute(root).candidates
         by_path = {c.path: c for c in candidates}
         self.assertEqual(len(candidates), 3)
         self.assertEqual(by_path[new_repo].status, "new")
@@ -157,4 +158,84 @@ class TestScanProjects(unittest.TestCase):
         config = _Cfg("/nonexistent")
         fs = FsAdapter(config)
         uc = ScanProjectsUseCase(FakeStore(), git, config, fs)
-        self.assertEqual(uc.execute(root), [])
+        self.assertEqual(uc.execute(root).candidates, [])
+
+
+def _page(front):
+    return ("---\n%s\n---\nbody\n" % front).encode()
+
+
+GUIDE = "/guide"
+REPO = "/tree/x"
+
+
+def _suggest_env(pages, repo_files, register=True):
+    store = FakeStore()
+    fs = FakeFs(dirs={GUIDE: []})
+    if register:
+        store.add_project(GUIDANCE_WORKSPACE, local_path=GUIDE)
+    git = FakeGit(
+        repos={REPO}, origin={REPO: "git@github.com:acme/x.git"}, ref="main",
+        ref_files={"main": pages, "HEAD": {f: b"" for f in repo_files}},
+    )
+    return ScanProjectsUseCase(store, git, _Cfg("/nonexistent"), fs).execute(REPO)
+
+
+PAGES = {
+    "languages/python.md": _page("detected-by: [pyproject.toml]"),
+    "languages/markdown.md": _page("detected-by: [*.md]"),
+    "patterns/hexagonal.md": _page("title: Hexagonal"),
+}
+
+
+class TestScanSuggestsFacets(unittest.TestCase):
+    def test_matching_facet_is_suggested_with_its_file_and_the_other_is_not(self):
+        result = _suggest_env(PAGES, ["pyproject.toml", "src/a.py"])
+        [cand] = result.candidates
+        self.assertEqual(cand.suggested_facets, (("python", "pyproject.toml"),))
+        self.assertIsNone(result.no_suggestions_reason)
+
+    def test_pattern_page_without_detected_by_is_never_suggested(self):
+        result = _suggest_env(PAGES, ["pyproject.toml", "README.md", "hexagonal.md"])
+        [cand] = result.candidates
+        self.assertEqual(
+            cand.suggested_facets, (("markdown", "README.md"), ("python", "pyproject.toml"))
+        )
+
+    def test_workspace_without_detected_by_gives_the_reason_and_no_suggestions(self):
+        pages = {"languages/python.md": _page("title: Python")}
+        result = _suggest_env(pages, ["pyproject.toml"])
+        self.assertEqual(result.no_suggestions_reason, "no concept page carries detected-by")
+        self.assertEqual(result.candidates[0].suggested_facets, ())
+
+    def test_invalid_page_is_skipped_and_the_valid_one_still_suggests(self):
+        pages = {
+            "languages/python.md": _page("detected-by: [pyproject.toml]"),
+            "languages/markdown.md": _page('detected-by: ["*.md"]'),
+        }
+        result = _suggest_env(pages, ["pyproject.toml", "README.md"])
+        self.assertEqual(result.candidates[0].suggested_facets, (("python", "pyproject.toml"),))
+        self.assertIsNone(result.no_suggestions_reason)
+
+    def test_entry_carrying_detected_by_is_ignored(self):
+        pages = {"testing/x.md": _page("type: Guidance\ndetected-by: [pyproject.toml]")}
+        result = _suggest_env(pages, ["pyproject.toml"])
+        self.assertEqual(result.candidates[0].suggested_facets, ())
+        self.assertEqual(result.no_suggestions_reason, "no concept page carries detected-by")
+
+    def test_no_registered_guidance_repo_gives_the_reason(self):
+        result = _suggest_env(PAGES, ["pyproject.toml"], register=False)
+        self.assertEqual(result.no_suggestions_reason, "no guidance repo is registered")
+        self.assertEqual(result.candidates[0].suggested_facets, ())
+
+    def test_unreadable_candidate_has_no_suggestions(self):
+        store = FakeStore()
+        store.add_project(GUIDANCE_WORKSPACE, local_path=GUIDE)
+        git = FakeGit(
+            repos={REPO}, remote_unreadable={REPO}, ref="main",
+            ref_files={"main": PAGES, "HEAD": {"pyproject.toml": b""}},
+        )
+        uc = ScanProjectsUseCase(store, git, _Cfg("/nonexistent"), FakeFs(dirs={GUIDE: []}))
+        [cand] = uc.execute(REPO).candidates
+        self.assertEqual(cand.status, "unreadable")
+        self.assertEqual(cand.suggested_facets, ())

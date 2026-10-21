@@ -16,6 +16,7 @@ from lightcycle.application.setup import (
     ScanProjectsUseCase,
 )
 from lightcycle.config import Config
+from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE
 
 
 def _env(with_store=True, with_workflows=True):
@@ -156,6 +157,20 @@ def _repo_at(path, remote_url=None):
         subprocess.run(["git", "-C", path, "remote", "add", "origin", remote_url], check=True)
 
 
+def _commit_files(path, files):
+    if not os.path.isdir(os.path.join(path, ".git")):
+        subprocess.run(["git", "init", "-q", "-b", "main", path], check=True)
+    for rel, text in files.items():
+        full = os.path.join(path, rel)
+        os.makedirs(os.path.dirname(full), exist_ok=True)
+        Path(full).write_text(text)
+    subprocess.run(["git", "-C", path, "add", "."], check=True)
+    subprocess.run(
+        ["git", "-C", path, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "x"],
+        check=True,
+    )
+
+
 class TestScanProjects(unittest.TestCase):
     def test_scan_reports_new_registered_and_no_remote_and_skips_node_modules(self):
         config, fs, _ = _env()
@@ -177,7 +192,7 @@ class TestScanProjects(unittest.TestCase):
         nested_in_node_modules = os.path.join(root, "node_modules", "nested")
         _repo_at(nested_in_node_modules, "git@github.com:acme/nested.git")
 
-        candidates = ScanProjectsUseCase(store, GitAdapter(), config, fs).execute(root)
+        candidates = ScanProjectsUseCase(store, GitAdapter(), config, fs).execute(root).candidates
         by_path = {c.path: c for c in candidates}
 
         self.assertNotIn(nested_in_node_modules, by_path)
@@ -192,6 +207,25 @@ class TestScanProjects(unittest.TestCase):
         self.assertEqual(by_path[noremote_repo].status, "no-remote")
         self.assertIsNone(by_path[noremote_repo].identity)
 
+    def test_committed_detected_by_suggests_a_facet_for_a_real_repo(self):
+        config, fs, _ = _env()
+        store = _store(config)
+        guide = tempfile.mkdtemp()
+        _commit_files(guide, {
+            "languages/python.md": "---\ndetected-by: [pyproject.toml]\n---\nx\n",
+            "patterns/hexagonal.md": "---\ntitle: h\n---\nx\n",
+        })
+        store.add_project(GUIDANCE_WORKSPACE, local_path=guide)
+        root = tempfile.mkdtemp()
+        repo = os.path.join(root, "x")
+        _repo_at(repo, "git@github.com:acme/x.git")
+        _commit_files(repo, {"pyproject.toml": "x\n"})
+
+        result = ScanProjectsUseCase(store, GitAdapter(), config, fs).execute(root)
+        [cand] = result.candidates
+        self.assertEqual(cand.suggested_facets, (("python", "pyproject.toml"),))
+        self.assertIsNone(result.no_suggestions_reason)
+
     def test_nested_repo_inside_an_outer_repo_is_found_not_the_outer(self):
         config, fs, _ = _env()
         store = _store(config)
@@ -204,7 +238,7 @@ class TestScanProjects(unittest.TestCase):
         nested = os.path.join(projects, "lightcycle")
         _repo_at(nested, "git@github.com:acme/lightcycle.git")
 
-        candidates = ScanProjectsUseCase(store, GitAdapter(), config, fs).execute(projects)
+        candidates = ScanProjectsUseCase(store, GitAdapter(), config, fs).execute(projects).candidates
         [cand] = candidates
         self.assertEqual(cand.path, nested)
         self.assertEqual(cand.identity, "acme/lightcycle")

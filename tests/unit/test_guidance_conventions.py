@@ -43,14 +43,14 @@ class TestConventionsText(unittest.TestCase):
         lines = CONVENTIONS_TEXT.splitlines()
         self.assertEqual(lines[0], "# Conventions")
         self.assertEqual(lines[2], "Conventions version: %d" % CONVENTIONS_VERSION)
-        self.assertEqual(CONVENTIONS_VERSION, 3)
+        self.assertEqual(CONVENTIONS_VERSION, 4)
 
     def test_text_names_every_rule_and_no_item_id(self):
         self.assertEqual(item_ids(CONVENTIONS_TEXT), [])
         self.assertIn("## Checks", CONVENTIONS_TEXT)
-        for n in range(1, 13):
+        for n in range(1, 15):
             self.assertIn("\n%d. " % n, CONVENTIONS_TEXT)
-        self.assertNotIn("\n13. ", CONVENTIONS_TEXT)
+        self.assertNotIn("\n15. ", CONVENTIONS_TEXT)
         for word in ("purpose", "when", "why", "item id"):
             self.assertIn(word, CONVENTIONS_TEXT)
 
@@ -58,8 +58,14 @@ class TestConventionsText(unittest.TestCase):
         self.assertIn("- `moved-to: <entry id>`", CONVENTIONS_TEXT)
         self.assertIn("\n11. `moved-to`", CONVENTIONS_TEXT)
 
-    def test_text_is_version_three_and_drops_the_verified_rules(self):
-        self.assertIn("Conventions version: 3", CONVENTIONS_TEXT)
+    def test_text_documents_detected_by_and_its_rules(self):
+        self.assertIn("`detected-by`", CONVENTIONS_TEXT)
+        self.assertIn("`package.json+tsconfig.json`", CONVENTIONS_TEXT)
+        self.assertIn("\n13. ", CONVENTIONS_TEXT)
+        self.assertIn("\n14. `detected-by`", CONVENTIONS_TEXT)
+
+    def test_text_is_version_four_and_drops_the_verified_rules(self):
+        self.assertIn("Conventions version: 4", CONVENTIONS_TEXT)
         for removed in (
             "fails unless the entry is context-only",
             "with an empty or missing `verified` fails",
@@ -91,6 +97,41 @@ class TestMovedTo(unittest.TestCase):
 
     def test_deprecated_stub_without_moved_to_still_passes(self):
         self.assertEqual(Tree({"old.md": entry(status="deprecated")}).check("final"), [])
+
+
+def concept(detected_by):
+    return "---\ndetected-by: %s\n---\nbody\n" % detected_by
+
+
+class TestDetectedBy(unittest.TestCase):
+    def check(self, head):
+        return Tree(head, pages=()).check("final")
+
+    def test_lone_concept_page_with_valid_list_passes(self):
+        self.assertEqual(self.check({"languages/python.md": concept("[pyproject.toml, *.[ch]]")}), [])
+
+    def test_same_page_without_the_key_still_fails_rule_10(self):
+        failures = self.check({"languages/python.md": "---\ntitle: x\n---\nbody\n"})
+        self.assertEqual(
+            failures, ["languages/python.md: no type: Guidance and no entry names it as a facet"]
+        )
+
+    def test_dotfile_element_fails(self):
+        failures = self.check({"p.md": concept("[.python-version]")})
+        self.assertEqual(failures, ["p.md: detected-by '.python-version' is not a file name or glob"])
+
+    def test_quoted_element_fails(self):
+        failures = self.check({"p.md": concept('["*.md"]')})
+        self.assertEqual(failures, ["p.md: detected-by '\"*.md\"' is not a file name or glob"])
+
+    def test_non_list_fails(self):
+        failures = self.check({"p.md": concept("pyproject.toml")})
+        self.assertEqual(failures, ["p.md: detected-by must be an inline list on one line"])
+
+    def test_entry_carrying_detected_by_fails(self):
+        head = {"a.md": entry(extra="detected-by: [x.toml]\n")}
+        failures = Tree(head).check("final")
+        self.assertEqual(failures, ["a.md: detected-by belongs on a concept page, not an entry"])
 
 
 class TestParsingEdges(unittest.TestCase):
