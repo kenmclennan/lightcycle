@@ -46,7 +46,7 @@ class TestSeededConfig(unittest.TestCase):
         config, path = _fresh_config()
         blocks = config.schedule_blocks()
         self.assertEqual(
-            sorted(blocks), ["daily-summary", "material-audit", "retro-audit"])
+            sorted(blocks), ["daily-summary", "material-audit", "ratchet-sweep", "retro-audit"])
         expected = {
             "retro-audit": ("lightcycle/retro-audit", "AUD", "0 9 * * *", "pending-reflections"),
             "material-audit": ("lightcycle/material-audit", "AUD", "0 9 * * 1", "materials-changed"),
@@ -110,7 +110,7 @@ class TestHandOver(unittest.TestCase):
         blocks.update(extra_blocks or {})
         flow = StubFlow({
             "lightcycle/retro-audit": {}, "lightcycle/material-audit": {},
-            "lightcycle/daily-summary": {}})
+            "lightcycle/daily-summary": {}, "lightcycle/ratchet-sweep": {}})
         rig = ScheduleRig(blocks, flow=flow)
         rig.cadence._guards = PassingGuards()
         rig.store.add_project("kenmclennan/guidance", local_path="/tmp/guidance")
@@ -124,7 +124,7 @@ class TestHandOver(unittest.TestCase):
         now = datetime.datetime(2026, 10, 19, 9, 30).timestamp()
         resp = rig.cadence.execute(now)
         self.assertEqual(resp.skipped, [])
-        self.assertEqual(len(resp.fired), 3)
+        self.assertEqual(len(resp.fired), 4)
         by_guard = {}
         for item_id in resp.fired:
             labels = rig.store.labels_of(item_id)
@@ -138,7 +138,8 @@ class TestHandOver(unittest.TestCase):
             {g: v[1] for g, v in by_guard.items()},
             {"schedule-guard:pending-reflections": "lightcycle/retro-audit",
              "schedule-guard:materials-changed": "lightcycle/material-audit",
-             "schedule-guard:day-unsummarised": "lightcycle/daily-summary"})
+             "schedule-guard:day-unsummarised": "lightcycle/daily-summary",
+             "schedule-guard:repos-active": "lightcycle/ratchet-sweep"})
         self.assertIn("schedule:retro-audit", by_guard["schedule-guard:pending-reflections"][2])
         self.assertTrue(by_guard["schedule-guard:day-unsummarised"][0].startswith("SUM-"))
         self.assertTrue(by_guard["schedule-guard:materials-changed"][0].startswith("AUD-"))
@@ -159,7 +160,7 @@ class TestHandOver(unittest.TestCase):
                       "project": "acme/ghost", "shortcode": "GHO", "cron": "0 9 * * *",
                       "guard": "materials-changed"}})
         resp = rig.cadence.execute(datetime.datetime(2026, 10, 19, 9, 30).timestamp())
-        self.assertEqual(len(resp.fired), 3)
+        self.assertEqual(len(resp.fired), 4)
         self.assertIn("not registered", dict(resp.skipped)["ghost"])
 
 

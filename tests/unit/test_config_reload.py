@@ -78,7 +78,7 @@ class TestEditBetweenTicks(ReloadFixture):
         self.edit(lambda t: t.replace("schedules-paused: false", "schedules-paused: true")
                   + "schedule-x:\n  enabled: true\n  cron: \"0 9 * * *\"\n")
         second, _ = self.run_tick(tick)
-        seeded = ["daily-summary", "material-audit", "retro-audit"]
+        seeded = ["daily-summary", "material-audit", "ratchet-sweep", "retro-audit"]
         self.assertEqual(self.gate.seen[0], (False, seeded))
         self.assertEqual(self.gate.seen[1], (True, seeded + ["x"]))
         self.assertEqual(first.config.outcome, "unchanged")

@@ -151,7 +151,7 @@ class TestScriptGuardName(unittest.TestCase):
         self.assertNotIn("script:scripts/a.sh", guard_names())
         self.assertEqual(
             sorted(guard_names()),
-            ["day-unsummarised", "materials-changed", "pending-reflections"])
+            ["day-unsummarised", "materials-changed", "pending-reflections", "repos-active"])
 
     def test_params_pass_through_untouched_for_a_script_guard(self):
         self.assertEqual(

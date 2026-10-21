@@ -3,11 +3,13 @@ from lightcycle.domain.workflows.lifecycle import script_path_shape_problem
 PENDING_REFLECTIONS = "pending-reflections"
 MATERIALS_CHANGED = "materials-changed"
 DAY_UNSUMMARISED = "day-unsummarised"
+REPOS_ACTIVE = "repos-active"
 
 _GUARD_PARAMETERS = {
     PENDING_REFLECTIONS: (("min", True),),
     MATERIALS_CHANGED: (),
     DAY_UNSUMMARISED: (),
+    REPOS_ACTIVE: (),
 }
 
 
@@ -61,4 +63,5 @@ GUARD_AUTOMATION_KINDS = {
     PENDING_REFLECTIONS: "audit",
     MATERIALS_CHANGED: "audit",
     DAY_UNSUMMARISED: "daily-summary",
+    REPOS_ACTIVE: "audit",
 }

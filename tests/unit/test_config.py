@@ -5,6 +5,7 @@ from pathlib import Path
 
 from lightcycle.config import _SEED_KEYS, Config, ConfigError, ConfigValueError
 from lightcycle.domain.pool import ModelRates
+from lightcycle.domain.schedule.guards import guard_names
 
 
 
@@ -339,6 +340,17 @@ class TestEnsureConfig(unittest.TestCase):
         self.assertIn("backup-interval-minutes: 15", text)
         self.assertIn("backup-retention: 96", text)
         self.assertIn("max-title-length: 72", text)
+
+    def test_a_fresh_config_seeds_the_ratchet_sweep_schedule_with_a_guard_the_engine_has(self):
+        p = os.path.join(tempfile.mkdtemp(), "config")
+        c = Config(environ={"LC_CONFIG": p})
+        c.ensure_config()
+        block = c.schedule_blocks()["ratchet-sweep"]
+        self.assertEqual(
+            (block["enabled"], block["workflow"], block["project"], block["shortcode"],
+             block["cron"], block["guard"]),
+            ("true", "lightcycle/ratchet-sweep", "guidance", "AUD", "0 9 * * 1", "repos-active"))
+        self.assertIn(block["guard"], guard_names())
 
     def test_tops_up_missing_keys_in_existing_config(self):
         d = tempfile.mkdtemp()
