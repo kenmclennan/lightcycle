@@ -87,14 +87,17 @@ def worker_alive(pid, recorded_start):
     return decide_alive(pid_alive(pid), recorded_start, process_start_time(pid))
 
 
+_TRACKED_CHILDREN = {}
+
+
+def track_child(proc):
+    _TRACKED_CHILDREN[proc.pid] = proc
+
+
 def reap_children():
-    while True:
-        try:
-            reaped_pid, _ = os.waitpid(-1, os.WNOHANG)
-        except ChildProcessError:
-            break
-        if reaped_pid == 0:
-            break
+    for pid, proc in list(_TRACKED_CHILDREN.items()):
+        if proc.poll() is not None:
+            _TRACKED_CHILDREN.pop(pid, None)
 
 
 def _signal_group(pid, sig):

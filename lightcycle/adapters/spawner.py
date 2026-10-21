@@ -6,7 +6,7 @@ import time
 import uuid
 
 from lightcycle.adapters.gh_shim import ensure_gh_shim
-from lightcycle.adapters.workers import process_start_time, register_worker, set_pid_started
+from lightcycle.adapters.workers import process_start_time, register_worker, set_pid_started, track_child
 from lightcycle.domain.work.worker_log import worker_log_filename
 from lightcycle.ports.spawner import SpawnerPort
 from lightcycle.ports.workers import RegistryUnreadable
@@ -43,6 +43,7 @@ def spawn_worker(config, role):
             proc = subprocess.Popen(
                 cmd, stdout=logf, stderr=logf, cwd=root, env=env, start_new_session=True
             )
+    track_child(proc)
     try:
         register_worker(
             root,

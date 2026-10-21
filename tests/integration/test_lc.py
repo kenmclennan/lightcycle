@@ -657,28 +657,64 @@ class TestWorkersAdapterEffects(unittest.TestCase):
         alive.wait(timeout=5)
         self.assertIsNotNone(alive.poll())
 
-    def test_reap_children_clears_a_zombie_left_by_an_unwaited_child(self):
+    def _await_zombie(self, proc):
         from lightcycle.adapters import workers as workers_adapter
 
-        sacrifice = subprocess.Popen(["true"])
         deadline = time.time() + 5
         state = ""
         while time.time() < deadline:
             state = subprocess.run(
-                ["ps", "-o", "stat=", "-p", str(sacrifice.pid)],
+                ["ps", "-o", "stat=", "-p", str(proc.pid)],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
             ).stdout.decode().strip()
             if state.startswith("Z"):
                 break
             time.sleep(0.01)
-        self.assertTrue(state.startswith("Z"), "sacrificial child never became a zombie")
-        self.assertTrue(workers_adapter.pid_alive(sacrifice.pid))
+        self.assertTrue(state.startswith("Z"), "child never became a zombie")
+        self.assertTrue(workers_adapter.pid_alive(proc.pid))
+
+    def setUp(self):
+        from lightcycle.adapters import workers as workers_adapter
+
+        workers_adapter._TRACKED_CHILDREN.clear()
+        self.addCleanup(workers_adapter._TRACKED_CHILDREN.clear)
+
+    def test_reap_children_clears_a_zombie_left_by_an_unwaited_child(self):
+        from lightcycle.adapters import workers as workers_adapter
+
+        sacrifice = subprocess.Popen(["true"])
+        workers_adapter.track_child(sacrifice)
+        self._await_zombie(sacrifice)
 
         workers_adapter.reap_children()
 
         self.assertFalse(workers_adapter.pid_alive(sacrifice.pid))
-        sacrifice.returncode = 0
+        self.assertEqual(sacrifice.returncode, 0)
+
+    def test_reap_children_leaves_an_untracked_childs_exit_status_alone(self):
+        from lightcycle.adapters import workers as workers_adapter
+
+        foreign = subprocess.Popen(["sh", "-c", "exit 3"])
+        self._await_zombie(foreign)
+
+        workers_adapter.reap_children()
+
+        self.assertEqual(foreign.wait(timeout=5), 3)
+
+    def test_reap_children_reaps_the_tracked_child_and_spares_the_untracked_one(self):
+        from lightcycle.adapters import workers as workers_adapter
+
+        tracked = subprocess.Popen(["true"])
+        foreign = subprocess.Popen(["sh", "-c", "exit 3"])
+        workers_adapter.track_child(tracked)
+        self._await_zombie(tracked)
+        self._await_zombie(foreign)
+
+        workers_adapter.reap_children()
+
+        self.assertFalse(workers_adapter.pid_alive(tracked.pid))
+        self.assertEqual(foreign.wait(timeout=5), 3)
 
 
 class TestSpawn(unittest.TestCase):

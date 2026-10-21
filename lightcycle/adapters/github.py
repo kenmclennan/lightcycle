@@ -354,7 +354,10 @@ class GitHubEventsAdapter(GitHubEventsPort):
             return _timeout_read_failure()
         if r.returncode != 0:
             return ReadFailure(r.returncode, r.stderr)
-        return r.stdout.strip()
+        login = r.stdout.strip()
+        if not login:
+            return ReadFailure(-1, "gh returned no login")
+        return login
 
     def pr_sync_state(self, pr: str) -> Union[PrSync, ReadFailure]:
         parts = _repo_parts(pr)
