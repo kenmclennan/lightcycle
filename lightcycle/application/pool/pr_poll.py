@@ -190,14 +190,24 @@ class PrPoll:
         if failures:
             self._snapshot.mark_stale(pr)
             return None
+        cutoff, cutoff_head = self._carry_cutoff(pr, previous, view.head_sha, push_time)
         self._snapshot.publish(
             pr,
             replace(
-                entry, push_time=push_time, comments=comments, pull_comments=pulls,
-                reviews=reviews, stale=False,
+                entry, push_time=cutoff, cutoff_head=cutoff_head, comments=comments,
+                pull_comments=pulls, reviews=reviews, stale=False,
             ),
         )
         return view.updated_at
+
+    def _carry_cutoff(self, pr, previous, head, fresh):
+        if previous.push_time is None:
+            return fresh, head
+        if head == previous.cutoff_head:
+            return previous.push_time, head
+        if self._writes.pool_updated_from(pr, previous.cutoff_head):
+            return previous.push_time, head
+        return fresh, head
 
     def _compare_files(self, wanted_files):
         for pr, sha in sorted(wanted_files):

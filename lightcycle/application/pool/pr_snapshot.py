@@ -11,6 +11,7 @@ class PrEntry:
     view: Optional[PrView] = None
     updated_at: float = 0.0
     push_time: object = None
+    cutoff_head: str = ""
     comments: object = None
     pull_comments: object = None
     reviews: object = None

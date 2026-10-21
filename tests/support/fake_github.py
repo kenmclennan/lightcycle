@@ -7,8 +7,10 @@ class FakeGitHub(GitHubEventsPort):
                  timed_comments=None, timed_reviews=None, head_shas=None, files_by_sha=None,
                  check_runs_by_sha=None, failing_calls=(), issue_states=None,
                  behind_prs=(), strict_bases=(), base_keys=None, login="operator",
-                 updated_ats=None, failing_prs=(), required_by_base=None):
+                 updated_ats=None, failing_prs=(), required_by_base=None,
+                 update_pushed_at=None):
         self._login = login
+        self._update_pushed_at = update_pushed_at
         self._merged = set(merged_prs)
         self._closed = set(closed_prs)
         self._conflicted = set(conflicted_prs)
@@ -208,4 +210,7 @@ class FakeGitHub(GitHubEventsPort):
             return ReadFailure(1, "HTTP 422: expected head sha did not match")
         self._behind.discard(pr)
         self._head_shas[pr] = expected_head_sha + "-updated"
+        if self._update_pushed_at is not None:
+            self._push_time = self._update_pushed_at
+            self._updated_ats[pr] = self._update_pushed_at
         return None

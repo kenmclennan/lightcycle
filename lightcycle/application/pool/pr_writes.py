@@ -26,10 +26,15 @@ class PrWrites:
         self._outcomes = {}
         self._rules = {}
         self._required = {}
+        self._updated_from = {}
 
     def request_update(self, pr, head_sha, base_key):
         with self._lock:
             self._queue.setdefault((pr, head_sha), base_key)
+
+    def pool_updated_from(self, pr, head_sha):
+        with self._lock:
+            return head_sha in self._updated_from.get(pr, ())
 
     def take_outcome(self, pr):
         with self._lock:
@@ -48,6 +53,7 @@ class PrWrites:
         with self._lock:
             self._queue = {k: v for k, v in self._queue.items() if k[0] in prs}
             self._outcomes = {k: v for k, v in self._outcomes.items() if k in prs}
+            self._updated_from = {k: v for k, v in self._updated_from.items() if k in prs}
 
     def _perform_one(self, github, pr, head_sha, base_key):
         required = self._rule(github, base_key)
@@ -58,6 +64,8 @@ class PrWrites:
         failure = github.update_branch(pr, head_sha)
         if isinstance(failure, ReadFailure):
             return WriteOutcome(UPDATE_FAILED, failure)
+        with self._lock:
+            self._updated_from.setdefault(pr, set()).add(head_sha)
         return WriteOutcome(UPDATED)
 
     def _rule(self, github, base_key):
