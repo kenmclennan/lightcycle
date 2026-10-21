@@ -29,7 +29,7 @@ from lightcycle.adapters.scaffold import ScaffoldAdapter
 from lightcycle.adapters.workers import process_start_time, register_worker
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.services.worktree import WorktreeService
-from lightcycle.domain.flow.flow import SPECS_WORKSPACE
+from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE, SPECS_WORKSPACE
 from lightcycle.domain.work import Artifact, State
 
 from tests.support.isolation import inject_container, make_syncable_git_repo
@@ -1343,6 +1343,23 @@ class TestAdd(unittest.TestCase):
         self.assertEqual(self.store.all_nodes(), [])
 
 
+def _git_repo_with(files, path=None):
+    path = path or tempfile.mkdtemp()
+    os.makedirs(path, exist_ok=True)
+    subprocess.run(["git", "init", "-q", "-b", "main", path], check=True)
+    for rel, text in files.items():
+        full = os.path.join(path, rel)
+        os.makedirs(os.path.dirname(full), exist_ok=True)
+        with open(full, "w") as f:
+            f.write(text)
+    subprocess.run(["git", "-C", path, "add", "."], check=True)
+    subprocess.run(
+        ["git", "-C", path, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "x"],
+        check=True,
+    )
+    return path
+
+
 class TestProjectScanCli(unittest.TestCase):
     def setUp(self):
         _fake_setUp(self)
@@ -1377,6 +1394,40 @@ class TestProjectScanCli(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         self.assertIn("unreadable\t%s" % broken, out)
         self.assertNotIn("new\t", out)
+
+    def test_scan_without_a_guidance_repo_says_there_are_no_suggestions(self):
+        rc, out, err = call(_cli_mod.cmd_project, "scan", tempfile.mkdtemp())
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(out.strip(), "no facet suggestions: no guidance repo is registered")
+
+    def test_scan_prints_and_dumps_the_suggested_facet_for_a_matching_repo(self):
+        guide = _git_repo_with({
+            "languages/python.md": "---\ndetected-by: [pyproject.toml]\n---\nx\n",
+            "languages/markdown.md": "---\ndetected-by: [*.md]\n---\nx\n",
+            "patterns/hexagonal.md": "---\ntitle: h\n---\nx\n",
+        })
+        self.store.add_project(GUIDANCE_WORKSPACE, local_path=guide)
+        tree = tempfile.mkdtemp()
+        repo = os.path.join(tree, "found")
+        _git_repo_with({"pyproject.toml": "x\n"}, repo)
+        subprocess.run(
+            ["git", "-C", repo, "remote", "add", "origin", "git@github.com:acme/found.git"],
+            check=True,
+        )
+
+        rc, out, err = call(_cli_mod.cmd_project, "scan", tree)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("  facet\tpython\tpyproject.toml", out)
+        self.assertNotIn("markdown", out)
+        self.assertNotIn("hexagonal", out)
+        self.assertNotIn("no facet suggestions", out)
+
+        rc2, out2, err2 = call(_cli_mod.cmd_project, "scan", tree, "--json")
+        self.assertEqual(rc2, 0, err2)
+        self.assertEqual(
+            json.loads(out2)[0]["suggested_facets"],
+            [{"facet": "python", "file": "pyproject.toml"}],
+        )
 
 
 class TestArtifacts(unittest.TestCase):

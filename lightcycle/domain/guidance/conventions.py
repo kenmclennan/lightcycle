@@ -1,6 +1,8 @@
 import re
 
-CONVENTIONS_VERSION = 3
+from lightcycle.domain.guidance.detection import validate_element
+
+CONVENTIONS_VERSION = 4
 
 CONVENTIONS_TEXT = """# Conventions
 
@@ -25,6 +27,8 @@ This guidance repo follows the Open Knowledge Format (OKF) 0.2 with the lightcyc
 ## Facets
 
 A facet is valid only when this repo has a concept page named for it, anywhere in the tree (for example `languages/kotlin.md`). `lc doctor` reports a project facet or an `applies-to` facet with no page.
+
+A concept page may carry `detected-by`, an inline list on one line of the file names or globs that show a repo uses that facet: `detected-by: [pyproject.toml, *.md]`. A name or glob has no `/`, no spaces and no quotes, and does not start with `.`. It matches a tracked file's base name at any depth. Join names with `+` when all must be present: `package.json+tsconfig.json`. `detected-by` belongs on concept pages only, never on an entry. `lc project scan` reads it to suggest facets for a repo; it never sets them.
 
 ## Status
 
@@ -60,6 +64,10 @@ Both modes run the same rules:
 10. A changed file without `type: Guidance` that no changed entry names as a facet fails.
 11. `moved-to` on an entry whose status is not `deprecated` fails.
 12. `moved-to` naming an id with no entry file in the tree fails.
+13. A changed concept page whose `detected-by` is not an inline list on one line of valid names or globs fails.
+14. `detected-by` on a `type: Guidance` entry fails.
+
+A changed page without `type: Guidance` that carries `detected-by` is a facet concept page by its own declaration, so rule 10 does not report it.
 """
 
 STEP = re.compile(r"^([a-z0-9][a-z0-9-]*/)?[a-z0-9][a-z0-9-]*$")
@@ -111,6 +119,17 @@ def inline_list(value):
 def is_checked_path(path):
     name = path.rsplit("/", 1)[-1]
     return path.endswith(".md") and name not in SKIPPED_NAMES
+
+
+def _detected_by_failures(path, value):
+    items = inline_list(value)
+    if items is None:
+        return ["%s: detected-by must be an inline list on one line" % path]
+    return [
+        "%s: detected-by '%s' is not a file name or glob" % (path, item)
+        for item in items
+        if not validate_element(item)
+    ]
 
 
 def check_entries(mode, changed, deleted, facet_pages, entry_ids, read_head, read_base):
@@ -167,8 +186,16 @@ def check_entries(mode, changed, deleted, facet_pages, entry_ids, read_head, rea
             )
 
     for path, (top, _) in parsed.items():
+        if "detected-by" not in top:
+            continue
+        if top.get("type") == "Guidance":
+            failures.append("%s: detected-by belongs on a concept page, not an entry" % path)
+            continue
+        failures.extend(_detected_by_failures(path, top["detected-by"]))
+
+    for path, (top, _) in parsed.items():
         stem = path.rsplit("/", 1)[-1][:-3]
-        if top.get("type") != "Guidance" and stem not in facets_named:
+        if top.get("type") != "Guidance" and "detected-by" not in top and stem not in facets_named:
             failures.append("%s: no type: Guidance and no entry names it as a facet" % path)
 
     return failures
