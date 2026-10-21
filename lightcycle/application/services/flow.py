@@ -22,11 +22,19 @@ class FlowService:
         self._graph_cache = {}
         self._graph_for_cache = {}
         self._flow_for_cache = {}
+        self._step_cache = {}
 
     def clear_cache(self):
         self._graph_cache = {}
         self._graph_for_cache = {}
         self._flow_for_cache = {}
+        self._step_cache = {}
+
+    def _parse_step(self, role, roots):
+        key = (tuple(roots) if isinstance(roots, (list, tuple)) else roots, role)
+        if key not in self._step_cache:
+            self._step_cache[key] = self._workflow_bundle.parse_step(role, roots)
+        return self._step_cache[key]
 
     def _default_pin(self):
         origin = self._config.default_origin()
@@ -99,7 +107,7 @@ class FlowService:
     def _role_metas_in(self, root):
         include_roots = self._with_engine_fragments(root)
         return {
-            role: (self._workflow_bundle.parse_step(role, include_roots) or StepPrompt(meta={}, body="")).meta
+            role: (self._parse_step(role, include_roots) or StepPrompt(meta={}, body="")).meta
             for role in self._workflow_bundle.step_roles(root)
         }
 
@@ -121,7 +129,7 @@ class FlowService:
             graph, root = self._graph_and_root(self.resolve_selection(selection))
         except ValueError:
             return None
-        parsed = self._workflow_bundle.parse_step(graph.file_for(stage), self._with_engine_fragments(root))
+        parsed = self._parse_step(graph.file_for(stage), self._with_engine_fragments(root))
         if not parsed or parsed.meta.get("model"):
             return None
         return (parsed.body or "").strip() or None
@@ -218,13 +226,13 @@ class FlowService:
 
     def meta_for_step(self, stage, name=None):
         graph, root = self._graph_and_root(name)
-        a = self._workflow_bundle.parse_step(graph.file_for(stage), self._with_engine_fragments(root))
+        a = self._parse_step(graph.file_for(stage), self._with_engine_fragments(root))
         return a.meta if a else {}
 
     def meta_for_unpinned_step(self, stage):
         if self._config is None:
             return {}
-        a = self._workflow_bundle.parse_step(stage, self._config.prompts_root())
+        a = self._parse_step(stage, self._config.prompts_root())
         return a.meta if a else {}
 
     def file_for_step(self, stage, name=None):

@@ -10,10 +10,13 @@ class ItemOutputs:
         self._declared_cache = {}
 
     def declared_types(self, step):
-        key = (self._flow.workflow_for(step), step.stage)
+        return self._declared(self._flow.workflow_for(step), step.stage)
+
+    def _declared(self, workflow, stage):
+        key = (workflow, stage)
         if key not in self._declared_cache:
             try:
-                meta = self._flow.meta_for_step(step.stage, key[0])
+                meta = self._flow.meta_for_step(stage, workflow)
             except (ValueError, KeyError):
                 meta = {}
             self._declared_cache[key] = frozenset(StepContract.from_meta(meta).produced_types())
@@ -23,12 +26,16 @@ class ItemOutputs:
         return getattr(node, "item", None) or node.id
 
     def _facts(self, item_id):
+        steps = [s for s in self._store.children(item_id) if s.type == "step"]
+        if not steps:
+            return {}
+        workflow = self._flow.workflow_for(steps[0])
         return {
             s.id: StepFacts(
-                id=s.id, pass_id=s.pass_id, declared=self.declared_types(s),
+                id=s.id, pass_id=s.pass_id, declared=self._declared(workflow, s.stage),
                 at=s.closed_at or s.created_at,
             )
-            for s in self._store.children(item_id) if s.type == "step"
+            for s in steps
         }
 
     def _reader_pass(self, node):

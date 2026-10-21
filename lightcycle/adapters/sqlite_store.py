@@ -732,15 +732,15 @@ class SqliteStore(StorePort):
             return {}
         placeholders = ", ".join("?" * len(item_ids))
         rows = self._conn.execute(
-            "SELECT %s FROM steps WHERE item IN (%s)"
-            % (", ".join(_STEP_COLUMNS), placeholders),
+            "SELECT id, item, state, assignee, role FROM steps WHERE item IN (%s)" % placeholders,
             item_ids,
         ).fetchall()
         deps = self._unresolved_deps([r[0] for r in rows])
         out = {}
-        for row in rows:
-            step = self._row_to_step(row, deps.get(row[0], []))
-            out.setdefault(step.item, []).append(step.state)
+        for step_id, item, state, assignee, role in rows:
+            out.setdefault(item, []).append(
+                derive_state("step", state == "done", assignee, len(deps.get(step_id, [])), role, [])
+            )
         return out
 
     def _rows_to_steps(self, rows):

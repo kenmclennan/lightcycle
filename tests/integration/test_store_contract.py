@@ -77,6 +77,47 @@ class TestHeldCommentsSchema(unittest.TestCase):
         self.assertTrue(reopened.file_hold("R-1", "inline:1", "m", "b", None, None, 1.0))
 
 
+class TestSqliteStoreItemStateMatchesStepRollUp(unittest.TestCase):
+    def _item_with(self, shape):
+        s = make_sqlite_store()
+        item = s.create_item("an item", "a description", shortcode="GRID")
+        done = s.create_step(step="done-one", role="agent", parent=item)
+        s.claim_ready("agent")
+        s.complete_node(done, "done")
+        other = {
+            "queued": lambda: s.create_step(step="x", role="agent", parent=item),
+            "waiting": lambda: s.create_step(step="x", role="human", parent=item),
+            "running": lambda: self._running(s, item),
+            "blocked": lambda: self._blocked(s, item, done),
+        }[shape]()
+        return s, item, other
+
+    def _running(self, s, item):
+        sid = s.create_step(step="x", role="agent", parent=item)
+        s.claim_ready("agent")
+        return sid
+
+    def _blocked(self, s, item, done):
+        gate = s.create_step(step="gate", role="agent", parent=item)
+        sid = s.create_step(step="x", role="agent", parent=item)
+        s.dep_add(sid, gate)
+        return sid
+
+    def test_item_state_equals_the_roll_up_of_its_steps_states(self):
+        from lightcycle.domain.work.rollup import roll_up
+
+        for shape in ("queued", "waiting", "running", "blocked"):
+            with self.subTest(shape=shape):
+                s, item, _ = self._item_with(shape)
+                step_states = [st.state for st in s.children(item) if st.type == "step"]
+                self.assertEqual(s.get_item(item).state, roll_up(step_states))
+
+    def test_an_item_with_no_steps_rolls_up_to_backlogged(self):
+        s = make_sqlite_store()
+        item = s.create_item("an item", "a description", shortcode="GRID")
+        self.assertEqual(s.get_item(item).state, State.BACKLOGGED)
+
+
 class TestSqliteStoreRoundtrips(unittest.TestCase):
     def _store(self):
         return make_sqlite_store()
