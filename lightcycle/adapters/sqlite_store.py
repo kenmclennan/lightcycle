@@ -3,6 +3,7 @@ import json
 import os
 import sqlite3
 import sys
+import time
 from contextlib import contextmanager
 from dataclasses import asdict
 
@@ -55,6 +56,7 @@ class SchemaVersionRefused(Exception):
 
 
 _SCHEMA_VERSION = 2
+BUSY_TIMEOUT_MS = 30000
 _LEGACY_LOG_TYPE = "log"
 _LAST_VERSION_ABLE_TO_MIGRATE_PRE_FLOOR_STORES = "0.2.27"
 _LAST_VERSION_ABLE_TO_MIGRATE_NODES_STORES = "0.6.263"
@@ -373,12 +375,12 @@ class SqliteStore(StorePort):
         self._db_path = os.path.join(config.data_root(), DB_FILENAME)
         os.makedirs(os.path.dirname(self._db_path), exist_ok=True)
         try:
-            self._conn = _ErrorTranslatingConnection(sqlite3.connect(self._db_path))
+            self._conn = _ErrorTranslatingConnection(sqlite3.connect(self._db_path, timeout=BUSY_TIMEOUT_MS / 1000))
         except sqlite3.Error as e:
             raise StoreError(str(e)) from e
-        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA busy_timeout=%d" % BUSY_TIMEOUT_MS)
+        self._enable_wal()
         self._conn.execute("PRAGMA synchronous=NORMAL")
-        self._conn.execute("PRAGMA busy_timeout=5000")
         self._conn.executescript(_SCHEMA)
         self.last_migration = None
         version = self._apply_schema_version_floor()
@@ -393,6 +395,17 @@ class SqliteStore(StorePort):
         if version == 1:
             self._migrate_schema_1_to_2()
         self._commit()
+
+    def _enable_wal(self):
+        deadline = time.monotonic() + BUSY_TIMEOUT_MS / 1000
+        while True:
+            try:
+                self._conn.execute("PRAGMA journal_mode=WAL")
+                return
+            except StoreError as e:
+                if "locked" not in str(e) or time.monotonic() >= deadline:
+                    raise
+                time.sleep(0.05)
 
     def _commit(self):
         if self._tx_depth == 0:
