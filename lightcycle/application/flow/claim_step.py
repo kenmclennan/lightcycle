@@ -21,7 +21,7 @@ class ClaimInput:
     stage: Optional[str] = None
 
 
-_STRUCTURAL_META_KEYS = ("model", "accepts", "produces", "presents", "detail", "github")
+_STRUCTURAL_META_KEYS = ("model", "accepts", "produces", "presents", "detail", "github", "always-run")
 
 
 @dataclass(frozen=True)

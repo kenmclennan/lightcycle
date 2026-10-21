@@ -20,11 +20,13 @@ from lightcycle.domain.flow.hooks import (
     PR_FEEDBACK,
     PR_MERGE,
 )
+from lightcycle.domain.flow.step_def import SKIP_OUTCOME
 from lightcycle.domain.flow.simulate_plan import build_coverage_plan
 from lightcycle.domain.runs import RUN_FIELDS
 from lightcycle.domain.schedule.state import SCHEDULE_STATE_ARTIFACT
 from lightcycle.domain.work.state import State
 from lightcycle.domain.workflows.identity import parse_pin
+from lightcycle.ports.github import CheckRun
 from lightcycle.domain.workflows.script_stage import GUARD_OUTCOMES
 
 SIMULATION_SHORTCODE = "SIM"
@@ -191,20 +193,87 @@ class WorkflowSimulateUseCase:
                 continue
             item_id = self._seed_item(pin, graph)
             github = self._github_factory()
-            monitor = MonitorPrsUseCase(
-                self._store, github, self._worktrees, self._flow, self._complete,
-                trusted_authors=lambda: frozenset({"reviewer"}),
-                held_shortcode=lambda: "HLD",
-                writes=InlinePrWrites(github, time.monotonic),
-                ci_clock=time.monotonic, ci_poll_seconds=lambda: 60,
-                ci_ceiling_seconds=self._config.ci_check_ceiling_seconds, ci_wall_clock=time.time,
-                ci_views=_LiveReads(),
-            )
+            monitor = self._monitor(github)
             violations += self._drive(item_id, pin, graph, walk, github, monitor, trace, index)
+        violations += self._ci_skip_probe(pin, graph, dom_flow, trace)
         violations += self._run_script_guards(pin, guards, trace)
         violations += self._run_lifecycle(pin, trace)
         violations += self._check_teardown_invariant()
         return SimulateResponse(ok=not violations, trace=trace, violations=violations)
+
+    def _monitor(self, github):
+        return MonitorPrsUseCase(
+            self._store, github, self._worktrees, self._flow, self._complete,
+            trusted_authors=lambda: frozenset({"reviewer"}),
+            held_shortcode=lambda: "HLD",
+            writes=InlinePrWrites(github, time.monotonic),
+            ci_clock=time.monotonic, ci_poll_seconds=lambda: 60,
+            ci_ceiling_seconds=self._config.ci_check_ceiling_seconds, ci_wall_clock=time.time,
+            ci_views=_LiveReads(),
+        )
+
+    def _ci_skip_probe(self, pin, graph, dom_flow, trace):
+        violations = []
+        for stage in dom_flow.steps():
+            sd = dom_flow.step_def(stage)
+            target = sd.routes.get(sd.ci_success) if sd.ci_success else None
+            if target is None:
+                continue
+            target_def = dom_flow.step_def(target)
+            if target_def.always_run:
+                cases = (("kept (always-run)", False, False),)
+            elif target_def.owner == "agent" and SKIP_OUTCOME in target_def.routes:
+                cases = (("skipped", False, True), ("kept (feedback)", True, False))
+            else:
+                continue
+            for label, feedback, skipped in cases:
+                found = self._probe_case(
+                    pin, graph, dom_flow, stage, target, label, feedback, skipped)
+                violations += found
+                if not found:
+                    trace.append("ci-skip probe: %s %s" % (target, label))
+        return violations
+
+    def _seed_pr(self, item_id, graph, stage):
+        phase = graph.phase_for(stage)
+        run = self._store.current_run(item_id, phase)
+        if run is None:
+            current = self._store.current_pass(item_id)
+            pid = current.id if current else self._store.open_pass(item_id)
+            run = self._store.get_run(self._store.open_run(item_id, pid, phase))
+        pr = "<simulated-ci-%s>" % item_id
+        self._store.set_pr(run.id, pr)
+        return pr
+
+    def _probe_case(self, pin, graph, dom_flow, stage, target, label, feedback, skipped):
+        prefix = "ci-skip probe %s -> %s (%s)" % (stage, target, label)
+        item_id = self._seed_item(pin, graph, stage=stage)
+        pr = self._seed_pr(item_id, graph, stage)
+        self._synthesize_produces(item_id, pin, target)
+        github = self._github_factory()
+        github.script_ci_result(pr, (CheckRun(name="sim", status="completed", conclusion="success"),))
+        if feedback:
+            github.script_feedback(pr, "please take a look")
+        try:
+            self._monitor(github).execute()
+        except UseCaseError as e:
+            return ["%s: raised: %s" % (prefix, e)]
+        watch = next(
+            (c for c in self._store.children(item_id) if c.stage == target), None)
+        if watch is None:
+            return ["%s: CI success did not open '%s'" % (prefix, target)]
+        if not skipped:
+            if watch.state != State.QUEUED:
+                return ["%s: '%s' was not left open for its agent" % (prefix, target)]
+            return []
+        if watch.state != State.DONE or watch.outcome != SKIP_OUTCOME or watch.claimed_by:
+            return ["%s: '%s' was not closed %s by the engine" % (prefix, target, SKIP_OUTCOME)]
+        landing = dom_flow.step_def(target).routes[SKIP_OUTCOME]
+        if not any(
+            c.stage == landing and c.state != State.DONE for c in self._store.children(item_id)
+        ):
+            return ["%s: the item did not land on '%s'" % (prefix, landing)]
+        return []
 
     def _seed_named_workspaces(self, graph):
         for workspace in sorted(_named_workspaces(graph)):
@@ -212,7 +281,7 @@ class WorkflowSimulateUseCase:
             self._scaffold.make_dir(path)
             self._store.add_project("simulate/%s" % workspace, local_path=path)
 
-    def _seed_item(self, pin, graph):
+    def _seed_item(self, pin, graph, stage=None):
         item_id = self._store.create_item(
             "simulate: %s" % pin, "simulated walk of %s" % pin, workflow=pin,
             shortcode=SIMULATION_SHORTCODE)
@@ -230,8 +299,9 @@ class WorkflowSimulateUseCase:
         if self._schedule_state:
             self._store.add_artifact(
                 item_id, SCHEDULE_STATE_ARTIFACT, self._schedule_state, internal=True)
-        role = self._flow.owner_of(graph.entry, pin)
-        self._store.create_step(step=graph.entry, role=role, parent=item_id)
+        start = stage or graph.entry
+        role = self._flow.owner_of(start, pin)
+        self._store.create_step(step=start, role=role, parent=item_id)
         return item_id
 
     def _is_walk_terminal(self, graph, stage):

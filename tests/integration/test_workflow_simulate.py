@@ -636,3 +636,48 @@ class TestOwnedEdgeBearingCapEscalationTargetSimulatesCleanly(SimulateTestCase):
         self.assertTrue(review_conflict_steps)
         self.assertTrue(all(s.outcome == "resolved" for s in review_conflict_steps))
         self.assertTrue(all(s.state == State.DONE for s in review_conflict_steps))
+
+
+_CI_WORKFLOW_TEXT = _WORKFLOW_TEXT.replace(
+    "  open-pr           done         watch-ci\n",
+    "  open-pr           done         poll-ci\n"
+    "  poll-ci           succeeded    watch-ci\n"
+    "  poll-ci           failed       watch-ci\n",
+).replace(
+    "  mention_token         await-merge  @lc\n",
+    "  mention_token         await-merge  @lc\n"
+    "  ci_success            poll-ci      succeeded\n"
+    "  ci_failure            poll-ci      failed\n",
+)
+
+_CI_STEPS = {
+    **_STEPS,
+    "poll-ci": "---\nengine: true\naccepts:\n  pr: required\n---\n\nPoll CI.\n",
+}
+
+_CI_ALWAYS_RUN_STEPS = {
+    **_CI_STEPS,
+    "watch-ci": _STEPS["watch-ci"].replace("---\n", "---\nalways-run: true\n", 1),
+}
+
+
+class TestCiSkipProbe(SimulateTestCase):
+    def test_a_skippable_watcher_is_probed_skipped_and_kept_on_feedback(self):
+        resp, _store = self._run_direct(_CI_WORKFLOW_TEXT, _CI_STEPS)
+
+        self.assertTrue(resp.ok, resp.violations)
+        self.assertIn("ci-skip probe: watch-ci skipped", resp.trace)
+        self.assertIn("ci-skip probe: watch-ci kept (feedback)", resp.trace)
+
+    def test_an_always_run_watcher_is_probed_kept_and_never_skipped(self):
+        resp, _store = self._run_direct(_CI_WORKFLOW_TEXT, _CI_ALWAYS_RUN_STEPS)
+
+        self.assertTrue(resp.ok, resp.violations)
+        self.assertIn("ci-skip probe: watch-ci kept (always-run)", resp.trace)
+        self.assertFalse([t for t in resp.trace if t.endswith("skipped")])
+
+    def test_a_workflow_without_ci_success_has_no_probe_line(self):
+        resp, _store = self._run_direct(_WORKFLOW_TEXT, _STEPS)
+
+        self.assertTrue(resp.ok, resp.violations)
+        self.assertFalse([t for t in resp.trace if "ci-skip probe" in t])

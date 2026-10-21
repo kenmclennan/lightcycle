@@ -1706,6 +1706,21 @@ class TestClaimConfigWithRealSteps(unittest.TestCase):
         self.assertIsNone(resp.config)
 
 
+class TestClaimConfigOmitsAlwaysRun(unittest.TestCase):
+    def test_always_run_stays_out_of_the_claim_config(self):
+        s = FakeStore()
+        item = s.create_item("st", "a description", workflow="spec-driven", shortcode="GRID")
+        s.create_step(step="build", role="agent", parent=item)
+        metas = {"coder": {"model": "sonnet", "step": "build", "always-run": True, "ci-wait": "1m"}}
+
+        resp = ClaimStepUseCase(
+            s, flow_for(metas, s), FakeWorktrees(), FakeWorkers(), FakeConfig(), FakeGithubBudget()
+        ).execute(ClaimInput(role="agent"))
+
+        self.assertNotIn("always-run", resp.config)
+        self.assertEqual(resp.config["ci-wait"], "1m")
+
+
 class TestBlockTask(unittest.TestCase):
     def test_routes_to_human_with_resume(self):
         s = FakeStore()

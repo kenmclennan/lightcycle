@@ -45,7 +45,7 @@ class MonitorPrsUseCase:
         self._resolve_ci = ResolveCiUseCase(
             store, github, flow_service, complete, clock=ci_clock, poll_seconds=ci_poll_seconds,
             ci_ceiling_seconds=ci_ceiling_seconds, wall_clock=ci_wall_clock,
-            views=ci_views,
+            views=ci_views, trusted_authors=trusted_authors,
         )
 
     def execute(self) -> MonitorPrsResponse:
