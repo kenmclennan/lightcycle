@@ -391,38 +391,49 @@ def _every_row_paints_bg(ctx):
         assert row_colours == {bg_hex}, (ctx["state"], y, row_colours)
 
 
-def test_every_registered_screen_state_paints_only_token_backgrounds():
-    for state, render in RENDER_SCREENS.items():
-        session = render(RENDER_SIZE)
-        try:
-            strips = session.app.screen._compositor.render_strips()
-            for y, strip in enumerate(strips):
-                x = 0
-                for segment in strip:
-                    width = len(segment.text)
-                    if segment.style and segment.style.bgcolor:
-                        hexv = segment.style.bgcolor.get_truecolor().hex.lower()
-                        assert hexv in _TOKEN_BACKGROUNDS, (state, x, y, hexv)
-                    x += width
-        finally:
-            session.close()
+@pytest.mark.parametrize("state", sorted(RENDER_SCREENS))
+def test_every_registered_screen_state_paints_only_token_backgrounds(state):
+    session = RENDER_SCREENS[state](RENDER_SIZE)
+    try:
+        strips = session.app.screen._compositor.render_strips()
+        for y, strip in enumerate(strips):
+            x = 0
+            for segment in strip:
+                width = len(segment.text)
+                if segment.style and segment.style.bgcolor:
+                    hexv = segment.style.bgcolor.get_truecolor().hex.lower()
+                    assert hexv in _TOKEN_BACKGROUNDS, (state, x, y, hexv)
+                x += width
+    finally:
+        session.close()
 
 
-def test_every_registered_screen_state_paints_only_token_foregrounds():
-    for state, render in RENDER_SCREENS.items():
-        session = render(RENDER_SIZE)
-        try:
-            strips = session.app.screen._compositor.render_strips()
-            for y, strip in enumerate(strips):
-                x = 0
-                for segment in strip:
-                    width = len(segment.text)
-                    if segment.style and segment.style.color:
-                        hexv = segment.style.color.get_truecolor().hex.lower()
-                        assert hexv in _TOKEN_FOREGROUNDS, (state, x, y, hexv)
-                    x += width
-        finally:
-            session.close()
+@pytest.mark.parametrize("state", sorted(RENDER_SCREENS))
+def test_every_registered_screen_state_paints_only_token_foregrounds(state):
+    session = RENDER_SCREENS[state](RENDER_SIZE)
+    try:
+        strips = session.app.screen._compositor.render_strips()
+        for y, strip in enumerate(strips):
+            x = 0
+            for segment in strip:
+                width = len(segment.text)
+                if segment.style and segment.style.color:
+                    hexv = segment.style.color.get_truecolor().hex.lower()
+                    assert hexv in _TOKEN_FOREGROUNDS, (state, x, y, hexv)
+                x += width
+    finally:
+        session.close()
+
+
+def test_the_token_paint_cases_are_exactly_the_registry_keys():
+    import tests.support.screen_render as screen_render
+
+    for case in (
+        test_every_registered_screen_state_paints_only_token_backgrounds,
+        test_every_registered_screen_state_paints_only_token_foregrounds,
+    ):
+        (mark,) = [m for m in case.pytestmark if m.name == "parametrize"]
+        assert list(mark.args[1]) == sorted(screen_render.SCREENS)
 
 
 @then("the footer occupies two one-row lines, a status line above a shortcut line")
