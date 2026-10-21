@@ -4,6 +4,7 @@ import unittest
 
 from lightcycle.application.flow import ClaimInput, ClaimStepUseCase, CompleteInput, CompleteStepUseCase
 from lightcycle.application.work import ShowNodeInput, ShowNodeUseCase
+from lightcycle.application.work.item_outputs import ItemOutputs
 from lightcycle.application.work.step_inputs import StepInputs
 from lightcycle.domain.pool import Worker
 from tests.support.fake_store import FakeStore
@@ -258,6 +259,60 @@ class TestItemOutputs(unittest.TestCase):
         self.assertEqual(x["value"], "v2")
         self.assertEqual(x["step"], rework)
         self.assertEqual([h["value"] for h in x["history"]], ["v1"])
+
+
+class _CountingStore:
+    def __init__(self, store):
+        self._store = store
+        self.get_item_calls = 0
+
+    def get_item(self, item_id):
+        self.get_item_calls += 1
+        return self._store.get_item(item_id)
+
+    def __getattr__(self, name):
+        return getattr(self._store, name)
+
+
+class TestItemOutputsResolvesTheWorkflowOncePerCall(unittest.TestCase):
+    def _calls_for(self, step_count):
+        store = FakeStore()
+        item = store.create_item("t", "the brief", workflow="spec-driven", shortcode="APP")
+        for _ in range(step_count):
+            store.create_step(step="build", role="agent", parent=item)
+        counting = _CountingStore(store)
+        outputs = ItemOutputs(counting, flow_for(METAS, counting))
+        node = store.get_node(store.children(item)[0].id)
+
+        outputs.for_reader(node)
+        reader_calls = counting.get_item_calls
+        counting.get_item_calls = 0
+        outputs.for_item(item)
+        item_calls = counting.get_item_calls
+        counting.get_item_calls = 0
+        outputs.present_types(node)
+        present_calls = counting.get_item_calls
+        return reader_calls, item_calls, present_calls
+
+    def test_get_item_calls_do_not_grow_with_the_step_count(self):
+        small = self._calls_for(3)
+        large = self._calls_for(30)
+
+        self.assertEqual(small, large)
+        self.assertTrue(all(n <= 1 for n in large))
+
+    def test_steps_with_different_stages_keep_their_own_declared_types(self):
+        store = FakeStore()
+        flow = flow_for(METAS, store)
+        item = store.create_item("t", "the brief", workflow="spec-driven", shortcode="APP")
+        build = store.create_step(step="build", role="agent", parent=item)
+        review = store.create_step(step="review", role="agent", parent=item)
+        outputs = ItemOutputs(store, flow)
+
+        self.assertEqual(outputs.declared_types(store.get_node(build)), frozenset({"X"}))
+        self.assertEqual(outputs.declared_types(store.get_node(review)), frozenset())
+        store.add_artifact(build, "X", "v1")
+        self.assertEqual(outputs.for_item(item).types, {"X"})
 
 
 if __name__ == "__main__":

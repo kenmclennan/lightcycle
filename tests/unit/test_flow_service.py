@@ -294,6 +294,48 @@ class TestGraphResolutionIsCachedPerPinPerInstance(unittest.TestCase):
         self.assertEqual(len(fs.workflow_text_calls), 2)
 
 
+class _CountingFs(FakeFs):
+    def __init__(self, metas):
+        super().__init__(metas)
+        self.parse_calls = []
+
+    def parse_step(self, role, root=None):
+        self.parse_calls.append((role, root))
+        return super().parse_step(role, root)
+
+
+class TestParsedStepPromptsAreCached(unittest.TestCase):
+    def test_two_load_flow_calls_parse_each_role_once(self):
+        fs = _CountingFs(METAS)
+        service = FlowService(fs, FakeStore())
+
+        service.load_flow()
+        service.load_flow()
+
+        self.assertEqual(len(fs.parse_calls), len(METAS))
+
+    def test_clear_cache_makes_the_next_load_parse_again(self):
+        fs = _CountingFs(METAS)
+        service = FlowService(fs, FakeStore())
+
+        service.load_flow()
+        service.clear_cache()
+        service.load_flow()
+
+        self.assertEqual(len(fs.parse_calls), 2 * len(METAS))
+
+    def test_different_roots_do_not_share_an_entry(self):
+        fs = _CountingFs(METAS)
+        service = FlowService(fs, FakeStore())
+
+        service._parse_step("coder", "/a")
+        service._parse_step("coder", "/b")
+        service._parse_step("coder", ["/a", "/p"])
+        service._parse_step("coder", ["/a", "/p"])
+
+        self.assertEqual(len(fs.parse_calls), 3)
+
+
 if __name__ == "__main__":
     unittest.main()
 
