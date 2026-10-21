@@ -132,6 +132,7 @@ def _seed_config(home):
         "github-poll-seconds: 60",
         "ci-check-ceiling-seconds: 3600",
         "github-reserve-calls: 750",
+        "github-view-refresh-polls: 10",
         "worker-history: 20",
         "editor: vi",
         "audit-shortcode: AUD",

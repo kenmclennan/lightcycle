@@ -31,6 +31,7 @@ class FakeGitHub(GitHubEventsPort):
         self.sync_calls = []
         self._updated_ats = dict(updated_ats or {})
         self._tips = {}
+        self._unsettled_reads = {}
         self._inline_events = []
         self.calls = []
         self.rate_limit_reading = ReadFailure(-1, "no rate limit scripted")
@@ -47,6 +48,9 @@ class FakeGitHub(GitHubEventsPort):
 
     def inline_comment_on(self, pr, ts):
         self._inline_events.append((pr, ts))
+
+    def leave_unsettled(self, pr, reads=1):
+        self._unsettled_reads[pr] = reads
 
     def advance_base(self, repo, base):
         key = (repo, base)
@@ -92,11 +96,15 @@ class FakeGitHub(GitHubEventsPort):
             return ReadFailure(1, "boom")
         base_key = self._base_keys.get(pr, "acme/widget@main")
         state = "MERGED" if pr in self._merged else "CLOSED" if pr in self._closed else "OPEN"
+        mergeable = "CONFLICTING" if pr in self._conflicted else "MERGEABLE"
+        merge_state = "BEHIND" if pr in self._behind else "CLEAN"
+        if self._unsettled_reads.get(pr, 0) > 0:
+            self._unsettled_reads[pr] -= 1
+            mergeable = merge_state = "UNKNOWN"
         return PrView(
             state=state, head_sha=self._head_shas.get(pr, ""),
             base_ref=base_key.partition("@")[2], base_key=base_key,
-            mergeable="CONFLICTING" if pr in self._conflicted else "MERGEABLE",
-            merge_state_status="BEHIND" if pr in self._behind else "CLEAN",
+            mergeable=mergeable, merge_state_status=merge_state,
             updated_at=self._updated_ats.get(pr, 0.0))
 
     def authenticated_login(self):

@@ -23,7 +23,7 @@ def _poll(github):
 def _round(poll, snapshot, now):
     snapshot.head_sha(_ONE)
     snapshot.head_sha(_TWO)
-    poll.run(snapshot.take_wanted(), now)
+    poll.run(snapshot.take_wanted(), now, 10)
 
 
 class TestPrPollConfirmation(unittest.TestCase):

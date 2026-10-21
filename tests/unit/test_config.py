@@ -149,6 +149,22 @@ class TestTunables(unittest.TestCase):
         c = _cfg({"LC_GITHUB_POLL_SECONDS": "30"})
         self.assertEqual(c.github_poll_seconds(), 30)
 
+    def test_github_view_refresh_polls_is_required_and_named_when_missing(self):
+        self.assertEqual(_cfg(github_view_refresh_polls="10").github_view_refresh_polls(), 10)
+        with self.assertRaises(ConfigError) as ctx:
+            _cfg().github_view_refresh_polls()
+        self.assertIn("github-view-refresh-polls", str(ctx.exception))
+
+    def test_github_view_refresh_polls_rejects_a_non_integer_and_zero(self):
+        with self.assertRaises(ConfigValueError):
+            _cfg(github_view_refresh_polls="often").github_view_refresh_polls()
+        with self.assertRaises(ConfigValueError):
+            _cfg(github_view_refresh_polls="0").github_view_refresh_polls()
+
+    def test_github_view_refresh_polls_env_override(self):
+        c = _cfg({"LC_GITHUB_VIEW_REFRESH_POLLS": "3"})
+        self.assertEqual(c.github_view_refresh_polls(), 3)
+
     def test_missing_tunable_raises(self):
         with self.assertRaises(ConfigError):
             _cfg().worktree_retries()
