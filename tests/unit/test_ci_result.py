@@ -82,8 +82,20 @@ class TestRequiredAndCeiling(unittest.TestCase):
     def test_no_required_set_judges_all_so_a_hung_check_times_out(self):
         self.assertEqual(_outcome((_running("codacy", 1000.0),), required=None), "timeout")
 
-    def test_nothing_matching_the_set_judges_all(self):
-        self.assertEqual(_outcome((_running("codacy", 9900.0),), required=frozenset({"build"})), "pending")
+    def test_nothing_matching_the_set_is_pending_on_the_absent_checks(self):
+        self.assertEqual(_outcome((_run("codacy"),), required=frozenset({"build"})), "pending")
+
+    def test_one_of_two_required_reported_is_pending(self):
+        self.assertEqual(ci_outcome((_run("a"),), frozenset({"a", "b"}), 10000.0, 3600, 10000.0), "pending")
+
+    def test_both_required_reported_green_is_success(self):
+        self.assertEqual(ci_outcome((_run("a"), _run("b")), frozenset({"a", "b"}), 10000.0, 3600, 10000.0), "success")
+
+    def test_absent_required_past_the_ceiling_is_timeout_naming_it(self):
+        checks = (_run("b"),)
+        required = frozenset({"a", "b"})
+        self.assertEqual(ci_outcome(checks, required, 10000.0, 3600, 6399.0), "timeout")
+        self.assertEqual(timed_out_check(judged_checks(checks, required, 6399.0), 10000.0, 3600).name, "a")
 
     def test_required_failure_with_others_in_progress_is_failure(self):
         checks = (_run("build", conclusion="failure"), _run("test"), _running("codacy", 9900.0))

@@ -528,6 +528,41 @@ class TestRequiredChecksAndCeiling(unittest.TestCase):
         self.assertIn("ceiling of 3600s", node.report)
         self.assertEqual([a.value for a in store.item_artifacts(step) if a.type == "ci-judged-sha"], ["sha1"])
 
+    def test_required_set_with_one_absent_keeps_waiting(self):
+        gh = _gh([_ok("a")], required={"a", "b"})
+        store, item, step, uc = _ci_setup(gh)
+
+        uc.execute()
+
+        self.assertEqual(store.get_node(step).state, State.QUEUED)
+
+    def test_required_set_all_reported_green_succeeds(self):
+        gh = _gh([_ok("a"), _ok("b")], required={"a", "b"})
+        store, item, step, uc = _ci_setup(gh)
+
+        uc.execute()
+
+        self.assertEqual(store.get_node(step).outcome, "succeeded")
+
+    def test_required_check_absent_past_the_ceiling_times_out_naming_it(self):
+        gh = _gh([_ok("b")], required={"a", "b"})
+        store, item, step, uc = _ci_setup(gh)
+        clock = [10000.0]
+        uc._wall_clock = lambda: clock[0]
+
+        uc.execute()
+        self.assertEqual(store.get_node(step).state, State.QUEUED)
+        clock[0] = 13600.0
+        uc.execute()
+        self.assertEqual(store.get_node(step).state, State.QUEUED)
+        clock[0] = 13601.0
+        uc.execute()
+
+        node = store.get_node(step)
+        self.assertEqual(node.outcome, "failed")
+        self.assertIn("required check 'a' never appeared", node.report)
+        self.assertIn("ceiling of 3600s", node.report)
+
     def test_no_required_set_keeps_today_rule_under_ceiling(self):
         gh = _gh([_hung("codacy", 9900.0)])
         store, item, step, uc = _ci_setup(gh)

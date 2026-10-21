@@ -1,11 +1,30 @@
+from dataclasses import dataclass
+
 _PASSING_CONCLUSIONS = ("success", "skipped", "neutral")
 
 
-def judged_checks(checks, required=None):
+MISSING_STATUS = "missing"
+
+
+@dataclass(frozen=True)
+class MissingCheck:
+    name: str
+    started_at: float
+    status: str = MISSING_STATUS
+    conclusion: None = None
+    url: str = ""
+
+
+def judged_checks(checks, required=None, since=0.0):
     if required is None:
         return tuple(checks)
     matched = tuple(c for c in checks if c.name in required)
-    return matched or tuple(checks)
+    present = {c.name for c in matched}
+    absent = tuple(
+        MissingCheck(name=name, started_at=since)
+        for name in sorted(required - present)
+    )
+    return matched + absent
 
 
 def timed_out_check(checks, now, ceiling):
@@ -13,13 +32,13 @@ def timed_out_check(checks, now, ceiling):
         return None
     return next(
         (c for c in checks
-         if c.status == "in_progress" and c.started_at > 0 and now - c.started_at > ceiling),
+         if c.status in ("in_progress", MISSING_STATUS) and c.started_at > 0 and now - c.started_at > ceiling),
         None,
     )
 
 
-def ci_outcome(checks, required=None, now=0.0, ceiling=None):
-    judged = judged_checks(checks, required)
+def ci_outcome(checks, required=None, now=0.0, ceiling=None, since=0.0):
+    judged = judged_checks(checks, required, since)
     if not judged:
         return "success"
     if timed_out_check(judged, now, ceiling) is not None:
