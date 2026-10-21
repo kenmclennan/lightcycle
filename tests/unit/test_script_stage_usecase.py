@@ -48,9 +48,10 @@ class StubFlowService:
 
 
 class RecordingComplete:
-    def __init__(self, store, fail=None):
+    def __init__(self, store, fail=None, refusal=None):
         self.store = store
         self.fail = fail
+        self.refusal = refusal
         self.calls = []
 
     def execute(self, input):
@@ -58,17 +59,17 @@ class RecordingComplete:
             raise self.fail
         self.calls.append(input)
         self.store.update_state(input.step, State.DONE)
-        return SimpleNamespace(next_step=None)
+        return SimpleNamespace(next_step=None, teardown_refusal=self.refusal)
 
 
 class Rig:
     def __init__(self, stages=None, cap=4, lifecycle=None, complete_fail=None, worktree=None,
-                 ensure_error=None):
+                 ensure_error=None, refusal=None):
         self.store = FakeStore()
         self.runner = FakeScriptRunner()
         defs = stages or {
             "poll": StepDef(script="scripts/poll.sh", routes={"found": "next", "none": "poll"})}
-        self.complete = RecordingComplete(self.store, complete_fail)
+        self.complete = RecordingComplete(self.store, complete_fail, refusal)
         self.ensured = []
 
         def ensure(step):
@@ -131,6 +132,28 @@ class TestRunLog(unittest.TestCase):
         rig.gate.execute(1)
 
         self.assertIn("log: script-%s.log" % step, rig.store.get_node(step).park.reason or "")
+
+
+class TestTeardownRefusal(unittest.TestCase):
+    def test_a_done_stage_whose_close_refuses_surfaces_the_refusal_with_its_item(self):
+        rig = Rig(refusal="cannot tear down: dirty worktree")
+        step = rig.step()
+        item = rig.store.get_node(step).item
+        rig.gate.execute(0)
+        rig.runner.finish(rig.key(step), done())
+
+        response = rig.gate.execute(1)
+
+        self.assertEqual(response.refused, [(item, "cannot tear down: dirty worktree")])
+        self.assertEqual(response.parked, [])
+
+    def test_a_clean_close_surfaces_no_refusal(self):
+        rig = Rig()
+        step = rig.step()
+        rig.gate.execute(0)
+        rig.runner.finish(rig.key(step), done())
+
+        self.assertEqual(rig.gate.execute(1).refused, [])
 
 
 class TestReapThenStart(unittest.TestCase):

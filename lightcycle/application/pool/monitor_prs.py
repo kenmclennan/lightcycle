@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Tuple
 
 from lightcycle.application.pool.check_content_pin import CheckContentPinUseCase
 from lightcycle.application.pool.dispatch_pr_feedback import DispatchPrFeedbackUseCase
@@ -21,6 +21,7 @@ class MonitorPrsResponse:
     updated: List[str] = field(default_factory=list)
     update_failed: List[str] = field(default_factory=list)
     ci_unread: List[CiUnread] = field(default_factory=list)
+    refused: List[Tuple[str, str]] = field(default_factory=list)
 
 
 class MonitorPrsUseCase:
@@ -60,4 +61,5 @@ class MonitorPrsUseCase:
             reworked=dispatched.reworked, conflicted=dispatched.conflicted,
             ci_resolved=ci.ci_resolved, head_moved=moved.head_moved, updated=behind.updated,
             update_failed=behind.update_failed, ci_unread=ci.ci_unread,
+            refused=resolved.refused,
         )

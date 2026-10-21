@@ -1,6 +1,6 @@
 import os
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Tuple
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.park_step import ParkInput
@@ -27,6 +27,7 @@ class ScriptStagesResponse:
     started: List[str] = field(default_factory=list)
     reaped: List[str] = field(default_factory=list)
     parked: List[str] = field(default_factory=list)
+    refused: List[Tuple[str, str]] = field(default_factory=list)
 
 
 def step_key(step_id):
@@ -53,10 +54,10 @@ class ScriptStageUseCase:
         return [k for k in self._runner.running() if k.startswith(STEP_KEY_PREFIX)]
 
     def execute(self, now: float) -> ScriptStagesResponse:
-        reaped, parked = self._reap()
+        reaped, parked, refused = self._reap()
         started, start_parked = self._start()
         return ScriptStagesResponse(
-            started=started, reaped=reaped, parked=parked + start_parked)
+            started=started, reaped=reaped, parked=parked + start_parked, refused=refused)
 
     def _label(self, step, sd):
         pin = self._flow_service.workflow_for(step) or "?"
@@ -69,7 +70,7 @@ class ScriptStageUseCase:
             decision="Fix the script or its config, then resolve the step."))
 
     def _reap(self):
-        reaped, parked = [], []
+        reaped, parked, refused = [], [], []
         for key in self._runner.running():
             if not key.startswith(STEP_KEY_PREFIX):
                 continue
@@ -77,38 +78,43 @@ class ScriptStageUseCase:
             if result is None:
                 continue
             reaped.append(key)
-            if self._reap_one(key[len(STEP_KEY_PREFIX):], result):
+            was_parked, refusal = self._reap_one(key[len(STEP_KEY_PREFIX):], result)
+            if was_parked:
                 parked.append(key)
-        return reaped, parked
+            if refusal:
+                refused.append(refusal)
+        return reaped, parked, refused
 
     def _reap_one(self, step_id, result):
         try:
             step = self._store.get_node(step_id)
         except NodeNotFoundError:
-            return False
+            return False, None
         if step.state != State.QUEUED or not is_engine_step(step):
-            return False
+            return False, None
         if skip_unpinned(self._store, self._flow_service, step):
-            return False
+            return False, None
         sd = flow_for(self._flow_service, step).step_def(step.stage)
         label = self._label(step, sd)
         reason, ok = result_violation(result, self._config.script_timeout_seconds())
         if not ok:
             self._park_step(step, label, reason, result)
-            return True
+            return True, None
         try:
             output = parse_stage_output(result.stdout, sorted(sd.routes))
         except ValueError as e:
             self._park_step(step, label, "broke the output contract: %s" % e, result, True)
-            return True
+            return True, None
         try:
-            apply_stage_result(self._store, self._complete, step.id, output)
+            resp = apply_stage_result(self._store, self._complete, step.id, output)
         except UseCaseError as e:
             self._park_step(
                 step, label, "printed outcome %s but completing it failed: %s"
                 % (output.outcome, e), result)
-            return True
-        return False
+            return True, None
+        if resp.teardown_refusal:
+            return False, (step.item, resp.teardown_refusal)
+        return False, None
 
     def _start(self):
         started, parked = [], []

@@ -1,4 +1,5 @@
 import sys
+import time
 from dataclasses import dataclass
 from typing import List, Optional
 
@@ -84,6 +85,8 @@ class TickUseCase:
             spin_port=spin_port, spin_cap=config.spin_cap(), stream=stream,
         )
         self._monitor = monitor
+        self._worker_log = worker_log
+        self._logged_refusals = {}
         self._github_poll_gate = github_poll_gate
         self._schedule_gate = schedule_gate
         self._lifecycle_gate = lifecycle_gate
@@ -99,6 +102,15 @@ class TickUseCase:
         self._github_budget = github_budget
         self._gh_call_gate = gh_call_gate
         self._budget_low = False
+
+    def _log_refusals(self, refused, now):
+        current = dict(refused)
+        for item, message in current.items():
+            if self._logged_refusals.get(item) == message:
+                continue
+            self._worker_log.append_run_log("%s  %-7s  %s\n" % (
+                time.strftime("%H:%M:%S", time.localtime(now)), "refused", message))
+        self._logged_refusals = current
 
     def _guidance_sync(self, now):
         try:
@@ -154,6 +166,9 @@ class TickUseCase:
         schedules_result = self._schedules(input.now)
         lifecycle_result = self._lifecycle(input.now)
         scripts_result = self._scripts(input.now)
+        self._log_refusals(
+            monitor_result.refused + (scripts_result.refused if scripts_result else []),
+            input.now)
         breaker_result = self._breaker_gate.execute(input.now)
         breaker = breaker_result.breaker
         backup_result = self._backup_gate.execute(input.now)
