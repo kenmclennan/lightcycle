@@ -48,6 +48,8 @@ Item/step invariant: a step's `item` is required and fixed at creation; an item 
 
 **The pytest session is hermetic by default.** `tests/support/hermetic_env.py` gives every test a fresh empty `HOME`, a `GIT_CONFIG_GLOBAL` holding only `useConfigOnly = true`, `GIT_CONFIG_NOSYSTEM=1`, and none of `GIT_AUTHOR_*`/`GIT_COMMITTER_*`/`EMAIL`/`GIT_CONFIG_*`, so a local run fails the way the runner does. A test that needs a git identity sets it through repo-local git config or `GIT_CONFIG_GLOBAL`, never `GIT_AUTHOR_*` (which `git config --get` does not read). An audit-hook guard fails any test that opens, lists, creates, removes or renames a path under the real home; its allow-list lives in `tests/support/hermetic_env.py`, and the real home is `hermetic_env.REAL_HOME`.
 
+**The TUI suite's empty-HOME run lives in CI, not in the local gate.** The `hermetic-tui` job in `.github/workflows/ci.yml` runs every TUI-importing unit and feature test file (discovered by `_tui_harness_test_files` in `tests/integration/test_tui_harness_is_hermetic.py`) once with `HOME` and `LC_HOME` set to an empty directory. Locally, `bash tests/run.sh tests/integration` keeps only a smoke render of one registered state under that environment, so a HOME dependency in the harness itself still fails before CI.
+
 - `tests/support/` - test doubles (`FakeStore`, `FakeFs`) and the store-contract base. Helpers, not collected as tests.
 - `tests/unit/` - fast, isolated tests of `domain/` logic and the application use cases (no subprocess).
 - `tests/integration/` - the store contract against a real `SqliteStore` and the tests that drive the wired `lc` CLI or exercise genuine git/worktree IO, via subprocess.
