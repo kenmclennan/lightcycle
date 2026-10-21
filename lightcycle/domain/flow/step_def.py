@@ -18,6 +18,8 @@ from lightcycle.domain.flow.hooks import (
     REVIEW_ROUNDS_CAP,
 )
 
+SKIP_OUTCOME = "done"
+
 
 @dataclass(frozen=True)
 class CiCap:
@@ -58,6 +60,7 @@ class StepDef:
     presents: Optional[str] = None
     detail: Optional[Tuple[str, ...]] = None
     github_heavy: bool = False
+    always_run: bool = False
 
     def __post_init__(self):
         object.__setattr__(self, "routes", MappingProxyType(dict(self.routes)))

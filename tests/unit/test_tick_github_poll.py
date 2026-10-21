@@ -104,7 +104,7 @@ class TestCiStageIssuesNoGitCall(unittest.TestCase):
         plant_pr(store, item, _PR, branch="feat/thing")
         step = store.create_step(step="poll-ci", role="engine", parent=item)
         flow = _FlowAdapter(_FLOW)
-        monitor = _CiMonitor(ResolveCiUseCase(store, snapshot, flow, CompleteStepUseCase(store, flow), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, wall_clock=lambda: 10000.0, views=snapshot))
+        monitor = _CiMonitor(ResolveCiUseCase(store, snapshot, flow, CompleteStepUseCase(store, flow), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, wall_clock=lambda: 10000.0, views=snapshot, trusted_authors=lambda: frozenset()))
         git = FakeGit()
         tick = make_tick(
             store, FakeWorkers(), FakeSpawner(), _Config(), monitor=monitor,
@@ -128,7 +128,7 @@ def _ci_pool(hold_view):
     item = store.create_item("building a thing", "a description")
     plant_pr(store, item, _PR, branch="feat/thing")
     flow = _FlowAdapter(_FLOW)
-    monitor = _CiMonitor(ResolveCiUseCase(store, snapshot, flow, CompleteStepUseCase(store, flow), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, wall_clock=lambda: 10000.0, views=snapshot))
+    monitor = _CiMonitor(ResolveCiUseCase(store, snapshot, flow, CompleteStepUseCase(store, flow), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, wall_clock=lambda: 10000.0, views=snapshot, trusted_authors=lambda: frozenset()))
     tick = make_tick(
         store, FakeWorkers(), FakeSpawner(), _Config(), monitor=monitor,
         github_poll_gate=_gate(snapshot, github, InlineGithubPollRunner()),
@@ -207,7 +207,7 @@ def _head_change_pool(before_move, settle=True):
     monitor = _CiMonitor(ResolveCiUseCase(
         store, snapshot, flow, CompleteStepUseCase(store, flow),
         clock=time.monotonic, poll_seconds=lambda: _POLL,
-        ci_ceiling_seconds=lambda: 3600, wall_clock=lambda: 10000.0, views=snapshot))
+        ci_ceiling_seconds=lambda: 3600, wall_clock=lambda: 10000.0, views=snapshot, trusted_authors=lambda: frozenset()))
     tick = make_tick(
         store, FakeWorkers(), FakeSpawner(), _Config(), monitor=monitor,
         github_poll_gate=_gate(snapshot, github, InlineGithubPollRunner()),

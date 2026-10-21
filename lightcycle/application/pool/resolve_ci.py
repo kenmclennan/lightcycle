@@ -3,6 +3,7 @@ from typing import List
 
 from lightcycle.application.flow.complete_step import CompleteInput
 from lightcycle.application.pool.pr_lookups import flow_for, run_of, skip_unpinned
+from lightcycle.application.pool.skip_idle_ci_watch import SkipIdleCiWatchUseCase
 from lightcycle.domain.pool import ci_outcome, failing_check, judged_checks, timed_out_check
 from lightcycle.domain.work import State
 from lightcycle.ports.github import NotYetRead, PrSync, ReadFailure
@@ -29,7 +30,7 @@ def _reason(call, failure):
 class ResolveCiUseCase:
     def __init__(
         self, store, github, flow_service, complete, *, clock, poll_seconds, ci_ceiling_seconds, wall_clock,
-        views,
+        views, trusted_authors,
     ):
         self._store = store
         self._github = github
@@ -40,6 +41,8 @@ class ResolveCiUseCase:
         self._ci_ceiling_seconds = ci_ceiling_seconds
         self._wall_clock = wall_clock
         self._views = views
+        self._skip_idle = SkipIdleCiWatchUseCase(
+            store, github, flow_service, complete, trusted_authors=trusted_authors)
         self._unread = {}
         self._first_epoch = {}
         ci_ceiling_seconds()
@@ -104,9 +107,11 @@ class ResolveCiUseCase:
                 continue
             if outcome == "success" and sd.ci_success:
                 self._store.add_artifact(step.id, "ci-judged-sha", sha, internal=True)
-                self._complete.execute(CompleteInput(
+                done = self._complete.execute(CompleteInput(
                     step=step.id, outcome=sd.ci_success, note="CI succeeded on %s." % sha,
                 ))
+                if done.next_step:
+                    self._skip_idle.execute(step, done.next_step, pr_value, sha)
                 ci_resolved.append(step.item)
             elif outcome == "timeout" and sd.ci_failure:
                 if self._github.head_sha(pr_value) != sha:

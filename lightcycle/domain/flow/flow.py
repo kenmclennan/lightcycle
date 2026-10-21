@@ -61,6 +61,7 @@ class Flow:
         owner = {}
         escalation = {}
         github_heavy = {}
+        always_run = {}
         scripts = {}
         presents = {}
         details = {}
@@ -70,6 +71,7 @@ class Flow:
                 continue
             escalation[stage] = bool(meta.get("escalation"))
             github_heavy[stage] = str(meta.get("github") or "").strip() == "heavy"
+            always_run[stage] = str(meta.get("always-run") or "").strip().lower() == "true"
             declared = meta.get("presents")
             if declared:
                 presents[stage] = str(declared).strip()
@@ -93,6 +95,7 @@ class Flow:
                 owner=owner.get(stage),
                 escalation=escalation.get(stage, False),
                 github_heavy=github_heavy.get(stage, False),
+                always_run=always_run.get(stage, False),
                 script=scripts.get(stage),
                 presents=presents.get(stage),
                 detail=details.get(stage),
