@@ -96,27 +96,48 @@ def test_inner_worker_count_shares_cores_with_the_pool(outer, cores, max_agents,
     assert _inner_worker_count(outer, cores, max_agents) == expected
 
 
-def test_tui_suite_passes_with_empty_home_and_lc_home():
-    files = _tui_harness_test_files()
-    assert files
+_SMOKE_STATE = "hub#workflow"
 
-    empty_home = tempfile.mkdtemp()
+
+def _empty_home_env(empty_home):
     env = dict(os.environ)
     env["HOME"] = empty_home
     env["LC_HOME"] = empty_home
     env.pop("LC_CONFIG", None)
-    inner = _inner_worker_count(
-        os.environ.get("PYTEST_XDIST_WORKER_COUNT"),
-        os.cpu_count() or 1,
-        os.environ.get("LC_MAX_AGENTS"),
-    )
+    return env
 
+
+def _run_under_empty_home(args):
+    empty_home = tempfile.mkdtemp()
     result = subprocess.run(
-        [sys.executable, "-m", "pytest", "-n", inner, "--dist=loadgroup", *files],
+        [sys.executable, *args],
         cwd=str(REPO_ROOT),
-        env=env,
+        env=_empty_home_env(empty_home),
         capture_output=True,
         text=True,
+        timeout=300,
+    )
+    return result, sorted(os.listdir(empty_home))
+
+
+def _home_clean(result, leftovers):
+    return result.returncode == 0 and not leftovers
+
+
+def test_registered_screen_state_renders_with_empty_home_and_lc_home():
+    result, leftovers = _run_under_empty_home(["-m", "tests.support.screen_render", _SMOKE_STATE])
+
+    assert _home_clean(result, leftovers), result.stdout + result.stderr + repr(leftovers)
+    assert result.stdout.strip()
+
+
+def test_empty_home_smoke_fails_when_the_harness_reads_a_home_dependent_path():
+    code = (
+        "import os, pathlib\n"
+        "pathlib.Path(os.path.expanduser('~'), 'harness-state').write_text('x')\n"
     )
 
-    assert result.returncode == 0, result.stdout + result.stderr
+    result, leftovers = _run_under_empty_home(["-c", code])
+
+    assert not _home_clean(result, leftovers)
+    assert leftovers == ["harness-state"]

@@ -55,6 +55,20 @@ jobs:
       - run: uv sync
       - run: bash tests/run.sh tests/integration
 
+  hermetic-tui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync
+      - name: Run the TUI test files with an empty HOME and LC_HOME
+        run: |
+          set -euo pipefail
+          files=$(uv run python -c "from tests.integration.test_tui_harness_is_hermetic import _tui_harness_test_files as f; print(*f())")
+          test -n "$files"
+          empty_home="$(mktemp -d)"
+          env -u LC_CONFIG HOME="$empty_home" LC_HOME="$empty_home" uv run pytest -n auto --dist=loadgroup $files
+
   packaging:
     runs-on: ubuntu-latest
     steps:
