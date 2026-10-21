@@ -62,11 +62,11 @@ _NO_PURPOSE = _entry().replace(b"purpose: p\n", b"")
 
 
 class TestDoctorConventionsVersion(unittest.TestCase):
-    def test_version_one_is_outdated_and_version_two_is_not(self):
+    def test_version_two_is_outdated_and_version_three_is_not(self):
         self.assertEqual(
-            len(_of_kind({"CONVENTIONS.md": _conventions(1)}, "guidance-conventions-outdated")), 1)
+            len(_of_kind({"CONVENTIONS.md": _conventions(2)}, "guidance-conventions-outdated")), 1)
         self.assertEqual(
-            _of_kind({"CONVENTIONS.md": _conventions(2)}, "guidance-conventions-outdated"), [])
+            _of_kind({"CONVENTIONS.md": _conventions(3)}, "guidance-conventions-outdated"), [])
 
     def test_an_older_version_is_reported_naming_both_and_the_pr(self):
         found = _of_kind({"CONVENTIONS.md": _conventions(CONVENTIONS_VERSION - 1)},
