@@ -12,7 +12,7 @@ class FakeGit(GitPort, TeardownLedgerPort):
                  torn_down_branches=(), init_ok=True, commit_ok=True,
                  missing_identity=(), ref=None, ref_files=None, fetch_ok=True,
                  fetch_detail="boom", added=None, changed=None, ref_shas=None,
-                 history=None, approvals=None, uncommitted=None):
+                 history=None, approvals=None, uncommitted=None, beyond=None):
         self._repos = set(repos) if repos is not None else None
         self._is_repo = is_repo
         self._origin = origin
@@ -41,6 +41,7 @@ class FakeGit(GitPort, TeardownLedgerPort):
         self._history = {k: list(v) for k, v in (history or {}).items()}
         self._changed = {k: list(v) for k, v in (changed or {}).items()}
         self._uncommitted = {k: list(v) for k, v in (uncommitted or {}).items()}
+        self._beyond = {k: list(v) for k, v in (beyond or {}).items()}
         self._fetch_ok = fetch_ok
         self._fetch_detail = fetch_detail
         self.calls = []
@@ -208,6 +209,11 @@ class FakeGit(GitPort, TeardownLedgerPort):
         self.calls.append(("uncommitted_paths", root))
         self._raise_if("uncommitted_paths", root)
         return list(self._uncommitted.get(root, []))
+
+    def commits_beyond(self, root, base, branch):
+        self.calls.append(("commits_beyond", root, base, branch))
+        self._raise_if("commits_beyond", root)
+        return list(self._beyond.get((root, branch), []))
 
     def created_worktrees(self):
         return [

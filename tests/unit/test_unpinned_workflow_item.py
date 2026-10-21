@@ -31,6 +31,9 @@ _BAD_URL = "https://github.com/x/y/pull/2"
 
 
 class _NoWorktrees:
+    def teardown_refusals(self, item, merged_prs=frozenset()):
+        return []
+
     def release_run(self, run, delete_remote=True):
         pass
 

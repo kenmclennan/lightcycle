@@ -67,6 +67,7 @@ from lightcycle.application.work.resolve_workflow_selection import (
     ResolveWorkflowSelectionInput,
     ResolveWorkflowSelectionUseCase,
 )
+from lightcycle.application.work.close_item import TeardownRefused
 from lightcycle.application.work.title_guard import validate_title
 from lightcycle.application.work import (
     ActiveStepsUseCase,
@@ -1097,6 +1098,11 @@ def _refuse_over_cap(fields):
     return 2
 
 
+def _log_teardown_refusal(message):
+    ts = time.strftime("%H:%M:%S", time.localtime(time.time()))
+    _container.worker_log.append_run_log("%s  %-7s  %s\n" % (ts, "refused", message))
+
+
 def cmd_done(argv):
     a = build_parser(COMMANDS["done"]).parse_args(argv)
     note = " ".join(a.note) if a.note else None
@@ -1124,6 +1130,9 @@ def cmd_done(argv):
             )
             if resp.next_step:
                 print(resp.next_step)
+            if resp.teardown_refusal:
+                sys.stderr.write("%s\n" % resp.teardown_refusal)
+                _log_teardown_refusal(resp.teardown_refusal)
         else:
             disposition = a.disposition
             if disposition is None:
@@ -1140,6 +1149,8 @@ def cmd_done(argv):
             )
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
+        if isinstance(e, TeardownRefused):
+            _log_teardown_refusal(str(e))
         return 1
     return 0
 
@@ -1165,6 +1176,8 @@ def cmd_close(argv):
         )
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
+        if isinstance(e, TeardownRefused):
+            _log_teardown_refusal(str(e))
         return 1
     return 0
 

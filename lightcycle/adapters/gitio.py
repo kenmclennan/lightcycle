@@ -313,6 +313,15 @@ def changed_paths(root, base):
     return rows
 
 
+def commits_beyond(root, base, branch):
+    proc = git(root, "rev-list", "%s..%s" % (base, branch))
+    if proc.returncode != 0:
+        raise GitReadError(
+            "git rev-list %s..%s failed in %s: %s" % (base, branch, root, proc.stderr.strip())
+        )
+    return [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+
+
 def uncommitted_paths(root):
     proc = git(root, "status", "--porcelain", "-z", "--untracked-files=all")
     if proc.returncode != 0:
@@ -385,6 +394,9 @@ class GitAdapter(GitPort):
 
     def uncommitted_paths(self, root):
         return uncommitted_paths(root)
+
+    def commits_beyond(self, root, base, branch):
+        return commits_beyond(root, base, branch)
 
     def commit_all(self, root, message):
         return commit_all(root, message)

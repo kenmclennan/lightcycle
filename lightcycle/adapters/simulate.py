@@ -174,6 +174,10 @@ class RecordingGit(GitPort, TeardownLedgerPort):
         self._record("uncommitted_paths", root)
         return []
 
+    def commits_beyond(self, root, base, branch):
+        self._record("commits_beyond", root, base, branch)
+        return []
+
 
 class ScriptedGitHub(GitHubEventsPort):
     def __init__(self, login="reviewer"):

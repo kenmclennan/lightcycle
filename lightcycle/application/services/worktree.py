@@ -1,7 +1,7 @@
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.setup.project_registry import ProjectRegistry
 from lightcycle.domain.flow.flow import PROJECT_WORKSPACE, SPECS_WORKSPACE
-from lightcycle.domain.runs import pass_number
+from lightcycle.domain.runs import RunState, pass_number
 from lightcycle.domain.workspace import Branch, Worktree
 from lightcycle.ports.git import GitReadError
 from lightcycle.ports.store import ProjectResolutionError
@@ -222,6 +222,54 @@ class WorktreeService:
             (self._target_for_phase(item, run.phase), self.path_for_run(run))
             for run in self._releasable_runs(item)
         ]
+
+    def teardown_refusals(self, item, merged_prs=frozenset()):
+        findings = []
+        fetched = set()
+        for run in self._releasable_runs(item):
+            target = self._target_for_phase(item, run.phase)
+            if not self._git.is_git_repo(target):
+                continue
+            path = self.path_for_run(run)
+            findings += self._dirty_findings(target, path)
+            if run.state == RunState.MERGED or (run.pr and run.pr in merged_prs):
+                continue
+            if target not in fetched:
+                fetched.add(target)
+                self._git.fetch_origin(target)
+            findings += self._unmerged_findings(target, run.branch)
+        return findings
+
+    def _dirty_findings(self, target, path):
+        try:
+            if not self._git.worktree_registered(target, path):
+                return []
+        except GitReadError as e:
+            return ["could not tell whether worktree %s is registered: %s" % (path, e)]
+        try:
+            paths = self._git.uncommitted_paths(path)
+        except GitReadError as e:
+            return ["could not read the state of worktree %s: %s" % (path, e)]
+        if not paths:
+            return []
+        return ["worktree %s has uncommitted paths: %s" % (path, ", ".join(paths))]
+
+    def _unmerged_findings(self, target, branch):
+        try:
+            if not self._git.branch_exists(target, branch):
+                return []
+        except GitReadError as e:
+            return ["could not tell whether branch %s exists: %s" % (branch, e)]
+        base = self._git.default_ref(target) or self._git.worktree_base(target)
+        if base is None:
+            return ["branch %s has no base branch to compare against in %s" % (branch, target)]
+        try:
+            shas = self._git.commits_beyond(target, base, branch)
+        except GitReadError as e:
+            return ["could not read the commits of branch %s: %s" % (branch, e)]
+        if not shas:
+            return []
+        return ["branch %s has %d commit(s) beyond %s that are not merged" % (branch, len(shas), base)]
 
     def remove(self, item):
         for run in self._releasable_runs(item):

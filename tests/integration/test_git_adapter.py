@@ -576,3 +576,26 @@ class TestGitAdapterChangedPaths(unittest.TestCase):
 
         with self.assertRaises(GitReadError):
             GitAdapter().changed_paths(repo, "no-such-ref")
+
+
+class TestGitAdapterCommitsBeyond(unittest.TestCase):
+    def test_branch_with_one_extra_commit_returns_one_sha(self):
+        repo = _make_repo()
+        _git(repo, "checkout", "-q", "-b", "feat/x")
+        (Path(repo) / "new").write_text("y")
+        _git(repo, "add", ".")
+        _git(repo, "commit", "-q", "-m", "more")
+
+        shas = GitAdapter().commits_beyond(repo, "main", "feat/x")
+
+        self.assertEqual(shas, [_git(repo, "rev-parse", "HEAD").stdout.strip()])
+
+    def test_merged_branch_returns_none(self):
+        repo = _make_repo()
+        _git(repo, "branch", "feat/x")
+
+        self.assertEqual(GitAdapter().commits_beyond(repo, "main", "feat/x"), [])
+
+    def test_unreadable_repo_raises(self):
+        with self.assertRaises(GitReadError):
+            GitAdapter().commits_beyond(tempfile.mkdtemp(), "main", "feat/x")

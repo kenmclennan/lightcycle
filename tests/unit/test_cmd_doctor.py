@@ -153,6 +153,32 @@ class TestCmdDoctor(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertRegex(out, r"github: ok - 4261/5000 remaining, resets at \d\d:\d\d:\d\d")
 
+    def test_open_item_with_a_teardown_refusal_is_listed_under_orphans(self):
+        store = FakeStore()
+        item = store.create_item("stuck", "a description")
+        store.add_artifact(item, "teardown-refused", "worktree /w has uncommitted paths: a.py", internal=True)
+        cli.set_container(FakeContainer(store))
+
+        rc, out, err = call(cli.cmd_doctor, "--json")
+
+        data = json.loads(out)
+        self.assertEqual(rc, 1)
+        self.assertEqual(len(data["orphans"]), 1)
+        self.assertIn(item, data["orphans"][0]["message"])
+        self.assertIn("a.py", data["orphans"][0]["message"])
+        self.assertIn("close the item again", data["orphans"][0]["fix"])
+
+    def test_closed_item_with_a_teardown_refusal_artifact_is_not_listed(self):
+        store = FakeStore()
+        item = store.create_item("done now", "a description")
+        store.add_artifact(item, "teardown-refused", "worktree /w has uncommitted paths: a.py", internal=True)
+        store.complete_node(item, "closed", "completed")
+        cli.set_container(FakeContainer(store))
+
+        rc, out, err = call(cli.cmd_doctor, "--json")
+
+        self.assertEqual(json.loads(out)["orphans"], [])
+
     def test_failing_origin_reports_in_origin_category(self):
         source = FakeWorkflowSource()
         source.register_origin("acme2", ref="gone-branch")
