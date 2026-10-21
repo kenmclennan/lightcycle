@@ -2028,10 +2028,11 @@ def cmd_start(argv):
         tick = _container.tick(flow=_flow())
         if a.once:
             now = time.time()
+            started = time.monotonic()
             tick.prime(now)
             result = _run_tick(tick, _container.worker_log, TickInput(now=now), now)
             lines, _ = _format_tick(result, None, now)
-            lines.append("tick took %.1fs" % (time.time() - now))
+            lines.append("tick took %.1fs" % (time.monotonic() - started))
             for line in lines:
                 print(line)
             return 0
@@ -2051,6 +2052,7 @@ def cmd_start(argv):
         last_waiting = None
         while True:
             now = time.time()
+            tick_started = time.monotonic()
             for line in _upgrade_notice_lines(upgrade_cadence.execute(now)):
                 print(line)
             drain = _drain_status(now).draining
@@ -2068,7 +2070,7 @@ def cmd_start(argv):
             prev_now, consecutive_failures, _ = _advance_tick_state(
                 prev_now, consecutive_failures, now, True, tick_failure_cap)
             lines, prev_snapshot = _format_tick(result, prev_snapshot, now)
-            lines += _tick_duration_lines(time.time() - now, interval)
+            lines += _tick_duration_lines(time.monotonic() - tick_started, interval)
             for line in lines:
                 print(line)
             if result.pool.draining:

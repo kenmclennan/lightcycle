@@ -301,7 +301,7 @@ class WorkflowSimulateUseCase:
                 item_id, SCHEDULE_STATE_ARTIFACT, self._schedule_state, internal=True)
         start = stage or graph.entry
         role = self._flow.owner_of(start, pin)
-        self._store.create_step(step=start, role=role, parent=item_id)
+        self._store.create_step(stage=start, role=role, item=item_id)
         return item_id
 
     def _is_walk_terminal(self, graph, stage):

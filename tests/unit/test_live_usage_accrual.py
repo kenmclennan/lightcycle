@@ -73,7 +73,7 @@ def _user(tool_use_id, content):
 class TestLiveUsageAccrualUseCase(unittest.TestCase):
     def test_registry_unreadable_returns_without_recording_usage(self):
         store = RecordingFakeStore()
-        create_owned_step(store, "build: t", step="build", role="agent")
+        create_owned_step(store, "build: t", stage="build", role="agent")
         workers = RaisingFakeWorkers()
         LiveUsageAccrualUseCase(store, FakeFs(files={}), workers, FakeConfig(), stream=ClaudeStreamAdapter()).execute(now=100)
         self.assertEqual(store.record_usage_calls, [])
@@ -85,7 +85,7 @@ class TestLiveUsageAccrualUseCase(unittest.TestCase):
 
     def test_a_live_worker_with_a_step_gets_its_delta_posted(self):
         store = RecordingFakeStore()
-        tid = create_owned_step(store, "build: t", step="build", role="agent")
+        tid = create_owned_step(store, "build: t", stage="build", role="agent")
         store.set_model(tid, "sonnet")
         lines = [
             _assistant("msg-1", tool_use=("tu-1", "Bash"),
@@ -121,7 +121,7 @@ class TestLiveUsageAccrualUseCase(unittest.TestCase):
 
     def test_a_second_tick_against_a_longer_log_posts_only_the_new_delta(self):
         store = RecordingFakeStore()
-        tid = create_owned_step(store, "build: t", step="build", role="agent")
+        tid = create_owned_step(store, "build: t", stage="build", role="agent")
         store.set_model(tid, "sonnet")
         first_lines = [
             _assistant("msg-1", tool_use=("tu-1", "Bash"),
@@ -153,7 +153,7 @@ class TestLiveUsageAccrualUseCase(unittest.TestCase):
 
     def test_a_tick_against_an_unchanged_log_makes_no_store_calls(self):
         store = RecordingFakeStore()
-        tid = create_owned_step(store, "build: t", step="build", role="agent")
+        tid = create_owned_step(store, "build: t", stage="build", role="agent")
         store.set_model(tid, "sonnet")
         lines = [
             _assistant("msg-1", tool_use=("tu-1", "Bash"),
@@ -174,7 +174,7 @@ class TestLiveUsageAccrualUseCase(unittest.TestCase):
 
     def test_a_chunk_ending_mid_line_does_not_advance_offset_or_double_count(self):
         store = RecordingFakeStore()
-        tid = create_owned_step(store, "build: t", step="build", role="agent")
+        tid = create_owned_step(store, "build: t", stage="build", role="agent")
         store.set_model(tid, "sonnet")
         partial = '{"type":"assistant","message":{"id":"msg-1"'
         fs = FakeFs(files={"/l/1.log": partial.encode()})
@@ -202,8 +202,8 @@ class TestLiveUsageAccrualUseCase(unittest.TestCase):
                 return super().parse_attribution_chunk(lines, seen, pending)
 
         store = RecordingFakeStore()
-        bad = create_owned_step(store, "build: bad", step="build", role="agent")
-        good = create_owned_step(store, "build: good", step="build", role="agent")
+        bad = create_owned_step(store, "build: bad", stage="build", role="agent")
+        good = create_owned_step(store, "build: good", stage="build", role="agent")
         store.set_model(good, "sonnet")
         good_lines = [_assistant("msg-1", usage={"input_tokens": 7, "output_tokens": 3,
                                                   "cache_read_input_tokens": 0,

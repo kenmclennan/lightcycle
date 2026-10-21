@@ -144,7 +144,7 @@ class TestRealStage(ScratchHome):
         item = store.create_item("t", "d", workflow=self.pin, shortcode="APP")
         store.add_artifact(item, "repo", "app")
         store.add_artifact(item, "brief", "look at the sheet")
-        return store.create_step(step="poll", role="engine", parent=item)
+        return store.create_step(stage="poll", role="engine", item=item)
 
     def drive(self, step, until):
         for n in range(400):

@@ -33,7 +33,7 @@ class TestStepDetailPr(unittest.TestCase):
     def setUp(self):
         self.store = FakeStore()
         self.flow = PhasedFlow({"write-code": "code", "open-spec": "spec"})
-        self.step = create_owned_step(self.store, "s", step="write-code", role="agent")
+        self.step = create_owned_step(self.store, "s", stage="write-code", role="agent")
         self.item = self.store.get_node(self.step).item
         self.pid = self.store.open_pass(self.item)
         self.store.set_step_pass(self.step, self.pid)
@@ -60,7 +60,7 @@ class TestStepDetailPr(unittest.TestCase):
 
     def test_a_step_of_a_phase_without_a_run_pr_does_not_show_one(self):
         self.store.set_pr(self.store.open_run(self.item, self.pid, "code"), PR)
-        other = self.store.create_step(step="open-spec", role="agent", parent=self.item)
+        other = self.store.create_step(stage="open-spec", role="agent", item=self.item)
         self.store.set_step_pass(other, self.pid)
 
         self.assertNotIn("pr", keys_and_values(self.store, other, self.flow))

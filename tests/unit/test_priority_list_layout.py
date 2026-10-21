@@ -18,7 +18,7 @@ class TestPriorityListScreenScrolling(unittest.TestCase):
     def test_screen_does_not_scroll_when_priority_list_overflows(self):
         store = FakeStore()
         for i in range(14):
-            create_owned_step(store, "word " * 30 + str(i), step="triage", role="human")
+            create_owned_step(store, "word " * 30 + str(i), stage="triage", role="human")
 
         session = self._launch(store)
 
@@ -31,7 +31,7 @@ class TestPriorityListScreenScrolling(unittest.TestCase):
 
     def test_screen_does_not_scroll_when_priority_list_fits(self):
         store = FakeStore()
-        create_owned_step(store, "single row", step="triage", role="human")
+        create_owned_step(store, "single row", stage="triage", role="human")
 
         session = self._launch(store)
 
@@ -126,7 +126,7 @@ def _rendered_cell_text(table, row_id, column_key):
 class TestPriorityListStepColumnTruncation(unittest.TestCase):
     def test_a_phrase_longer_than_the_budget_is_shown_with_a_trailing_ellipsis(self):
         store = FakeStore()
-        step = create_owned_step(store, "build it", step="build", role="agent")
+        step = create_owned_step(store, "build it", stage="build", role="agent")
         fs = FakeFs(metas={
             "coder": {
                 "model": "sonnet", "step": "build",
@@ -144,7 +144,7 @@ class TestPriorityListStepColumnTruncation(unittest.TestCase):
 
     def test_a_phrase_within_the_budget_is_shown_in_full(self):
         store = FakeStore()
-        step = create_owned_step(store, "build it", step="build", role="agent")
+        step = create_owned_step(store, "build it", stage="build", role="agent")
         fs = FakeFs(metas={
             "coder": {"model": "sonnet", "step": "build", "display": "Coding"},
         })

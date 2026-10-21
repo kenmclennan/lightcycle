@@ -37,7 +37,7 @@ class Rig:
             self.store, self.flow, FakeWorktrees(), self.workers, self.config, FakeGithubBudget())
 
     def first_step(self, stage="build", role="agent"):
-        return self.store.create_step(step=stage, role=role, parent=self.item)
+        return self.store.create_step(stage=stage, role=role, item=self.item)
 
     def claim(self):
         return self.claim_uc().execute(ClaimInput(role="agent"))
@@ -279,7 +279,7 @@ class TestItemOutputsResolvesTheWorkflowOncePerCall(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("t", "the brief", workflow="spec-driven", shortcode="APP")
         for _ in range(step_count):
-            store.create_step(step="build", role="agent", parent=item)
+            store.create_step(stage="build", role="agent", item=item)
         counting = _CountingStore(store)
         outputs = ItemOutputs(counting, flow_for(METAS, counting))
         node = store.get_node(store.children(item)[0].id)
@@ -305,8 +305,8 @@ class TestItemOutputsResolvesTheWorkflowOncePerCall(unittest.TestCase):
         store = FakeStore()
         flow = flow_for(METAS, store)
         item = store.create_item("t", "the brief", workflow="spec-driven", shortcode="APP")
-        build = store.create_step(step="build", role="agent", parent=item)
-        review = store.create_step(step="review", role="agent", parent=item)
+        build = store.create_step(stage="build", role="agent", item=item)
+        review = store.create_step(stage="review", role="agent", item=item)
         outputs = ItemOutputs(store, flow)
 
         self.assertEqual(outputs.declared_types(store.get_node(build)), frozenset({"X"}))

@@ -56,7 +56,7 @@ def _store_no_closed_items(ctx):
 def _store_closed_item_today_with_cost(ctx):
     store = FakeStore(now=lambda: _NOW.isoformat())
     item = store.create_item("done item", "a description")
-    step = store.create_step(step="build", role="agent", parent=item)
+    step = store.create_step(stage="build", role="agent", item=item)
     store.claim_ready("agent")
     store.record_usage(step, 100, 10, 0, 0, 2.50, "list", None)
     store.complete_node(step, "done")

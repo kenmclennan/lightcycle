@@ -53,7 +53,7 @@ class _Rig:
         self.store = FakeStore()
         self.item = self.store.create_item("building a thing", "a description")
         plant_pr(self.store, self.item, _URL, branch=_BRANCH)
-        self.poll = self.store.create_step(step="poll-ci", role="engine", parent=self.item)
+        self.poll = self.store.create_step(stage="poll-ci", role="engine", item=self.item)
         adapter = _FlowAdapter(flow or _flow())
         complete = CompleteStepUseCase(self.store, adapter)
         if wrap:
@@ -128,7 +128,7 @@ class TestFeedbackThatDoesNotBlock(unittest.TestCase):
         rig = _Rig(_gh())
         run = rig.store.current_run(rig.item, None)
         rig.store.file_hold(run.id, "k1", "mallory", "body", None, None, 1.0)
-        hold_step = rig.store.create_step(step="held-comment", role="human", parent=rig.item)
+        hold_step = rig.store.create_step(stage="held-comment", role="human", item=rig.item)
         rig.store.attach_hold(run.id, "k1", rig.item, hold_step)
         rig.store.decide_hold(hold_step, "approved")
         rig.uc.execute()
@@ -193,7 +193,7 @@ class TestMixedPrs(unittest.TestCase):
         rig = _Rig(gh)
         second = rig.store.create_item("another", "a description")
         plant_pr(rig.store, second, other, branch="feat/other")
-        rig.store.create_step(step="poll-ci", role="engine", parent=second)
+        rig.store.create_step(stage="poll-ci", role="engine", item=second)
 
         result = rig.uc.execute()
 

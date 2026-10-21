@@ -51,7 +51,7 @@ class TestCmdCloseRefusesAStep(unittest.TestCase):
         cli.set_container(_Container(self.store))
 
     def test_names_done_as_the_verb_for_a_step(self):
-        step = create_owned_step(self.store, "build: x", step="build", role="agent")
+        step = create_owned_step(self.store, "build: x", stage="build", role="agent")
         rc, out, err = call(cli.cmd_close, step)
         self.assertEqual(rc, 2)
         self.assertIn("done", err)

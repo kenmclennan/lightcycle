@@ -87,7 +87,7 @@ class Rig:
     def step(self, stage="poll"):
         item = self.store.create_item("t", "d", workflow=PIN, shortcode="APP")
         self.store.add_artifact(item, "brief", "hello")
-        return self.store.create_step(step=stage, role="engine", parent=item)
+        return self.store.create_step(stage=stage, role="engine", item=item)
 
     def key(self, step):
         return "step:%s" % step

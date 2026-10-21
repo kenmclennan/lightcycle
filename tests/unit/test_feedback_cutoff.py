@@ -35,7 +35,7 @@ class _Rig:
         self.store = FakeStore()
         self.item = self.store.create_item("feature", "d")
         plant_pr(self.store, self.item, _PR)
-        self.step = self.store.create_step(step="ready-merge", role="human", parent=self.item)
+        self.step = self.store.create_step(stage="ready-merge", role="human", item=self.item)
         self.dispatch = DispatchPrFeedbackUseCase(
             self.store, self.snapshot, _FlowAdapter(_FEEDBACK_FLOW), None, **_TRUST)
         self.now = 0.0

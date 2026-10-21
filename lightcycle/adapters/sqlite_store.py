@@ -330,7 +330,7 @@ _STEP_COLUMNS = (
 
 _PARK_COLUMNS = {"needs": "park_needs", "reason": "park_reason", "tried": "park_tried"}
 
-_STEP_LABEL_COLUMNS = {"for": "role", "step": "stage"}
+_STEP_LABEL_COLUMNS = {"for": "role", "stage": "stage"}
 _ITEM_LABEL_COLUMNS = {"project": "project"}
 
 _RUN_SELECT = (
@@ -816,10 +816,10 @@ class SqliteStore(StorePort):
             sql += " " + suffix
         return self._rows_to_items(self._conn.execute(sql, params).fetchall())
 
-    def _mint_id(self, parent, shortcode=None):
-        if parent is None and not shortcode:
+    def _mint_id(self, item, shortcode=None):
+        if item is None and not shortcode:
             raise ValueError("create_item needs an explicit shortcode or id; nothing fills one in")
-        namespace = parent if parent is not None else shortcode
+        namespace = item if item is not None else shortcode
         row = self._conn.execute(
             "INSERT INTO counters (namespace, next) VALUES (?, 2) "
             "ON CONFLICT(namespace) DO UPDATE SET next = next + 1 "
@@ -827,13 +827,13 @@ class SqliteStore(StorePort):
             (namespace,),
         ).fetchone()
         n = row[0]
-        if parent is None:
+        if item is None:
             return "%s-%d" % (shortcode, n)
-        return format_step_id(parent, n)
+        return format_step_id(item, n)
 
-    def _mint_or_adopt(self, explicit_id, parent, shortcode=None):
+    def _mint_or_adopt(self, explicit_id, item, shortcode=None):
         if explicit_id is None:
-            return self._mint_id(parent, shortcode)
+            return self._mint_id(item, shortcode)
         exists = self._conn.execute(
             "SELECT 1 FROM steps WHERE id = ? UNION SELECT 1 FROM items WHERE id = ?",
             (explicit_id, explicit_id),
@@ -1041,7 +1041,7 @@ class SqliteStore(StorePort):
             ).fetchall()
         ]
 
-    def ensure_store(self):
+    def ensure_ready(self):
         pass
 
     def reclaim(self, tid):
@@ -1487,25 +1487,25 @@ class SqliteStore(StorePort):
             )
         self._commit()
 
-    def _insert_step_nocommit(self, *, step=None, role=None, parent=None, deps=None,
+    def _insert_step_nocommit(self, *, stage=None, role=None, item=None, deps=None,
                               id=None, previous=None):
-        if parent is None:
-            raise ValueError("create_step requires a parent")
-        tid = self._mint_or_adopt(id, parent)
+        if item is None:
+            raise ValueError("create_step requires an item")
+        tid = self._mint_or_adopt(id, item)
         self._conn.execute(
             "INSERT INTO steps (id, item, stage, role, state, created_at, previous_step) "
             "VALUES (?, ?, ?, ?, 'ready', ?, ?)",
-            (tid, parent, step, role, self._now(), previous),
+            (tid, item, stage, role, self._now(), previous),
         )
         if deps:
             for dep in deps:
                 self._dep_add_nocommit(tid, dep)
         return tid
 
-    def create_step(self, *, step=None, role=None, parent=None, deps=None,
+    def create_step(self, *, stage=None, role=None, item=None, deps=None,
                     id=None, previous=None):
         tid = self._insert_step_nocommit(
-            step=step, role=role, parent=parent, deps=deps, id=id, previous=previous)
+            stage=stage, role=role, item=item, deps=deps, id=id, previous=previous)
         self._commit()
         return tid
 

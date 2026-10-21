@@ -104,11 +104,11 @@ class TestPriorityStackedRebuildRendersEachRowOnce(unittest.TestCase):
         store = FakeStore()
         store.create_item("first title long enough for a continuation line", "a description", id=_PRIORITY_ID_A + "-i")
         store.create_step(
-            step=_PRIORITY_STEP, role="agent", parent=_PRIORITY_ID_A + "-i", id=_PRIORITY_ID_A)
+            stage=_PRIORITY_STEP, role="agent", item=_PRIORITY_ID_A + "-i", id=_PRIORITY_ID_A)
         store.edit_node(_PRIORITY_ID_A + "-i", project=_PRIORITY_PROJECT)
         store.create_item("second title long enough for a continuation line", "a description", id=_PRIORITY_ID_B + "-i")
         store.create_step(
-            step=_PRIORITY_STEP, role="agent", parent=_PRIORITY_ID_B + "-i", id=_PRIORITY_ID_B)
+            stage=_PRIORITY_STEP, role="agent", item=_PRIORITY_ID_B + "-i", id=_PRIORITY_ID_B)
         store.edit_node(_PRIORITY_ID_B + "-i", project=_PRIORITY_PROJECT)
         width = _priority_stack_terminal_width()
         session = launch(make_test_container(store=store), size=(width, 24))
@@ -133,11 +133,11 @@ class TestPriorityStackedCursorGlyphSurvivesCheapPaths(unittest.TestCase):
         store = FakeStore()
         store.create_item("first title long enough for a continuation line", "a description", id=_PRIORITY_ID_A + "-i")
         store.create_step(
-            step=_PRIORITY_STEP, role="agent", parent=_PRIORITY_ID_A + "-i", id=_PRIORITY_ID_A)
+            stage=_PRIORITY_STEP, role="agent", item=_PRIORITY_ID_A + "-i", id=_PRIORITY_ID_A)
         store.edit_node(_PRIORITY_ID_A + "-i", project=_PRIORITY_PROJECT)
         store.create_item("second title long enough for a continuation line", "a description", id=_PRIORITY_ID_B + "-i")
         store.create_step(
-            step=_PRIORITY_STEP, role="agent", parent=_PRIORITY_ID_B + "-i", id=_PRIORITY_ID_B)
+            stage=_PRIORITY_STEP, role="agent", item=_PRIORITY_ID_B + "-i", id=_PRIORITY_ID_B)
         store.edit_node(_PRIORITY_ID_B + "-i", project=_PRIORITY_PROJECT)
         for tid in active_ids:
             store.assign(tid, "worker-1")

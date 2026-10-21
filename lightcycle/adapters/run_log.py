@@ -129,7 +129,8 @@ def _run_streamed(script_path, cwd, env, stdin_bytes, timeout, tee):
 
 
 def run_logged(config, label, log_path, script_path, cwd, env, stdin_bytes, timeout):
-    started = time.time()
+    started_at = time.time()
+    started = time.monotonic()
     with contextlib.ExitStack() as stack:
         try:
             handle = stack.enter_context(open(log_path, "ab"))
@@ -137,7 +138,7 @@ def run_logged(config, label, log_path, script_path, cwd, env, stdin_bytes, time
             handle = None
         if handle is not None:
             _write(handle, "script: %s\nstarted: %s\n--- stderr ---\n" % (
-                script_path, time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(started))))
+                script_path, time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(started_at))))
         tee = _LogTee(handle)
         exit_code, timed_out = None, False
         try:
@@ -150,7 +151,7 @@ def run_logged(config, label, log_path, script_path, cwd, env, stdin_bytes, time
             footer = "could not start: %s" % e
         stdout, stderr_text = tee.text("stdout"), tee.text("stderr")
         if handle is not None:
-            _write(handle, "--- end ---\n%s (%.1fs)\n" % (footer, time.time() - started))
+            _write(handle, "--- end ---\n%s (%.1fs)\n" % (footer, time.monotonic() - started))
     if handle is not None:
         prune_run_logs(config, label)
     return LoggedRun(

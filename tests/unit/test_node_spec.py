@@ -7,33 +7,33 @@ class TestNodeSpec(unittest.TestCase):
     def test_defaults_are_empty(self):
         spec = NodeSpec()
         self.assertEqual(spec.deps, ())
-        self.assertIsNone(spec.step)
-        self.assertIsNone(spec.parent)
+        self.assertIsNone(spec.stage)
+        self.assertIsNone(spec.item)
         self.assertIsNone(spec.previous)
 
     def test_as_kwargs_names_every_create_task_arg(self):
         spec = NodeSpec(
-            step="review",
+            stage="review",
             role="agent",
-            parent="s-1",
+            item="s-1",
             deps=("t-1", "t-2"),
             previous="t-1",
         )
         self.assertEqual(
             spec.as_kwargs(),
             {
-                "step": "review",
+                "stage": "review",
                 "role": "agent",
-                "parent": "s-1",
+                "item": "s-1",
                 "deps": ["t-1", "t-2"],
                 "previous": "t-1",
             },
         )
 
     def test_is_frozen(self):
-        spec = NodeSpec(step="x")
+        spec = NodeSpec(stage="x")
         with self.assertRaises(Exception):
-            spec.step = "y"
+            spec.stage = "y"
 
 
 if __name__ == "__main__":

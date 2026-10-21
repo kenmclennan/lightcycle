@@ -2,7 +2,7 @@ import unittest
 
 from lightcycle.application.pool.memory_gate import MemoryGateUseCase
 from lightcycle.application.pool.pool_hold_status import PoolHoldStatusUseCase
-from lightcycle.domain.pool import WorkerPool
+from lightcycle.domain.pool import MemoryGateState, WorkerPool
 from lightcycle.domain.pool.machine_headroom import MachineHeadroom
 from lightcycle.ports.memory_gate_status import MemoryGateStatusPort
 from tests.support.fake_machine import FakeMachine
@@ -11,13 +11,13 @@ from tests.support.fake_workers import FakeWorkers
 
 class FakeMemoryGateStatus(MemoryGateStatusPort):
     def __init__(self, state=None):
-        self._state = state if state is not None else {}
+        self._state = state
 
     def load(self):
-        return dict(self._state)
+        return self._state
 
     def save(self, state):
-        self._state = dict(state)
+        self._state = state
 
 
 class FakeConfig:
@@ -95,7 +95,8 @@ class TestMemoryGateUseCase(unittest.TestCase):
         result = _execute(workers, machine, memory_gate_status=status)
 
         self.assertEqual(
-            status.load(), {"cap": result.cap, "pool_share": 0.30, "peak_worker_share": 0.10},
+            status.load(),
+            MemoryGateState(cap=result.cap, pool_share=0.30, peak_worker_share=0.10),
         )
         self.assertEqual(result.cap, 0)
 
@@ -124,5 +125,6 @@ class TestMemoryGateUseCase(unittest.TestCase):
         self.assertFalse(hasattr(result, "system_pressure"))
         self.assertFalse(hasattr(result, "suspended"))
         self.assertEqual(
-            status.load(), {"cap": None, "pool_share": 0.2, "peak_worker_share": 0.1},
+            status.load(),
+            MemoryGateState(cap=None, pool_share=0.2, peak_worker_share=0.1),
         )

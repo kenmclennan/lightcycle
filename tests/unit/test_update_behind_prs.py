@@ -65,7 +65,7 @@ class _Harness:
     def gate(self, url, title="feature"):
         item = self.store.create_item(title, "d")
         plant_pr(self.store, item, url)
-        step = self.store.create_step(step="watch-step", role="human", parent=item)
+        step = self.store.create_step(stage="watch-step", role="human", item=item)
         return item, step
 
     def notes(self, step):
@@ -123,7 +123,7 @@ class TestUpdatePath(unittest.TestCase):
         h = _Harness(github)
         item = h.store.create_item("f", "d")
         plant_pr(h.store, item, url)
-        h.store.create_step(step="fix-step", role="agent", parent=item)
+        h.store.create_step(stage="fix-step", role="agent", item=item)
 
         h.uc.execute()
 
@@ -276,7 +276,7 @@ class TestFailureBounds(unittest.TestCase):
 class TestPerGateCount(unittest.TestCase):
     def _next_gate(self, h, item, old):
         h.store.complete_node(old, "merged")
-        return h.store.create_step(step="watch-step", role="human", parent=item)
+        return h.store.create_step(stage="watch-step", role="human", item=item)
 
     def test_pr_replaced_gate_by_gate_is_never_capped(self):
         github, url = _behind(50, head="h0")
@@ -390,7 +390,7 @@ class TestBehindReason(unittest.TestCase):
     def test_none_blank_and_latest_wins(self):
         store = FakeStore()
         item = store.create_item("f", "d")
-        step = store.create_step(step="watch-step", role="human", parent=item)
+        step = store.create_step(stage="watch-step", role="human", item=item)
         self.assertIsNone(behind_reason(store, step))
 
         store.add_artifact(step, "behind-not-updated", "first", internal=True)
@@ -427,7 +427,7 @@ class TestConflictFallThrough(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("f", "d")
         plant_pr(store, item, url)
-        step = store.create_step(step="watch-step", role="agent", parent=item)
+        step = store.create_step(stage="watch-step", role="agent", item=item)
         flow = _FlowAdapter(_FLOW)
         monitor = MonitorPrsUseCase(
             store, github, FakeWorktrees(), flow, CompleteStepUseCase(store, flow),
@@ -451,7 +451,7 @@ class TestOneReadPerPrPerTick(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("f", "d")
         plant_pr(store, item, url)
-        store.create_step(step="watch-step", role="agent", parent=item)
+        store.create_step(stage="watch-step", role="agent", item=item)
         flow = _FlowAdapter(_FLOW)
         return MonitorPrsUseCase(
             store, github, FakeWorktrees(), flow, CompleteStepUseCase(store, flow),

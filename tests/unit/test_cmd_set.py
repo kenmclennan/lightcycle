@@ -37,7 +37,7 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
         cli.set_container(FakeContainer(self.store))
 
     def test_needs_without_state_waiting_is_refused(self):
-        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
+        bid = create_owned_step(self.store, "build: x", stage="build", role="agent")
         BlockStepUseCase(self.store).execute(
             BlockInput(step=bid, needs="pick a colour", reason="needed a decision")
         )
@@ -49,7 +49,7 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
         self.assertEqual(t.park.needs, "pick a colour")
 
     def test_waiting_without_reason_is_refused(self):
-        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
+        bid = create_owned_step(self.store, "build: x", stage="build", role="agent")
         rc, out, err = call(cli.cmd_set, bid, "--state", "waiting", "--needs", "decide X")
         self.assertEqual(rc, 2)
         self.assertIn("--reason", err)
@@ -58,7 +58,7 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
         self.assertIsNone(t.needs)
 
     def test_waiting_refuses_generic_edit_flags(self):
-        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
+        bid = create_owned_step(self.store, "build: x", stage="build", role="agent")
         rc, out, err = call(
             cli.cmd_set, bid, "--state", "waiting", "--needs", "decide X", "--title", "renamed"
         )
@@ -68,13 +68,13 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
         self.assertEqual(t.role, "agent")
 
     def test_ready_refuses_any_other_flag(self):
-        bid = create_owned_step(self.store, "build: x", step="build", role="human")
+        bid = create_owned_step(self.store, "build: x", stage="build", role="human")
         rc, out, err = call(cli.cmd_set, bid, "--state", "ready", "--title", "renamed")
         self.assertNotEqual(rc, 0)
         self.assertIn("--title", err)
 
     def test_in_progress_refuses_any_other_flag(self):
-        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
+        bid = create_owned_step(self.store, "build: x", stage="build", role="agent")
         rc, out, err = call(cli.cmd_set, bid, "--state", "in_progress", "--description", "d")
         self.assertNotEqual(rc, 0)
         self.assertIn("--description", err)
@@ -86,20 +86,20 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
         self.assertIn("--title", err)
 
     def test_unknown_state_is_still_refused_with_its_own_message(self):
-        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
+        bid = create_owned_step(self.store, "build: x", stage="build", role="agent")
         rc, out, err = call(cli.cmd_set, bid, "--state", "bogus")
         self.assertNotEqual(rc, 0)
         self.assertIn("unknown --state", err)
 
     def test_unknown_state_points_to_close_and_done_for_ending_a_node(self):
-        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
+        bid = create_owned_step(self.store, "build: x", stage="build", role="agent")
         rc, out, err = call(cli.cmd_set, bid, "--state", "bogus")
         self.assertNotEqual(rc, 0)
         self.assertIn("lc close", err)
         self.assertIn("lc done", err)
 
     def test_unknown_state_points_to_reopen_for_reopening_a_closed_item(self):
-        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
+        bid = create_owned_step(self.store, "build: x", stage="build", role="agent")
         rc, out, err = call(cli.cmd_set, bid, "--state", "in_progress")
         self.assertNotEqual(rc, 0)
         self.assertIn("lc reopen", err)
@@ -111,7 +111,7 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
         self.assertEqual(self.store.get_item(iid).description, "d")
 
     def test_notes_replaces_existing_notes(self):
-        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
+        bid = create_owned_step(self.store, "build: x", stage="build", role="agent")
         self.store.note(bid, "old note")
         rc, out, err = call(cli.cmd_set, bid, "--notes", "replacement")
         self.assertEqual(rc, 0, err)
@@ -119,7 +119,7 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
         self.assertEqual(t.notes, "replacement")
 
     def test_notes_empty_is_refused(self):
-        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
+        bid = create_owned_step(self.store, "build: x", stage="build", role="agent")
         self.store.note(bid, "old note")
         rc, out, err = call(cli.cmd_set, bid, "--notes", "")
         self.assertNotEqual(rc, 0)
@@ -129,7 +129,7 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
         self.assertEqual(t.notes, "old note")
 
     def test_unset_notes_clears_notes(self):
-        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
+        bid = create_owned_step(self.store, "build: x", stage="build", role="agent")
         self.store.note(bid, "old note")
         rc, out, err = call(cli.cmd_set, bid, "--unset", "notes")
         self.assertEqual(rc, 0, err)
@@ -137,7 +137,7 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
         self.assertFalse(t.notes)
 
     def test_notes_combined_with_state_is_refused(self):
-        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
+        bid = create_owned_step(self.store, "build: x", stage="build", role="agent")
         rc, out, err = call(
             cli.cmd_set, bid, "--state", "waiting", "--needs", "decide X", "--notes", "x"
         )
@@ -207,7 +207,7 @@ class TestCmdSetEmptyStringIsNeverAValue(unittest.TestCase):
         self.assertNotEqual(rc, 0)
 
     def test_tried_empty_combined_with_state_waiting_is_refused_before_parking(self):
-        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
+        bid = create_owned_step(self.store, "build: x", stage="build", role="agent")
         rc, out, err = call(
             cli.cmd_set, bid, "--state", "waiting", "--needs", "X", "--reason", "Y", "--tried", ""
         )
@@ -217,7 +217,7 @@ class TestCmdSetEmptyStringIsNeverAValue(unittest.TestCase):
         self.assertFalse(t.park)
 
     def test_state_waiting_with_blank_needs_is_still_refused(self):
-        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
+        bid = create_owned_step(self.store, "build: x", stage="build", role="agent")
         rc, out, err = call(
             cli.cmd_set, bid, "--state", "waiting", "--needs", "", "--reason", "y"
         )
@@ -227,7 +227,7 @@ class TestCmdSetEmptyStringIsNeverAValue(unittest.TestCase):
         self.assertIsNone(t.park.needs)
 
     def test_state_waiting_with_blank_reason_is_still_refused(self):
-        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
+        bid = create_owned_step(self.store, "build: x", stage="build", role="agent")
         rc, out, err = call(
             cli.cmd_set, bid, "--state", "waiting", "--needs", "x", "--reason", ""
         )
@@ -279,25 +279,25 @@ class TestCmdSetEmptyStringIsNeverAValue(unittest.TestCase):
         self.assertIn("there is no way to clear a label this way", err)
 
     def test_unset_needs_is_refused(self):
-        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
+        bid = create_owned_step(self.store, "build: x", stage="build", role="agent")
         rc, out, err = call(cli.cmd_set, bid, "--unset", "needs")
         self.assertNotEqual(rc, 0)
         self.assertIn("--state ready", err)
 
     def test_unset_reason_is_refused(self):
-        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
+        bid = create_owned_step(self.store, "build: x", stage="build", role="agent")
         rc, out, err = call(cli.cmd_set, bid, "--unset", "reason")
         self.assertNotEqual(rc, 0)
         self.assertIn("--state ready", err)
 
     def test_unset_tried_is_refused(self):
-        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
+        bid = create_owned_step(self.store, "build: x", stage="build", role="agent")
         rc, out, err = call(cli.cmd_set, bid, "--unset", "tried")
         self.assertNotEqual(rc, 0)
         self.assertIn("--state ready", err)
 
     def test_unset_description_on_a_step_is_refused_by_field_ownership(self):
-        bid = create_owned_step(self.store, "build: x", step="build", role="agent")
+        bid = create_owned_step(self.store, "build: x", stage="build", role="agent")
         rc, out, err = call(cli.cmd_set, bid, "--unset", "description")
         self.assertNotEqual(rc, 0)
         self.assertIn("--description", err)
@@ -420,7 +420,7 @@ class TestCmdSetBacklogged(unittest.TestCase):
         self.item = self.store.create_item("an item", "a description")
         self.pid = self.store.open_pass(self.item)
         self.run = self.store.open_run(self.item, self.pid, "code")
-        self.step = self.store.create_step(step="build", role="agent", parent=self.item)
+        self.step = self.store.create_step(stage="build", role="agent", item=self.item)
 
     def test_an_idle_item_is_backlogged_with_exit_zero(self):
         rc, out, err = call(cli.cmd_set, self.item, "--state", "backlogged")

@@ -103,23 +103,23 @@ class TestTransition(unittest.TestCase):
 
     def test_next_task_spec_routes_and_keeps_deps(self):
         spec = self._t().next_step_spec(make_step(id="t-1"))
-        self.assertEqual(spec.step, "review")
+        self.assertEqual(spec.stage, "review")
         self.assertEqual(spec.role, "agent")
-        self.assertEqual(spec.parent, "i-1")
+        self.assertEqual(spec.item, "i-1")
         self.assertEqual(spec.deps, ("t-1",))
 
     def test_next_task_spec_includes_parent_when_present(self):
         spec = self._t().next_step_spec(make_step(id="t-1", parent="s-9"))
-        self.assertEqual(spec.parent, "s-9")
+        self.assertEqual(spec.item, "s-9")
 
     def test_next_task_spec_as_kwargs_matches_create_task(self):
         kw = self._t().next_step_spec(make_step(id="t-1", parent="s-9")).as_kwargs()
         self.assertEqual(
             kw,
             {
-                "step": "review",
+                "stage": "review",
                 "role": "agent",
-                "parent": "s-9",
+                "item": "s-9",
                 "deps": ["t-1"],
                 "previous": "t-1",
             },

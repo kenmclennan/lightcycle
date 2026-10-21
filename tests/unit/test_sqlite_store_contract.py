@@ -25,7 +25,7 @@ class TestSqliteStoreDisconnect(unittest.TestCase):
 
 
 class TestSqliteStoreRequiresParent(unittest.TestCase):
-    def test_create_step_without_parent_raises(self):
+    def test_create_step_without_item_raises(self):
         s = make_sqlite_store()
         with self.assertRaises(ValueError):
             s.create_step()

@@ -55,7 +55,7 @@ class _World:
         flow = _FlowAdapter(_flow(with_hook))
         self.item = self.store.create_item("feature", "d")
         plant_pr(self.store, self.item, _URL)
-        self.gate = self.store.create_step(step="watch-step", role="agent", parent=self.item)
+        self.gate = self.store.create_step(stage="watch-step", role="agent", item=self.item)
         self.monitor = MonitorPrsUseCase(
             self.store, self.github, FakeWorktrees(), flow, CompleteStepUseCase(self.store, flow),
             trusted_authors=lambda: frozenset(), held_shortcode=lambda: "HLD",

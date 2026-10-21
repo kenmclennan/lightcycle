@@ -1,4 +1,4 @@
-import os
+import posixpath
 from dataclasses import dataclass
 from typing import Optional
 
@@ -10,7 +10,7 @@ class Worktree:
 
     def path_in(self, repo_root: str) -> str:
         name = "%s-%s" % (self.item, self.phase) if self.phase else self.item
-        return os.path.join(repo_root, ".worktrees", name)
+        return posixpath.join(repo_root, ".worktrees", name)
 
     @staticmethod
     def is_lock_contention(stderr: str) -> bool:

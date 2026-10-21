@@ -15,7 +15,7 @@ def _rendered_text(widget):
 def _open_hub_on_active_step():
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    store.create_step(step="build", role="agent", parent=item)
+    store.create_step(stage="build", role="agent", item=item)
     store.claim_ready("agent")
     session = launch(make_test_container(store=store))
     session.run(
@@ -66,8 +66,8 @@ def test_pinned_ancestor_banner_pulses_when_its_own_row_is_active():
     store = FakeStore()
     item = store.create_item("Item", "a description")
     for i in range(39):
-        store.create_step(step="build", role="agent", parent=item)
-    active_step = store.create_step(step="build", role="agent", parent=item)
+        store.create_step(stage="build", role="agent", item=item)
+    active_step = store.create_step(stage="build", role="agent", item=item)
     store.assign(active_step, "worker-1")
     store.update_state(active_step, State.RUNNING)
 
@@ -105,7 +105,7 @@ def test_pinned_ancestor_banner_pulses_when_its_own_row_is_active():
 def test_queued_engine_row_does_not_animate_until_the_pool_starts():
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    store.create_step(step="poll-ci", role="engine", parent=item)
+    store.create_step(stage="poll-ci", role="engine", item=item)
     lock = FakeLock(running=False)
     session = launch(make_test_container(store=store, lock=lock))
     try:

@@ -171,7 +171,7 @@ def _item_hub_open(ctx):
 def _step_hub_open(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step(step="write-code", role="agent", parent=item)
+    step = store.create_step(stage="write-code", role="agent", item=item)
     ctx["item_id"] = item
     ctx["step_id"] = step
     ctx["node_id"] = step
@@ -183,7 +183,7 @@ def _step_hub_open(ctx):
 def _priority_with_item(ctx):
     store = FakeStore()
     item = store.create_item("an item", "a description")
-    step = store.create_step(step="write-code", role="agent", parent=item)
+    step = store.create_step(stage="write-code", role="agent", item=item)
     store.claim_ready("agent")
     ctx["item_id"] = item
     ctx["step_id"] = step
@@ -194,7 +194,7 @@ def _priority_with_item(ctx):
 def _priority_with_needs_attention_step(ctx):
     store = FakeStore()
     item = store.create_item("an item", "a description")
-    step = store.create_step(step="await-merge", role="human", parent=item)
+    step = store.create_step(stage="await-merge", role="human", item=item)
     store.update_metadata(step, {"needs": "Resolve the conflict", "reason": "CI reported a conflict"})
     ctx["item_id"] = item
     ctx["step_id"] = step
@@ -205,7 +205,7 @@ def _priority_with_needs_attention_step(ctx):
 def _priority_with_queued_step(ctx):
     store = FakeStore()
     item = store.create_item("an item", "a description")
-    step = store.create_step(step="write-code", role="agent", parent=item)
+    step = store.create_step(stage="write-code", role="agent", item=item)
     ctx["item_id"] = item
     ctx["step_id"] = step
     _launch(ctx, store)
@@ -217,7 +217,7 @@ def _item_full_identity(ctx):
     item = store.create_item(
         "Full item", "a description", workflow="lightcycle/spec-driven@abc123", project="org/repo",
     )
-    store.create_step(step="write-code", role="agent", parent=item)
+    store.create_step(stage="write-code", role="agent", item=item)
     ctx["item_id"] = item
     session = _launch(ctx, store)
     _push_hub(ctx, session, item)
@@ -229,7 +229,7 @@ def _step_of_item_full_identity(ctx):
     item = store.create_item(
         "Full item", "a description", workflow="lightcycle/spec-driven@abc123", project="org/repo",
     )
-    step = store.create_step(step="write-code", role="agent", parent=item)
+    step = store.create_step(stage="write-code", role="agent", item=item)
     ctx["item_id"] = item
     ctx["step_id"] = step
     session = _launch(ctx, store)
@@ -240,7 +240,7 @@ def _step_of_item_full_identity(ctx):
 def _item_at_step(ctx, step):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    store.create_step(step=step, role="agent", parent=item)
+    store.create_step(stage=step, role="agent", item=item)
     ctx["item_id"] = item
     session = _launch(ctx, store)
     _push_hub(ctx, session, item)
@@ -256,7 +256,7 @@ def _item_at_step_with_display(ctx, step, phrase):
     })
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    store.create_step(step=step, role="agent", parent=item)
+    store.create_step(stage=step, role="agent", item=item)
     ctx["item_id"] = item
     session = _launch(ctx, store)
     _push_hub(ctx, session, item)
@@ -273,7 +273,7 @@ def _step_composite_title_with_display(ctx):
     store = FakeStore()
     item = store.create_item("Per-step cost attribution and historical backfill", "a description")
     step = store.create_step(
-        step="code-await-merge", role="agent", parent=item)
+        stage="code-await-merge", role="agent", item=item)
     ctx["item_id"] = item
     ctx["step_id"] = step
     _launch(ctx, store)
@@ -288,7 +288,7 @@ def _active_item_claimed_minutes_ago(ctx, step, minutes):
 
     store = FakeStore(now=lambda: claimed_at.isoformat())
     item = store.create_item("Item", "a description")
-    store.create_step(step=step, role="agent", parent=item)
+    store.create_step(stage=step, role="agent", item=item)
     store.claim_ready("agent")
 
     ctx["item_id"] = item
@@ -306,7 +306,7 @@ def _human_step_created_minutes_ago(ctx, minutes):
 
     store = FakeStore(now=lambda: created_at.isoformat())
     item = store.create_item("Item", "a description")
-    step = store.create_step(step="await-merge", role="human", parent=item)
+    step = store.create_step(stage="await-merge", role="human", item=item)
 
     ctx["item_id"] = item
     ctx["step_id"] = step
@@ -319,7 +319,7 @@ def _human_step_created_minutes_ago(ctx, minutes):
 def _step_selected(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step(step="write-code", role="agent", parent=item)
+    step = store.create_step(stage="write-code", role="agent", item=item)
     store.claim_ready("agent")
     ctx["item_id"] = item
     ctx["step_id"] = step
@@ -342,12 +342,12 @@ def _item_with_status(ctx, status):
     store = FakeStore()
     if status == "active":
         item = store.create_item("Item", "a description")
-        store.create_step(step="build", role="agent", parent=item)
+        store.create_step(stage="build", role="agent", item=item)
         store.claim_ready("agent")
         node_id = item
     elif status == "needs-attention on a human step":
         item = store.create_item("Item", "a description")
-        store.create_step(step="await-merge", role="human", parent=item)
+        store.create_step(stage="await-merge", role="human", item=item)
         node_id = item
     elif status == "blocked on another item's completion":
         blocker = store.create_item("Blocker", "a description")
@@ -356,11 +356,11 @@ def _item_with_status(ctx, status):
         node_id = item
     elif status == "queued, not yet run":
         item = store.create_item("Item", "a description")
-        store.create_step(step="build", role="agent", parent=item)
+        store.create_step(stage="build", role="agent", item=item)
         node_id = item
     elif status == "done":
         item = store.create_item("Item", "a description")
-        step = store.create_step(step="build", role="agent", parent=item)
+        step = store.create_step(stage="build", role="agent", item=item)
         store.complete_node(step, "done")
         node_id = item
     else:
@@ -375,19 +375,19 @@ def _step_with_status(ctx, status):
     store = FakeStore()
     item = store.create_item("Item", "a description")
     if status == "active":
-        step = store.create_step(step="build", role="agent", parent=item)
+        step = store.create_step(stage="build", role="agent", item=item)
         store.claim_ready("agent")
     elif status == "needs-attention, a human step":
-        step = store.create_step(step="await-merge", role="human", parent=item)
+        step = store.create_step(stage="await-merge", role="human", item=item)
         store.update_metadata(step, {"needs": "Resolve the conflict", "reason": "CI reported a conflict"})
     elif status == "blocked on another item's completion":
         blocker = store.create_item("Blocker", "a description")
-        step = store.create_step(step="build", role="agent", parent=item)
+        step = store.create_step(stage="build", role="agent", item=item)
         store.dep_add(step, blocker)
     elif status == "queued, not yet run":
-        step = store.create_step(step="build", role="agent", parent=item)
+        step = store.create_step(stage="build", role="agent", item=item)
     elif status == "done":
-        step = store.create_step(step="build", role="agent", parent=item)
+        step = store.create_step(stage="build", role="agent", item=item)
         store.complete_node(step, "done")
     else:
         raise AssertionError("unhandled status %r" % status)
@@ -400,7 +400,7 @@ def _step_with_status(ctx, status):
 def _item_hub_open_on_tab(ctx, tab):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    store.create_step(step="build", role="agent", parent=item)
+    store.create_step(stage="build", role="agent", item=item)
     ctx["item_id"] = item
     ctx["node_id"] = item
     session = _launch(ctx, store)
@@ -416,7 +416,7 @@ def _item_hub_open_on_tab(ctx, tab):
 def _step_hub_open_on_tab(ctx, tab):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step(step="write-code", role="agent", parent=item)
+    step = store.create_step(stage="write-code", role="agent", item=item)
     ctx["item_id"] = item
     ctx["step_id"] = step
     ctx["node_id"] = step
@@ -458,7 +458,7 @@ def _item_blocked_with_step(ctx):
     blocker = store.create_item("Blocker item", "a description")
     item = store.create_item("Blocked item", "a description")
     store.dep_add(item, blocker)
-    step = store.create_step(step="write-code", role="agent", parent=item)
+    step = store.create_step(stage="write-code", role="agent", item=item)
     ctx["item_id"] = item
     ctx["node_id"] = item
     ctx["blocker_id"] = blocker
@@ -472,7 +472,7 @@ def _step_running_with_unresolved_dependency(ctx):
     store = FakeStore()
     blocker = store.create_item("Blocker item", "a description")
     item = store.create_item("Item", "a description")
-    step = store.create_step(step="write-code", role="agent", parent=item, deps=[blocker])
+    step = store.create_step(stage="write-code", role="agent", item=item, deps=[blocker])
     store.assign(step, "worker-1")
     store.update_state(step, State.RUNNING)
     ctx["item_id"] = item
@@ -486,7 +486,7 @@ def _step_running_with_unresolved_dependency(ctx):
 def _item_escalated_rework(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step(step="write-code", role="agent", parent=item)
+    step = store.create_step(stage="write-code", role="agent", item=item)
     store.update_metadata(step, {"needs": "Resolve the merge conflict manually"})
     route_to_human(store, step, "BLOCKED: Resolve the merge conflict manually")
     ctx["item_id"] = item
@@ -499,7 +499,7 @@ def _item_escalated_rework(ctx):
 def _item_escalated_rework_with_reason(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step(step="write-code", role="agent", parent=item)
+    step = store.create_step(stage="write-code", role="agent", item=item)
     store.update_metadata(
         step,
         {"needs": "Resolve the merge conflict manually", "reason": "CI reported a real conflict"},
@@ -515,7 +515,7 @@ def _item_escalated_rework_with_reason(ctx):
 def _step_parked_with_needs_and_reason(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step(step="write-code", role="agent", parent=item)
+    step = store.create_step(stage="write-code", role="agent", item=item)
     store.update_metadata(
         step,
         {"needs": "Resolve the merge conflict manually", "reason": "CI reported a real conflict"},
@@ -534,7 +534,7 @@ def _step_parked_with_needs_and_reason(ctx):
 def _item_escalated_over_cap_reason(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step(step="write-code", role="agent", parent=item)
+    step = store.create_step(stage="write-code", role="agent", item=item)
     store.update_metadata(
         step, {"needs": "Resolve the merge conflict manually", "reason": LC_277_6_REASON_EXTENDED}
     )
@@ -550,10 +550,10 @@ def _item_that_is(ctx, status):
     store = FakeStore()
     item = store.create_item("Item", "a description")
     if status == "active":
-        store.create_step(step="build", role="agent", parent=item)
+        store.create_step(stage="build", role="agent", item=item)
         store.claim_ready("agent")
     elif status == "queued":
-        store.create_step(step="build", role="agent", parent=item)
+        store.create_step(stage="build", role="agent", item=item)
     else:
         raise AssertionError("unhandled status %r" % status)
     ctx["item_id"] = item
@@ -578,9 +578,9 @@ def _cycle_to_tab(ctx, tab):
 def _opened_from_priority_row(ctx):
     store = FakeStore()
     other = store.create_item("Other", "a description")
-    store.create_step(step="build", role="agent", parent=other)
+    store.create_step(stage="build", role="agent", item=other)
     item = store.create_item("Target", "a description")
-    step = store.create_step(step="write-code", role="agent", parent=item)
+    step = store.create_step(stage="write-code", role="agent", item=item)
     store.claim_ready("agent")
     store.add_artifact(item, "repo", "org/repo")
     store.edit_node(item, description="A description")
@@ -598,7 +598,7 @@ def _opened_from_priority_row(ctx):
 def _opened_and_navigated(ctx):
     store = FakeStore()
     item = store.create_item("Target", "a description")
-    store.create_step(step="build", role="agent", parent=item)
+    store.create_step(stage="build", role="agent", item=item)
     session = _launch(ctx, store)
     _push_hub(ctx, session, item)
     session.press("down")
@@ -643,7 +643,7 @@ def _step_reclaimed(ctx):
 
     store = FakeStore(now=lambda: claimed_at.isoformat())
     item = store.create_item("Item", "a description")
-    step = store.create_step(step="write-code", role="agent", parent=item)
+    step = store.create_step(stage="write-code", role="agent", item=item)
     store.claim_ready("agent")
     store.reclaim(step)
 

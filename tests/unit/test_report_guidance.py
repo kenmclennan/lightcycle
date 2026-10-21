@@ -58,7 +58,7 @@ def _setup(files, github=None, added=None, approvals=None):
 
 
 def _step(store, item, delivered, cited=None, created_at=None, stage="write-code"):
-    sid = store.create_step(step=stage, role="agent", parent=item)
+    sid = store.create_step(stage=stage, role="agent", item=item)
     if delivered is not None:
         store.add_artifact(sid, "guidance-delivered", delivered, internal=True)
     if cited is not None:

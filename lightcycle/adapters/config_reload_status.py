@@ -2,6 +2,7 @@ import json
 import os
 import sys
 
+from lightcycle.domain.pool import ConfigReloadState
 from lightcycle.ports.config_reload_status import ConfigReloadStatusPort
 
 
@@ -12,13 +13,13 @@ def config_reload_status_path(root):
 def load(root):
     p = config_reload_status_path(root)
     if not os.path.exists(p):
-        return {}
+        return None
     try:
         with open(p) as f:
-            return json.loads(f.read())
+            return ConfigReloadState.from_dict(json.loads(f.read()))
     except Exception as e:
         sys.stderr.write("warning: could not read config reload state %s: %s\n" % (p, e))
-        return {}
+        return None
 
 
 def save(root, state):
@@ -26,7 +27,7 @@ def save(root, state):
     p = config_reload_status_path(root)
     tmp = "%s.%d.tmp" % (p, os.getpid())
     with open(tmp, "w") as f:
-        f.write(json.dumps(state, indent=2))
+        f.write(json.dumps(state.as_dict(), indent=2))
     os.replace(tmp, p)
 
 

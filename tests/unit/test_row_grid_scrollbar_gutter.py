@@ -28,7 +28,7 @@ def _priority_active_store(count):
     store = FakeStore(now=lambda: _at(14))
     for i in range(count):
         step = create_owned_step(store, 
-            "row %d" % i, step="write-code", role="agent", id="LC-%d.1" % (1000 + i),
+            "row %d" % i, stage="write-code", role="agent", id="LC-%d.1" % (1000 + i),
         )
         store.assign(step, "worker-%d" % i)
         store.update_state(step, State.RUNNING)
@@ -48,7 +48,7 @@ def _hierarchy_step_store(count):
     item = store.create_item("Item", "a description", id="LC-3000")
     steps = []
     for i in range(count):
-        step = store.create_step(step="build", role="agent", parent=item, id="LC-3000.%d" % (i + 1))
+        step = store.create_step(stage="build", role="agent", item=item, id="LC-3000.%d" % (i + 1))
         store.assign(step, "worker-%d" % i)
         store.update_state(step, State.RUNNING)
         steps.append(step)

@@ -19,7 +19,7 @@ def _create_step(ctx, name, deps=None, role=None, parent=None):
         name,
         role=role,
         deps=[ctx["ids"][d] for d in (deps or [])],
-        parent=parent,
+        item=parent,
     )
     ctx["ids"][name] = tid
     return tid

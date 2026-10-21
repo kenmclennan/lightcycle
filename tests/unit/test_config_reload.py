@@ -151,9 +151,9 @@ class TestRejectedEdits(ReloadFixture):
         self.set_key("max-agents", "abc")
         self.run_tick(tick)
         state = self.status.load()
-        self.assertEqual(state["outcome"], "rejected")
-        self.assertEqual(state["pid"], 4242)
-        self.assertEqual(state["rejected_mtime"], self.config.config_mtime())
+        self.assertEqual(state.outcome, "rejected")
+        self.assertEqual(state.pid, 4242)
+        self.assertEqual(state.rejected_mtime, self.config.config_mtime())
 
 
 class TestRestartRequiredKeys(ReloadFixture):
@@ -166,7 +166,7 @@ class TestRestartRequiredKeys(ReloadFixture):
         self.assertEqual(result.config.outcome, "reloaded")
         self.assertEqual(result.config.restart_required, ("poll-seconds",))
         self.assertTrue(self.config.schedules_paused())
-        self.assertEqual(self.status.load()["restart_required"], ["poll-seconds"])
+        self.assertEqual(self.status.load().restart_required, ("poll-seconds",))
 
     def test_an_edit_leaving_the_four_keys_alone_needs_no_restart(self):
         tick = self.tick()
@@ -209,7 +209,7 @@ class TestBoundary(ReloadFixture):
         result, err = self.run_tick(self.tick())
         self.assertEqual(result.config.outcome, "unchanged")
         self.assertEqual(err, "")
-        self.assertEqual(self.status.load()["outcome"], "unchanged")
+        self.assertEqual(self.status.load().outcome, "unchanged")
 
     def test_seeded_real_content_touched_is_reloaded_not_rejected(self):
         tick = self.tick()
@@ -222,7 +222,7 @@ class TestMaxAgentsIsLive(ReloadFixture):
     def ready_steps(self, store, n):
         for _ in range(n):
             item = store.create_item("i", "d")
-            store.create_step(step="build", role="agent", parent=item)
+            store.create_step(stage="build", role="agent", item=item)
 
     def test_raising_max_agents_spawns_up_to_the_new_value(self):
         store = FakeStore()

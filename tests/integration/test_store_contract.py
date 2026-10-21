@@ -122,25 +122,25 @@ class TestSqliteStoreItemStateMatchesStepRollUp(unittest.TestCase):
     def _item_with(self, shape):
         s = make_sqlite_store()
         item = s.create_item("an item", "a description", shortcode="GRID")
-        done = s.create_step(step="done-one", role="agent", parent=item)
+        done = s.create_step(stage="done-one", role="agent", item=item)
         s.claim_ready("agent")
         s.complete_node(done, "done")
         other = {
-            "queued": lambda: s.create_step(step="x", role="agent", parent=item),
-            "waiting": lambda: s.create_step(step="x", role="human", parent=item),
+            "queued": lambda: s.create_step(stage="x", role="agent", item=item),
+            "waiting": lambda: s.create_step(stage="x", role="human", item=item),
             "running": lambda: self._running(s, item),
             "blocked": lambda: self._blocked(s, item, done),
         }[shape]()
         return s, item, other
 
     def _running(self, s, item):
-        sid = s.create_step(step="x", role="agent", parent=item)
+        sid = s.create_step(stage="x", role="agent", item=item)
         s.claim_ready("agent")
         return sid
 
     def _blocked(self, s, item, done):
-        gate = s.create_step(step="gate", role="agent", parent=item)
-        sid = s.create_step(step="x", role="agent", parent=item)
+        gate = s.create_step(stage="gate", role="agent", item=item)
+        sid = s.create_step(stage="x", role="agent", item=item)
         s.dep_add(sid, gate)
         return sid
 
@@ -166,14 +166,14 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
     def test_create_task_roundtrips_structured_attrs(self):
         s = self._store()
         item = s.create_item("an item", "a description", shortcode="GRID")
-        tid = s.create_step(step="build", role="agent", parent=item)
+        tid = s.create_step(stage="build", role="agent", item=item)
         t = s.get_step(tid)
         self.assertEqual((t.role, t.stage, t.item), ("agent", "build", item))
         self.assertEqual(t.state, State.QUEUED)
 
     def test_claim_and_close_map_status(self):
         s = self._store()
-        create_owned_step(s, "build: x", step="build", role="agent")
+        create_owned_step(s, "build: x", stage="build", role="agent")
         claimed = s.claim_ready("agent")
         self.assertEqual(claimed.state, State.RUNNING)
         s.complete_node(claimed.id, "done")
@@ -219,7 +219,7 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
 
     def test_tasks_closed_since_returns_closed_tasks_on_or_after_date(self):
         s = self._store()
-        tid = create_owned_step(s, "build: x", step="build", role="agent")
+        tid = create_owned_step(s, "build: x", stage="build", role="agent")
         s.complete_node(tid, "done")
         results = s.nodes_closed_since("2000-01-01")
         self.assertIn(tid, [t.id for t in results])
@@ -308,7 +308,7 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
     def test_last_n_closed_items_excludes_nested_steps(self):
         s = self._store()
         item = s.create_item("item", "a description", shortcode="GRID")
-        step = s.create_step(parent=item)
+        step = s.create_step(item=item)
         s.complete_node(step, "done")
         s.complete_node(item, "merged")
         result_ids = [t.id for t in s.last_n_closed_items(10)]
@@ -325,8 +325,8 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
     def test_edit_keeps_a_steps_id_and_everything_hanging_off_it(self):
         s = self._store()
         item = s.create_item("item", "a description", shortcode="GRID")
-        blocker = s.create_step(parent=item)
-        step = s.create_step(parent=item)
+        blocker = s.create_step(item=item)
+        step = s.create_step(item=item)
         s.dep_add(step, blocker)
         s.label_add(step, "retro-origin")
 
@@ -1065,7 +1065,7 @@ class TestSqliteStoreSchema2Migration(unittest.TestCase):
         store, _err = self._open(root)
         first = create_owned_step(store, "x", role="agent")
         item = store.get_node(first).item
-        second = store.create_step(step="review", role="agent", parent=item, previous=first)
+        second = store.create_step(stage="review", role="agent", item=item, previous=first)
 
         store.set_report(first, "the report")
         store.set_log(second, "/l/s.log")
@@ -1170,7 +1170,7 @@ class TestSqliteStoreUsageColumnsMigration(unittest.TestCase):
     def test_delete_clears_the_removed_steps_gh_call_and_tool_usage_rows(self):
         store = make_sqlite_store()
         item = store.create_item("owning item", "a description", shortcode="GRID")
-        step = create_owned_step(store, "a step", parent=item)
+        step = create_owned_step(store, "a step", item=item)
         store.record_gh_calls("sp-1", step, 4)
         store._conn.execute(
             "INSERT INTO step_tool_usage (step, tool, calls, bytes) VALUES (?, 'Bash', 1, 1)", (step,)

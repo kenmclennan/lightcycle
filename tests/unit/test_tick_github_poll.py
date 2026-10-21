@@ -102,7 +102,7 @@ class TestCiStageIssuesNoGitCall(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("building a thing", "a description")
         plant_pr(store, item, _PR, branch="feat/thing")
-        step = store.create_step(step="poll-ci", role="engine", parent=item)
+        step = store.create_step(stage="poll-ci", role="engine", item=item)
         flow = _FlowAdapter(_FLOW)
         monitor = _CiMonitor(ResolveCiUseCase(store, snapshot, flow, CompleteStepUseCase(store, flow), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, wall_clock=lambda: 10000.0, views=snapshot, trusted_authors=lambda: frozenset()))
         git = FakeGit()
@@ -144,7 +144,7 @@ def _judged_at(hold_view, created_at):
         if hold_view:
             snapshot.pr_sync_state(_PR)
         if step is None and now >= created_at:
-            step = store.create_step(step="poll-ci", role="engine", parent=item)
+            step = store.create_step(stage="poll-ci", role="engine", item=item)
         tick.execute(TickInput(now=now))
         if step is not None and store.get_node(step).state.value == "done":
             return store, step, snapshot, now
@@ -222,7 +222,7 @@ def _head_change_pool(before_move, settle=True):
             tick.execute(TickInput(now=clock[0]))
             clock[0] += _TICK
 
-    first = store.create_step(step="poll-ci", role="engine", parent=item)
+    first = store.create_step(stage="poll-ci", role="engine", item=item)
     run(_POLL + 2 * _TICK)
     assert store.get_node(first).state.value == "done"
     for event in before_move:
@@ -235,7 +235,7 @@ def _head_change_pool(before_move, settle=True):
 class TestCiJudgementAfterHeadChange(unittest.TestCase):
     def _assert_judged_on_new_head(self, before_move):
         github, store, item, snapshot, run, clock = _head_change_pool(before_move)
-        second = store.create_step(step="poll-ci", role="engine", parent=item)
+        second = store.create_step(stage="poll-ci", role="engine", item=item)
         run(3 * _TICK)
         self.assertEqual(store.get_node(second).state.value, "queued")
 
@@ -280,7 +280,7 @@ def _run_until_done(store, step, run, clock, concluded_at):
 class TestCiJudgementWaitsForAConfirmingPoll(unittest.TestCase):
     def test_a_step_created_between_a_push_and_the_next_poll_does_not_judge_the_old_head(self):
         github, store, item, snapshot, run, clock = _head_change_pool([_rework_push], settle=False)
-        second = store.create_step(step="poll-ci", role="engine", parent=item)
+        second = store.create_step(stage="poll-ci", role="engine", item=item)
         run(3 * _TICK)
         self.assertEqual(store.get_node(second).state.value, "queued")
         self.assertEqual([a for a in store.item_artifacts(second) if a.type == "ci-judged-sha"], [])
@@ -299,7 +299,7 @@ class TestCiJudgementWaitsForAConfirmingPoll(unittest.TestCase):
         concluded_at = _concluded(github, clock)
         while clock[0] % _POLL != 0:
             run(_TICK)
-        second = store.create_step(step="poll-ci", role="engine", parent=item)
+        second = store.create_step(stage="poll-ci", role="engine", item=item)
 
         run(_TICK)
         self.assertEqual(store.get_node(second).state.value, "queued")
@@ -497,7 +497,7 @@ class _Rig:
         self.store = FakeStore()
         item = self.store.create_item("feature", "d")
         plant_pr(self.store, item, self.url)
-        self.step = self.store.create_step(step="watch-step", role="human", parent=item)
+        self.step = self.store.create_step(stage="watch-step", role="human", item=item)
         flow = _FlowAdapter(_BEHIND_FLOW)
         self.monitor = MonitorPrsUseCase(
             self.store, self.snapshot, FakeWorktrees(), flow, CompleteStepUseCase(self.store, flow),

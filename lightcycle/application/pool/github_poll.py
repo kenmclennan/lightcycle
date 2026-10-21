@@ -1,6 +1,7 @@
 from lightcycle.application.pool.pr_poll import PrPoll
 import time
 
+from lightcycle.domain.pool import GithubBudget
 from lightcycle.ports.github import RateLimit
 from lightcycle.ports.store import StoreError
 
@@ -80,10 +81,10 @@ class GithubPollUseCase:
         reading = self._github.rate_limit()
         if not isinstance(reading, RateLimit):
             return
-        self._github_budget_status.save({
-            "limit": reading.limit, "remaining": reading.remaining,
-            "reset": reading.reset, "read_at": self._clock(),
-        })
+        self._github_budget_status.save(GithubBudget(
+            limit=reading.limit, remaining=reading.remaining,
+            reset=reading.reset, read_at=self._clock(),
+        ))
 
     def execute(self, now):
         interval = self._config.github_poll_seconds()

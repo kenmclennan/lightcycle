@@ -72,7 +72,7 @@ class TestDefaultPin(unittest.TestCase):
 class TestNodeHelpersTolerateWorkflowLessNodes(unittest.TestCase):
     def _svc_node(self):
         store = FakeStore()
-        step = create_owned_step(store, "audit: x", step="audit", role="agent")
+        step = create_owned_step(store, "audit: x", stage="audit", role="agent")
         svc = FlowService(FakeFs({}), store, config=_RefCfg(), workflow_source=_WFSource(["a", "b"]))
         return svc, store.get_node(step)
 
@@ -94,7 +94,7 @@ class _BrokenStore(FakeStore):
 class TestOwningItemPropagatesStoreErrors(unittest.TestCase):
     def test_workflow_for_raises_rather_than_returning_none_on_a_read_failure(self):
         store = _BrokenStore()
-        step = create_owned_step(store, "audit: x", step="audit", role="agent")
+        step = create_owned_step(store, "audit: x", stage="audit", role="agent")
         service = svc(store)
         with self.assertRaises(RuntimeError):
             service.workflow_for(store.get_node(step))
@@ -114,7 +114,7 @@ class TestWorkflowResolutionSkipsGetItem(unittest.TestCase):
     def _setup(self):
         store = _GetItemCountingStore()
         item = store.create_item("i", "d", workflow="wf")
-        step = store.create_step(step="gate", role="human", parent=item)
+        step = store.create_step(stage="gate", role="human", item=item)
         return store, item, step
 
     def test_workflow_for_a_step_returns_the_pin_without_get_item(self):
@@ -147,19 +147,19 @@ class TestStepSkill(unittest.TestCase):
     def test_human_gate_step_returns_its_skill_body(self):
         svc, store = self._svc_store()
         item = store.create_item("i", "a description", workflow="wf")
-        step = store.create_step(step="gate", role="human", parent=item)
+        step = store.create_step(stage="gate", role="human", item=item)
         self.assertEqual(svc.step_skill(store.get_node(step)), "GATE SKILL BODY")
 
     def test_agent_step_has_no_skill(self):
         svc, store = self._svc_store()
         item = store.create_item("i", "a description", workflow="wf")
-        step = store.create_step(step="review", role="agent", parent=item)
+        step = store.create_step(stage="review", role="agent", item=item)
         self.assertIsNone(svc.step_skill(store.get_node(step)))
 
     def test_workflow_less_node_has_no_skill(self):
         svc, store = self._svc_store()
         item = store.create_item("i", "a description")
-        step = store.create_step(step="gate", role="human", parent=item)
+        step = store.create_step(stage="gate", role="human", item=item)
         self.assertIsNone(svc.step_skill(store.get_node(step)))
 
 
@@ -242,7 +242,7 @@ class TestFlowService(unittest.TestCase):
 
     def test_ready_roles_from_store(self):
         store = FakeStore()
-        create_owned_step(store, "b", step="build", role="agent")
+        create_owned_step(store, "b", stage="build", role="agent")
         self.assertIn("agent", svc(store).ready_roles())
 
 
@@ -250,7 +250,7 @@ class TestPhaseFor(unittest.TestCase):
     def _step(self, metas):
         store = FakeStore()
         item = store.create_item("st", "a description", workflow="w")
-        step = store.get_node(store.create_step(step="build", role="agent", parent=item))
+        step = store.get_node(store.create_step(stage="build", role="agent", item=item))
         return FlowService(FakeFs(metas, workflow=graph_text_from_metas(metas)), store), step
 
     def test_returns_the_steps_declared_phase(self):
@@ -267,7 +267,7 @@ class TestDisplayFor(unittest.TestCase):
     def _step(self, metas):
         store = FakeStore()
         item = store.create_item("st", "a description", workflow="w")
-        step = store.get_node(store.create_step(step="build", role="agent", parent=item))
+        step = store.get_node(store.create_step(stage="build", role="agent", item=item))
         return FlowService(FakeFs(metas, workflow=graph_text_from_metas(metas)), store), step
 
     def test_returns_the_steps_declared_display_phrase(self):
@@ -283,21 +283,21 @@ class TestDisplayFor(unittest.TestCase):
         store = FakeStore()
         service = FlowService(
             FakeFs({}), store, config=_RefCfg(), workflow_source=_WFSource(["a", "b"]))
-        step = store.get_node(create_owned_step(store, "audit: x", step=AUDIT_STEP, role="agent"))
+        step = store.get_node(create_owned_step(store, "audit: x", stage=AUDIT_STEP, role="agent"))
         self.assertEqual(service.display_for(step), "Auditing recent work")
 
     def test_is_the_engine_phrase_for_a_workflow_less_findings_node_without_a_crash(self):
         store = FakeStore()
         service = FlowService(
             FakeFs({}), store, config=_RefCfg(), workflow_source=_WFSource(["a", "b"]))
-        step = store.get_node(create_owned_step(store, "findings: x", step=FINDINGS_STEP, role="human"))
+        step = store.get_node(create_owned_step(store, "findings: x", stage=FINDINGS_STEP, role="human"))
         self.assertEqual(service.display_for(step), "Review the findings")
 
     def test_declared_display_wins_over_the_engine_phrase_for_a_stage_named_audit(self):
         metas = {"auditor": {"model": "sonnet", "step": "audit", "display": "Custom audit label"}}
         store = FakeStore()
         item = store.create_item("st", "a description", workflow="w")
-        step = store.get_node(store.create_step(step="audit", role="agent", parent=item))
+        step = store.get_node(store.create_step(stage="audit", role="agent", item=item))
         service = FlowService(FakeFs(metas, workflow=graph_text_from_metas(metas)), store)
         self.assertEqual(service.display_for(step), "Custom audit label")
 
@@ -307,8 +307,8 @@ class TestGraphResolutionIsCachedPerPinPerInstance(unittest.TestCase):
         store = FakeStore()
         fs = FakeFs(METAS)
         service = FlowService(fs, store)
-        build_node = store.get_node(create_owned_step(store, "a", step="build", role="agent"))
-        review_node = store.get_node(create_owned_step(store, "b", step="review", role="agent"))
+        build_node = store.get_node(create_owned_step(store, "a", stage="build", role="agent"))
+        review_node = store.get_node(create_owned_step(store, "b", stage="review", role="agent"))
 
         service.flow_for(build_node)
         service.flow_for(review_node)
@@ -319,7 +319,7 @@ class TestGraphResolutionIsCachedPerPinPerInstance(unittest.TestCase):
     def test_a_fresh_flow_service_instance_re_resolves(self):
         store = FakeStore()
         fs = FakeFs(METAS)
-        node = store.get_node(create_owned_step(store, "a", step="build", role="agent"))
+        node = store.get_node(create_owned_step(store, "a", stage="build", role="agent"))
 
         FlowService(fs, store).flow_for(node)
         FlowService(fs, store).flow_for(node)

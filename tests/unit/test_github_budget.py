@@ -41,7 +41,7 @@ class _HeavyFlow(FlowService):
 
 
 def _state(remaining, reset=RESET):
-    return {"limit": 5000, "remaining": remaining, "reset": reset, "read_at": 1.0}
+    return GithubBudget(limit=5000, remaining=remaining, reset=reset, read_at=1.0)
 
 
 def _budget(status, flow, now=1000.0, reserve=750):
@@ -79,9 +79,9 @@ class TestBudgetRule(unittest.TestCase):
 class TestBudgetUseCase(unittest.TestCase):
     def setUp(self):
         self.store = FakeStore()
-        self.a = create_owned_step(self.store, "a", step="watch-ci", role="agent")
-        self.b = create_owned_step(self.store, "b", step="build", role="agent")
-        self.c = create_owned_step(self.store, "c", step="review-code", role="agent")
+        self.a = create_owned_step(self.store, "a", stage="watch-ci", role="agent")
+        self.b = create_owned_step(self.store, "b", stage="build", role="agent")
+        self.c = create_owned_step(self.store, "c", stage="review-code", role="agent")
         self.flow = _HeavyFlow({"watch-ci", "review-code"}, self.store)
         self.ready = self.store.ready_steps()
 
@@ -133,9 +133,9 @@ class TestTickHold(unittest.TestCase):
 
     def _store(self):
         store = FakeStore()
-        create_owned_step(store, "a", step="watch-ci", role="heavy-role")
-        create_owned_step(store, "b", step="build", role="agent")
-        create_owned_step(store, "c", step="review-code", role="heavy-role")
+        create_owned_step(store, "a", stage="watch-ci", role="heavy-role")
+        create_owned_step(store, "b", stage="build", role="agent")
+        create_owned_step(store, "c", stage="review-code", role="heavy-role")
         return store
 
     def test_a_held_step_is_not_spawned_for_and_a_plain_one_is(self):
@@ -155,7 +155,7 @@ class TestTickHold(unittest.TestCase):
 
     def test_with_every_ready_step_held_nothing_is_spawned(self):
         store = FakeStore()
-        create_owned_step(store, "a", step="watch-ci", role="agent")
+        create_owned_step(store, "a", stage="watch-ci", role="agent")
         spawner = FakeSpawner()
         tick = make_tick(
             store, FakeWorkers(), spawner, FakeConfig(max_agents=4),
@@ -169,7 +169,7 @@ class TestTickHold(unittest.TestCase):
 
     def test_when_not_low_the_heavy_step_is_spawned_for(self):
         store = FakeStore()
-        create_owned_step(store, "a", step="watch-ci", role="agent")
+        create_owned_step(store, "a", stage="watch-ci", role="agent")
         spawner = FakeSpawner()
         tick = make_tick(
             store, FakeWorkers(), spawner, FakeConfig(max_agents=4),
@@ -215,8 +215,8 @@ class TestClaimHold(unittest.TestCase):
     def _store(self):
         store = FakeStore()
         item = store.create_item("i", "a description", workflow="standard", shortcode="GRID")
-        self.heavy = store.create_step(step="open-pr", role="agent", parent=item)
-        self.plain = store.create_step(step="build", role="agent", parent=item)
+        self.heavy = store.create_step(stage="open-pr", role="agent", item=item)
+        self.plain = store.create_step(stage="build", role="agent", item=item)
         return store
 
     def test_while_low_the_claim_skips_a_heavy_step_and_takes_the_plain_one(self):
@@ -229,7 +229,7 @@ class TestClaimHold(unittest.TestCase):
     def test_while_low_a_role_with_only_heavy_steps_claims_nothing(self):
         store = FakeStore()
         item = store.create_item("i", "a description", workflow="standard", shortcode="GRID")
-        store.create_step(step="open-pr", role="agent", parent=item)
+        store.create_step(stage="open-pr", role="agent", item=item)
 
         self.assertIsNone(self._claim(store, FakeGithubBudgetStatus(_state(10)), {"open-pr"}))
 

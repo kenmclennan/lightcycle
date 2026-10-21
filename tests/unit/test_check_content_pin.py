@@ -117,7 +117,7 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("guarded feature", "a description")
         plant_pr(store, item, self._URL)
-        step = store.create_step(step="build", role="agent", parent=item)
+        step = store.create_step(stage="build", role="agent", item=item)
         cc = CheckContentPinUseCase(store, github, _FlowAdapter(f), trusted_authors=lambda: frozenset({"review-code"}))
         phase = f.step_def(f.merge_stages()[0]).phase
         uc = _ContentPinRunner(store, cc, item, phase)
@@ -214,8 +214,8 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("guarded feature", "a description")
         plant_pr(store, item, self._URL, phase="code")
-        spec_step = store.create_step(step="spec-feedback", role="agent", parent=item)
-        code_step = store.create_step(step="ready-merge", role="human", parent=item)
+        spec_step = store.create_step(stage="spec-feedback", role="agent", item=item)
+        code_step = store.create_step(stage="ready-merge", role="human", item=item)
         cc = CheckContentPinUseCase(store, gh, _FlowAdapter(flow), trusted_authors=lambda: frozenset({"review-code"}))
         uc = _ContentPinRunner(store, cc, item, "code")
         uc.execute()
@@ -435,10 +435,10 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         store = FakeStore(now=lambda: clock["now"])
         item = store.create_item("guarded feature", "a description")
         plant_pr(store, item, self._URL)
-        step_9 = store.create_step(step="build", role="agent", parent=item,
+        step_9 = store.create_step(stage="build", role="agent", item=item,
             id="%s.9" % item)
         clock["now"] = "2026-01-01T00:00:01"
-        step_10 = store.create_step(step="build", role="agent", parent=item,
+        step_10 = store.create_step(stage="build", role="agent", item=item,
             id="%s.10" % item)
         store.complete_node(step_9, "done")
         store.complete_node(step_10, "done")

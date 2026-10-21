@@ -26,7 +26,7 @@ def _rendered_row_text(session, widget):
 def _open_hub():
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    store.create_step(step="build", role="agent", parent=item)
+    store.create_step(stage="build", role="agent", item=item)
     session = launch(make_test_container(store=store))
     session.press("enter")
     return session
@@ -64,7 +64,7 @@ def test_hub_footer_status_and_shortcut_lines_are_painted():
 
 def test_priority_list_footer_status_and_shortcut_lines_are_painted():
     store = FakeStore()
-    create_owned_step(store, "a", step="build", role="agent")
+    create_owned_step(store, "a", stage="build", role="agent")
     session = launch(make_test_container(store=store), size=(100, 24))
     try:
         footer = session.app.screen.query_one(DashboardFooter)
@@ -80,8 +80,8 @@ def test_priority_list_footer_status_and_shortcut_lines_are_painted():
 def test_hierarchy_cursor_survives_a_layout_forced_rerender():
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    done_step = store.create_step(step="build", role="agent", parent=item)
-    queued_step = store.create_step(step="write-code", role="agent", parent=item)
+    done_step = store.create_step(stage="build", role="agent", item=item)
+    queued_step = store.create_step(stage="write-code", role="agent", item=item)
     store.complete_node(done_step, "done")
     session = launch(make_test_container(store=store))
     try:
@@ -145,7 +145,7 @@ def test_pre_refresh_frame_shows_only_the_active_tabs_pane_and_no_empty_message(
     store = FakeStore()
     if tab in ("log", "detail"):
         item = store.create_item("Item", "a description")
-        node_id = store.create_step(step="build", role="agent", parent=item)
+        node_id = store.create_step(stage="build", role="agent", item=item)
     else:
         node_id = store.create_item("Item", "a description")
     session = launch(make_test_container(store=store))

@@ -126,7 +126,7 @@ class TestRepinInFlight(unittest.TestCase):
             item = store.create_item(key, "d", workflow=workflow)
             store.update_state(item, "in_progress")
             if stage:
-                step = store.create_step(step=stage, role="agent", parent=item)
+                step = store.create_step(stage=stage, role="agent", item=item)
                 store.update_state(step, state)
             ids[key] = item
         return store, ids
@@ -239,7 +239,7 @@ class TestRepinReowns(unittest.TestCase):
         self.store.update_state(self.item, "in_progress")
 
     def _step(self, stage, role, state="queued"):
-        step = self.store.create_step(step=stage, role=role, parent=self.item)
+        step = self.store.create_step(stage=stage, role=role, item=self.item)
         self.store.update_state(step, state)
         return step
 

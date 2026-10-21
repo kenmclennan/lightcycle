@@ -22,8 +22,8 @@ class TestSelectPriorityRowsDedupe(unittest.TestCase):
     def test_a_node_already_selected_in_attention_is_not_selected_again_in_active_or_queued(self):
         store = FakeStore()
         item = store.create_item("story", "a description")
-        gate = store.create_step(step="ready-merge", role="human", parent=item)
-        active_sibling = store.create_step(step="build", role="agent", parent=item)
+        gate = store.create_step(stage="ready-merge", role="human", item=item)
+        active_sibling = store.create_step(stage="build", role="agent", item=item)
         lanes = {
             "inbox": [store.get_node(gate)],
             "active": [store.get_node(active_sibling)],
@@ -38,8 +38,8 @@ class TestSelectPriorityRowsDedupe(unittest.TestCase):
 
     def test_escalation_sorts_before_gate_regardless_of_lane_order(self):
         store = FakeStore()
-        gate = create_owned_step(store, "await merge", step="ready-merge", role="human")
-        escalation = create_owned_step(store, "stuck build", step="build", role="human")
+        gate = create_owned_step(store, "await merge", stage="ready-merge", role="human")
+        escalation = create_owned_step(store, "stuck build", stage="build", role="human")
         lanes = {
             "inbox": [store.get_node(gate), store.get_node(escalation)],
             "active": [],
@@ -54,7 +54,7 @@ class TestSelectPriorityRowsDedupe(unittest.TestCase):
 
     def test_an_unblocked_engine_step_in_the_queue_lane_lands_in_active(self):
         store = FakeStore()
-        step = create_owned_step(store, "polling", step="poll-ci", role="engine")
+        step = create_owned_step(store, "polling", stage="poll-ci", role="engine")
         lanes = {"inbox": [], "active": [], "queue": [store.get_node(step)]}
 
         selection = select_priority_rows(store, lanes, _FixedFlowService(), True)
@@ -64,7 +64,7 @@ class TestSelectPriorityRowsDedupe(unittest.TestCase):
 
     def test_an_unblocked_engine_step_lands_in_queued_while_the_pool_is_stopped(self):
         store = FakeStore()
-        step = create_owned_step(store, "polling", step="poll-ci", role="engine")
+        step = create_owned_step(store, "polling", stage="poll-ci", role="engine")
         lanes = {"inbox": [], "active": [], "queue": [store.get_node(step)]}
 
         selection = select_priority_rows(store, lanes, _FixedFlowService(), False)
@@ -74,8 +74,8 @@ class TestSelectPriorityRowsDedupe(unittest.TestCase):
 
     def test_a_dependency_blocked_engine_step_stays_in_queued(self):
         store = FakeStore()
-        blocker = create_owned_step(store, "blocker", step="build", role="agent")
-        step = create_owned_step(store, "polling", step="poll-ci", role="engine", deps=[blocker])
+        blocker = create_owned_step(store, "blocker", stage="build", role="agent")
+        step = create_owned_step(store, "polling", stage="poll-ci", role="engine", deps=[blocker])
         lanes = {"inbox": [], "active": [], "queue": [store.get_node(step)]}
 
         selection = select_priority_rows(store, lanes, _FixedFlowService(), True)
@@ -87,9 +87,9 @@ class TestSelectPriorityRowsDedupe(unittest.TestCase):
         store = FakeStore()
         item_a = store.create_item("a", "a description")
         item_b = store.create_item("b", "a description")
-        step_a = store.create_step(step="build", role="agent", parent=item_a)
-        step_b1 = store.create_step(step="build", role="agent", parent=item_b)
-        step_b2 = store.create_step(step="build", role="agent", parent=item_b)
+        step_a = store.create_step(stage="build", role="agent", item=item_a)
+        step_b1 = store.create_step(stage="build", role="agent", item=item_b)
+        step_b2 = store.create_step(stage="build", role="agent", item=item_b)
         lanes = {
             "inbox": [],
             "active": [store.get_node(step_a), store.get_node(step_b1), store.get_node(step_b2)],
@@ -124,10 +124,10 @@ class TestSelectPriorityRowsItemReads(unittest.TestCase):
 
         store = FakeStore()
         item = store.create_item("story", "a description")
-        gate = store.create_step(step="ready-merge", role="human", parent=item)
-        first = store.create_step(step="build", role="agent", parent=item)
-        second = store.create_step(step="build", role="agent", parent=item)
-        other = create_owned_step(store, "other", step="build", role="agent")
+        gate = store.create_step(stage="ready-merge", role="human", item=item)
+        first = store.create_step(stage="build", role="agent", item=item)
+        second = store.create_step(stage="build", role="agent", item=item)
+        other = create_owned_step(store, "other", stage="build", role="agent")
         counting = _CountingStore(store)
         lanes = {
             "inbox": [store.get_node(gate)],

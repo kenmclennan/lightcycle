@@ -2,10 +2,12 @@ from tests.support.fake_github_budget import FakeGithubBudget
 import os
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 from lightcycle.application.inspect import DoctorInput, DoctorUseCase
 from lightcycle.config import _SEED_KEYS, Config
+from lightcycle.domain.pool import ConfigReloadState
 from lightcycle.ports.workflow_bundle import StepPrompt
 from lightcycle.ports.workflow_source import OriginRegistration
 from tests.support.fake_fs import FakeFs
@@ -224,7 +226,7 @@ class TestDoctorUseCase(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("item", "a description", workflow="acme/build@sha1")
         store.update_state(item, "in_progress")
-        step = store.create_step(step=stage, role="agent", parent=item)
+        step = store.create_step(stage=stage, role="agent", item=item)
         store.update_state(step, "queued")
         source = FakeWorkflowSource()
         source.add_bundle("acme", "sha1", 1)
@@ -513,7 +515,7 @@ class TestDoctorUseCase(unittest.TestCase):
 
     def test_store_integrity_violation_surfaces_under_store(self):
         store = FakeStore()
-        item = store.create_step(parent="missing-parent")
+        item = store.create_step(item="missing-parent")
         source = FakeWorkflowSource()
         source.add_bundle("acme", "sha1", 1, current=True)
         config = _cfg(**_ALL_KEYS)
@@ -568,7 +570,7 @@ class TestDoctorOrphans(unittest.TestCase):
         store = FakeStore()
         store.add_project("acme", local_path="/repo")
         item = store.create_item("item", "a description")
-        step = store.create_step(parent=item, role="agent")
+        step = store.create_step(item=item, role="agent")
         store.update_state(step, "in_progress")
         path = "/repo/.worktrees/%s-code" % item
         fs = FakeFs(dirs={"/repo/.worktrees": ["%s-code" % item]})
@@ -579,8 +581,8 @@ class TestDoctorOrphans(unittest.TestCase):
         store = FakeStore()
         store.add_project("acme", local_path="/repo")
         item = store.create_item("item", "a description")
-        code = store.create_step(step="write-code", parent=item, role="agent")
-        spec = store.create_step(step="spec-handle-feedback", parent=item, role="agent")
+        code = store.create_step(stage="write-code", item=item, role="agent")
+        spec = store.create_step(stage="spec-handle-feedback", item=item, role="agent")
         store.update_state(code, "in_progress")
         store.update_state(spec, "in_progress")
         code_path = "/repo/.worktrees/%s-code" % item
@@ -633,7 +635,7 @@ class TestDoctorOrphans(unittest.TestCase):
         store = FakeStore()
         store.add_project("acme", local_path="/repo")
         item = store.create_item("item", "a description")
-        step = store.create_step(parent=item, role="agent")
+        step = store.create_step(item=item, role="agent")
         store.update_state(step, "in_progress")
         path = "/repo/.worktrees/%s-code" % item
         fs = FakeFs(dirs={"/repo/.worktrees": ["%s-code" % item]})
@@ -1001,21 +1003,20 @@ class TestDoctorWorkflowLifecycle(unittest.TestCase):
 class TestReloadProblems(unittest.TestCase):
     def _report(self, state, pid=4242, mtime_matches=True):
         config = _cfg(**_ALL_KEYS)
-        if "rejected_mtime" in state and mtime_matches:
-            state = dict(state, rejected_mtime=config.config_mtime())
+        if state.rejected_mtime is not None and mtime_matches:
+            state = replace(state, rejected_mtime=config.config_mtime())
         source = FakeWorkflowSource()
         source.add_bundle("acme", "sha1", 1, current=True)
         return DoctorUseCase(
             FakeStore(), source, config, FakeWorkflowBundle(), FakeFs(), FakeMachine(),
             _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(),
-            FakeConfigReloadStatus(dict(state, pid=pid)),
+            FakeConfigReloadStatus(replace(state, pid=pid)),
             FakeLock(running=True, pid=4242), FakeGithubBudget(),
         ).execute(DoctorInput()).problems["config"]
 
     def _rejected(self, **kw):
         return self._report(
-            {"outcome": "rejected", "reason": "bad value", "rejected_mtime": 1,
-             "restart_required": []}, **kw)
+            ConfigReloadState(outcome="rejected", reason="bad value", rejected_mtime=1), **kw)
 
     def test_a_rejection_by_the_running_pool_is_reported(self):
         problems = self._rejected()
@@ -1031,8 +1032,8 @@ class TestReloadProblems(unittest.TestCase):
 
     def test_restart_required_keys_are_reported(self):
         problems = self._report(
-            {"outcome": "reloaded", "rejected_mtime": None,
-             "restart_required": ["poll-seconds", "spin-cap"]})
+            ConfigReloadState(
+                outcome="reloaded", restart_required=("poll-seconds", "spin-cap")))
         self.assertEqual(
             [p.message for p in problems],
             ["running pool needs a restart for: poll-seconds, spin-cap"])

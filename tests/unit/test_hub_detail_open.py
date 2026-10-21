@@ -12,7 +12,7 @@ class TestOpeningDetailRows(unittest.TestCase):
         self.launcher = FakeLauncher()
         store = FakeStore()
         item = store.create_item("Item", "a description", id="LC-1")
-        step = store.create_step(step="triage", role="human", parent=item, id="LC-1.1")
+        step = store.create_step(stage="triage", role="human", item=item, id="LC-1.1")
         self.session = _launch(store, launcher=self.launcher, fs=FakeFs(files={"/tmp/wt": "x"}))
         self.addCleanup(self.session.close)
         self.screen = NodeHubScreen(self.session.app._container, step, lambda: NOW, initial_tab="detail")

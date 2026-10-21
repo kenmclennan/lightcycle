@@ -47,7 +47,7 @@ class GoalItemsFixture(unittest.TestCase):
 
     def with_step(self, title, role="agent", deps=None, running=False):
         item = self._link(self.store.create_item(title, "d"))
-        step = self.store.create_step(step="build", role=role, parent=item, deps=deps)
+        step = self.store.create_step(stage="build", role=role, item=item, deps=deps)
         if running:
             self.store.assign(step, "worker-1")
             self.store.update_state(step, State.RUNNING)
@@ -89,8 +89,8 @@ class TestGoalItemsUseCase(GoalItemsFixture):
     def test_open_item_in_no_lane_is_current_work_without_a_step(self):
         watcher, _ = self.with_step("watcher")
         item = self._link(self.store.create_item("watched only", "d"))
-        watched = self.store.create_step(step="build", role="agent", parent=item)
-        self.store.set_watched_step(self.store.create_step(step="build", role="agent", parent=watcher), watched)
+        watched = self.store.create_step(stage="build", role="agent", item=item)
+        self.store.set_watched_step(self.store.create_step(stage="build", role="agent", item=watcher), watched)
 
         result = self.execute()
 
@@ -105,7 +105,7 @@ class TestGoalItemsUseCase(GoalItemsFixture):
     def test_items_outside_the_goal_are_left_out(self):
         self.backlogged()
         other = self.store.create_item("elsewhere", "d")
-        self.store.create_step(step="build", role="agent", parent=other)
+        self.store.create_step(stage="build", role="agent", item=other)
         result = self.execute()
         self.assertEqual(self.selected_ids(result), [])
         self.assertEqual(len(result.backlog), 1)
@@ -177,7 +177,7 @@ class TestSharedPredicates(GoalItemsFixture):
         bare = self.store.create_item("bare", "d")
         self.store.dep_add(bare, blocker)
         with_child = self.store.create_item("with child", "d")
-        self.store.create_step(step="build", role="agent", parent=with_child)
+        self.store.create_step(stage="build", role="agent", item=with_child)
         self.store.dep_add(with_child, blocker)
 
         self.assertEqual(self.store.get_node(bare).state, State.BLOCKED)

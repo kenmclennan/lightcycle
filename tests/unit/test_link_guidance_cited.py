@@ -9,7 +9,7 @@ class TestGuidanceCited(unittest.TestCase):
     def setUp(self):
         self.store = FakeStore()
         self.item = self.store.create_item("t", "d")
-        self.step = self.store.create_step(step="build", role="agent", parent=self.item)
+        self.step = self.store.create_step(stage="build", role="agent", item=self.item)
         self.store.replace_artifact(self.step, "guidance-delivered", "a/x\nb\nc", internal=True)
         self.use = LinkArtifactUseCase(self.store)
 
@@ -49,7 +49,7 @@ class TestGuidanceCited(unittest.TestCase):
         self.assertIn("is not a step", self._refused("a/x", "NOPE-9"))
 
     def test_step_without_delivery_is_refused(self):
-        other = self.store.create_step(step="build", role="agent", parent=self.item)
+        other = self.store.create_step(stage="build", role="agent", item=self.item)
         self.assertEqual(
             self._refused("a/x", other),
             "step '%s' was delivered no guidance entries, so there is nothing to cite - "

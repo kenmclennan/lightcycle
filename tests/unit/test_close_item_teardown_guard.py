@@ -45,7 +45,7 @@ def _world(git, branch=BRANCH, pr=None, run_state=None):
         store.set_pr(rid, pr)
     if run_state:
         store.close_run(rid, run_state)
-    step = store.create_step(step="finalise", role="agent", parent=item)
+    step = store.create_step(stage="finalise", role="agent", item=item)
     svc = WorktreeService(store, git, fs=None, config=_Cfg())
     return store, svc, item, step
 
@@ -223,7 +223,7 @@ class TestMixedWorktrees(unittest.TestCase):
         dirty = store.open_run(item, pid, "code")
         store.set_branch(clean, "feat/spec")
         store.set_branch(dirty, BRANCH)
-        store.create_step(step="finalise", role="agent", parent=item)
+        store.create_step(stage="finalise", role="agent", item=item)
         svc = WorktreeService(store, git, fs=None, config=_Cfg())
         dirty_path = svc.path_for_run(store.get_run(dirty))
         clean_path = svc.path_for_run(store.get_run(clean))

@@ -64,8 +64,8 @@ class TestUnpinnedWorkflowOnOneItem(unittest.TestCase):
         )
         self.good = self.store.create_item("good", "d", workflow="lc/standard@sha1")
         self.bad = self.store.create_item("bad", "d", workflow="lc/standard")
-        self.store.create_step(step="await-merge", role="human", parent=self.good)
-        self.bad_step = self.store.create_step(step="await-merge", role="human", parent=self.bad)
+        self.store.create_step(stage="await-merge", role="human", item=self.good)
+        self.bad_step = self.store.create_step(stage="await-merge", role="human", item=self.bad)
         _plant_pr(self.store, self.good, _GOOD_URL)
         _plant_pr(self.store, self.bad, _BAD_URL)
 
@@ -90,7 +90,7 @@ class TestUnpinnedWorkflowOnOneItem(unittest.TestCase):
         self.assertIn("lc set %s --workflow lc/standard" % self.bad, notes)
 
     def test_ci_monitor_notes_the_bad_item_and_does_not_raise(self):
-        engine_step = self.store.create_step(step="await-merge", role="engine", parent=self.bad)
+        engine_step = self.store.create_step(stage="await-merge", role="engine", item=self.bad)
         uc = ResolveCiUseCase(self.store, FakeGitHub(), self.flow, self._complete(), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
 
         uc.execute()

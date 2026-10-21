@@ -170,13 +170,13 @@ def _scheduled_item(store, state, summary=None):
     store.add_artifact(item, "schedule-state", state, internal=True)
     if summary is not None:
         store.add_artifact(item, "summary", summary)
-    step = store.create_step(step="build", role="agent", parent=item)
+    step = store.create_step(stage="build", role="agent", item=item)
     return item, step
 
 
 def _closed_item(store, id):
     item = store.create_item("closed %s" % id, "d", id=id)
-    child = store.create_step(step="build", role="agent", parent=item)
+    child = store.create_step(stage="build", role="agent", item=item)
     store.complete_node(child, "done")
     store.complete_node(item, "merged")
     return item
@@ -228,7 +228,7 @@ class TestScheduleCompletionBatch(unittest.TestCase):
         s = FakeStore()
         _closed_item(s, "APP-1")
         item = s.create_item("plain", "d", shortcode="PLN")
-        step = s.create_step(step="build", role="agent", parent=item)
+        step = s.create_step(stage="build", role="agent", item=item)
         ScheduleCompletion(s, flow_for(SUMMARY_METAS, s)).execute(s.get_node(step), "done")
         self.assertEqual([i.id for i in s.closed_unretroed_items()], ["APP-1"])
         self.assertIsNone(s.get_node(step).notes)
@@ -289,7 +289,7 @@ class TestScheduleCompletionSummary(unittest.TestCase):
     def test_a_declared_summary_on_a_sibling_step_is_the_last_fallback(self):
         s = FakeStore()
         item, step = _scheduled_item(s, "day: 2026-10-14 count: 2")
-        sibling = s.create_step(step="build", role="agent", parent=item)
+        sibling = s.create_step(stage="build", role="agent", item=item)
         s.add_artifact(sibling, "summary", "From a sibling.")
         ScheduleCompletion(s, flow_for(SUMMARY_METAS, s)).execute(s.get_node(step), "done")
         self.assertEqual(s.day_summary(DAY).summary, "From a sibling.")
@@ -297,7 +297,7 @@ class TestScheduleCompletionSummary(unittest.TestCase):
     def test_an_undeclared_summary_on_a_sibling_step_is_not_found(self):
         s = FakeStore()
         item, step = _scheduled_item(s, "day: 2026-10-14 count: 2")
-        sibling = s.create_step(step="build", role="agent", parent=item)
+        sibling = s.create_step(stage="build", role="agent", item=item)
         s.add_artifact(sibling, "summary", "From a sibling.")
         ScheduleCompletion(s, flow_for(METAS, s)).execute(s.get_node(step), "done")
         self.assertIsNone(s.day_summary(DAY))
@@ -317,7 +317,7 @@ class TestCompleteStepRunsTheScheduleRule(unittest.TestCase):
         _closed_item(s, "APP-1")
         item = s.create_item("run", "d", shortcode="AUD", workflow="spec-driven")
         s.add_artifact(item, "schedule-state", "batch: APP-1", internal=True)
-        step = s.create_step(step="build", role="agent", parent=item)
+        step = s.create_step(stage="build", role="agent", item=item)
         CompleteStepUseCase(s, flow_for(METAS, s)).execute(
             CompleteInput(step=step, outcome="done"))
         self.assertEqual(s.get_node(step).state, "done")

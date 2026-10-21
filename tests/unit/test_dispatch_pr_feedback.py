@@ -205,7 +205,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("in-review feature", "a description")
         plant_pr(store, item, pr_url)
-        step = store.create_step(step="ready-merge", role="human", parent=item
+        step = store.create_step(stage="ready-merge", role="human", item=item
         )
         worktrees = FakeWorktrees()
         uc = DispatchPrFeedbackUseCase(store, github, _FlowAdapter(f), None, **_TRUST)
@@ -674,7 +674,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("in-review feature", "a description")
         plant_pr(store, item, url)
-        store.create_step(step="ready-merge", role="human", parent=item
+        store.create_step(stage="ready-merge", role="human", item=item
         )
         check_content_pin = CheckContentPinUseCase(store, gh, _FlowAdapter(_FLOW), trusted_authors=lambda: frozenset({"review-code"}))
         resolve = ResolveMergedPrsUseCase(
@@ -700,13 +700,13 @@ class TestMonitorPrsConflict(unittest.TestCase):
         item = store.create_item("conflicting feature", "a description")
         plant_pr(store, item, pr_url)
         for _ in range(prior_conflicts):
-            old = store.create_step(step="watch-step",
-                                    role="agent", parent=item)
+            old = store.create_step(stage="watch-step",
+                                    role="agent", item=item)
             if prior_tip is not None:
                 store.add_artifact(old, CONFLICT_BASE_TIP, prior_tip, internal=True)
             store.complete_node(old, "conflicted")
-        step = store.create_step(step="watch-step",
-                                 role="agent", parent=item)
+        step = store.create_step(stage="watch-step",
+                                 role="agent", item=item)
         worktrees = FakeWorktrees()
         complete = CompleteStepUseCase(store, _FlowAdapter(f))
         uc = DispatchPrFeedbackUseCase(store, github, _FlowAdapter(f), complete, **_TRUST)
@@ -767,8 +767,8 @@ class TestMonitorPrsConflict(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("conflicting feature", "a description")
         plant_pr(store, item, url)
-        store.create_step(step="watch-step",
-                           role="agent", parent=item)
+        store.create_step(stage="watch-step",
+                           role="agent", item=item)
         gh = FakeGitHub(merged_prs={url}, conflicted_prs={url})
         complete = CompleteStepUseCase(store, _FlowAdapter(flow))
         check_content_pin = CheckContentPinUseCase(store, gh, _FlowAdapter(flow), trusted_authors=lambda: frozenset({"review-code"}))
@@ -796,8 +796,8 @@ class TestMonitorPrsConflict(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("arbitrary", "a description")
         plant_pr(store, item, url)
-        step = store.create_step(step="await-green",
-                                 role="agent", parent=item)
+        step = store.create_step(stage="await-green",
+                                 role="agent", item=item)
         complete = CompleteStepUseCase(store, _FlowAdapter(arbitrary_flow))
         uc = DispatchPrFeedbackUseCase(store, FakeGitHub(conflicted_prs={url}), _FlowAdapter(arbitrary_flow), complete, **_TRUST)
 
@@ -878,8 +878,8 @@ class TestMonitorPrsConflict(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("quad feature", "a description")
         plant_pr(store, item, url)
-        step = store.create_step(step="watch-pr", role="agent",
-                                 parent=item)
+        step = store.create_step(stage="watch-pr", role="agent",
+                                 item=item)
         complete = CompleteStepUseCase(store, _FlowAdapter(_READY_MERGE_QUAD_FLOW))
         uc = DispatchPrFeedbackUseCase(store, FakeGitHub(conflicted_prs={url}), _FlowAdapter(_READY_MERGE_QUAD_FLOW), complete, **_TRUST)
 
@@ -894,8 +894,8 @@ class TestMonitorPrsConflict(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("both quad feature", "a description")
         plant_pr(store, item, url)
-        step = store.create_step(step="watch-pr", role="agent",
-                                 parent=item)
+        step = store.create_step(stage="watch-pr", role="agent",
+                                 item=item)
         feedback_comment = (
             1500.0,
             Comment(author="reviewer", body="@lc fix it", is_top_level=True,
@@ -936,11 +936,11 @@ class TestMonitorPrsConflict(unittest.TestCase):
         item = store.create_item("no-cap feature", "a description")
         plant_pr(store, item, url)
         for _ in range(5):
-            old = store.create_step(step="watch-step",
-                                    role="agent", parent=item)
+            old = store.create_step(stage="watch-step",
+                                    role="agent", item=item)
             store.complete_node(old, "conflicted")
-        step = store.create_step(step="watch-step",
-                                 role="agent", parent=item)
+        step = store.create_step(stage="watch-step",
+                                 role="agent", item=item)
         complete = CompleteStepUseCase(store, _FlowAdapter(no_cap_flow))
         uc = DispatchPrFeedbackUseCase(store, FakeGitHub(conflicted_prs={url}), _FlowAdapter(no_cap_flow), complete, **_TRUST)
 
@@ -982,7 +982,7 @@ class TestConflictCapCountsFailuresNotConflicts(unittest.TestCase):
         self.store = FakeStore()
         self.item = self.store.create_item("conflicting feature", "a description")
         plant_pr(self.store, self.item, self.URL)
-        self.store.create_step(step="watch-step", role="agent", parent=self.item)
+        self.store.create_step(stage="watch-step", role="agent", item=self.item)
         self.complete = CompleteStepUseCase(self.store, _FlowAdapter(flow))
         self.uc = DispatchPrFeedbackUseCase(
             self.store, self.gh, _FlowAdapter(flow), self.complete, **_TRUST)
@@ -1090,7 +1090,7 @@ class TestConflictCapCountsFailuresNotConflicts(unittest.TestCase):
     def test_escalated_resolutions_each_add_one_failure(self):
         self._start(self._flow(failure_cap=2))
         for _ in range(2):
-            fix = self.store.create_step(step="fix-step", role="agent", parent=self.item)
+            fix = self.store.create_step(stage="fix-step", role="agent", item=self.item)
             self.store.complete_node(fix, "escalate")
 
         self.uc.execute()

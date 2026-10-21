@@ -160,10 +160,10 @@ def _row_lines(session, row_id):
 @given("the store has a step in the inbox lane, an active step, and a queued step")
 def _g_inbox_active_queued(ctx):
     store = FakeStore()
-    ctx["inbox_id"] = create_owned_step(store, "inbox item", step="triage", role="human")
-    ctx["active_id"] = create_owned_step(store, "active item", step="build", role="agent")
+    ctx["inbox_id"] = create_owned_step(store, "inbox item", stage="triage", role="human")
+    ctx["active_id"] = create_owned_step(store, "active item", stage="build", role="agent")
     store.assign(ctx["active_id"], "worker-1")
-    ctx["queued_id"] = create_owned_step(store, "queued item", step="build", role="agent")
+    ctx["queued_id"] = create_owned_step(store, "queued item", stage="build", role="agent")
     ctx["store"] = store
 
 
@@ -173,21 +173,21 @@ def _g_inbox_active_queued(ctx):
 )
 def _g_inbox_blocked_active_queued(ctx):
     store = FakeStore()
-    ctx["inbox_id"] = create_owned_step(store, "inbox item", step="triage", role="human")
-    blocker = create_owned_step(store, "blocker", step="build", role="agent")
+    ctx["inbox_id"] = create_owned_step(store, "inbox item", stage="triage", role="human")
+    blocker = create_owned_step(store, "blocker", stage="build", role="agent")
     ctx["blocked_id"] = create_owned_step(store, 
-        "blocked item", step="build", role="agent", deps=[blocker]
+        "blocked item", stage="build", role="agent", deps=[blocker]
     )
-    ctx["active_id"] = create_owned_step(store, "active item", step="build", role="agent")
+    ctx["active_id"] = create_owned_step(store, "active item", stage="build", role="agent")
     store.assign(ctx["active_id"], "worker-1")
-    ctx["queued_id"] = create_owned_step(store, "queued item", step="build", role="agent")
+    ctx["queued_id"] = create_owned_step(store, "queued item", stage="build", role="agent")
     ctx["store"] = store
 
 
 @given(parsers.parse('the store has a step in the inbox lane at step "{step_name}"'))
 def _g_inbox_at_step(ctx, step_name):
     store = FakeStore()
-    ctx["target_id"] = create_owned_step(store, "inbox item", step=step_name, role="human")
+    ctx["target_id"] = create_owned_step(store, "inbox item", stage=step_name, role="human")
     ctx["store"] = store
 
 
@@ -197,7 +197,7 @@ def _g_inbox_at_step(ctx, step_name):
 ))
 def _g_inbox_at_step_with_display(ctx, step_name, phrase):
     store = FakeStore()
-    ctx["target_id"] = create_owned_step(store, "inbox item", step=step_name, role="human")
+    ctx["target_id"] = create_owned_step(store, "inbox item", stage=step_name, role="human")
     ctx["store"] = store
     ctx["fs"] = FakeFs(metas={
         step_name: {"step": step_name, "display": phrase},
@@ -207,8 +207,8 @@ def _g_inbox_at_step_with_display(ctx, step_name, phrase):
 @given("the store has a gate step and an escalation step, both in the inbox lane")
 def _g_inbox_gate_and_escalation(ctx):
     store = FakeStore()
-    ctx["gate_id"] = create_owned_step(store, "await merge", step="ready-merge", role="human")
-    ctx["escalation_id"] = create_owned_step(store, "stuck build", step="build", role="human")
+    ctx["gate_id"] = create_owned_step(store, "await merge", stage="ready-merge", role="human")
+    ctx["escalation_id"] = create_owned_step(store, "stuck build", stage="build", role="human")
     ctx["store"] = store
     ctx["fs"] = FakeFs(metas={
         "coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}},
@@ -222,8 +222,8 @@ def _g_inbox_gate_and_escalation(ctx):
 ))
 def _g_inbox_gate_and_escalation_with_display(ctx, phrase):
     store = FakeStore()
-    ctx["gate_id"] = create_owned_step(store, "await merge", step="ready-merge", role="human")
-    ctx["escalation_id"] = create_owned_step(store, "stuck build", step="build", role="human")
+    ctx["gate_id"] = create_owned_step(store, "await merge", stage="ready-merge", role="human")
+    ctx["escalation_id"] = create_owned_step(store, "stuck build", stage="build", role="human")
     ctx["store"] = store
     ctx["fs"] = FakeFs(metas={
         "coder": {
@@ -236,25 +236,25 @@ def _g_inbox_gate_and_escalation_with_display(ctx, phrase):
 @given("the store has a step in the inbox lane and a queued step, with no active step")
 def _g_inbox_and_queued_no_active(ctx):
     store = FakeStore()
-    ctx["inbox_id"] = create_owned_step(store, "inbox item", step="triage", role="human")
-    ctx["queued_id"] = create_owned_step(store, "queued item", step="build", role="agent")
+    ctx["inbox_id"] = create_owned_step(store, "inbox item", stage="triage", role="human")
+    ctx["queued_id"] = create_owned_step(store, "queued item", stage="build", role="agent")
     ctx["store"] = store
 
 
 @given("the store has only a queued step")
 def _g_only_queued(ctx):
     store = FakeStore()
-    ctx["queued_id"] = create_owned_step(store, "queued item", step="build", role="agent")
+    ctx["queued_id"] = create_owned_step(store, "queued item", stage="build", role="agent")
     ctx["store"] = store
 
 
 @given("the store has queued steps, blocked steps, and an in-progress step")
 def _g_queued_blocked_running(ctx):
     store = FakeStore()
-    create_owned_step(store, "queued", step="build", role="agent")
-    blocker = create_owned_step(store, "blocker", step="build", role="agent")
-    create_owned_step(store, "blocked", step="build", role="agent", deps=[blocker])
-    ctx["running_id"] = create_owned_step(store, "running", step="build", role="agent")
+    create_owned_step(store, "queued", stage="build", role="agent")
+    blocker = create_owned_step(store, "blocker", stage="build", role="agent")
+    create_owned_step(store, "blocked", stage="build", role="agent", deps=[blocker])
+    ctx["running_id"] = create_owned_step(store, "running", stage="build", role="agent")
     store.assign(ctx["running_id"], "worker-1")
     ctx["store"] = store
 
@@ -268,7 +268,7 @@ def _g_queued_blocked_running(ctx):
 def _g_claimed_minutes_ago(ctx, step_name, minutes):
     clock = Clock(BASE_TIME - datetime.timedelta(minutes=minutes))
     store = FakeStore(now=lambda: clock.now().isoformat())
-    tid = create_owned_step(store, "active item", step=step_name, role="agent")
+    tid = create_owned_step(store, "active item", stage=step_name, role="agent")
     store.assign(tid, "worker-1")
     store.update_state(tid, State.RUNNING)
     store.accrue_active_seconds([tid], minutes * 60)
@@ -293,7 +293,7 @@ def _g_claimed_minutes_ago_with_display(ctx, step_name, minutes, phrase):
 def _g_launched_with_claimed_step(ctx):
     clock = Clock(BASE_TIME - datetime.timedelta(seconds=55))
     store = FakeStore(now=lambda: clock.now().isoformat())
-    tid = create_owned_step(store, "active item", step="build", role="agent")
+    tid = create_owned_step(store, "active item", stage="build", role="agent")
     store.assign(tid, "worker-1")
     store.update_state(tid, State.RUNNING)
     clock.set(BASE_TIME)
@@ -308,9 +308,9 @@ def _g_launched_with_claimed_step(ctx):
 @given("the store has an active step and a queued step")
 def _g_active_and_queued(ctx):
     store = FakeStore()
-    ctx["active_id"] = create_owned_step(store, "active item", step="build", role="agent")
+    ctx["active_id"] = create_owned_step(store, "active item", stage="build", role="agent")
     store.assign(ctx["active_id"], "worker-1")
-    ctx["queued_id"] = create_owned_step(store, "queued item", step="build", role="agent")
+    ctx["queued_id"] = create_owned_step(store, "queued item", stage="build", role="agent")
     ctx["store"] = store
 
 
@@ -319,11 +319,11 @@ def _g_item_active_and_queued_own(ctx):
     clock = Clock(BASE_TIME - datetime.timedelta(minutes=14))
     store = FakeStore(now=lambda: clock.now().isoformat())
     item = store.create_item("An item with two open steps", "a description")
-    active = store.create_step(step="write-code", role="agent", parent=item)
+    active = store.create_step(stage="write-code", role="agent", item=item)
     store.assign(active, "worker-1")
     store.update_state(active, State.RUNNING)
     store.accrue_active_seconds([active], 14 * 60)
-    store.create_step(step="code-open-pr", role="agent", parent=item)
+    store.create_step(stage="code-open-pr", role="agent", item=item)
     clock.set(BASE_TIME)
     ctx["store"] = store
     ctx["clock"] = clock
@@ -335,8 +335,8 @@ def _g_item_active_and_queued_own(ctx):
 def _g_item_inbox_and_active_own(ctx):
     store = FakeStore()
     item = store.create_item("An item with an inbox step and an active step", "a description")
-    store.create_step(step="code-await-merge", role="human", parent=item)
-    active = store.create_step(step="write-code", role="agent", parent=item)
+    store.create_step(stage="code-await-merge", role="human", item=item)
+    active = store.create_step(stage="write-code", role="agent", item=item)
     store.assign(active, "worker-1")
     ctx["store"] = store
     ctx["item_id"] = item
@@ -345,7 +345,7 @@ def _g_item_inbox_and_active_own(ctx):
 @given(parsers.parse('the store has a queued step at step "{step_name}"'))
 def _g_queued_at_step(ctx, step_name):
     store = FakeStore()
-    ctx["target_id"] = create_owned_step(store, "queued item", step=step_name, role="agent")
+    ctx["target_id"] = create_owned_step(store, "queued item", stage=step_name, role="agent")
     ctx["store"] = store
 
 
@@ -363,7 +363,7 @@ def _g_queued_at_step_with_display(ctx, step_name, phrase):
 @given("the dashboard has launched with a queued step")
 def _g_launched_with_queued(ctx):
     store = FakeStore()
-    ctx["target_id"] = create_owned_step(store, "queued item", step="build", role="agent")
+    ctx["target_id"] = create_owned_step(store, "queued item", stage="build", role="agent")
     ctx["store"] = store
     _launch(ctx)
 
@@ -378,12 +378,12 @@ def _g_long_title_step(ctx, group):
     store = FakeStore()
     long_title = ("word " * 20).strip()
     if group == "needs-attention":
-        tid = create_owned_step(store, long_title, step="triage", role="human")
+        tid = create_owned_step(store, long_title, stage="triage", role="human")
     elif group == "active":
-        tid = create_owned_step(store, long_title, step="build", role="agent")
+        tid = create_owned_step(store, long_title, stage="build", role="agent")
         store.assign(tid, "worker-1")
     else:
-        tid = create_owned_step(store, long_title, step="build", role="agent")
+        tid = create_owned_step(store, long_title, stage="build", role="agent")
     ctx["store"] = store
     ctx["target_id"] = tid
 
@@ -398,16 +398,16 @@ def _g_three_steps_with_project(ctx, project):
     store = FakeStore()
 
     blocked_item = store.create_item("blocked item", "a description", project=project)
-    blocker = create_owned_step(store, "blocker", step="build", role="agent")
-    store.create_step(step="build", role="agent", deps=[blocker], parent=blocked_item
+    blocker = create_owned_step(store, "blocker", stage="build", role="agent")
+    store.create_step(stage="build", role="agent", deps=[blocker], item=blocked_item
     )
 
     active_item = store.create_item("active item", "a description", project=project)
-    active = store.create_step(step="build", role="agent", parent=active_item)
+    active = store.create_step(stage="build", role="agent", item=active_item)
     store.assign(active, "worker-1")
 
     queued_item = store.create_item("queued item", "a description", project=project)
-    store.create_step(step="build", role="agent", parent=queued_item)
+    store.create_step(stage="build", role="agent", item=queued_item)
 
     ctx["store"] = store
     ctx["row_ids"] = [blocked_item, active_item, queued_item]
@@ -416,14 +416,14 @@ def _g_three_steps_with_project(ctx, project):
 @given("the store has a queued step with no registered project")
 def _g_queued_no_project(ctx):
     store = FakeStore()
-    ctx["target_id"] = create_owned_step(store, "queued item", step="build", role="agent")
+    ctx["target_id"] = create_owned_step(store, "queued item", stage="build", role="agent")
     ctx["store"] = store
 
 
 @given("the dashboard has launched with no needs-attention steps")
 def _g_launched_no_attention(ctx):
     store = FakeStore()
-    create_owned_step(store, "queued", step="build", role="agent")
+    create_owned_step(store, "queued", stage="build", role="agent")
     ctx["store"] = store
     _launch(ctx)
     ctx["bell_calls"] = _attach_bell_spy(ctx["session"])
@@ -437,8 +437,8 @@ def _g_launched_with_attention_already_rung(ctx):
     store = FakeStore()
     ctx["store"] = store
     _launch(ctx)
-    blocker = create_owned_step(store, "blocker", step="build", role="agent")
-    create_owned_step(store, "blocked", step="build", role="agent", deps=[blocker])
+    blocker = create_owned_step(store, "blocker", stage="build", role="agent")
+    create_owned_step(store, "blocked", stage="build", role="agent", deps=[blocker])
     ctx["session"].poll_tick()
     ctx["bell_calls"] = _attach_bell_spy(ctx["session"])
 
@@ -446,7 +446,7 @@ def _g_launched_with_attention_already_rung(ctx):
 @given("the store has a step already in the inbox lane")
 def _g_store_has_inbox_step(ctx):
     store = FakeStore()
-    create_owned_step(store, "inbox item", step="triage", role="human")
+    create_owned_step(store, "inbox item", stage="triage", role="human")
     ctx["store"] = store
     ctx["launch_with_bell_spy"] = True
 
@@ -454,7 +454,7 @@ def _g_store_has_inbox_step(ctx):
 @given("the store has three queued steps")
 def _g_three_queued(ctx):
     store = FakeStore()
-    ctx["row_ids"] = [create_owned_step(store, "q%d" % i, step="build", role="agent") for i in range(3)]
+    ctx["row_ids"] = [create_owned_step(store, "q%d" % i, stage="build", role="agent") for i in range(3)]
     ctx["store"] = store
 
 
@@ -463,7 +463,7 @@ def _g_more_than_one_screen(ctx):
     def build():
         store = FakeStore()
         for i in range(60):
-            create_owned_step(store, "q%d" % i, step="build", role="agent")
+            create_owned_step(store, "q%d" % i, stage="build", role="agent")
         return store
 
     ctx["build_store"] = build
@@ -474,7 +474,7 @@ def _g_more_than_one_screen(ctx):
 def _g_queued_step_with_id(ctx, id, source):
     store = FakeStore()
     item = store.create_item("queued item", "a description", id=id)
-    ctx["target_id"] = store.create_step(step="build", role="agent", parent=item)
+    ctx["target_id"] = store.create_step(stage="build", role="agent", item=item)
     ctx["store"] = store
 
 
@@ -485,10 +485,10 @@ def _g_queued_step_with_id(ctx, id, source):
 def _g_more_than_screen_with_deep_long_id(ctx):
     store = FakeStore()
     for i in range(60):
-        create_owned_step(store, "q%d" % i, step="build", role="agent")
+        create_owned_step(store, "q%d" % i, stage="build", role="agent")
     ctx["long_id"] = "LIGHTCYCLE-999.10.10"
     item = store.create_item("deep item", "a description", id=ctx["long_id"])
-    ctx["target_id"] = store.create_step(step="build", role="agent", parent=item
+    ctx["target_id"] = store.create_step(stage="build", role="agent", item=item
     )
     ctx["store"] = store
 
@@ -527,7 +527,7 @@ def _g_row_forces_stacked(ctx, mode):
     clock = Clock(BASE_TIME - datetime.timedelta(minutes=_STACK_TIME_MINUTES))
     store = FakeStore(now=lambda: clock.now().isoformat())
     item = store.create_item(_STACK_TITLE, "a description", id=_STACK_ID, project=_STACK_PROJECT)
-    tid = store.create_step(step=_STACK_STEP, role="agent", parent=item)
+    tid = store.create_step(stage=_STACK_STEP, role="agent", item=item)
     store.assign(tid, "worker-1")
     store.update_state(tid, State.RUNNING)
     store.accrue_active_seconds([tid], _STACK_TIME_MINUTES * 60)
@@ -541,8 +541,8 @@ def _g_row_forces_stacked(ctx, mode):
 @given("the dashboard has launched with a selected queued step")
 def _g_launched_with_selected_queued(ctx):
     store = FakeStore()
-    create_owned_step(store, "other", step="build", role="agent")
-    target = create_owned_step(store, "target", step="build", role="agent")
+    create_owned_step(store, "other", stage="build", role="agent")
+    target = create_owned_step(store, "target", stage="build", role="agent")
     ctx["store"] = store
     ctx["target_id"] = target
     _launch(ctx)
@@ -554,9 +554,9 @@ def _g_launched_with_selected_queued(ctx):
 @given("the dashboard has launched with a selected step")
 def _g_launched_with_selected_step(ctx):
     store = FakeStore()
-    first = create_owned_step(store, "first", step="build", role="agent")
-    target = create_owned_step(store, "target", step="build", role="agent")
-    last = create_owned_step(store, "last", step="build", role="agent")
+    first = create_owned_step(store, "first", stage="build", role="agent")
+    target = create_owned_step(store, "target", stage="build", role="agent")
+    last = create_owned_step(store, "last", stage="build", role="agent")
     ctx["store"] = store
     ctx["target_id"] = target
     ctx["first_id"] = first
@@ -570,10 +570,10 @@ def _g_launched_with_selected_step(ctx):
 @given("the store has a runnable queued step and a dependency-held queued step")
 def _g_runnable_and_held_queued(ctx):
     store = FakeStore()
-    ctx["runnable_id"] = create_owned_step(store, "runnable item", step="build", role="agent")
-    blocker = create_owned_step(store, "blocker", step="build", role="agent")
+    ctx["runnable_id"] = create_owned_step(store, "runnable item", stage="build", role="agent")
+    blocker = create_owned_step(store, "blocker", stage="build", role="agent")
     ctx["held_id"] = create_owned_step(store, 
-        "held item", step="build", role="agent", deps=[blocker]
+        "held item", stage="build", role="agent", deps=[blocker]
     )
     ctx["store"] = store
 
@@ -581,9 +581,9 @@ def _g_runnable_and_held_queued(ctx):
 @given("the store has a step blocked on another item's completion")
 def _g_blocked_on_other_item(ctx):
     store = FakeStore()
-    blocker = create_owned_step(store, "blocker", step="build", role="agent")
+    blocker = create_owned_step(store, "blocker", stage="build", role="agent")
     ctx["blocker_id"] = blocker
-    ctx["target_id"] = create_owned_step(store, "blocked", step="build", role="agent", deps=[blocker])
+    ctx["target_id"] = create_owned_step(store, "blocked", stage="build", role="agent", deps=[blocker])
     ctx["store"] = store
 
 
@@ -601,7 +601,7 @@ def _g_blocked_on_other_item_with_display(ctx, phrase):
 @given("the store has a step in the inbox lane")
 def _g_inbox_only(ctx):
     store = FakeStore()
-    ctx["target_id"] = create_owned_step(store, "inbox item", step="triage", role="human")
+    ctx["target_id"] = create_owned_step(store, "inbox item", stage="triage", role="human")
     ctx["store"] = store
 
 
@@ -656,23 +656,23 @@ def _w_poll_elapses_nothing_new(ctx):
 @when("a step becomes blocked by an unresolved dependency")
 def _w_step_becomes_blocked(ctx):
     store = ctx["store"]
-    blocker = create_owned_step(store, "blocker", step="build", role="agent")
-    create_owned_step(store, "blocked", step="build", role="agent", deps=[blocker])
+    blocker = create_owned_step(store, "blocker", stage="build", role="agent")
+    create_owned_step(store, "blocked", stage="build", role="agent", deps=[blocker])
 
 
 @when("a step is created directly into the inbox lane")
 def _w_new_inbox_step_directly(ctx):
-    create_owned_step(ctx["store"], "new inbox item", step="triage", role="human")
+    create_owned_step(ctx["store"], "new inbox item", stage="triage", role="human")
 
 
 @when("a new step is created directly into the queue")
 def _w_new_queue_step_directly(ctx):
-    create_owned_step(ctx["store"], "new queued", step="build", role="agent")
+    create_owned_step(ctx["store"], "new queued", stage="build", role="agent")
 
 
 @when("a new step is created into the queue")
 def _w_new_queue_step(ctx):
-    ctx["target_id"] = create_owned_step(ctx["store"], "new item", step="build", role="agent")
+    ctx["target_id"] = create_owned_step(ctx["store"], "new item", stage="build", role="agent")
 
 
 @when("Down is pressed")
@@ -1234,8 +1234,8 @@ def _t_new_row_built_at_real_width(ctx):
 
 def test_a_selected_rows_own_state_colour_survives_rendering():
     store = FakeStore()
-    attention_id = create_owned_step(store, "inbox item", step="triage", role="human")
-    active_id = create_owned_step(store, "active item", step="build", role="agent")
+    attention_id = create_owned_step(store, "inbox item", stage="triage", role="human")
+    active_id = create_owned_step(store, "active item", stage="build", role="agent")
     store.assign(active_id, "worker-1")
     session = launch(make_test_container(store=store))
 

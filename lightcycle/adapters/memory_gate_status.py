@@ -2,6 +2,7 @@ import json
 import os
 import sys
 
+from lightcycle.domain.pool import MemoryGateState
 from lightcycle.ports.memory_gate_status import MemoryGateStatusPort
 
 
@@ -12,13 +13,13 @@ def memory_gate_status_path(root):
 def load(root):
     p = memory_gate_status_path(root)
     if not os.path.exists(p):
-        return {}
+        return None
     try:
         with open(p) as f:
-            return json.loads(f.read())
+            return MemoryGateState.from_dict(json.loads(f.read()))
     except Exception as e:
         sys.stderr.write("warning: could not read memory gate state %s: %s\n" % (p, e))
-        return {}
+        return None
 
 
 def save(root, state):
@@ -26,7 +27,7 @@ def save(root, state):
     p = memory_gate_status_path(root)
     tmp = "%s.%d.tmp" % (p, os.getpid())
     with open(tmp, "w") as f:
-        f.write(json.dumps(state, indent=2))
+        f.write(json.dumps(state.as_dict(), indent=2))
     os.replace(tmp, p)
 
 

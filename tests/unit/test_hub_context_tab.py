@@ -23,7 +23,7 @@ def _store():
     store.add_artifact(
         item, "plan", "## Problem\nfirst para\n\n- item one\nsee [the spec](https://example.test/s)", kind="text"
     )
-    step = store.create_step(step="triage", role="human", parent=item, id="LC-1.1")
+    step = store.create_step(stage="triage", role="human", item=item, id="LC-1.1")
     store.set_report(step, "ship it")
     return store, step
 

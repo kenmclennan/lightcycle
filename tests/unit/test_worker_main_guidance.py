@@ -18,7 +18,7 @@ class TestRecordGuidance(unittest.TestCase):
     def setUp(self):
         self.store = FakeStore()
         item = self.store.create_item("t", "d")
-        self.step = self.store.create_step(step="build", role="agent", parent=item)
+        self.step = self.store.create_step(stage="build", role="agent", item=item)
 
     def _artifacts(self):
         return {a.type: a.value for a in self.store.item_artifacts(self.step)}

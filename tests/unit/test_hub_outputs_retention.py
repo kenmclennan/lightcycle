@@ -38,7 +38,7 @@ class TestHubOutputsShapeRetention(unittest.TestCase):
     def test_step_output_is_listed_by_name_with_its_step_and_opens_its_text(self):
         store = FakeStore()
         item = store.create_item("item", "a description", workflow="o/w@abc")
-        step = store.create_step(step="audit", role="agent", parent=item)
+        step = store.create_step(stage="audit", role="agent", item=item)
         store.add_artifact(step, "findings", "the audit digest")
         store.add_artifact(step, "reflection", "private note", internal=True)
 
@@ -63,7 +63,7 @@ class TestHubOutputsShapeRetention(unittest.TestCase):
         item = store.create_item("item", "a description", workflow="o/w@abc")
         for n, value in enumerate(("specs/v1.md", "specs/v2.md"), start=1):
             pid = store.open_pass(item)
-            step = store.create_step(step="spec", role="agent", parent=item)
+            step = store.create_step(stage="spec", role="agent", item=item)
             store.set_step_pass(step, pid)
             store.add_artifact(step, "spec", value)
 

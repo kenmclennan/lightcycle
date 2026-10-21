@@ -142,16 +142,16 @@ class TestResolveStepFocusUseCase(unittest.TestCase):
 
     def test_a_gate_presenting_a_declared_output_of_a_sibling_step_lands_on_its_input_entry(self):
         s = FakeStore()
-        step = create_owned_step(s, "s", step="gate", role="human")
-        sibling = s.create_step(step="audit", role="agent", parent=s.get_node(step).item)
+        step = create_owned_step(s, "s", stage="gate", role="human")
+        sibling = s.create_step(stage="audit", role="agent", item=s.get_node(step).item)
         s.add_artifact(sibling, "findings", "text")
         flow = FlowStub(presents="artifact:findings", produced={"findings": "optional"})
         self.assertEqual(resolve(s, step, flow), "detail:in:findings")
 
     def test_a_gate_declaring_detail_lands_on_its_presents_entry(self):
         s = FakeStore()
-        step = create_owned_step(s, "s", step="gate", role="human")
-        sibling = s.create_step(step="audit", role="agent", parent=s.get_node(step).item)
+        step = create_owned_step(s, "s", stage="gate", role="human")
+        sibling = s.create_step(stage="audit", role="agent", item=s.get_node(step).item)
         s.add_artifact(sibling, "findings", "text")
         flow = FlowStub(
             presents="artifact:findings", produced={"findings": "optional"},
@@ -160,25 +160,25 @@ class TestResolveStepFocusUseCase(unittest.TestCase):
 
     def test_a_gate_presenting_an_artifact_not_yet_attached_falls_past_it(self):
         s = FakeStore()
-        step = create_owned_step(s, "s", step="gate", role="human")
+        step = create_owned_step(s, "s", stage="gate", role="human")
         self.assertNotEqual(
             resolve(s, step, FlowStub(presents="artifact:findings")), "detail:in:findings")
 
     def test_a_running_agent_step_resolves_to_log(self):
         s = FakeStore()
-        step = create_owned_step(s, "s", step="build", role="agent")
+        step = create_owned_step(s, "s", stage="build", role="agent")
         s.claim_ready("agent")
         self.assertEqual(resolve(s, step, FlowStub()), "log")
 
     def test_a_queued_engine_step_with_a_log_path_resolves_to_log(self):
         s = FakeStore()
-        step = create_owned_step(s, "s", step="script", role="engine")
+        step = create_owned_step(s, "s", stage="script", role="engine")
         s.set_log(step, "/tmp/x.log")
         self.assertEqual(resolve(s, step, FlowStub()), "log")
 
     def test_a_done_step_producing_an_attached_artifact_lands_on_it_in_context(self):
         s = FakeStore()
-        step = create_owned_step(s, "s", step="build", role="agent")
+        step = create_owned_step(s, "s", stage="build", role="agent")
         s.add_artifact(step, "summary", "text")
         s.complete_node(step, "done")
         self.assertEqual(
@@ -186,6 +186,6 @@ class TestResolveStepFocusUseCase(unittest.TestCase):
 
     def test_a_dependency_blocked_step_resolves_to_reason(self):
         s = FakeStore()
-        blocker = create_owned_step(s, "b", step="build", role="agent")
-        step = create_owned_step(s, "s", step="build", role="agent", deps=[blocker])
+        blocker = create_owned_step(s, "b", stage="build", role="agent")
+        step = create_owned_step(s, "s", stage="build", role="agent", deps=[blocker])
         self.assertEqual(resolve(s, step, FlowStub()).split(":")[0], "reason")

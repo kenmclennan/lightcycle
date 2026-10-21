@@ -10,7 +10,7 @@ from tests.support.step_factory import create_owned_step
 class TestParkTask(unittest.TestCase):
     def test_empty_observation_raises(self):
         s = FakeStore()
-        bid = create_owned_step(s, "build: x", step="build", role="agent")
+        bid = create_owned_step(s, "build: x", stage="build", role="agent")
         with self.assertRaises(UseCaseError):
             ParkStepUseCase(s).execute(
                 ParkInput(step=bid, observation="  ", decision="decide X")
@@ -18,7 +18,7 @@ class TestParkTask(unittest.TestCase):
 
     def test_empty_decision_raises(self):
         s = FakeStore()
-        bid = create_owned_step(s, "build: x", step="build", role="agent")
+        bid = create_owned_step(s, "build: x", stage="build", role="agent")
         with self.assertRaises(UseCaseError):
             ParkStepUseCase(s).execute(
                 ParkInput(step=bid, observation="something happened", decision="")
@@ -26,7 +26,7 @@ class TestParkTask(unittest.TestCase):
 
     def test_park_sets_needs_reason_role_and_note_on_fake_store(self):
         s = FakeStore()
-        bid = create_owned_step(s, "build: x", step="build", role="agent")
+        bid = create_owned_step(s, "build: x", stage="build", role="agent")
         ParkStepUseCase(s).execute(
             ParkInput(step=bid, observation="something happened", decision="decide X")
         )
@@ -38,7 +38,7 @@ class TestParkTask(unittest.TestCase):
 
     def test_park_sets_needs_reason_role_and_note_on_sqlite_store(self):
         s = make_sqlite_store()
-        bid = create_owned_step(s, "build: x", step="build", role="agent")
+        bid = create_owned_step(s, "build: x", stage="build", role="agent")
         ParkStepUseCase(s).execute(
             ParkInput(step=bid, observation="something happened", decision="decide X")
         )
@@ -50,7 +50,7 @@ class TestParkTask(unittest.TestCase):
 
     def test_park_carries_resume_fields_when_present(self):
         s = FakeStore()
-        bid = create_owned_step(s, "build: x", step="build", role="agent")
+        bid = create_owned_step(s, "build: x", stage="build", role="agent")
         ParkStepUseCase(s).execute(
             ParkInput(
                 step=bid, observation="something happened", decision="decide X",
@@ -61,7 +61,7 @@ class TestParkTask(unittest.TestCase):
 
     def test_a_failing_reassign_leaves_the_metadata_write_unapplied(self):
         s = FakeStore()
-        bid = create_owned_step(s, "build: x", step="build", role="agent")
+        bid = create_owned_step(s, "build: x", stage="build", role="agent")
 
         def raising_reassign(tid, role):
             raise RuntimeError("boom")

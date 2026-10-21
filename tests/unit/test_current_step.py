@@ -8,16 +8,16 @@ class TestCurrentStep(unittest.TestCase):
     def test_returns_the_first_non_done_child(self):
         store = FakeStore()
         item = store.create_item("story", "a description")
-        done = store.create_step(step="spec-writer", role="agent", parent=item)
+        done = store.create_step(stage="spec-writer", role="agent", item=item)
         store.complete_node(done, "done")
-        active = store.create_step(step="build", role="agent", parent=item)
+        active = store.create_step(stage="build", role="agent", item=item)
 
         self.assertEqual(current_step(store, item).id, active)
 
     def test_returns_none_when_every_child_is_done(self):
         store = FakeStore()
         item = store.create_item("story", "a description")
-        done = store.create_step(step="spec-writer", role="agent", parent=item)
+        done = store.create_step(stage="spec-writer", role="agent", item=item)
         store.complete_node(done, "done")
 
         self.assertIsNone(current_step(store, item))

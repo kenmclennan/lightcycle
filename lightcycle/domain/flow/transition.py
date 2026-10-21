@@ -13,9 +13,9 @@ class Transition:
 
     def next_step_spec(self, step) -> NodeSpec:
         return NodeSpec(
-            step=self.to_stage,
+            stage=self.to_stage,
             role=self.to_role,
-            parent=step.item,
+            item=step.item,
             deps=(step.id,),
             previous=step.id,
         )

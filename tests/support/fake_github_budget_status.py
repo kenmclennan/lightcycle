@@ -3,12 +3,12 @@ from lightcycle.ports.github_budget_status import GithubBudgetStatusPort
 
 class FakeGithubBudgetStatus(GithubBudgetStatusPort):
     def __init__(self, state=None):
-        self._state = state if state is not None else {}
+        self._state = state
         self.saves = []
 
     def load(self):
-        return dict(self._state)
+        return self._state
 
     def save(self, state):
-        self._state = dict(state)
-        self.saves.append(dict(state))
+        self._state = state
+        self.saves.append(state)

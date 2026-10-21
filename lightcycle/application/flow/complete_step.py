@@ -198,7 +198,7 @@ class CompleteStepUseCase:
     ) -> CompleteResponse:
         spec = None
         if input.outcome == "findings" and input.note:
-            spec = NodeSpec(step=FINDINGS_STEP, role="human", parent=t.item, previous=t.id)
+            spec = NodeSpec(stage=FINDINGS_STEP, role="human", item=t.item, previous=t.id)
         won, fid = self._store.complete_step_atomic(
             input.step, input.outcome, self._expected_assignee(), spec)
         if not won:

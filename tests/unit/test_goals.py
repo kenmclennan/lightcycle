@@ -155,7 +155,7 @@ class TestGoalUseCases(unittest.TestCase):
         self._refuses(EditGoalUseCase(self.store).execute, EditGoalInput(id=self.goal))
 
     def test_refuses_linking_a_step_an_unknown_id_and_a_linked_pair(self):
-        step = self.store.create_step(step="s", role="agent", parent=self.item)
+        step = self.store.create_step(stage="s", role="agent", item=self.item)
         self._refuses(LinkGoalItemUseCase(self.store).execute, self.goal, step)
         self._refuses(LinkGoalItemUseCase(self.store).execute, self.goal, "LC-999")
         LinkGoalItemUseCase(self.store).execute(self.goal, self.item)
