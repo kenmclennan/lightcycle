@@ -19,6 +19,7 @@ LC = str(ROOT / "bin" / "lc")
 sys.path.insert(0, str(ROOT))
 import lightcycle.adapters.lock as _lock_mod
 import lightcycle.cli as _cli_mod
+import lightcycle.commands.context as _context_mod
 import lightcycle.container as _container_mod
 from tests.support.fake_fs import graph_text_from_metas
 from tests.support.fake_machine import FakeMachine
@@ -1074,7 +1075,7 @@ class TestRun(unittest.TestCase):
         create_owned_step(self.store, "build: t", stage="build", role="agent")
         flow_calls = []
         worktree_calls = []
-        orig_make_flow = _cli_mod.make_flow_service
+        orig_make_flow = _context_mod.make_flow_service
         orig_make_worktrees = _container_mod.make_worktrees
 
         def _flow_spy(*a, **kw):
@@ -1087,7 +1088,7 @@ class TestRun(unittest.TestCase):
             worktree_calls.append((svc, a[4]))
             return svc
 
-        with patch.object(_cli_mod, "make_flow_service", side_effect=_flow_spy), \
+        with patch.object(_context_mod, "make_flow_service", side_effect=_flow_spy), \
                 patch.object(_container_mod, "make_worktrees", side_effect=_worktrees_spy):
             rc, _, err = self._run_once()
 

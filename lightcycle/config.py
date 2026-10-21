@@ -4,7 +4,38 @@ from pathlib import Path
 from typing import Optional
 
 from lightcycle import frontmatter
+from lightcycle.config_ranges import check_range, parse_bool
+from lightcycle.config_reload import (
+    RELOAD_REJECTED,
+    RELOAD_RELOADED,
+    RELOAD_UNCHANGED,
+    RESTART_REQUIRED_KEYS,
+    ConfigReloadResult,
+    rejection_reason,
+    restart_required,
+)
+from lightcycle.config_schedules import (
+    SCHEDULE_KEY_PREFIX,
+    WORKFLOW_KEY_PREFIX,
+    is_obsolete_key,
+    schedule_blocks,
+    workflow_config,
+    workflow_config_block_name,
+)
+from lightcycle.config_seeds import (
+    _SEED_KEYS,
+    default_config_text,
+    missing_seed_keys,
+    seed_key_names,
+    with_trusted_authors,
+)
 from lightcycle.domain.pool import ModelRates
+
+__all__ = [
+    "RESTART_REQUIRED_KEYS",
+    "SCHEDULE_KEY_PREFIX",
+    "WORKFLOW_KEY_PREFIX",
+]
 
 
 _GETTER_NAME_OVERRIDES = {
@@ -44,28 +75,7 @@ _ENV_OVERRIDE_VARS = {
     "guidance-dormant-days": "LC_GUIDANCE_DORMANT_DAYS",
 }
 
-SCHEDULE_KEY_PREFIX = "schedule-"
-WORKFLOW_KEY_PREFIX = "workflow-"
-
-_TRUE = ("true", "yes", "1", "on")
-_FALSE = ("false", "no", "0", "off")
-
 _BLANK = (None, "", {})
-
-RESTART_REQUIRED_KEYS = ("poll-seconds", "pool-upgrade-check-seconds", "tick-failure-cap", "spin-cap")
-
-RELOAD_UNCHANGED = "unchanged"
-RELOAD_RELOADED = "reloaded"
-RELOAD_REJECTED = "rejected"
-
-
-@dataclass(frozen=True)
-class ConfigReloadResult:
-    outcome: str
-    reason: Optional[str] = None
-    mtime: Optional[int] = None
-    restart_required: tuple = ()
-
 
 @dataclass(frozen=True)
 class ResolvedSetting:
@@ -75,136 +85,6 @@ class ResolvedSetting:
     state: str
     env_var: Optional[str]
     seed: Optional[str]
-
-
-_SEED_KEYS = [
-    ("projects", "~/workspace/projects"),
-    ("branch-prefix", "feat"),
-    ("default-origin", "lightcycle"),
-    ("workflows-remote", ""),
-    ("max-agents", "5"),
-    ("worktree-retries", "6"),
-    ("worktree-retry-sleep", "0.25"),
-    ("max-boot-seconds", "120"),
-    ("max-session-seconds", "1800"),
-    ("stall-seconds", "1800"),
-    ("ci-check-ceiling-seconds", "3600"),
-    ("probe-cooldown-seconds", "1800"),
-    ("spin-cap", "3"),
-    ("poll-seconds", "5"),
-    ("github-poll-seconds", "60"),
-    ("github-reserve-calls", "750"),
-    ("github-view-refresh-polls", "10"),
-    ("worker-history", "20"),
-    ("editor", "vi"),
-    ("backups-dir", "~/.lightcycle-backups"),
-    ("backup-interval-minutes", "15"),
-    ("guidance-fetch-minutes", "5"),
-    ("backup-retention", "96"),
-    ("workflow-retention", "5"),
-    ("max-title-length", "72"),
-    ("tui-autostart-pool", "false"),
-    ("tui-metrics", "false"),
-    ("developer-mode", "false"),
-    ("tui-upgrade-check-seconds", "900"),
-    ("pool-upgrade-check-seconds", "900"),
-    ("personal-origin", ""),
-    ("price-sonnet-input-per-mtok", "2.00"),
-    ("price-sonnet-output-per-mtok", "10.00"),
-    ("price-sonnet-cache-write-per-mtok", "2.50"),
-    ("price-sonnet-cache-read-per-mtok", "0.20"),
-    ("price-opus-input-per-mtok", "5.00"),
-    ("price-opus-output-per-mtok", "25.00"),
-    ("price-opus-cache-write-per-mtok", "6.25"),
-    ("price-opus-cache-read-per-mtok", "0.50"),
-    ("price-haiku-input-per-mtok", "1.00"),
-    ("price-haiku-output-per-mtok", "5.00"),
-    ("price-haiku-cache-write-per-mtok", "1.25"),
-    ("price-haiku-cache-read-per-mtok", "0.10"),
-    ("shutdown-grace-seconds", "10"),
-    ("tick-failure-cap", "5"),
-    ("review-rounds-cap", "5"),
-    ("context-artifact-types", "spec"),
-    ("audit-shortcode", "AUD"),
-    ("held-comment-shortcode", "HLD"),
-    ("guidance-shortcode", "GDN"),
-    ("trusted-authors", ""),
-    ("memory-reserve-fraction", "0.65"),
-    ("guidance-budget-bytes", "6144"),
-    ("guidance-unused-after-deliveries", "60"),
-    ("guidance-dormant-days", "60"),
-    ("schedules-paused", "false"),
-    ("lifecycle-timeout-seconds", "300"),
-    ("script-timeout-seconds", "300"),
-    ("script-max-running", "4"),
-]
-
-_SEED_SCHEDULES = """\
-schedule-retro-audit:
-  enabled: true
-  workflow: lightcycle/retro-audit
-  project: guidance
-  shortcode: AUD
-  cron: 0 9 * * *
-  guard: pending-reflections
-  min: 30
-schedule-material-audit:
-  enabled: true
-  workflow: lightcycle/material-audit
-  project: guidance
-  shortcode: AUD
-  cron: 0 9 * * 1
-  guard: materials-changed
-schedule-daily-summary:
-  enabled: true
-  workflow: lightcycle/daily-summary
-  project: guidance
-  shortcode: SUM
-  cron: 0 7 * * *
-  guard: day-unsummarised
-schedule-ratchet-sweep:
-  enabled: true
-  workflow: lightcycle/ratchet-sweep
-  project: guidance
-  shortcode: AUD
-  cron: 0 9 * * 1
-  guard: repos-active
-"""
-
-_NUMERIC_RANGES = {
-    "github-poll-seconds": (1, None),
-    "github-reserve-calls": (0, None),
-    "github-view-refresh-polls": (1, None),
-    "memory-reserve-fraction": (0.0, 1.0),
-    "max-agents": (0, None),
-    "guidance-budget-bytes": (0, None),
-    "guidance-unused-after-deliveries": (1, None),
-    "guidance-dormant-days": (1, None),
-    "lifecycle-timeout-seconds": (1, None),
-    "script-timeout-seconds": (1, None),
-    "script-max-running": (1, None),
-    "workflow-retention": (1, None),
-    "max-boot-seconds": (0, None),
-    "max-session-seconds": (0, None),
-    "stall-seconds": (0, None),
-    "ci-check-ceiling-seconds": (1, None),
-    "probe-cooldown-seconds": (0, None),
-    "tui-upgrade-check-seconds": (0, None),
-    "pool-upgrade-check-seconds": (0, None),
-    "shutdown-grace-seconds": (0, None),
-    "price-sonnet-input-per-mtok": (0.0, None),
-    "price-sonnet-output-per-mtok": (0.0, None),
-    "price-sonnet-cache-write-per-mtok": (0.0, None),
-    "price-sonnet-cache-read-per-mtok": (0.0, None),
-    "price-opus-input-per-mtok": (0.0, None),
-    "price-opus-output-per-mtok": (0.0, None),
-    "price-opus-cache-write-per-mtok": (0.0, None),
-    "price-opus-cache-read-per-mtok": (0.0, None),
-    "price-haiku-input-per-mtok": (0.0, None),
-    "price-haiku-output-per-mtok": (0.0, None),
-    "price-haiku-cache-write-per-mtok": (0.0, None),
-    "price-haiku-cache-read-per-mtok": (0.0, None),
-}
 
 
 class ConfigError(Exception):
@@ -369,10 +249,7 @@ class Config:
         ]
         if bad:
             self._cached, self._cached_path, self._loaded_mtime = previous
-            reason = bad[0].error
-            if len(bad) > 1:
-                reason = "%s (and %d more)" % (reason, len(bad) - 1)
-            return self._reject(mtime, reason)
+            return self._reject(mtime, rejection_reason(bad))
         self._rejected = None
         return ConfigReloadResult(
             RELOAD_RELOADED, mtime=mtime,
@@ -383,18 +260,14 @@ class Config:
         return ConfigReloadResult(RELOAD_REJECTED, reason=reason, mtime=mtime)
 
     def _restart_required(self, candidate, start_values):
-        return tuple(
-            k for k in RESTART_REQUIRED_KEYS
-            if k in start_values
-            and self._env(_ENV_OVERRIDE_VARS[k]) is None
-            and candidate.get(k) != start_values[k]
-        )
+        return restart_required(
+            candidate, start_values, lambda k: self._env(_ENV_OVERRIDE_VARS[k]) is not None)
 
     def _default_config_text(self):
-        return "".join("%s: %s\n" % (k, v) for k, v in _SEED_KEYS) + _SEED_SCHEDULES
+        return default_config_text()
 
     def _missing_seed_keys(self, existing):
-        return [(k, v) for k, v in _SEED_KEYS if k not in existing]
+        return missing_seed_keys(existing)
 
     def reconcile_config(self):
         p = self.config_path()
@@ -413,11 +286,9 @@ class Config:
         return tuple(k for k, v in self._missing_seed_keys(self.load_config()))
 
     def obsolete_config_keys(self):
-        seed_names = {k for k, v in _SEED_KEYS}
+        seed_names = seed_key_names()
         return tuple(
-            k for k, v in self.load_config().items()
-            if k not in seed_names and not k.startswith(SCHEDULE_KEY_PREFIX)
-            and not (k.startswith(WORKFLOW_KEY_PREFIX) and isinstance(v, dict)))
+            k for k, v in self.load_config().items() if is_obsolete_key(k, v, seed_names))
 
     def resolved_settings(self):
         entries = []
@@ -501,26 +372,17 @@ class Config:
             raise ConfigValueError("config value %r must be a number (got %r)" % (key, v))
 
     def _check_range(self, key, value):
-        bounds = _NUMERIC_RANGES.get(key)
-        if bounds is None:
-            return value
-        lo, hi = bounds
-        if lo is not None and value < lo:
-            raise ConfigValueError("config value %r must be >= %r (got %r)" % (key, lo, value))
-        if hi is not None and value > hi:
-            raise ConfigValueError("config value %r must be <= %r (got %r)" % (key, hi, value))
-        return value
+        try:
+            return check_range(key, value)
+        except ValueError as e:
+            raise ConfigValueError(str(e))
 
     @staticmethod
     def _parse_bool(key, raw):
-        text = str(raw).strip().lower()
-        if text in _TRUE:
-            return True
-        if text in _FALSE:
-            return False
-        raise ConfigValueError(
-            "config value %r must be one of %s or %s (got %r)"
-            % (key, "/".join(_TRUE), "/".join(_FALSE), raw))
+        try:
+            return parse_bool(key, raw)
+        except ValueError as e:
+            raise ConfigValueError(str(e))
 
     def _required_bool(self, key):
         v = self.load_config().get(key)
@@ -632,11 +494,7 @@ class Config:
         return self._required_bool("schedules-paused")
 
     def schedule_blocks(self):
-        return {
-            k[len(SCHEDULE_KEY_PREFIX):]: dict(v)
-            for k, v in self.load_config().items()
-            if k.startswith(SCHEDULE_KEY_PREFIX) and isinstance(v, dict)
-        }
+        return schedule_blocks(self.load_config())
 
     def lifecycle_timeout_seconds(self):
         return self._check_range(
@@ -650,11 +508,10 @@ class Config:
         return self._check_range("script-max-running", self._required_int("script-max-running"))
 
     def workflow_config_block_name(self, origin, name):
-        return "%s%s-%s" % (WORKFLOW_KEY_PREFIX, origin, name)
+        return workflow_config_block_name(origin, name)
 
     def workflow_config(self, origin, name):
-        block = self.load_config().get(self.workflow_config_block_name(origin, name))
-        return dict(block) if isinstance(block, dict) else {}
+        return workflow_config(self.load_config(), origin, name)
 
     def workflow_data_root(self):
         return os.path.join(self.data_root(), "workflow-data")
@@ -756,14 +613,8 @@ class Config:
         if os.path.exists(p):
             with open(p) as f:
                 lines = f.readlines()
-        for i, line in enumerate(lines):
-            if line.split(":", 1)[0].strip() == "trusted-authors":
-                lines[i] = "trusted-authors: %s\n" % login
-                break
-        else:
-            lines.append("trusted-authors: %s\n" % login)
         with open(p, "w") as f:
-            f.writelines(lines)
+            f.writelines(with_trusted_authors(lines, login))
         self.reload()
         return True
 

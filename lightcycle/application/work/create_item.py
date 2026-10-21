@@ -1,8 +1,10 @@
 from dataclasses import dataclass, field
 from typing import List, Optional
 
+from lightcycle.application.errors import UseCaseError
 from lightcycle.application.work.resolve_backlog import link_resolves
 from lightcycle.application.work.resolve_shortcode import resolve_shortcode
+from lightcycle.application.work.title_guard import validate_title
 
 
 @dataclass(frozen=True)
@@ -21,10 +23,17 @@ class CreateItemResponse:
 
 
 class CreateItemUseCase:
-    def __init__(self, store):
+    def __init__(self, store, config):
         self._store = store
+        self._config = config
 
     def execute(self, input: CreateItemInput) -> CreateItemResponse:
+        validate_title(self._config, input.title)
+        if not (input.description or "").strip():
+            raise UseCaseError(
+                "a description is required for an item; a paragraph or two describing "
+                "the work, which the entry step reads"
+            )
         resolved = resolve_shortcode(self._store, input.project, input.repo)
         project = resolved.project
         repo = input.repo or resolved.identity

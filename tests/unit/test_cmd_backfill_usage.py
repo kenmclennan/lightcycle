@@ -4,6 +4,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
 from lightcycle import cli
+from lightcycle.commands import pool as pool_cmds
 from lightcycle.adapters.claude_stream import ClaudeStreamAdapter
 from lightcycle.ports.workers import RegistryUnreadable
 from tests.support.fake_fs import FakeFs
@@ -83,7 +84,7 @@ class TestCmdBackfillUsageSummary(unittest.TestCase):
             reclassified=122, recovered=118,
         )
         with mock.patch.object(cli, "Container", lambda: FakeContainer(store=store)), \
-                mock.patch.object(cli, "BackfillUsageUseCase") as UseCase:
+                mock.patch.object(pool_cmds, "BackfillUsageUseCase") as UseCase:
             UseCase.return_value.execute.return_value = fake_resp
             rc, out, err = call(cli.main, "backfill-usage")
         self.assertEqual(rc, 0)
@@ -98,7 +99,7 @@ class TestCmdBackfillUsageSummary(unittest.TestCase):
             repair_missing_logs=1,
         )
         with mock.patch.object(cli, "Container", lambda: FakeContainer()), \
-                mock.patch.object(cli, "BackfillUsageUseCase") as UseCase:
+                mock.patch.object(pool_cmds, "BackfillUsageUseCase") as UseCase:
             UseCase.return_value.execute.return_value = fake_resp
             rc, out, err = call(cli.main, "backfill-usage", "--repair")
         self.assertEqual(rc, 0)
@@ -107,7 +108,7 @@ class TestCmdBackfillUsageSummary(unittest.TestCase):
 
     def test_unreadable_registry_exits_one_with_a_clean_message(self):
         with mock.patch.object(cli, "Container", lambda: FakeContainer()), \
-                mock.patch.object(cli, "BackfillUsageUseCase") as UseCase:
+                mock.patch.object(pool_cmds, "BackfillUsageUseCase") as UseCase:
             UseCase.return_value.execute.side_effect = RegistryUnreadable("boom")
             rc, out, err = call(cli.main, "backfill-usage")
         self.assertEqual(rc, 1)

@@ -2,6 +2,7 @@ import datetime
 import unittest
 
 from lightcycle.application.flow.engine_steps import RETRO_ORIGIN_LABEL, SUMMARY_ORIGIN_LABEL
+from lightcycle.application.flow.route_step import RouteStepService
 from lightcycle.application.work.backlog import BacklogInput, BacklogUseCase
 from lightcycle.application.work.report import ReportInput, ReportUseCase, _backlog_start_and_close
 from lightcycle.domain.work import item_cost
@@ -187,7 +188,7 @@ class TestReportUseCaseEscalations(unittest.TestCase):
         s = FakeStore(now=lambda: "2026-01-01T10:00:00+00:00")
         item = s.create_item("item", "a description")
         step = s.create_step(stage="build", role="agent", item=item)
-        s.reassign(step, "human")
+        RouteStepService(s).route(step, "human")
 
         resp = ReportUseCase(s).execute(ReportInput(day=datetime.date(2026, 1, 1)))
 
@@ -197,8 +198,8 @@ class TestReportUseCaseEscalations(unittest.TestCase):
         s = FakeStore(now=lambda: "2026-01-01T10:00:00+00:00")
         item = s.create_item("item", "a description")
         step = s.create_step(stage="build", role="agent", item=item)
-        s.reassign(step, "human")
-        s.reassign(step, "agent")
+        RouteStepService(s).route(step, "human")
+        RouteStepService(s).route(step, "agent")
 
         self.assertEqual(s.get_node(step).role, "agent")
         resp = ReportUseCase(s).execute(ReportInput(day=datetime.date(2026, 1, 1)))
@@ -209,7 +210,7 @@ class TestReportUseCaseEscalations(unittest.TestCase):
         s = FakeStore(now=lambda: "2026-01-02T10:00:00+00:00")
         item = s.create_item("item", "a description")
         step = s.create_step(stage="build", role="agent", item=item)
-        s.reassign(step, "human")
+        RouteStepService(s).route(step, "human")
 
         resp = ReportUseCase(s).execute(ReportInput(day=datetime.date(2026, 1, 1)))
 
@@ -219,9 +220,9 @@ class TestReportUseCaseEscalations(unittest.TestCase):
         s = FakeStore(now=lambda: "2026-01-01T10:00:00+00:00")
         item = s.create_item("item", "a description")
         step = s.create_step(stage="build", role="agent", item=item)
-        s.reassign(step, "human")
+        RouteStepService(s).route(step, "human")
         s.update_metadata(step, {"reason": None, "needs": None, "tried": None})
-        s.reassign(step, "agent")
+        RouteStepService(s).route(step, "agent")
 
         resp = ReportUseCase(s).execute(ReportInput(day=datetime.date(2026, 1, 1)))
 

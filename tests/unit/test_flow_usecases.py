@@ -1901,7 +1901,7 @@ class TestUnblockTask(unittest.TestCase):
         )
         self.assertEqual(spin_port.load(), SpinLedger())
 
-    def test_a_failing_reassign_leaves_the_earlier_writes_unapplied(self):
+    def test_a_failing_route_leaves_the_earlier_writes_unapplied(self):
         s = FakeStore()
         bid = create_owned_step(s, "build: x", stage="build", role="agent")
         BlockStepUseCase(s).execute(BlockInput(step=bid, needs="decide X", reason="oops"))
@@ -1909,10 +1909,10 @@ class TestUnblockTask(unittest.TestCase):
         before_metadata = (before.park.reason, before.park.needs, before.park.tried)
         before_notes = before.notes
 
-        def raising_reassign(tid, role):
+        def raising_assign(tid, assignee):
             raise RuntimeError("boom")
 
-        s.reassign = raising_reassign
+        s.assign = raising_assign
         with self.assertRaises(RuntimeError):
             UnblockStepUseCase(
                 s, flow_for(METAS, s), spin_port=FakeSpinPort()

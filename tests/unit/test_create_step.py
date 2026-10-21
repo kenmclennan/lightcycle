@@ -7,6 +7,11 @@ from tests.support.fake_fs import FakeFs, graph_text_from_metas
 from tests.support.fake_store import FakeStore
 
 
+class _Config:
+    def max_title_length(self):
+        return 80
+
+
 def _flow(store, requires=None):
     metas = {"coder": {"model": "sonnet", "step": "build", "routes": {"done": "review"}}}
     workflow = graph_text_from_metas(metas, entry="build", requires=requires)
@@ -51,7 +56,7 @@ class TestCreateStepUseCase(unittest.TestCase):
     def test_role_resolves_from_the_parents_pinned_workflow(self):
         s = FakeStore()
         parent = s.create_item("an item", "a description", workflow="standard")
-        resp = CreateStepUseCase(s, _flow(s)).execute(
+        resp = CreateStepUseCase(s, _flow(s), _Config()).execute(
             CreateStepInput(title="", step="build", parent=parent)
         )
         step = s.get_node(resp.id)
@@ -62,7 +67,7 @@ class TestCreateStepUseCase(unittest.TestCase):
     def test_role_resolves_from_an_explicit_workflow(self):
         s = FakeStore()
         parent = s.create_item("an item", "a description")
-        resp = CreateStepUseCase(s, _flow(s)).execute(
+        resp = CreateStepUseCase(s, _flow(s), _Config()).execute(
             CreateStepInput(title="", step="build", parent=parent, workflow="standard")
         )
         self.assertEqual(s.get_node(resp.id).role, "agent")
@@ -71,16 +76,25 @@ class TestCreateStepUseCase(unittest.TestCase):
         s = FakeStore()
         parent = s.create_item("an item", "a description", workflow="standard")
         with self.assertRaises(UseCaseError) as ctx:
-            CreateStepUseCase(s, _flow(s)).execute(
+            CreateStepUseCase(s, _flow(s), _Config()).execute(
                 CreateStepInput(title="build it", step="not-a-real-step", parent=parent)
             )
         self.assertIn("build", str(ctx.exception))
+
+    def test_an_over_length_title_is_refused_before_the_non_blank_title_refusal(self):
+        s = FakeStore()
+        parent = s.create_item("an item", "a description", workflow="standard")
+        with self.assertRaises(UseCaseError) as ctx:
+            CreateStepUseCase(s, _flow(s), _Config()).execute(
+                CreateStepInput(title="x" * 81, step="build", parent=parent)
+            )
+        self.assertIn("title exceeds 80 chars", str(ctx.exception))
 
     def test_a_workflow_less_parent_raises_a_clean_error_not_a_traceback(self):
         s = FakeStore()
         parent = s.create_item("an item", "a description")
         with self.assertRaises(UseCaseError) as ctx:
-            CreateStepUseCase(s, _flow_with_single_default_origin(s)).execute(
+            CreateStepUseCase(s, _flow_with_single_default_origin(s), _Config()).execute(
                 CreateStepInput(title="", step="build", parent=parent)
             )
         self.assertIn("no workflow selected", str(ctx.exception))
@@ -88,7 +102,7 @@ class TestCreateStepUseCase(unittest.TestCase):
     def test_unknown_parent_raises(self):
         s = FakeStore()
         with self.assertRaises(UseCaseError) as ctx:
-            CreateStepUseCase(s, _flow(s)).execute(
+            CreateStepUseCase(s, _flow(s), _Config()).execute(
                 CreateStepInput(title="build it", step="build", parent="does-not-exist")
             )
         self.assertIn("does-not-exist", str(ctx.exception))
@@ -96,7 +110,7 @@ class TestCreateStepUseCase(unittest.TestCase):
     def test_note_is_written_when_given(self):
         s = FakeStore()
         parent = s.create_item("an item", "a description", workflow="standard")
-        resp = CreateStepUseCase(s, _flow(s)).execute(
+        resp = CreateStepUseCase(s, _flow(s), _Config()).execute(
             CreateStepInput(
                 title="", step="build", parent=parent, note=["watch", "for", "flakes"]
             )
@@ -114,7 +128,7 @@ class TestCreateStepUseCase(unittest.TestCase):
 
         s.note = _boom
         with self.assertRaises(RuntimeError):
-            CreateStepUseCase(s, _flow(s)).execute(
+            CreateStepUseCase(s, _flow(s), _Config()).execute(
                 CreateStepInput(title="", step="build", parent=parent, note=["x"])
             )
         self.assertEqual(s._records, before)
@@ -123,7 +137,7 @@ class TestCreateStepUseCase(unittest.TestCase):
     def test_a_step_filed_with_no_pass_yet_open_is_enrolled_into_a_freshly_opened_pass_1(self):
         s = FakeStore()
         parent = s.create_item("an item", "a description", workflow="standard")
-        resp = CreateStepUseCase(s, _flow(s)).execute(
+        resp = CreateStepUseCase(s, _flow(s), _Config()).execute(
             CreateStepInput(title="", step="build", parent=parent)
         )
         current = s.current_pass(parent)
@@ -136,7 +150,7 @@ class TestCreateStepUseCase(unittest.TestCase):
         pid1 = s.open_pass(parent)
         s.close_pass(pid1)
         pid2 = s.open_pass(parent)
-        resp = CreateStepUseCase(s, _flow(s)).execute(
+        resp = CreateStepUseCase(s, _flow(s), _Config()).execute(
             CreateStepInput(title="", step="build", parent=parent)
         )
         self.assertEqual(s.get_node(resp.id).pass_id, pid2)
@@ -147,7 +161,7 @@ class TestCreateStepUseCase(unittest.TestCase):
         pid1 = s.open_pass(parent)
         s.close_pass(pid1)
         pid2 = s.open_pass(parent)
-        resp = CreateStepUseCase(s, _flow(s)).execute(
+        resp = CreateStepUseCase(s, _flow(s), _Config()).execute(
             CreateStepInput(title="", step="build", parent=parent, workflow="standard")
         )
         self.assertEqual(s.get_node(resp.id).pass_id, pid2)
@@ -157,7 +171,7 @@ class TestCreateStepUseCase(unittest.TestCase):
         parent = s.create_item("an item", "a description", workflow="standard")
         before = dict(s._records)
         with self.assertRaises(UseCaseError) as ctx:
-            CreateStepUseCase(s, _flow(s)).execute(
+            CreateStepUseCase(s, _flow(s), _Config()).execute(
                 CreateStepInput(title="build it", step="build", parent=parent)
             )
         self.assertIn("title", str(ctx.exception))

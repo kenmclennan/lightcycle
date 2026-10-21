@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-import lightcycle.adapters.tui.app as app_module
+import lightcycle.adapters.tui.views.backlog as backlog_module
 from lightcycle.adapters.tui.app import (
     BACKLOG_COLUMNS, DATA_COLUMNS, BacklogTable, BacklogView, PriorityTable,
 )
@@ -46,7 +46,7 @@ class TestBacklogStackedRebuildRendersEachRowOnce(unittest.TestCase):
         table = session.app.query_one(BacklogTable)
         self.assertTrue(table._stacked_mode)
 
-        with patch.object(app_module, "_backlog_row_cells", wraps=app_module._backlog_row_cells) as spy:
+        with patch.object(backlog_module, "_backlog_row_cells", wraps=backlog_module._backlog_row_cells) as spy:
             session.run(lambda: view._rebuild_table(view._rows))
             session.pause()
 
@@ -62,13 +62,13 @@ class TestBacklogStackedRebuildRendersEachRowOnce(unittest.TestCase):
         self.assertNotIn("❯", table.get_cell(_BACKLOG_ID_B, "row").plain)
 
         calls = []
-        original = app_module._repaint_stacked_cursor
+        original = backlog_module._repaint_stacked_cursor
 
         def spy(table_arg, row_key, show):
             calls.append(row_key.value)
             return original(table_arg, row_key, show)
 
-        with patch.object(app_module, "_repaint_stacked_cursor", spy):
+        with patch.object(backlog_module, "_repaint_stacked_cursor", spy):
             session.press("down")
 
         self.assertEqual(set(calls), {_BACKLOG_ID_A, _BACKLOG_ID_B})

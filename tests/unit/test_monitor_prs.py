@@ -3,33 +3,12 @@ import unittest
 
 from lightcycle.application.pool.pr_writes import InlinePrWrites
 from lightcycle.application.flow.complete_step import CompleteStepUseCase
-from lightcycle.application.pool import MonitorPrsUseCase, TickInput, TickUseCase
-from lightcycle.application.pool.no_op_gates import (
-    NoOpBackupGate,
-    NoOpBreakerGate,
-    NoOpFlowService,
-    NoOpFs,
-    NoOpGit,
-    NoOpHookCompletions,
-    NoOpGuidanceGate,
-    NoOpMemoryGate,
-    NoOpMonitor,
-    NoOpSpinPort,
-    NoOpStream,
-    NoOpConfigReload,
-    NoOpLifecycleGate,
-    NoOpGhCallGate,
-    NoOpGithubBudget,
-    NoOpGithubPollGate,
-    NoOpScriptGate,
-    NoOpScheduleGate,
-    NoOpUsageGate,
-    NoOpWorktrees,
-)
+from lightcycle.application.pool import MonitorPrsUseCase, TickInput
 from tests.support.fake_view_freshness import AlwaysConfirmed
 from tests.support.fake_fs import flow_from_metas
 from lightcycle.ports.github import CheckRun, Comment
 from tests.support.fake_github import FakeGitHub
+from tests.support.tick_factory import make_tick
 from tests.support.fake_store import FakeStore
 
 _BOT_LOGIN = "copilot-pull-request-reviewer[bot]"
@@ -194,24 +173,6 @@ class FakeConfig:
     def spin_cap(self):
         return 3
 
-
-def make_tick(store, workers, spawner, config, **overrides):
-    kwargs = dict(
-        monitor=NoOpMonitor(), breaker_gate=NoOpBreakerGate(),
-        hook_completions=NoOpHookCompletions(), worktrees=NoOpWorktrees(), git=NoOpGit(),
-        backup_gate=NoOpBackupGate(), worker_log=NoOpFs(), flow_service=NoOpFlowService(),
-        spin_port=NoOpSpinPort(), usage_gate=NoOpUsageGate(), stream=NoOpStream(),
-        memory_gate=NoOpMemoryGate(),
-        schedule_gate=NoOpScheduleGate(),
-        lifecycle_gate=NoOpLifecycleGate(),
-        script_gate=NoOpScriptGate(),
-        github_poll_gate=NoOpGithubPollGate(),
-        config_reload=NoOpConfigReload(),
-        guidance_gate=NoOpGuidanceGate(),
-        github_budget=NoOpGithubBudget(), gh_call_gate=NoOpGhCallGate(),
-    )
-    kwargs.update(overrides)
-    return TickUseCase(store, workers, spawner, config, **kwargs)
 
 
 class TestTickWithMonitor(unittest.TestCase):

@@ -1,5 +1,6 @@
 from lightcycle.application.pool.backup import BackupResponse
 from lightcycle.application.pool.breaker_gate import BreakerGateResponse
+from lightcycle.application.pool.cadence_gates import CadenceGatesResponse
 from lightcycle.application.pool.hook_completions import HookCompletionsResponse
 from lightcycle.application.pool.github_budget import GithubBudgetReading
 from lightcycle.application.pool.guidance_sync import GuidanceSyncResponse
@@ -151,3 +152,16 @@ class NoOpStream:
 class NoOpConfigReload:
     def execute(self):
         return ReloadConfigResponse("unchanged")
+
+
+class NoOpCadenceGates:
+    def execute(self, now):
+        return CadenceGatesResponse()
+
+    def reset(self):
+        pass
+
+
+class NoOpAccrualGates:
+    def execute(self, now):
+        return None

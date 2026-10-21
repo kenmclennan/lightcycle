@@ -44,6 +44,13 @@ class TestCmdNewTitleCap(unittest.TestCase):
         self.assertIn("--description", err)
         self.assertEqual(self.store.all_nodes(), [])
 
+    def test_new_item_with_a_blank_description_prints_the_refusal_and_exits_1(self):
+        rc, out, err = call(cli.cmd_new, "item", "an item", "--description", "  ")
+        self.assertEqual(rc, 1)
+        self.assertIn("a description is required for an item", err)
+        self.assertNotIn("--description", err)
+        self.assertEqual(self.store.all_nodes(), [])
+
     def test_new_item_title_at_cap_is_accepted(self):
         self.store.add_project("acme/app", shortcode="APP")
         rc, out, err = call(

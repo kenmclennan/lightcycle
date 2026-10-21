@@ -163,3 +163,80 @@ class TestContainerTickGithubPoll(unittest.TestCase):
             container.tick(flow=object())
 
         self.assertIn("github-reserve-calls", str(ctx.exception))
+
+
+class TestContainerSimulation(unittest.TestCase):
+    def _container(self):
+        from unittest import mock
+
+        container = Container(store=object())
+        container.workflow_lifecycle = mock.Mock()
+        return container
+
+    def test_the_scratch_dir_exists_inside_and_is_gone_after(self):
+        import os
+        from unittest import mock
+
+        seen = []
+
+        def fake_sim(container, scratch):
+            seen.append(scratch)
+            return mock.Mock()
+
+        with mock.patch("lightcycle.container.SimulationContainer", fake_sim), \
+                mock.patch("lightcycle.application.workflows.simulate.WorkflowSimulateUseCase"):
+            with self._container().simulation():
+                self.assertTrue(os.path.isdir(seen[0]))
+        self.assertFalse(os.path.exists(seen[0]))
+
+    def test_the_scratch_dir_is_removed_when_the_body_raises(self):
+        import os
+        from unittest import mock
+
+        seen = []
+
+        def fake_sim(container, scratch):
+            seen.append(scratch)
+            return mock.Mock()
+
+        with mock.patch("lightcycle.container.SimulationContainer", fake_sim), \
+                mock.patch("lightcycle.application.workflows.simulate.WorkflowSimulateUseCase"):
+            with self.assertRaises(RuntimeError):
+                with self._container().simulation():
+                    raise RuntimeError("boom")
+        self.assertFalse(os.path.exists(seen[0]))
+
+    def test_the_scratch_dir_is_removed_when_wiring_raises(self):
+        import os
+        from unittest import mock
+
+        seen = []
+
+        def fake_sim(container, scratch):
+            seen.append(scratch)
+            raise RuntimeError("boom")
+
+        with mock.patch("lightcycle.container.SimulationContainer", fake_sim):
+            with self.assertRaises(RuntimeError):
+                with self._container().simulation():
+                    pass
+        self.assertFalse(os.path.exists(seen[0]))
+
+
+class TestContainerStopPool(unittest.TestCase):
+    def test_returns_a_stop_pool_over_the_containers_workers_and_sweep(self):
+        from unittest import mock
+
+        from lightcycle.application.pool.stop_pool import StopPoolUseCase
+
+        workers = object()
+        container = Container(store=object(), workers=workers)
+        sweep = object()
+        container.sweep = mock.Mock(return_value=sweep)
+
+        use_case = container.stop_pool(flow="f")
+
+        self.assertIsInstance(use_case, StopPoolUseCase)
+        self.assertIs(use_case._workers, workers)
+        self.assertIs(use_case._sweep, sweep)
+        container.sweep.assert_called_once_with(flow="f")

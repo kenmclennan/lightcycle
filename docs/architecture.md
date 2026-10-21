@@ -27,7 +27,12 @@ graph TD
 - **ports/** - the interfaces the application depends on: `StorePort`, `GitPort`, `FsPort`, `WorkflowBundlePort`, `WorkerLogPort`, `ScaffoldPort`, `WorkersPort`, `SpawnerPort`, `RunLockPort`, `MachinePort`.
 - **application/** - one use case per action, grouped by activity (inspect, work, flow, pool, feedback, setup), plus services (`FlowService`, `WorktreeService`). Depends on ports, not adapters.
 - **adapters/** - all IO: `SqliteStore`, git, the worker spawner, the workers registry, the filesystem, the run-lock. The only callers of `sqlite3` / `git` / `subprocess`.
-- **config.py / container.py** - the environment boundary and the composition root.
+- **config.py / container.py** - the environment boundary and the composition root. `config.py` stays the only reader of the environment and the config file; its pure concerns live in `config_seeds.py` (what `lc init` writes), `config_ranges.py` (numeric validation), `config_schedules.py` (`schedule-*` and `workflow-*` blocks) and `config_reload.py` (reload outcomes and the restart-required set), which take their inputs as arguments. `Container` also wires `tick()`, `stop_pool()` and `simulation()` (a context manager that owns the simulate scratch directory).
+- **commands/** - the `cmd_*` functions, one module per command group (`inspect`, `intake`, `flow`, `pool`, `feedback`, `setup`, `workflow`) beside the use cases they drive, with `context.py` holding the container binding. `cli.py` keeps `main`, the worker-permission gate, the parser wiring and the loop commands, and re-imports every `cmd_*` so dispatch is unchanged.
+- **adapters/sqlite/** - `SqliteStore` inherits one mixin per aggregate (`items`, `steps`, `runs`, `usage`, `feedback`, `goals`, `projects`); `sqlite_store.py` keeps the connection, `transaction()`, schema, migrations, id minting and row mappers.
+- **adapters/tui/** - `hub.py` holds `NodeHubScreen`; `hub_render.py` (pure text and cell builders), `hub_widgets.py`, `artifact_viewer.py` and `hub_tabs/<tab>.py` (one mixin per tab) hold the rest. `app.py` holds `LightcycleApp`; each tab view lives in `views/<view>.py` with the shared tables in `adapters/tui/views/tables.py`, and the modals in `modals.py`.
+
+`RouteStepService` (`application/flow/route_step.py`) is how a step is routed to a role: park, unblock and repin call it inside their transaction, and the store has no `reassign`. `TickUseCase` takes an injected `SweepUseCase` and two gate groupings: `CadenceGatesUseCase` (schedule, lifecycle and script gates) and `AccrualGatesUseCase` (usage then gh-call accrual).
 
 The engine ships **zero runtime dependencies** (stdlib only). Dev/test tooling (`uv`, `pytest`) is separate and never imported by `lightcycle/`.
 

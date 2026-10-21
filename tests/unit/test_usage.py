@@ -171,7 +171,7 @@ class TestUsageResumeSubtractFrom(unittest.TestCase):
     def test_subtracts_posted_fields_from_usage(self):
         resume = UsageResume(
             posted_input_tokens=40, posted_output_tokens=20, posted_cache_read_tokens=4,
-            posted_cache_creation_tokens=2, posted_cost_usd=0.4,
+            posted_cache_creation_tokens=2, posted_cost=Cost.from_usd(0.4),
         )
         usage = UsageEvent(
             input_tokens=100, output_tokens=50, cache_read_tokens=10,
@@ -228,7 +228,7 @@ class TestUsageResumePlus(unittest.TestCase):
         self.assertEqual(result.offset, 0)
 
     def test_a_recovered_token_delta_advances_the_usage_fields_and_cost(self):
-        resume = UsageResume(posted_input_tokens=40, posted_cost_usd=0.4)
+        resume = UsageResume(posted_input_tokens=40, posted_cost=Cost.from_usd(0.4))
         delta = AttributionEvent(
             recovered_input_tokens=10, recovered_output_tokens=5,
             recovered_cache_read_tokens=1, recovered_cache_creation_tokens=2,
@@ -241,8 +241,13 @@ class TestUsageResumePlus(unittest.TestCase):
         self.assertEqual(result.posted_output_tokens, 5)
         self.assertEqual(result.posted_cache_read_tokens, 1)
         self.assertEqual(result.posted_cache_creation_tokens, 2)
-        self.assertEqual(result.posted_cost_usd, 0.5)
+        self.assertEqual(result.posted_cost, Cost.from_usd(0.5))
         self.assertEqual(result.posted_turn_count, 0)
+
+    def test_subtracting_a_resume_that_equals_the_total_lands_on_zero(self):
+        resume = UsageResume(posted_cost=Cost.from_usd(0.4))
+        result = resume.subtract_from(UsageEvent(cost_usd=Cost.from_usd(0.4)))
+        self.assertEqual(result.cost_usd, Cost())
 
     def test_a_turn_or_tool_usage_delta_advances_only_those_fields(self):
         resume = UsageResume(posted_turn_count=1, posted_tool_usage={"Read": {"calls": 1, "bytes": 5}})

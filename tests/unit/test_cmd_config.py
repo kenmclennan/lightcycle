@@ -6,6 +6,7 @@ from contextlib import redirect_stdout, redirect_stderr
 from pathlib import Path
 
 from lightcycle import cli
+from lightcycle.adapters.fsio import FsAdapter
 from lightcycle.config import _SEED_KEYS, RESTART_REQUIRED_KEYS, Config
 
 
@@ -23,6 +24,7 @@ class FakeContainer:
     def __init__(self, config, launcher=None):
         self.config = config
         self.launcher = launcher
+        self.fs = FsAdapter(config)
 
 
 class FakeLauncher:

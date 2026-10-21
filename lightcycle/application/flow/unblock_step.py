@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from lightcycle.application.errors import UseCaseError
+from lightcycle.application.flow.route_step import RouteStepService
 from lightcycle.domain.work.park import Park
 
 
@@ -36,6 +37,6 @@ class UnblockStepUseCase:
                 input.step, {"reason": None, "needs": None, "tried": None}
             )
             self._store.set_notes(input.step, "\n".join(kept))
-            self._store.reassign(input.step, role)
+            RouteStepService(self._store).route(input.step, role)
         self._spin_port.update(lambda ledger: ledger.clear(input.step))
         return UnblockResponse(role=role)

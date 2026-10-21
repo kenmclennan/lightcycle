@@ -38,7 +38,7 @@ class UsageResume:
     posted_output_tokens: int = 0
     posted_cache_read_tokens: int = 0
     posted_cache_creation_tokens: int = 0
-    posted_cost_usd: float = 0.0
+    posted_cost: Cost = field(default_factory=Cost)
 
     def subtract_from(self, usage):
         return UsageEvent(
@@ -46,7 +46,7 @@ class UsageResume:
             output_tokens=usage.output_tokens - self.posted_output_tokens,
             cache_read_tokens=usage.cache_read_tokens - self.posted_cache_read_tokens,
             cache_creation_tokens=usage.cache_creation_tokens - self.posted_cache_creation_tokens,
-            cost_usd=usage.cost_usd - Cost.from_usd(self.posted_cost_usd),
+            cost_usd=usage.cost_usd - self.posted_cost,
             cost_basis=usage.cost_basis,
             rates_used=usage.rates_used,
             thinking_tokens=usage.thinking_tokens,
@@ -75,7 +75,7 @@ class UsageResume:
         posted_output_tokens = self.posted_output_tokens
         posted_cache_read_tokens = self.posted_cache_read_tokens
         posted_cache_creation_tokens = self.posted_cache_creation_tokens
-        posted_cost = Cost.from_usd(self.posted_cost_usd)
+        posted_cost = self.posted_cost
         posted_turn_count = self.posted_turn_count
         posted_tool_usage = dict(self.posted_tool_usage)
         if (delta.recovered_input_tokens or delta.recovered_output_tokens
@@ -100,7 +100,7 @@ class UsageResume:
             posted_output_tokens=posted_output_tokens,
             posted_cache_read_tokens=posted_cache_read_tokens,
             posted_cache_creation_tokens=posted_cache_creation_tokens,
-            posted_cost_usd=posted_cost.to_usd(),
+            posted_cost=posted_cost,
         )
 
 

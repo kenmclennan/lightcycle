@@ -3,6 +3,7 @@ from typing import List, Optional
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.passes import PassBook
+from lightcycle.application.work.title_guard import validate_title
 from lightcycle.domain.work import refuse_fields, render_field_refusal
 
 
@@ -21,11 +22,13 @@ class CreateStepResponse:
 
 
 class CreateStepUseCase:
-    def __init__(self, store, flow):
+    def __init__(self, store, flow, config):
         self._store = store
         self._flow = flow
+        self._config = config
 
     def execute(self, input: CreateStepInput) -> CreateStepResponse:
+        validate_title(self._config, input.title)
         flow = None
         pin = None
         if input.workflow:

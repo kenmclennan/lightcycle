@@ -1427,7 +1427,7 @@ class TestSqliteStoreAtomicity(unittest.TestCase):
                         pending_tool_use={}, posted_turn_count=1, posted_tool_usage={},
                         posted_input_tokens=5, posted_output_tokens=0,
                         posted_cache_read_tokens=0, posted_cache_creation_tokens=0,
-                        posted_cost_usd=0.0,
+                        posted_cost=Cost.from_usd(0.0),
                     ),
                     tid=tid, input_tokens=5, output_tokens=0, cache_read_tokens=0,
                     cache_creation_tokens=0, cost_usd=0.0, cost_basis=None,
