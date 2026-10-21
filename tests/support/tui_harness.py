@@ -92,35 +92,35 @@ class FakeBreakerPort(BreakerPort):
 
 class FakeMemoryGateStatus(MemoryGateStatusPort):
     def __init__(self, state=None):
-        self._state = state if state is not None else {}
+        self._state = state
 
     def load(self):
-        return dict(self._state)
+        return self._state
 
     def save(self, state):
-        self._state = dict(state)
+        self._state = state
 
 
 class FakeConfigReloadStatus(ConfigReloadStatusPort):
     def __init__(self, state=None):
-        self._state = state if state is not None else {}
+        self._state = state
 
     def load(self):
-        return dict(self._state)
+        return self._state
 
     def save(self, state):
-        self._state = dict(state)
+        self._state = state
 
 
 class FakeGuidanceSyncStatus(GuidanceSyncStatusPort):
     def __init__(self, state=None):
-        self._state = state if state is not None else {}
+        self._state = state
 
     def load(self):
-        return dict(self._state)
+        return self._state
 
     def save(self, state):
-        self._state = dict(state)
+        self._state = state
 
 
 class FakeLauncher(LauncherPort):

@@ -126,7 +126,7 @@ class TestReapingAGuard(unittest.TestCase):
 
         def activate_with_a_step(input):
             original(input)
-            rig.store.create_step(step="audit", role="agent", parent=input.item)
+            rig.store.create_step(stage="audit", role="agent", item=input.item)
 
         rig.activate.execute = activate_with_a_step
         tick(rig, 11)

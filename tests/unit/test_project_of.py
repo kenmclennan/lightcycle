@@ -19,7 +19,7 @@ class TestProjectOf(unittest.TestCase):
     def test_a_step_node_resolves_via_its_parent_item(self):
         s = FakeStore()
         item_id = s.create_item("item", "a description", project="org/proj")
-        step_id = s.create_step(step="write-code", parent=item_id)
+        step_id = s.create_step(stage="write-code", item=item_id)
         step = s.get_step(step_id)
         self.assertEqual(project_of(s, step), "org/proj")
 
@@ -50,7 +50,7 @@ class TestRepoOf(unittest.TestCase):
         s = FakeStore()
         item_id = s.create_item("item", "a description")
         s.add_artifact(item_id, "repo", "org/proj")
-        step_id = s.create_step(step="write-code", parent=item_id)
+        step_id = s.create_step(stage="write-code", item=item_id)
         step = s.get_step(step_id)
         self.assertEqual(repo_of(s, step), "org/proj")
 

@@ -25,7 +25,7 @@ DAY = datetime.date(2026, 1, 1)
 def _closed(store, id, label=None, step="build", closed_at="2026-01-01T10:00:00+00:00",
             disposition="completed", cost=None):
     item = store.create_item("item %s" % id, "d", id=id)
-    child = store.create_step(step=step, role="agent", parent=item)
+    child = store.create_step(stage=step, role="agent", item=item)
     if cost is not None:
         store.claim_ready("agent")
         store.record_usage(child, 100, 10, 0, 0, cost, "list", None)
@@ -204,7 +204,7 @@ class TestAutomationUseCase(unittest.TestCase):
     def test_an_in_flight_automation_item_is_excluded(self):
         s = FakeStore()
         item = s.create_item("running", "d", id="AUD-1")
-        s.create_step(step="audit", role="agent", parent=item)
+        s.create_step(stage="audit", role="agent", item=item)
         s.label_add(item, RETRO_ORIGIN_LABEL)
 
         self.assertEqual(AutomationUseCase(s).execute(AutomationInput()).total.count, 0)

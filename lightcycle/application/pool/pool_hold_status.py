@@ -26,7 +26,7 @@ class PoolHoldStatusUseCase:
             return PoolHoldResponse(holding=False, alive=0, max_agents=max_agents)
         alive = pool.alive(probe)
         state = self._memory_gate_status.load()
-        cap = state.get("cap")
+        cap = state.cap if state else None
         return PoolHoldResponse(
             holding=cap == 0, alive=len(alive), max_agents=max_agents,
         )

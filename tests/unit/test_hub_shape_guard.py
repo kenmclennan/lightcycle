@@ -25,7 +25,7 @@ class TestHierarchyShapeGuard(unittest.TestCase):
     def _store(self):
         store = FakeStore()
         item = store.create_item("Item", "a description", id=self._ITEM)
-        store.create_step(step="build", role="agent", parent=item, id=self._STEP)
+        store.create_step(stage="build", role="agent", item=item, id=self._STEP)
         store.set_report(self._STEP, "built the thing")
         return store
 
@@ -187,7 +187,7 @@ class TestDetailShapeGuard(unittest.TestCase):
     def _store(self):
         store = FakeStore()
         item = store.create_item("Item", "a description", id=self._ITEM)
-        store.create_step(step="build", role="agent", parent=item, id=self._STEP)
+        store.create_step(stage="build", role="agent", item=item, id=self._STEP)
         store.set_report(self._STEP, "built the thing")
         return store
 
@@ -268,7 +268,7 @@ class TestCostShapeGuard(unittest.TestCase):
     def _store(self):
         store = FakeStore()
         item = store.create_item("Item", "a description", id=self._ITEM)
-        step = store.create_step(step="write-code", role="agent", parent=item, id=self._STEP)
+        step = store.create_step(stage="write-code", role="agent", item=item, id=self._STEP)
         store.record_usage(step, 100, 50, 0, 0, 1.0, "list", None)
         store.record_attribution(step, 5, {})
         return store

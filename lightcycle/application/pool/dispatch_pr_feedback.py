@@ -153,7 +153,7 @@ class DispatchPrFeedbackUseCase:
 
     def _open_feedback_step(self, step, flow, feedback_step, run, outstanding):
         role = flow.step_def(feedback_step).owner
-        tid = self._store.create_step(step=feedback_step, role=role, parent=step.item)
+        tid = self._store.create_step(stage=feedback_step, role=role, item=step.item)
         self._store.set_watched_step(tid, step.id)
         keys = [h.key for h in outstanding.admitted + outstanding.approved]
         self._store.add_artifact(tid, "admitted-comments", "\n".join(keys), internal=True)

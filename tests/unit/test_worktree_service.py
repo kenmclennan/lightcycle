@@ -672,7 +672,7 @@ class TestPhaseReEntry(unittest.TestCase):
         self.store.add_artifact(self.item, "repo", "saga")
 
     def _step(self, step):
-        sid = self.store.create_step(step=step, parent=self.item)
+        sid = self.store.create_step(stage=step, item=self.item)
         self.step = self.store.get_node(sid)
         return sid
 
@@ -839,7 +839,7 @@ class TestClaimResolvesFromTheClaimedStep(unittest.TestCase):
         )
 
     def _step(self, stage):
-        sid = self.store.create_step(step=stage, parent=self.item)
+        sid = self.store.create_step(stage=stage, item=self.item)
         PassBook(self.store, _TwoPhaseFlow()).enrol(self.item, sid, stage)
         return self.store.get_node(sid)
 
@@ -925,7 +925,7 @@ class TestWorktreesOf(unittest.TestCase):
         self.store.add_artifact(self.item, "repo", "/elsewhere/app")
         plant_run(self.store, self.item, "spec", "spec/x")
         plant_run(self.store, self.item, "code", "feat/y")
-        self.store.create_step(step="spec-handle-feedback", parent=self.item)
+        self.store.create_step(stage="spec-handle-feedback", item=self.item)
         git = FakeGit(repos={"/specs", "/elsewhere/app"})
 
         WorktreeService(

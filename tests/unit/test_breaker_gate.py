@@ -482,7 +482,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
 
     def test_a_dead_worker_with_a_step_and_usage_records_it_on_the_store(self):
         store = RecordingFakeStore()
-        tid = create_owned_step(store, "build: t", step="build", role="agent")
+        tid = create_owned_step(store, "build: t", stage="build", role="agent")
         workers = FakeWorkers(
             workers=[{"spawnid": "sp-1", "pid": 1, "step": tid, "log": "/l/1.log", "started": 0}]
         )
@@ -516,7 +516,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
 
     def test_a_dead_worker_with_a_step_and_a_log_causes_attribution_to_be_recorded(self):
         store = RecordingFakeStore()
-        tid = create_owned_step(store, "build: t", step="build", role="agent")
+        tid = create_owned_step(store, "build: t", stage="build", role="agent")
         workers = FakeWorkers(
             workers=[{"spawnid": "sp-1", "pid": 1, "step": tid, "log": "/l/1.log", "started": 0}]
         )
@@ -556,7 +556,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
 
     def test_a_result_line_log_skips_the_model_lookup_entirely(self):
         store = RecordingFakeStore()
-        tid = create_owned_step(store, "build: t", step="build", role="agent")
+        tid = create_owned_step(store, "build: t", stage="build", role="agent")
         workers = FakeWorkers(
             workers=[{"spawnid": "sp-1", "pid": 1, "step": tid, "log": "/l/1.log", "started": 0}]
         )
@@ -572,7 +572,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
 
     def test_no_result_line_with_recoverable_usage_looks_up_the_model_and_derives_cost(self):
         store = RecordingFakeStore()
-        tid = create_owned_step(store, "build: t", step="build", role="agent")
+        tid = create_owned_step(store, "build: t", stage="build", role="agent")
         store.set_model(tid, "sonnet")
         workers = FakeWorkers(
             workers=[{"spawnid": "sp-1", "pid": 1, "step": tid, "log": "/l/1.log", "started": 0}]
@@ -644,7 +644,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
 
     def test_a_dead_worker_with_a_step_and_usage_results_in_one_ledger_entry(self):
         store = FakeStore()
-        tid = create_owned_step(store, "build: t", step="build", role="agent")
+        tid = create_owned_step(store, "build: t", stage="build", role="agent")
         workers = FakeWorkers(
             workers=[{"spawnid": "sp-1", "pid": 1, "step": tid, "log": "/l/1.log", "started": 0}]
         )
@@ -659,7 +659,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
 
     def test_no_result_line_and_nothing_recoverable_skips_the_model_lookup(self):
         store = RecordingFakeStore()
-        tid = create_owned_step(store, "build: t", step="build", role="agent")
+        tid = create_owned_step(store, "build: t", stage="build", role="agent")
         workers = FakeWorkers(
             workers=[{"spawnid": "sp-1", "pid": 1, "step": tid, "log": "/l/1.log", "started": 0}]
         )
@@ -690,8 +690,8 @@ class TestBreakerGatePoolWideSpin(unittest.TestCase):
 
     def test_two_no_work_deaths_with_steps_trips_the_pool_wide_guard_and_parks_a_step(self):
         s = FakeStore()
-        step1 = create_owned_step(s, "build: a", step="build", role="agent")
-        step2 = create_owned_step(s, "build: b", step="build", role="agent")
+        step1 = create_owned_step(s, "build: a", stage="build", role="agent")
+        step2 = create_owned_step(s, "build: b", stage="build", role="agent")
         workers = FakeWorkers(
             workers=[
                 self._dead_worker("w1", 1, step1),
@@ -709,7 +709,7 @@ class TestBreakerGatePoolWideSpin(unittest.TestCase):
 
     def test_a_single_dead_worker_with_no_work_does_not_trip_the_guard(self):
         s = FakeStore()
-        step1 = create_owned_step(s, "build: a", step="build", role="agent")
+        step1 = create_owned_step(s, "build: a", stage="build", role="agent")
         workers = FakeWorkers(workers=[self._dead_worker("w1", 1, step1)])
         fs = FakeFs(files={"/l/w1.log": _NO_WORK_LOG})
         result = BreakerGateUseCase(
@@ -720,8 +720,8 @@ class TestBreakerGatePoolWideSpin(unittest.TestCase):
 
     def test_a_rejection_takes_precedence_over_the_pool_wide_no_work_tally(self):
         s = FakeStore()
-        step1 = create_owned_step(s, "build: a", step="build", role="agent")
-        step2 = create_owned_step(s, "build: b", step="build", role="agent")
+        step1 = create_owned_step(s, "build: a", stage="build", role="agent")
+        step2 = create_owned_step(s, "build: b", stage="build", role="agent")
         workers = FakeWorkers(
             workers=[
                 self._dead_worker("w1", 1, step1),
@@ -747,8 +747,8 @@ class TestBreakerGatePoolWideSpin(unittest.TestCase):
 
     def test_real_activity_resets_an_advancing_streak(self):
         s = FakeStore()
-        step1 = create_owned_step(s, "build: a", step="build", role="agent")
-        step2 = create_owned_step(s, "build: b", step="build", role="agent")
+        step1 = create_owned_step(s, "build: a", stage="build", role="agent")
+        step2 = create_owned_step(s, "build: b", stage="build", role="agent")
         workers = FakeWorkers(
             workers=[
                 self._dead_worker("w1", 1, step1),
@@ -773,8 +773,8 @@ class TestBreakerGatePoolWideSpin(unittest.TestCase):
         spin_port = FakeSpinPort()
         config = FakeConfig(spin_cap=3)
         for i in range(3):
-            step1 = create_owned_step(s, "build: a%d" % i, step="build", role="agent")
-            step2 = create_owned_step(s, "build: b%d" % i, step="build", role="agent")
+            step1 = create_owned_step(s, "build: a%d" % i, stage="build", role="agent")
+            step2 = create_owned_step(s, "build: b%d" % i, stage="build", role="agent")
             workers = FakeWorkers(
                 workers=[
                     self._dead_worker("w1-%d" % i, 100 + i * 2, step1),
@@ -796,7 +796,7 @@ class TestBreakerGatePoolWideSpin(unittest.TestCase):
 
     def test_a_dead_worker_with_resume_state_gets_a_corrected_delta_recorded(self):
         store = RecordingFakeStore()
-        tid = create_owned_step(store, "build: t", step="build", role="agent")
+        tid = create_owned_step(store, "build: t", stage="build", role="agent")
         lines = [
             json.dumps({
                 "type": "assistant",
@@ -866,7 +866,7 @@ class TestBreakerGatePoolWideSpin(unittest.TestCase):
 
     def test_a_negative_token_or_cost_correction_is_written_as_computed_not_clamped(self):
         store = RecordingFakeStore()
-        tid = create_owned_step(store, "build: t", step="build", role="agent")
+        tid = create_owned_step(store, "build: t", stage="build", role="agent")
         line = json.dumps({
             "type": "result",
             "modelUsage": {
@@ -901,7 +901,7 @@ class TestBreakerGatePoolWideSpin(unittest.TestCase):
 
     def test_a_dead_worker_with_no_resume_state_behaves_exactly_as_today(self):
         store = RecordingFakeStore()
-        tid = create_owned_step(store, "build: t", step="build", role="agent")
+        tid = create_owned_step(store, "build: t", stage="build", role="agent")
         workers = FakeWorkers(
             workers=[{"spawnid": "sp-1", "pid": 1, "step": tid, "log": "/l/1.log", "started": 0}]
         )
@@ -930,8 +930,8 @@ class TestBreakerGateUnparseableLog(unittest.TestCase):
                 return super().parse_attribution_event(lines)
 
         store = RecordingFakeStore()
-        bad = create_owned_step(store, "build: bad", step="build", role="agent")
-        good = create_owned_step(store, "build: good", step="build", role="agent")
+        bad = create_owned_step(store, "build: bad", stage="build", role="agent")
+        good = create_owned_step(store, "build: good", stage="build", role="agent")
         good_log = json.dumps({"type": "result", "modelUsage": {"sonnet": {
             "inputTokens": 9, "outputTokens": 4, "costUSD": 0.5}}}).encode()
         fs = FakeFs(files={"/l/bad.log": b"BAD\n", "/l/good.log": good_log})

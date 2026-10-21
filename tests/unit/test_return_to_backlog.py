@@ -19,7 +19,7 @@ def _item(store, steps=1):
     item = store.create_item("an item", "a description")
     pid = store.open_pass(item)
     run = store.open_run(item, pid, "code")
-    step_ids = [store.create_step(step="build", role="agent", parent=item) for _ in range(steps)]
+    step_ids = [store.create_step(stage="build", role="agent", item=item) for _ in range(steps)]
     return item, pid, run, step_ids
 
 

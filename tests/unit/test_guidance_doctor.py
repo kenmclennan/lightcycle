@@ -3,6 +3,7 @@ import unittest
 
 from lightcycle.application.inspect import DoctorInput, DoctorUseCase
 from lightcycle.domain.guidance.conventions import CONVENTIONS_VERSION
+from lightcycle.domain.pool import GuidanceSyncState
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_git import FakeGit
 from tests.support.fake_machine import FakeMachine
@@ -145,8 +146,8 @@ class TestDoctorNonconformingEntries(unittest.TestCase):
 
 class TestDoctorGuidance(unittest.TestCase):
     def test_a_failed_fetch_is_reported_with_its_detail(self):
-        status = FakeGuidanceSyncStatus(
-            {"ok": False, "at": 1000.0, "detail": "could not resolve host", "ref": "origin/main"})
+        status = FakeGuidanceSyncStatus(GuidanceSyncState(
+            ok=False, at=1000.0, detail="could not resolve host", ref="origin/main"))
         msgs = _problems({"a.md": _entry()}, status=status)
         self.assertEqual(len(msgs), 1)
         self.assertIn("fetch failed", msgs[0])

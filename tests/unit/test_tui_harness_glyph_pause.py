@@ -16,7 +16,7 @@ _TICK_INTERVAL = 1 / ACTIVE_GLYPH_TICKS_PER_SECOND
 class TestGlyphTimerStaysPausedAcrossAssertions(unittest.TestCase):
     def test_app_level_timer_does_not_tick_between_pause_and_the_next_stimulus(self):
         store = FakeStore()
-        tid = create_owned_step(store, "active item", step="build", role="agent")
+        tid = create_owned_step(store, "active item", stage="build", role="agent")
         store.assign(tid, "worker-1")
         store.update_state(tid, State.RUNNING)
 
@@ -33,7 +33,7 @@ class TestGlyphTimerStaysPausedAcrossAssertions(unittest.TestCase):
     def test_screen_level_timer_does_not_tick_between_pause_and_the_next_stimulus(self):
         store = FakeStore()
         item = store.create_item("Item", "a description")
-        tid = store.create_step(step="build", role="agent", parent=item)
+        tid = store.create_step(stage="build", role="agent", item=item)
         store.assign(tid, "worker-1")
         store.update_state(tid, State.RUNNING)
 

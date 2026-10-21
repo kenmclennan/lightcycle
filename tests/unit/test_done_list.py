@@ -18,7 +18,7 @@ class TestBuildDoneRowsCost(unittest.TestCase):
     def test_a_completed_step_with_recorded_usage_produces_cost_and_time_text(self):
         store = FakeStore()
         item = store.create_item("story", "a description")
-        step = store.create_step(step="build", role="agent", parent=item)
+        step = store.create_step(stage="build", role="agent", item=item)
         store.claim_ready("agent")
         store.accrue_active_seconds([step], 540)
         store.record_usage(step, 100, 10, 0, 0, 3.75, "list", None)
@@ -43,7 +43,7 @@ class TestBuildDoneRowsCost(unittest.TestCase):
     def test_a_step_that_ran_with_no_recorded_cost_shows_the_not_recorded_placeholder(self):
         store = FakeStore()
         item = store.create_item("story", "a description")
-        step = store.create_step(step="build", role="agent", parent=item)
+        step = store.create_step(stage="build", role="agent", item=item)
         store.claim_ready("agent")
         store.record_attribution(step, 50, {})
         store.complete_node(step, "done")
@@ -58,7 +58,7 @@ class TestBuildDoneRowsCache(unittest.TestCase):
     def _closed_store(self):
         store = FakeStore()
         item = store.create_item("story", "a description")
-        step = store.create_step(step="build", role="agent", parent=item)
+        step = store.create_step(stage="build", role="agent", item=item)
         store.claim_ready("agent")
         store.accrue_active_seconds([step], 300)
         store.record_usage(step, 100, 10, 0, 0, 2.50, "list", None)

@@ -115,7 +115,7 @@ class TestResolveCiJudgedSha(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("building a thing", "a description")
         plant_pr(store, item, _URL, branch=_BRANCH)
-        step = store.create_step(step="poll-ci", role="engine", parent=item)
+        step = store.create_step(stage="poll-ci", role="engine", item=item)
 
         gh = FakeGitHub(head_shas={_URL: "sha1"}, check_runs_by_sha={
             (_URL, "sha1"): (CheckRun(name="build", status=conclusion[0], conclusion=conclusion[1]),)
@@ -155,7 +155,7 @@ class TestResolveCiConfirmsHeadBeforeFailed(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("building a thing", "a description")
         plant_pr(store, item, _URL, branch=_BRANCH)
-        step = store.create_step(step="poll-ci", role="engine", parent=item)
+        step = store.create_step(stage="poll-ci", role="engine", item=item)
 
         flow = _FlowAdapter(_FLOW)
         uc = ResolveCiUseCase(store, github, flow, CompleteStepUseCase(store, flow), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
@@ -237,7 +237,7 @@ class TestResolveCiUseCase(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("building a thing", "a description")
         plant_pr(store, item, _URL, branch=_BRANCH)
-        step = store.create_step(step="poll-ci", role="engine", parent=item)
+        step = store.create_step(stage="poll-ci", role="engine", item=item)
 
         complete = CompleteStepUseCase(store, _FlowAdapter(flow))
         uc = ResolveCiUseCase(store, github, _FlowAdapter(flow), complete, clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
@@ -348,7 +348,7 @@ class TestCiUnreadDiagnostics(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("building a thing", "a description")
         plant_pr(store, item, _URL, branch=_BRANCH)
-        step = store.create_step(step="poll-ci", role="engine", parent=item)
+        step = store.create_step(stage="poll-ci", role="engine", item=item)
         flow = _FlowAdapter(_FLOW)
         clock = _Clock()
         uc = ResolveCiUseCase(
@@ -434,10 +434,10 @@ class TestCiUnreadDiagnostics(unittest.TestCase):
         clock = _Clock()
         stuck_item = store.create_item("stuck", "a description")
         plant_pr(store, stuck_item, "https://github.com/acme/widget/pull/9", branch="feat/stuck")
-        stuck = store.create_step(step="poll-ci", role="engine", parent=stuck_item)
+        stuck = store.create_step(stage="poll-ci", role="engine", item=stuck_item)
         ok_item = store.create_item("fine", "a description")
         plant_pr(store, ok_item, _URL, branch=_BRANCH)
-        fine = store.create_step(step="poll-ci", role="engine", parent=ok_item)
+        fine = store.create_step(stage="poll-ci", role="engine", item=ok_item)
 
         class _Split(_ScriptedGitHub):
             def head_sha(self, pr):
@@ -462,7 +462,7 @@ def _ci_setup(github):
     store = FakeStore()
     item = store.create_item("building a thing", "a description")
     plant_pr(store, item, _URL, branch=_BRANCH)
-    step = store.create_step(step="poll-ci", role="engine", parent=item)
+    step = store.create_step(stage="poll-ci", role="engine", item=item)
     flow = _FlowAdapter(_FLOW)
     uc = ResolveCiUseCase(
         store, github, flow, CompleteStepUseCase(store, flow),
@@ -710,8 +710,8 @@ class TestViewConfirmationHold(unittest.TestCase):
         item_b = store.create_item("b", "d")
         plant_pr(store, item_a, _URL, branch=_BRANCH)
         plant_pr(store, item_b, other, branch="feat/other")
-        step_a = store.create_step(step="poll-ci", role="engine", parent=item_a)
-        step_b = store.create_step(step="poll-ci", role="engine", parent=item_b)
+        step_a = store.create_step(stage="poll-ci", role="engine", item=item_a)
+        step_b = store.create_step(stage="poll-ci", role="engine", item=item_b)
         github = FakeGitHub(
             head_shas={_URL: "sha1", other: "sha1"},
             check_runs_by_sha={(_URL, "sha1"): (_ok("build"),), (other, "sha1"): (_ok("build"),)})

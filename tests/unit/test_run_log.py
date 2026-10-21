@@ -39,7 +39,7 @@ class StepRig(unittest.TestCase):
         os.makedirs(os.path.join(self.root, "logs"))
         item = self.store.create_item("t", "d")
         self.item = item
-        self.step = self.store.create_step(step="poll", role="engine", parent=item)
+        self.step = self.store.create_step(stage="poll", role="engine", item=item)
 
     def log_file(self, name="script-x-1.log", text="out\n"):
         path = os.path.join(self.root, "logs", name)
@@ -133,7 +133,7 @@ class TestDoctorHookFailures(unittest.TestCase):
         for name in ("with-log", "no-log", "closed"):
             item = store.create_item("Maintenance failed for %s" % name, "d", shortcode="AUD")
             store.label_add(item, LIFECYCLE_ORIGIN_LABEL)
-            step = store.create_step(step=LIFECYCLE_FAILURE_STEP, role="human", parent=item)
+            step = store.create_step(stage=LIFECYCLE_FAILURE_STEP, role="human", item=item)
             items[name] = (item, step)
         store.set_log(items["with-log"][1], "/logs/hook-a.log")
         store.complete_node(items["closed"][1], "done")

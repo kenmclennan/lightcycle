@@ -80,7 +80,7 @@ class _Harness:
         return item
 
     def ci_round(self, item, outcome, sha):
-        step = self.store.create_step(step="ci-step", role="engine", parent=item)
+        step = self.store.create_step(stage="ci-step", role="engine", item=item)
         if sha is not None:
             self.store.add_artifact(step, CI_JUDGED_SHA, sha, internal=True)
         self.complete.execute(CompleteInput(step=step, outcome=outcome))
@@ -150,7 +150,7 @@ class TestBaselineFromCi(unittest.TestCase):
         url = _pr(5)
         h = _Harness({url: "aaa"})
         item = h.item_with_pr(url)
-        gate = h.store.create_step(step="watch-step", role="agent", parent=item)
+        gate = h.store.create_step(stage="watch-step", role="agent", item=item)
 
         result = h.run()
 
@@ -175,7 +175,7 @@ class TestDetection(unittest.TestCase):
         url = _pr(10)
         h = _Harness({url: "aaa"})
         item = h.item_with_pr(url)
-        gate = h.store.create_step(step="watch-step", role="agent", parent=item)
+        gate = h.store.create_step(stage="watch-step", role="agent", item=item)
 
         self.assertEqual(h.run().head_moved, [])
         self.assertEqual(h.run().head_moved, [])
@@ -187,7 +187,7 @@ class TestDetection(unittest.TestCase):
         url = _pr(11)
         h = _Harness({url: "aaa"})
         item = h.item_with_pr(url)
-        h.store.create_step(step="watch-step", role="agent", parent=item)
+        h.store.create_step(stage="watch-step", role="agent", item=item)
         h.run()
         h.heads[url] = ""
 
@@ -197,7 +197,7 @@ class TestDetection(unittest.TestCase):
         url = _pr(12)
         h = _Harness({url: "aaa"})
         item = h.item_with_pr(url)
-        h.store.create_step(step="watch-step", role="agent", parent=item)
+        h.store.create_step(stage="watch-step", role="agent", item=item)
         h.run()
         h.github = FakeGitHub(head_shas={url: "bbb"}, failing_calls={"pr_sync_state"})
 
@@ -207,9 +207,9 @@ class TestDetection(unittest.TestCase):
         url = _pr(13)
         h = _Harness({url: "aaa"})
         item = h.item_with_pr(url)
-        gate = h.store.create_step(step="watch-step", role="agent", parent=item)
+        gate = h.store.create_step(stage="watch-step", role="agent", item=item)
         h.run()
-        feedback = h.store.create_step(step="watch-step", role="agent", parent=item)
+        feedback = h.store.create_step(stage="watch-step", role="agent", item=item)
         h.store.set_watched_step(feedback, gate)
         h.heads[url] = "bbb"
 
@@ -220,7 +220,7 @@ class TestDetection(unittest.TestCase):
         url = _pr(14)
         h = _Harness({url: "aaa"}, flow=_PLAIN)
         item = h.item_with_pr(url)
-        gate = h.store.create_step(step="watch-step", role="agent", parent=item)
+        gate = h.store.create_step(stage="watch-step", role="agent", item=item)
         h.run()
         h.heads[url] = "bbb"
 
@@ -231,8 +231,8 @@ class TestDetection(unittest.TestCase):
         a, b = _pr(15), _pr(16)
         h = _Harness({a: "aaa", b: "bbb"})
         item_a, item_b = h.item_with_pr(a), h.item_with_pr(b)
-        h.store.create_step(step="watch-step", role="agent", parent=item_a)
-        h.store.create_step(step="watch-step", role="agent", parent=item_b)
+        h.store.create_step(stage="watch-step", role="agent", item=item_a)
+        h.store.create_step(stage="watch-step", role="agent", item=item_b)
         h.run()
         h.heads[a] = "aa2"
 
@@ -242,7 +242,7 @@ class TestDetection(unittest.TestCase):
         url = _pr(17)
         h = _Harness({url: "aaa"})
         item = h.item_with_pr(url)
-        h.store.create_step(step="watch-step", role="agent", parent=item)
+        h.store.create_step(stage="watch-step", role="agent", item=item)
         h.uc = DetectHeadMovedUseCase(h.store, h.flow, None)
 
         self.assertEqual(h.run().head_moved, [])
@@ -257,7 +257,7 @@ class TestMonitorWiring(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("feature", "d")
         plant_pr(store, item, url)
-        gate = store.create_step(step="watch-step", role="agent", parent=item)
+        gate = store.create_step(stage="watch-step", role="agent", item=item)
         flow = _FlowAdapter(_FLOW)
         monitor = MonitorPrsUseCase(
             store, github, FakeWorktrees(), flow, CompleteStepUseCase(store, flow),

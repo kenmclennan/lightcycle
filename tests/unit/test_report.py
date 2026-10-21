@@ -15,7 +15,7 @@ def _local_midnight_iso(day):
 def _closed_item(store, *, disposition, closed_at, id=None, label=None, step=None):
     item = store.create_item("item", "a description", id=id)
     if step:
-        store.complete_node(store.create_step(step=step, role="agent", parent=item), "done")
+        store.complete_node(store.create_step(stage=step, role="agent", item=item), "done")
     store.complete_node(item, "merged", disposition=disposition)
     store._records[item]["closed_at"] = closed_at
     if label:
@@ -91,7 +91,7 @@ class TestReportUseCase(unittest.TestCase):
     def test_cost_matches_item_cost_over_the_days_closed_items_children(self):
         s = FakeStore()
         item = s.create_item("item", "a description")
-        step = s.create_step(step="build", role="agent", parent=item)
+        step = s.create_step(stage="build", role="agent", item=item)
         s.claim_ready("agent")
         s.record_usage(step, 100, 10, 0, 0, 2.50, "list", None)
         s.complete_node(step, "done")
@@ -110,7 +110,7 @@ class TestReportUseCaseBacklog(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("item", "a description")
         s._records[item]["created_at"] = "2026-01-05T08:00:00"
-        s.create_step(step="build", role="agent", parent=item)
+        s.create_step(stage="build", role="agent", item=item)
 
         start, _close = _backlog_start_and_close(s, datetime.date(2026, 1, 5))
 
@@ -155,7 +155,7 @@ class TestReportUseCaseBacklog(unittest.TestCase):
         s = FakeStore()
         leaver = s.create_item("leaver", "a description")
         s._records[leaver]["created_at"] = "2026-01-01T08:00:00"
-        s.create_step(step="build", role="agent", parent=leaver)
+        s.create_step(stage="build", role="agent", item=leaver)
         s._records[s.children(leaver)[0].id]["created_at"] = "2026-01-05T08:00:00"
 
         resp = ReportUseCase(s).execute(ReportInput(day=datetime.date(2026, 1, 5)))
@@ -168,7 +168,7 @@ class TestReportUseCaseBacklog(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("reopened", "a description")
         s._records[item]["created_at"] = "2026-01-01T08:00:00"
-        step = s.create_step(step="build", role="agent", parent=item)
+        step = s.create_step(stage="build", role="agent", item=item)
         s._records[step]["created_at"] = "2026-01-02T08:00:00"
         s.complete_node(step, "done")
         s.complete_node(item, "abandoned", disposition="abandoned")
@@ -186,7 +186,7 @@ class TestReportUseCaseEscalations(unittest.TestCase):
     def test_a_step_still_parked_with_a_waiting_entry_on_the_day_counts(self):
         s = FakeStore(now=lambda: "2026-01-01T10:00:00+00:00")
         item = s.create_item("item", "a description")
-        step = s.create_step(step="build", role="agent", parent=item)
+        step = s.create_step(stage="build", role="agent", item=item)
         s.reassign(step, "human")
 
         resp = ReportUseCase(s).execute(ReportInput(day=datetime.date(2026, 1, 1)))
@@ -196,7 +196,7 @@ class TestReportUseCaseEscalations(unittest.TestCase):
     def test_a_resolved_park_still_counts_even_though_its_current_role_is_agent_again(self):
         s = FakeStore(now=lambda: "2026-01-01T10:00:00+00:00")
         item = s.create_item("item", "a description")
-        step = s.create_step(step="build", role="agent", parent=item)
+        step = s.create_step(stage="build", role="agent", item=item)
         s.reassign(step, "human")
         s.reassign(step, "agent")
 
@@ -208,7 +208,7 @@ class TestReportUseCaseEscalations(unittest.TestCase):
     def test_a_waiting_entry_on_a_different_day_does_not_count(self):
         s = FakeStore(now=lambda: "2026-01-02T10:00:00+00:00")
         item = s.create_item("item", "a description")
-        step = s.create_step(step="build", role="agent", parent=item)
+        step = s.create_step(stage="build", role="agent", item=item)
         s.reassign(step, "human")
 
         resp = ReportUseCase(s).execute(ReportInput(day=datetime.date(2026, 1, 1)))
@@ -218,7 +218,7 @@ class TestReportUseCaseEscalations(unittest.TestCase):
     def test_counting_is_unaffected_by_park_reason_already_being_cleared(self):
         s = FakeStore(now=lambda: "2026-01-01T10:00:00+00:00")
         item = s.create_item("item", "a description")
-        step = s.create_step(step="build", role="agent", parent=item)
+        step = s.create_step(stage="build", role="agent", item=item)
         s.reassign(step, "human")
         s.update_metadata(step, {"reason": None, "needs": None, "tried": None})
         s.reassign(step, "agent")
@@ -259,7 +259,7 @@ class TestReportUseCaseSummary(unittest.TestCase):
 
 
 def _seed_step(store, item, stage, seconds, *, turns=0, closed_at=None, finish=True):
-    step = store.create_step(step=stage, role="agent", parent=item)
+    step = store.create_step(stage=stage, role="agent", item=item)
     store.claim_ready("agent")
     store.accrue_active_seconds([step], seconds)
     if turns:

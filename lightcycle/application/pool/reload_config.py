@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from lightcycle.config import RELOAD_RELOADED, RELOAD_UNCHANGED, RESTART_REQUIRED_KEYS
+from lightcycle.domain.pool import ConfigReloadState
 
 
 @dataclass(frozen=True)
@@ -23,13 +24,13 @@ class ReloadConfigUseCase:
         self._rejected_mtime = None
 
     def _save(self, outcome, reason=None):
-        self._status.save({
-            "pid": self._pid,
-            "outcome": outcome,
-            "reason": reason,
-            "rejected_mtime": self._rejected_mtime,
-            "restart_required": list(self._restart_required),
-        })
+        self._status.save(ConfigReloadState(
+            pid=self._pid,
+            outcome=outcome,
+            reason=reason,
+            rejected_mtime=self._rejected_mtime,
+            restart_required=tuple(self._restart_required),
+        ))
 
     def execute(self) -> ReloadConfigResponse:
         if not self._announced:

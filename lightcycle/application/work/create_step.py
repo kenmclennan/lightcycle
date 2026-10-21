@@ -59,7 +59,7 @@ class CreateStepUseCase:
         if input.title.strip():
             raise UseCaseError(render_field_refusal(refuse_fields("step", ("title",))))
         with self._store.transaction():
-            tid = self._store.create_step(step=input.step, role=role, parent=input.parent)
+            tid = self._store.create_step(stage=input.step, role=role, item=input.parent)
             if input.note:
                 self._store.note(tid, " ".join(input.note))
             PassBook(self._store, self._flow).enrol(input.parent, tid, input.step, pin)

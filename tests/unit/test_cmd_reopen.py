@@ -50,7 +50,7 @@ class TestCmdReopenRefusesAStep(unittest.TestCase):
         cli.set_container(_Container(self.store))
 
     def test_names_state_ready_as_the_route_for_a_step(self):
-        step = create_owned_step(self.store, "build: x", step="build", role="agent")
+        step = create_owned_step(self.store, "build: x", stage="build", role="agent")
         rc, out, err = call(cli.cmd_reopen, step)
         self.assertEqual(rc, 1)
         self.assertIn("--state ready", err)

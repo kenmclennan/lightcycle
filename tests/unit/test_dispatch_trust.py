@@ -44,7 +44,7 @@ class _Base(unittest.TestCase):
         self.store = FakeStore()
         self.item = self.store.create_item("in-review feature", "a description")
         self.rid = plant_pr(self.store, self.item, _URL)
-        self.step = self.store.create_step(step="ready-merge", role="human", parent=self.item)
+        self.step = self.store.create_step(stage="ready-merge", role="human", item=self.item)
         self.adapter = _FlowAdapter(self.flow)
         self.uc = DispatchPrFeedbackUseCase(
             self.store, github, self.adapter, None,

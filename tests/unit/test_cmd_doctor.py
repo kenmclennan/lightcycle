@@ -124,7 +124,7 @@ class TestCmdDoctor(unittest.TestCase):
 
     def test_unhealthy_store_returns_one(self):
         store = FakeStore()
-        store.create_step(parent="missing-parent")
+        store.create_step(item="missing-parent")
         cli.set_container(FakeContainer(store))
         rc, out, err = call(cli.cmd_doctor)
         self.assertEqual(rc, 1)
@@ -279,7 +279,7 @@ class TestCmdDoctor(unittest.TestCase):
 
     def test_json_unhealthy_shape_and_exit_code(self):
         store = FakeStore()
-        item = store.create_step(parent="missing-parent")
+        item = store.create_step(item="missing-parent")
         cli.set_container(FakeContainer(store))
         rc, out, err = call(cli.cmd_doctor, "--json")
         self.assertEqual(rc, 1)

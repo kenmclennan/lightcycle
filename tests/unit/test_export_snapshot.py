@@ -10,10 +10,10 @@ class TestExportSnapshot(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("some work", "a description")
         store.add_artifact(item, "spec", "/specs/GRID-059.md")
-        step = store.create_step(step="build", role="agent", parent=item)
+        step = store.create_step(stage="build", role="agent", item=item)
         store.note(step, "some notes")
         store.label_add(step, "retro-origin")
-        blocker = store.create_step(parent=item)
+        blocker = store.create_step(item=item)
         store.dep_add(step, blocker)
         store.complete_node(blocker, "done")
 

@@ -4,17 +4,17 @@ from typing import Optional, Tuple
 
 @dataclass(frozen=True)
 class NodeSpec:
-    step: Optional[str] = None
+    stage: Optional[str] = None
     role: Optional[str] = None
-    parent: Optional[str] = None
+    item: Optional[str] = None
     deps: Tuple[str, ...] = ()
     previous: Optional[str] = None
 
     def as_kwargs(self) -> dict:
         return {
-            "step": self.step,
+            "stage": self.stage,
             "role": self.role,
-            "parent": self.parent,
+            "item": self.item,
             "deps": list(self.deps),
             "previous": self.previous,
         }

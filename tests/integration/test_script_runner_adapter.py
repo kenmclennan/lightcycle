@@ -241,7 +241,7 @@ class TestPrunedScriptLog(ScriptRunnerTestCase):
         store = FakeStore()
         steps = []
         for index in range(3):
-            step = create_owned_step(store, "s%d" % index, step="script", role="engine")
+            step = create_owned_step(store, "s%d" % index, stage="script", role="engine")
             log_path = runner.run(path, self.dir, self.env(), "", 30, "script-t").log_path
             store.set_log(step, log_path)
             store.complete_node(step, "done")

@@ -48,6 +48,6 @@ class HoldCommentUseCase:
                 shortcode=self._shortcode(),
             )
             self._store.label_add(item_id, HELD_COMMENT_ORIGIN_LABEL)
-            step_id = self._store.create_step(step=HELD_COMMENT_STEP, role="human", parent=item_id)
+            step_id = self._store.create_step(stage=HELD_COMMENT_STEP, role="human", item=item_id)
             self._store.attach_hold(run.id, held.key, item_id, step_id)
         return step_id

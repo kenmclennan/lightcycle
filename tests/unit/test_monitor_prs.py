@@ -220,7 +220,7 @@ class TestTickWithMonitor(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("merge me", "a description")
         plant_pr(store, item, url)
-        store.create_step(step="ready-merge", role="human", parent=item)
+        store.create_step(stage="ready-merge", role="human", item=item)
         worktrees = FakeWorktrees()
         monitor = MonitorPrsUseCase(
             store, FakeGitHub(merged_prs={url}), worktrees, _FlowAdapter(_FLOW),
@@ -240,7 +240,7 @@ class TestTickWithMonitor(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("abandoned me", "a description")
         plant_pr(store, item, url)
-        store.create_step(step="ready-merge", role="human", parent=item
+        store.create_step(stage="ready-merge", role="human", item=item
         )
         worktrees = FakeWorktrees()
         monitor = MonitorPrsUseCase(
@@ -304,13 +304,13 @@ class TestMonitorPrsUseCaseComposesAllThreeJobs(unittest.TestCase):
         merge_item = store.create_item("merge me", "a description")
         merge_url = "https://github.com/x/y/pull/500"
         plant_pr(store, merge_item, merge_url)
-        store.create_step(step="ready-merge", role="human", parent=merge_item
+        store.create_step(stage="ready-merge", role="human", item=merge_item
         )
 
         feedback_item = store.create_item("in review", "a description")
         feedback_url = "https://github.com/x/y/pull/501"
         plant_pr(store, feedback_item, feedback_url)
-        store.create_step(step="watch-pr", role="agent", parent=feedback_item
+        store.create_step(stage="watch-pr", role="agent", item=feedback_item
         )
 
         ci_item = store.create_item("ci pending", "a description")
@@ -318,7 +318,7 @@ class TestMonitorPrsUseCaseComposesAllThreeJobs(unittest.TestCase):
         ci_branch = "feat/ci-item"
         ci_root = "/repo/ci-item"
         plant_pr(store, ci_item, ci_url, branch=ci_branch)
-        store.create_step(step="poll-ci", role="engine", parent=ci_item)
+        store.create_step(stage="poll-ci", role="engine", item=ci_item)
 
         comment = Comment(
             author="reviewer", body="please rename this", is_top_level=False,
@@ -364,7 +364,7 @@ class TestTeardownRefusalRunLog(unittest.TestCase):
         item = store.create_item("refused", "a description")
         store.add_artifact(item, "repo", REPO)
         plant_pr(store, item, self.URL, branch=BRANCH)
-        store.create_step(step="ready-merge", role="human", parent=item)
+        store.create_step(stage="ready-merge", role="human", item=item)
         worktrees = WorktreeService(store, git, fs=None, config=_Cfg())
         path = worktrees.path_for_run(store.open_runs_of(item)[0])
         git._registered = {path}

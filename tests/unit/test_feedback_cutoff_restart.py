@@ -63,7 +63,7 @@ class _Rig:
         self.store = store or FakeStore()
         self.item = self.store.create_item("feature", "d")
         plant_pr(self.store, self.item, _PR)
-        self.store.create_step(step="ready-merge", role="human", parent=self.item)
+        self.store.create_step(stage="ready-merge", role="human", item=self.item)
         self.process = _Process(self.github, self.store)
 
     def restart(self, runner=None):

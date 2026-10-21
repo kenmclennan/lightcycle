@@ -22,7 +22,7 @@ class StoreContractBase:
         s = self.make_store()
         pinned = s.create_item("p", "d", shortcode="LC", workflow="wf")
         unpinned = s.create_item("u", "d", shortcode="LC")
-        step = s.create_step(step="gate", role="human", parent=pinned)
+        step = s.create_step(stage="gate", role="human", item=pinned)
         self.assertEqual(s.item_workflow(pinned), "wf")
         self.assertIsNone(s.item_workflow(unpinned))
         self.assertIsNone(s.item_workflow("nope"))
@@ -43,8 +43,8 @@ class StoreContractBase:
         tid = self._step(s, "t", role="agent")
         s.assign(tid, "w1")
         won, new = s.complete_step_atomic(
-            tid, "done", "w1", NodeSpec(step="review", role="agent",
-                     parent=s.get_step(tid).item))
+            tid, "done", "w1", NodeSpec(stage="review", role="agent",
+                     item=s.get_step(tid).item))
         self.assertTrue(won)
         self.assertIsNotNone(new)
         self.assertEqual(s.get_node(tid).state, "done")
@@ -55,7 +55,7 @@ class StoreContractBase:
         tid = self._step(s, "t", role="agent")
         s.assign(tid, "w1")
         s.complete_step_atomic(tid, "done", "w1", None)
-        won, new = s.complete_step_atomic(tid, "done", "w1", NodeSpec(step="review"))
+        won, new = s.complete_step_atomic(tid, "done", "w1", NodeSpec(stage="review"))
         self.assertFalse(won)
         self.assertIsNone(new)
 
@@ -64,7 +64,7 @@ class StoreContractBase:
         tid = self._step(s, "t", role="agent")
         s.assign(tid, "w1")
         won, new = s.complete_step_atomic(
-            tid, "done", "w2", NodeSpec(step="review"))
+            tid, "done", "w2", NodeSpec(stage="review"))
         self.assertFalse(won)
         self.assertIsNone(new)
         self.assertEqual(s.get_node(tid).state, "running")
@@ -82,8 +82,8 @@ class StoreContractBase:
         tid = self._step(s, "t", role="agent")
         won, new = s.complete_step_atomic(
             tid, "done", "handle-feedback-worker",
-            NodeSpec(step="review", role="agent",
-                     parent=s.get_step(tid).item))
+            NodeSpec(stage="review", role="agent",
+                     item=s.get_step(tid).item))
         self.assertTrue(won)
         self.assertIsNotNone(new)
         self.assertEqual(s.get_node(tid).state, "done")
@@ -372,9 +372,9 @@ class StoreContractBase:
 
     def test_claim_ready_stage_filter_prefers_the_matching_stage_over_an_earlier_ready_step_of_the_same_role_and_item(self):
         s = self.make_store()
-        first = self._step(s, "t", role="agent", step="review-conflict")
+        first = self._step(s, "t", role="agent", stage="review-conflict")
         item = s.get_step(first).item
-        self._step(s, "t2", role="agent", step="await-merge", parent=item)
+        self._step(s, "t2", role="agent", stage="await-merge", item=item)
         claimed = s.claim_ready("agent", stage="await-merge")
         self.assertEqual(claimed.stage, "await-merge")
 
@@ -388,9 +388,9 @@ class StoreContractBase:
 
     def test_claim_ready_without_item_or_stage_returns_the_first_ready_step_of_the_role_as_before(self):
         s = self.make_store()
-        first = self._step(s, "t", role="agent", step="review-conflict")
+        first = self._step(s, "t", role="agent", stage="review-conflict")
         item = s.get_step(first).item
-        self._step(s, "t2", role="agent", step="await-merge", parent=item)
+        self._step(s, "t2", role="agent", stage="await-merge", item=item)
         claimed = s.claim_ready("agent")
         self.assertEqual(claimed.id, first)
 
@@ -627,7 +627,7 @@ class StoreContractBase:
     def test_a_steps_item_is_fixed_at_creation(self):
         s = self.make_store()
         item = s.create_item("owning item", "a description", shortcode="GRID")
-        tid = self._step(s, "a step", parent=item)
+        tid = self._step(s, "a step", item=item)
         s.edit_node(tid)
         self.assertEqual(s.get_step(tid).item, item)
 
@@ -640,7 +640,7 @@ class StoreContractBase:
     def test_edit_task_parent_omitted_leaves_parent_unchanged(self):
         s = self.make_store()
         item = s.create_item("owning item", "a description", shortcode="GRID")
-        tid = self._step(s, "a step", parent=item)
+        tid = self._step(s, "a step", item=item)
         s.edit_node(tid)
         t = s.get_node(tid)
         self.assertEqual(t.item, item)
@@ -1139,7 +1139,7 @@ class StoreContractBase:
         item = s.create_item("t", "a description", shortcode="GRID")
         self.assertEqual(s.get_node(item).created_at, sentinel)
 
-        tid = s.create_step(step="build", role="agent", parent=item)
+        tid = s.create_step(stage="build", role="agent", item=item)
         self.assertEqual(s.get_node(tid).created_at, sentinel)
 
         pid = s.open_pass(item)
@@ -1169,8 +1169,8 @@ class StoreContractBase:
     def test_steps_at_step_created_at_set_and_orders_by_creation(self):
         s = self.make_store()
         item = s.create_item("owner", "an owning item", shortcode="GRID")
-        first = s.create_step(step="build", role="agent", parent=item)
-        second = s.create_step(step="build", role="agent", parent=item)
+        first = s.create_step(stage="build", role="agent", item=item)
+        second = s.create_step(stage="build", role="agent", item=item)
         steps = {t.id: t for t in s.steps_at_step("build")}
         self.assertTrue(steps[first].created_at)
         self.assertTrue(steps[second].created_at)
@@ -1232,16 +1232,16 @@ class StoreContractBase:
     def test_item_state_rolls_up_mixed_children(self):
         s = self.make_store()
         item = s.create_item("item", "a description", shortcode="GRID")
-        done_step = self._step(s, "done step", role="agent", parent=item)
-        self._step(s, "open step", role="agent", parent=item)
+        done_step = self._step(s, "done step", role="agent", item=item)
+        self._step(s, "open step", role="agent", item=item)
         s.complete_node(done_step, "done")
         self.assertEqual(s.get_node(item).state, "queued")
 
     def test_item_state_backlogged_when_all_children_done_but_item_never_closed(self):
         s = self.make_store()
         item = s.create_item("item", "a description", shortcode="GRID")
-        a = self._step(s, "a", parent=item)
-        b = self._step(s, "b", parent=item)
+        a = self._step(s, "a", item=item)
+        b = self._step(s, "b", item=item)
         s.complete_node(a, "done")
         s.complete_node(b, "done")
         self.assertEqual(s.get_node(item).state, "backlogged")
@@ -1249,8 +1249,8 @@ class StoreContractBase:
     def test_item_state_queued_when_all_children_queued(self):
         s = self.make_store()
         item = s.create_item("item", "a description", shortcode="GRID")
-        self._step(s, "a", role="agent", parent=item)
-        self._step(s, "b", role="agent", parent=item)
+        self._step(s, "a", role="agent", item=item)
+        self._step(s, "b", role="agent", item=item)
         self.assertEqual(s.get_node(item).state, "queued")
 
     def test_empty_item_state_backlogged(self):
@@ -1370,7 +1370,7 @@ class StoreContractBase:
         s = self.make_store()
         item = s.create_item("item: foo", "a description", shortcode="GRID")
         s.add_artifact(item, "spec", "specs/foo.md")
-        step = self._step(s, "build: foo", parent=item)
+        step = self._step(s, "build: foo", item=item)
 
         view = s.node_view(step)
 
@@ -1544,7 +1544,7 @@ class StoreContractBase:
     def _filed_hold(self, s, run_id="R-1", key="inline:1", created_at=10.0):
         s.file_hold(run_id, key, "mallory", "do it", "a.py", 3, created_at)
         item = s.create_item("held", "d", shortcode="HLD")
-        step = s.create_step(step="review-held-comment", role="human", parent=item)
+        step = s.create_step(stage="review-held-comment", role="human", item=item)
         s.attach_hold(run_id, key, item, step)
         return step
 

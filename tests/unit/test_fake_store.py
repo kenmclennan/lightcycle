@@ -5,7 +5,7 @@ from tests.support.step_factory import create_owned_step
 
 
 class TestFakeStoreRequiresParent(unittest.TestCase):
-    def test_create_step_without_parent_raises(self):
+    def test_create_step_without_item_raises(self):
         s = FakeStore()
         with self.assertRaises(ValueError):
             s.create_step()
@@ -14,7 +14,7 @@ class TestFakeStoreRequiresParent(unittest.TestCase):
 class TestLabels(unittest.TestCase):
     def setUp(self):
         self.s = FakeStore()
-        self.tid = create_owned_step(self.s, "build: thing", step="build", role="agent")
+        self.tid = create_owned_step(self.s, "build: thing", stage="build", role="agent")
 
     def test_step_and_role_split_into_separate_labels(self):
         step = self.s.get_node(self.tid)
@@ -99,7 +99,7 @@ class TestParentChildren(unittest.TestCase):
     def setUp(self):
         self.s = FakeStore()
         self.item = self.s.create_item("item: foo", "a description")
-        self.step = self.s.create_step(parent=self.item)
+        self.step = self.s.create_step(item=self.item)
 
     def test_child_has_parent(self):
         self.assertEqual(self.s.get_node(self.step).item, self.item)
@@ -111,7 +111,7 @@ class TestParentChildren(unittest.TestCase):
 
     def test_children_excludes_other_records(self):
         other_story = self.s.create_item("item: bar", "a description")
-        self.s.create_step(parent=other_story)
+        self.s.create_step(item=other_story)
         self.assertEqual(len(self.s.children(self.item)), 1)
 
     def test_story_artifacts_roundtrip(self):

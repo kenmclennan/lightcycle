@@ -220,7 +220,7 @@ class TestMonitorPrsSkipsItemsWithNoOpenStep(unittest.TestCase):
     def test_live_await_merge_step_still_closes_the_item_on_merge(self):
         url = "https://github.com/x/y/pull/63"
         store, item = self._backlogged_with_pr(url)
-        store.create_step(step="ready-merge", role="human", parent=item)
+        store.create_step(stage="ready-merge", role="human", item=item)
 
         result = self._use_case(store, FakeGitHub(merged_prs={url})).execute()
 
@@ -267,13 +267,13 @@ class TestMonitorPrsMultiWorkflow(unittest.TestCase):
         code_item = store.create_item("code feature", "a description", workflow="standard")
         code_url = "https://github.com/x/y/pull/100"
         plant_pr(store, code_item, code_url)
-        store.create_step(step="await-merge", role="human", parent=code_item
+        store.create_step(stage="await-merge", role="human", item=code_item
         )
 
         spec_item = store.create_item("a spec", "a description", workflow="spec")
         spec_url = "https://github.com/x/y/pull/101"
         plant_pr(store, spec_item, spec_url)
-        store.create_step(step="await-merge", role="human", parent=spec_item
+        store.create_step(stage="await-merge", role="human", item=spec_item
         )
 
         worktrees = FakeWorktrees()
@@ -362,8 +362,8 @@ class TestMonitorPrsMergeIntoAHumanStage(unittest.TestCase):
         store.add_artifact(item, "repo", "lightcycle")
         url = "https://github.com/x/y/pull/77"
         plant_pr(store, item, url, "code")
-        step = store.create_step(step="code-await-merge",
-            role="human", parent=item)
+        step = store.create_step(stage="code-await-merge",
+            role="human", item=item)
         _gh = FakeGitHub(merged_prs={url})
         uc = ResolveMergedPrsUseCase(
             store, _gh, FakeWorktrees(), flow_service, CompleteStepUseCase(store, flow_service), CheckContentPinUseCase(store, _gh, flow_service, trusted_authors=lambda: frozenset({"review-code"}))
@@ -396,7 +396,7 @@ class TestMonitorPrsResolvePairIsOneTransaction(unittest.TestCase):
         item = store.create_item("deliver", "a description")
         url = "https://github.com/x/y/pull/71"
         rid = plant_pr(store, item, url)
-        step = store.create_step(step="ready-merge", role="human", parent=item)
+        step = store.create_step(stage="ready-merge", role="human", item=item)
         worktrees = FakeWorktrees()
         github = FakeGitHub(**github_kwargs(url))
         uc = ResolveMergedPrsUseCase(
@@ -444,7 +444,7 @@ class TestMonitorPrsSpecMergeContinuesToCode(unittest.TestCase):
         store.add_artifact(spec_item, "branch", "spec/LC-59-phase-c1", label="spec")
         spec_url = "https://github.com/x/y/pull/101"
         plant_pr(store, spec_item, spec_url, "spec")
-        store.create_step(step="spec-await-merge", role="human", parent=spec_item
+        store.create_step(stage="spec-await-merge", role="human", item=spec_item
         )
         worktrees = FakeWorktrees()
         github = FakeGitHub(merged_prs={spec_url})
@@ -544,7 +544,7 @@ class TestMonitorPrsPhaseBoundarySameRepo(unittest.TestCase):
         store.add_artifact(item, "branch", "feat/LC-7-feature-login", label="feature")
         url = "https://github.com/x/y/pull/7"
         plant_pr(store, item, url, "feature")
-        store.create_step(step="feature-await-merge", role="human", parent=item
+        store.create_step(stage="feature-await-merge", role="human", item=item
         )
         worktrees = FakeWorktrees()
         complete = CompleteStepUseCase(store, flow_service)
@@ -566,7 +566,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("my feature", "a description")
         plant_pr(store, item, pr_url)
-        step = store.create_step(step="ready-merge", role="human", parent=item
+        step = store.create_step(stage="ready-merge", role="human", item=item
         )
         worktrees = FakeWorktrees()
         uc = ResolveMergedPrsUseCase(
@@ -625,7 +625,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("done feature", "a description")
         plant_pr(store, item, url)
-        step = store.create_step(step="ready-merge", role="human", parent=item
+        step = store.create_step(stage="ready-merge", role="human", item=item
         )
         store.complete_node(step, "merged")
         store.complete_node(item, "merged")
@@ -644,7 +644,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("upstream feature", "a description")
         plant_pr(store, item, url)
-        step = store.create_step(step="build", role="agent", parent=item
+        step = store.create_step(stage="build", role="agent", item=item
         )
         worktrees = FakeWorktrees()
         _gh = FakeGitHub(merged_prs={url})
@@ -665,7 +665,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("regressed feature", "a description")
         plant_pr(store, item, url)
-        step = store.create_step(step="review", role="agent", parent=item
+        step = store.create_step(stage="review", role="agent", item=item
         )
         worktrees = FakeWorktrees()
         _gh = FakeGitHub(merged_prs={url})
@@ -681,7 +681,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
     def test_task_without_pr_artifact_is_skipped(self):
         store = FakeStore()
         item = store.create_item("no-pr feature", "a description")
-        store.create_step(step="ready-merge", role="human", parent=item
+        store.create_step(stage="ready-merge", role="human", item=item
         )
         worktrees = FakeWorktrees()
         github = FakeGitHub(merged_prs={"anything"})
@@ -695,7 +695,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
 
     def test_task_without_parent_is_skipped(self):
         store = FakeStore()
-        create_owned_step(store, "ready-merge: orphan", step="ready-merge", role="human")
+        create_owned_step(store, "ready-merge: orphan", stage="ready-merge", role="human")
         worktrees = FakeWorktrees()
         _gh = FakeGitHub(merged_prs={"x"})
         uc = ResolveMergedPrsUseCase(
@@ -721,7 +721,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("ship it", "a description")
         plant_pr(store, item, url)
-        store.create_step(step="await-ship", role="human", parent=item)
+        store.create_step(stage="await-ship", role="human", item=item)
         worktrees = FakeWorktrees()
         _gh = FakeGitHub(merged_prs={url})
         uc = ResolveMergedPrsUseCase(
@@ -743,7 +743,7 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("abandoned feature", "a description")
         plant_pr(store, item, pr_url)
-        step = store.create_step(step="ready-merge", role="human", parent=item
+        step = store.create_step(stage="ready-merge", role="human", item=item
         )
         worktrees = FakeWorktrees()
         uc = ResolveMergedPrsUseCase(
@@ -821,7 +821,7 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("cancelled work", "a description")
         plant_pr(store, item, url)
-        store.create_step(step="await-ship", role="human", parent=item
+        store.create_step(stage="await-ship", role="human", item=item
         )
         worktrees = FakeWorktrees()
         _gh = FakeGitHub(closed_prs={url})
@@ -852,7 +852,7 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("gated feature", "a description")
         plant_pr(store, item, url)
-        step = store.create_step(step="ready-merge", role="human", parent=item
+        step = store.create_step(stage="ready-merge", role="human", item=item
         )
         worktrees = FakeWorktrees()
         flow_adapter = _FlowAdapter(_CLOSE_ROUTES_TO_HUMAN_GATE_FLOW)
@@ -876,7 +876,7 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("watched feature", "a description")
         plant_pr(store, item, url)
-        step = store.create_step(step="watch-pr", role="agent", parent=item
+        step = store.create_step(stage="watch-pr", role="agent", item=item
         )
         worktrees = FakeWorktrees()
         _gh = FakeGitHub(closed_prs={url})
@@ -910,8 +910,8 @@ class TestUndeclaredDispositionParksTheMergeStage(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("ship it", "a description")
         plant_pr(store, item, url)
-        other = store.create_step(step="spec-feedback", role="agent", parent=item)
-        merge_step = store.create_step(step="await-ship", role="human", parent=item)
+        other = store.create_step(stage="spec-feedback", role="agent", item=item)
+        merge_step = store.create_step(stage="await-ship", role="human", item=item)
         _gh = FakeGitHub(merged_prs={url})
         uc = ResolveMergedPrsUseCase(
             store, _gh, FakeWorktrees(), _FlowAdapter(flow), None, CheckContentPinUseCase(store, _gh, _FlowAdapter(flow), trusted_authors=lambda: frozenset({"review-code"}))
@@ -927,11 +927,11 @@ class TestLatestStepOrdering(unittest.TestCase):
     def test_mixed_utc_offsets_sort_chronologically_not_as_raw_strings(self):
         store = FakeStore()
         item = store.create_item("it", "a description")
-        earliest = store.create_step(step="build", role="agent", parent=item)
+        earliest = store.create_step(stage="build", role="agent", item=item)
         store._records[earliest]["created_at"] = "2026-01-01T10:00:00+00:00"
-        true_latest = store.create_step(step="build", role="agent", parent=item)
+        true_latest = store.create_step(stage="build", role="agent", item=item)
         store._records[true_latest]["created_at"] = "2026-01-01T05:00:00-12:00"
-        greatest_raw_string = store.create_step(step="build", role="agent", parent=item
+        greatest_raw_string = store.create_step(stage="build", role="agent", item=item
         )
         store._records[greatest_raw_string]["created_at"] = "2026-01-01T15:00:00+00:00"
 
@@ -985,7 +985,7 @@ class TestSharedPhaseGatesResolveOnlyTheGateTheItemIsAt(unittest.TestCase):
         item = store.create_item("spec item", "a description")
         url = "https://github.com/x/y/pull/9"
         plant_pr(store, item, url, "spec")
-        step = store.create_step(step=at, role="human", parent=item)
+        step = store.create_step(stage=at, role="human", item=item)
         gh = github(url) if github else FakeGitHub(**github_kwargs(url))
         adapter = _FlowAdapter(flow)
         uc = ResolveMergedPrsUseCase(
@@ -1074,7 +1074,7 @@ class TestTeardownRefusalSkipsTheItemForTheTick(unittest.TestCase):
         item = store.create_item("spec item", "a description")
         url = "https://github.com/x/y/pull/9"
         plant_pr(store, item, url, "spec")
-        step = store.create_step(step="nochange-await-merge", role="human", parent=item)
+        step = store.create_step(stage="nochange-await-merge", role="human", item=item)
         gh = FakeGitHub(merged_prs={url})
         adapter = _FlowAdapter(flow)
         worktrees = _RefusingWorktrees()
@@ -1123,7 +1123,7 @@ class TestPhaseReleaseGuard(unittest.TestCase):
         item = store.create_item("my feature", "a description")
         store.add_artifact(item, "repo", self.REPO)
         rid = plant_pr(store, item, self.URL, branch=self.BRANCH)
-        step = store.create_step(step="ready-merge", role="human", parent=item)
+        step = store.create_step(stage="ready-merge", role="human", item=item)
         git = FakeGit(branches={(self.REPO, self.BRANCH)}, ref="origin/main", **git_kwargs)
         svc = WorktreeService(store, git, fs=None, config=_GuardCfg())
         adapter = _FlowAdapter(flow or _FLOW)

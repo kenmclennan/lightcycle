@@ -45,8 +45,8 @@ def _usecase(store, fs, workers):
 class TestGhCallAccrual(unittest.TestCase):
     def setUp(self):
         self.store = FakeStore()
-        self.a = create_owned_step(self.store, "a", step="build", role="agent")
-        self.b = create_owned_step(self.store, "b", step="build", role="agent")
+        self.a = create_owned_step(self.store, "a", stage="build", role="agent")
+        self.b = create_owned_step(self.store, "b", stage="build", role="agent")
 
     def test_only_a_worker_with_a_step_and_a_log_writes_a_count(self):
         fs = FakeFs(files={_path("s1"): _line(1) + _line(2), _path("s3"): _line(1)})

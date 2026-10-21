@@ -56,12 +56,12 @@ def _label_value(labels, prefix):
     return None
 
 
-def labels_for(*, role=None, step=None, project=None):
+def labels_for(*, role=None, stage=None, project=None):
     parts = []
     if role:
         parts.append("for:%s" % role)
-    if step:
-        parts.append("step:%s" % step)
+    if stage:
+        parts.append("stage:%s" % stage)
     if project:
         parts.append("project:%s" % project)
     return parts
@@ -75,7 +75,7 @@ def record_to_step(record, blocked_by=None):
     return Step(
         id=record["id"],
         item=record.get("parent"),
-        stage=_label_value(labels, "step:"),
+        stage=_label_value(labels, "stage:"),
         pass_id=record.get("pass_id"),
         role=role,
         state=derive_state(
@@ -406,7 +406,7 @@ class FakeStore(StorePort):
             result.append(d)
         return result
 
-    def ensure_store(self):
+    def ensure_ready(self):
         pass
 
     def reclaim(self, tid):
@@ -553,7 +553,7 @@ class FakeStore(StorePort):
             if b["id"] not in exclude
             if "for:%s" % role in (b.get("labels") or [])
             and (item is None or b.get("parent") == item)
-            and (stage is None or "step:%s" % stage in (b.get("labels") or []))
+            and (stage is None or "stage:%s" % stage in (b.get("labels") or []))
         ]
         if not candidates:
             return None
@@ -767,14 +767,14 @@ class FakeStore(StorePort):
     def clear_schedule_run_request(self, schedule_id):
         self._schedule_run_requests.discard(schedule_id)
 
-    def create_step(self, *, step=None, role=None, parent=None, deps=None,
+    def create_step(self, *, stage=None, role=None, item=None, deps=None,
                     id=None, previous=None):
-        if parent is None:
-            raise ValueError("create_step requires a parent")
+        if item is None:
+            raise ValueError("create_step requires an item")
         fields = dict(
             type="step",
-            parent=parent,
-            labels=labels_for(role=role, step=step),
+            parent=item,
+            labels=labels_for(role=role, stage=stage),
             previous_step=previous,
         )
         if id is not None:
@@ -1066,7 +1066,7 @@ class FakeStore(StorePort):
         return [self._to_node(b) for b in items[:n]]
 
     def steps_at_step(self, step):
-        label = "step:%s" % step
+        label = "stage:%s" % step
         return [self._to_node(b) for b in self._records.values()
                 if b.get("type") == "step" and label in (b.get("labels") or [])]
 

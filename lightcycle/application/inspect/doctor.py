@@ -283,16 +283,16 @@ class DoctorUseCase:
             return []
         state = self._config_reload_status.load()
         holder = self._lock.holder_pid()
-        if holder is None or state.get("pid") != holder:
+        if holder is None or state is None or state.pid != holder:
             return []
         problems = []
-        if (state.get("outcome") == "rejected"
-                and state.get("rejected_mtime") == self._config.config_mtime()):
+        if (state.outcome == "rejected"
+                and state.rejected_mtime == self._config.config_mtime()):
             problems.append(Problem(
                 "config",
                 "config edit rejected by the running pool (%s); it is running on the last good "
-                "config" % state.get("reason")))
-        restart = state.get("restart_required") or []
+                "config" % state.reason))
+        restart = state.restart_required
         if restart:
             problems.append(Problem(
                 "config", "running pool needs a restart for: %s" % ", ".join(restart)))
@@ -517,17 +517,17 @@ class DoctorUseCase:
     def _fetch_problems(self, library, root):
         problems = []
         status = self._guidance_sync_status.load()
-        if status and not status.get("ok", True):
-            ref = status.get("ref")
+        if status is not None and not status.ok:
+            ref = status.ref
             reading = (
                 "delivery is reading the last fetched ref %s" % ref if ref
                 else "delivery has no fetched ref to read"
             )
-            at = datetime.datetime.fromtimestamp(status.get("at", 0)).astimezone()
+            at = datetime.datetime.fromtimestamp(status.at or 0).astimezone()
             problems.append(Problem(
                 "guidance",
                 "guidance repo fetch failed at %s: %s - %s"
-                % (at.strftime("%Y-%m-%d %H:%M:%S"), status.get("detail", ""), reading),
+                % (at.strftime("%Y-%m-%d %H:%M:%S"), status.detail, reading),
             ))
         if library.ref(root) is None and library.has_origin(root):
             problems.append(Problem(

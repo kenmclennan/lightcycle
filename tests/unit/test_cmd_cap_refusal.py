@@ -96,7 +96,7 @@ class TestCloseRefusesAnOverLongNote(unittest.TestCase):
         self.assertEqual(self.h.store.get_node(self.item).note, SHORT)
 
     def test_a_step_given_to_close_reports_that_refusal_not_a_cap(self):
-        step = create_owned_step(self.h.store, "build: x", step="build", role="agent")
+        step = create_owned_step(self.h.store, "build: x", stage="build", role="agent")
         rc, out, err = self.h.run("close", step, "--note", LONG)
         self.assertEqual(rc, 2)
         self.assertIn("lc done", err)

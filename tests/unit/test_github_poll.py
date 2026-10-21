@@ -6,6 +6,7 @@ from lightcycle.application.pool.github_poll import GithubPollUseCase
 from lightcycle.application.pool.pr_snapshot import PrSnapshot
 from lightcycle.application.pool.pr_writes import PrWrites
 from lightcycle.config import ConfigError
+from lightcycle.domain.pool import GithubBudget
 from lightcycle.ports.github import CheckRun, Comment, NotYetRead, RateLimit, ReadFailure
 from tests.support.fake_store import FakeStore
 from tests.support.fake_fs import FakeFs
@@ -89,7 +90,7 @@ class TestBudgetRead(unittest.TestCase):
 
         self.assertEqual(
             pool.status.load(),
-            {"limit": 5000, "remaining": 4261, "reset": 1792503970, "read_at": 1000.0})
+            GithubBudget(limit=5000, remaining=4261, reset=1792503970, read_at=1000.0))
 
     def test_exactly_one_rate_limit_read_per_cycle_even_with_no_wanted_prs(self):
         pool = _Pool()

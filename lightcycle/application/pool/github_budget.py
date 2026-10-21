@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from lightcycle.domain.pool import github_budget_from_state, github_budget_low
+from lightcycle.domain.pool import github_budget_low
 
 
 @dataclass(frozen=True)
@@ -31,7 +31,7 @@ class GithubBudgetUseCase:
 
     def reading(self) -> GithubBudgetReading:
         reserve = self._config.github_reserve_calls()
-        budget = github_budget_from_state(self._status.load())
+        budget = self._status.load()
         if budget is None:
             return GithubBudgetReading(False, None, None, None, reserve, False)
         return GithubBudgetReading(

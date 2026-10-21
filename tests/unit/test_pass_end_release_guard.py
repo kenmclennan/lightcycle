@@ -45,7 +45,7 @@ def _world(git, branches=((BRANCH, "code"),)):
         rid = store.open_run(item, pid, phase)
         store.set_branch(rid, branch)
         runs.append(rid)
-    step = store.create_step(step="finalise", role="agent", parent=item)
+    step = store.create_step(stage="finalise", role="agent", item=item)
     svc = WorktreeService(store, git, fs=None, config=_Cfg())
     return store, svc, item, step, runs, pid
 

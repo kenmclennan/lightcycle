@@ -61,7 +61,7 @@ class TestNoCommandExitsZeroHavingDoneNothing(unittest.TestCase):
         self.assertIn("nothing to set", err)
 
     def test_clearing_a_note_is_a_real_change_not_an_empty_one(self):
-        step = create_owned_step(self.store, "build: x", step="build", role="agent")
+        step = create_owned_step(self.store, "build: x", stage="build", role="agent")
         self.store.note(step, "something")
         rc, out, err = call(cli.cmd_set, step, "--unset", "notes")
         self.assertEqual(rc, 0, err)
@@ -74,7 +74,7 @@ class TestANoteHasSomewhereToGo(unittest.TestCase):
 
     def test_new_step_takes_a_note(self):
         item = self.store.create_item("an item", "a description")
-        step = self.store.create_step(step="build", role="agent", parent=item)
+        step = self.store.create_step(stage="build", role="agent", item=item)
         self.store.note(step, "the human decided X")
         self.assertIn("the human decided X", self.store.get_step(step).notes)
 
@@ -87,7 +87,7 @@ class TestANoteHasSomewhereToGo(unittest.TestCase):
         self.assertEqual(self.store.get_node(item).note, "worth keeping")
 
     def test_a_disposition_on_a_step_is_still_refused(self):
-        step = create_owned_step(self.store, "build: x", step="build", role="agent")
+        step = create_owned_step(self.store, "build: x", stage="build", role="agent")
         rc, out, err = call(cli.cmd_done, step, "done", "--disposition", "completed")
         self.assertEqual(rc, 2)
         self.assertIn("--disposition", err)

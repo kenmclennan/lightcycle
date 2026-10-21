@@ -416,7 +416,7 @@ class TestModel(unittest.TestCase):
         _fake_setUp(self)
 
     def test_task_mapping_and_status(self):
-        bid = create_owned_step(self.store, "build: thing", step="build", role="agent")
+        bid = create_owned_step(self.store, "build: thing", stage="build", role="agent")
         rc, out, err = call(_cli_mod.cmd_show, bid)
         self.assertEqual(rc, 0, err)
         t = json.loads(out)
@@ -426,8 +426,8 @@ class TestModel(unittest.TestCase):
         self.assertEqual(t["state"], "queued")
 
     def test_status_lanes_json(self):
-        h = create_owned_step(self.store, "spec: x", step="spec", role="human")
-        c = create_owned_step(self.store, "build: y", step="build", role="agent")
+        h = create_owned_step(self.store, "spec: x", stage="spec", role="human")
+        c = create_owned_step(self.store, "build: y", stage="build", role="agent")
         rc, out, err = call(_cli_mod.cmd_status, "--json")
         self.assertEqual(rc, 0, err)
         s = json.loads(out)
@@ -440,7 +440,7 @@ class TestClaim(unittest.TestCase):
         _fake_setUp(self)
 
     def test_claim_returns_and_marks_in_progress(self):
-        c = create_owned_step(self.store, "build: y", step="build", role="agent")
+        c = create_owned_step(self.store, "build: y", stage="build", role="agent")
         rc, out, err = call(_cli_mod.cmd_claim, "agent")
         self.assertEqual(rc, 0, err)
         t = json.loads(out)
@@ -450,12 +450,12 @@ class TestClaim(unittest.TestCase):
         self.assertEqual(out2.strip(), "")
 
     def test_claim_ignores_human(self):
-        create_owned_step(self.store, "spec: x", step="spec", role="human")
+        create_owned_step(self.store, "spec: x", stage="spec", role="human")
         rc, out, _ = call(_cli_mod.cmd_claim, "agent")
         self.assertEqual(out.strip(), "")
 
     def test_claim_assigns_worker_spawnid(self):
-        b = create_owned_step(self.store, "build: y", step="build", role="agent")
+        b = create_owned_step(self.store, "build: y", stage="build", role="agent")
         cfg = write_config(projects=self.root, specs=self.root)
         inject_container(
             self, store=self.store, home=self.root, config_path=cfg,
@@ -467,7 +467,7 @@ class TestClaim(unittest.TestCase):
         self.assertEqual(self.store.get_node(b).claimed_by, "spawn-xyz")
 
     def test_claim_refuses_a_further_claim_after_its_step_is_done(self):
-        b = create_owned_step(self.store, "build: y", step="build", role="agent")
+        b = create_owned_step(self.store, "build: y", stage="build", role="agent")
         cfg = write_config(projects=self.root, specs=self.root)
         inject_container(
             self, store=self.store, home=self.root, config_path=cfg,
@@ -478,14 +478,14 @@ class TestClaim(unittest.TestCase):
         register_worker(self.root, {"spawnid": "spawn-xyz", "role": "agent", "step": None})
         call(_cli_mod.cmd_claim, "agent")
         self.store.complete_node(b, "done")
-        second = create_owned_step(self.store, "build: z", step="build", role="agent")
+        second = create_owned_step(self.store, "build: z", stage="build", role="agent")
         rc, out, err = call(_cli_mod.cmd_claim, "agent")
         self.assertNotEqual(rc, 0)
         self.assertIn("spawn-xyz", err)
         self.assertEqual(self.store.get_node(second).state, "queued")
 
     def test_corrupt_registry_exits_one_with_a_clean_message(self):
-        create_owned_step(self.store, "build: y", step="build", role="agent")
+        create_owned_step(self.store, "build: y", stage="build", role="agent")
         cfg = write_config(projects=self.root, specs=self.root)
         inject_container(
             self, store=self.store, home=self.root, config_path=cfg,
@@ -503,7 +503,7 @@ class TestClaim(unittest.TestCase):
 
     def test_unresolvable_workflow_selector_parks_instead_of_crashing(self):
         item = self.store.create_item("item", "a description", workflow="ghost/whatever")
-        step = self.store.create_step(step="build", role="agent", parent=item)
+        step = self.store.create_step(stage="build", role="agent", item=item)
         rc, out, err = call(_cli_mod.cmd_claim, "agent")
         self.assertEqual(rc, 0, err)
         self.assertNotIn("Traceback", err)
@@ -517,7 +517,7 @@ class TestFlow(unittest.TestCase):
 
     def test_advance_creates_next_step(self):
         item = self.store.create_item("st", "a description", workflow="lightcycle/spec-driven@%s" % _SHA)
-        b = self.store.create_step(step="build", role="agent", parent=item)
+        b = self.store.create_step(stage="build", role="agent", item=item)
         self.store.complete_node(b, "done")
         rc, out, err = call(_cli_mod.cmd_advance, b, "done")
         self.assertEqual(rc, 0, err)
@@ -529,7 +529,7 @@ class TestFlow(unittest.TestCase):
         self.assertEqual(nt["stage"], "review")
 
     def test_ready_roles(self):
-        create_owned_step(self.store, "build: t", step="build", role="agent")
+        create_owned_step(self.store, "build: t", stage="build", role="agent")
         rc, out, _ = call(_cli_mod.cmd_ready_roles)
         self.assertIn("agent", out.split())
 
@@ -540,14 +540,14 @@ class TestDoneBlock(unittest.TestCase):
 
     def test_done_closes_and_advances(self):
         item = self.store.create_item("st", "a description", workflow="lightcycle/spec-driven@%s" % _SHA)
-        b = self.store.create_step(step="build", role="agent", parent=item)
+        b = self.store.create_step(stage="build", role="agent", item=item)
         rc, out, err = call(_cli_mod.cmd_done, b, "done")
         self.assertEqual(rc, 0, err)
         self.assertTrue(out.strip())
         self.assertEqual(self.store.get_node(b).state, "done")
 
     def test_done_unknown_outcome_errors_without_closing(self):
-        b = create_owned_step(self.store, "build: t", step="build", role="agent")
+        b = create_owned_step(self.store, "build: t", stage="build", role="agent")
         rc, out, err = call(_cli_mod.cmd_done, b, "banana")
         self.assertEqual(rc, 1)
         self.assertEqual(self.store.get_node(b).state, State.QUEUED)
@@ -561,7 +561,7 @@ class TestDoneBlock(unittest.TestCase):
         )
         item = self.store.create_item(
             "st", "a description", workflow="lightcycle/small-change@%s" % _SHA)
-        sac = self.store.create_step(step="scope-and-code", role="agent", parent=item)
+        sac = self.store.create_step(stage="scope-and-code", role="agent", item=item)
         rc, out, err = call(_cli_mod.cmd_done, sac, "too-big")
         self.assertEqual(rc, 0, err)
         rs = out.strip()
@@ -572,7 +572,7 @@ class TestDoneBlock(unittest.TestCase):
         self.assertEqual(node.outcome, "rescoped")
 
     def test_block_writes_metadata_and_routes_human(self):
-        b = create_owned_step(self.store, "build: t", step="build", role="agent")
+        b = create_owned_step(self.store, "build: t", stage="build", role="agent")
         rc, out, err = call(
             _cli_mod.cmd_set, b, "--state", "waiting",
             "--needs", "confirm aud", "--reason", "audit was inconclusive",
@@ -584,7 +584,7 @@ class TestDoneBlock(unittest.TestCase):
         self.assertEqual(step.role, "human")
 
     def test_block_clears_assignee_and_surfaces_in_inbox(self):
-        b = create_owned_step(self.store, "build: t", step="build", role="agent")
+        b = create_owned_step(self.store, "build: t", stage="build", role="agent")
         self.store.claim_ready("agent")
         rc, out, err = call(
             _cli_mod.cmd_set, b, "--state", "waiting", "--needs", "rebase first",
@@ -597,7 +597,7 @@ class TestDoneBlock(unittest.TestCase):
 
     def test_done_note_forwards_to_next_task(self):
         item = self.store.create_item("st", "a description", workflow="lightcycle/spec-driven@%s" % _SHA)
-        b = self.store.create_step(step="build", role="agent", parent=item)
+        b = self.store.create_step(stage="build", role="agent", item=item)
         rc, out, err = call(_cli_mod.cmd_done, b, "done", "--note", "fix the coverage")
         self.assertEqual(rc, 0, err)
         new = out.strip()
@@ -611,7 +611,7 @@ class TestDoneBlock(unittest.TestCase):
 
     def test_done_without_note_unchanged(self):
         item = self.store.create_item("st", "a description", workflow="lightcycle/spec-driven@%s" % _SHA)
-        b = self.store.create_step(step="build", role="agent", parent=item)
+        b = self.store.create_step(stage="build", role="agent", item=item)
         rc, out, err = call(_cli_mod.cmd_done, b, "done")
         self.assertEqual(rc, 0, err)
         new = out.strip()
@@ -620,7 +620,7 @@ class TestDoneBlock(unittest.TestCase):
 
     def test_done_note_accepts_unquoted_multiword(self):
         item = self.store.create_item("st", "a description", workflow="lightcycle/spec-driven@%s" % _SHA)
-        b = self.store.create_step(step="build", role="agent", parent=item)
+        b = self.store.create_step(stage="build", role="agent", item=item)
         rc, out, err = call(_cli_mod.cmd_done, b, "done", "--note", "fix", "the", "flaky", "test")
         self.assertEqual(rc, 0, err)
         self.assertEqual(self.store.get_node(b).report, "fix the flaky test")
@@ -632,7 +632,7 @@ class TestSweep(unittest.TestCase):
         (Path(self.root) / "logs").mkdir(exist_ok=True)
 
     def test_sweep_releases_orphaned_claim(self):
-        b = create_owned_step(self.store, "build: t", step="build", role="agent")
+        b = create_owned_step(self.store, "build: t", stage="build", role="agent")
         self.store.claim_ready("agent")
         rc, out, err = call(_cli_mod.cmd_sweep)
         self.assertEqual(rc, 0, err)
@@ -843,7 +843,7 @@ class TestRun(unittest.TestCase):
         return (Path(self.root) / "logs" / "run.log").read_text()
 
     def test_run_once_spawns_for_ready_role(self):
-        create_owned_step(self.store, "build: t", step="build", role="agent")
+        create_owned_step(self.store, "build: t", stage="build", role="agent")
         rc, _, err = self._run_once()
         self.assertEqual(rc, 0, err)
         self.assertTrue(any(w["role"] == "agent" for w in self._workers()))
@@ -855,13 +855,13 @@ class TestRun(unittest.TestCase):
         self.assertIn("inflight=", run_log)
 
     def test_queue_lists_ready(self):
-        c = create_owned_step(self.store, "build: y", step="build", role="agent")
+        c = create_owned_step(self.store, "build: y", stage="build", role="agent")
         rc, out, _ = call(_cli_mod.cmd_queue, "5")
         self.assertIn(c, out)
 
     def test_run_skips_role_with_inflight_worker(self):
-        create_owned_step(self.store, "build: t", step="build", role="agent")
-        prior = create_owned_step(self.store, "audit: prior", step="material-audit", role="agent")
+        create_owned_step(self.store, "build: t", stage="build", role="agent")
+        prior = create_owned_step(self.store, "audit: prior", stage="material-audit", role="agent")
         self.store.complete_node(prior, "done")
         self._preset_worker(
             spawnid="boot",
@@ -879,16 +879,16 @@ class TestRun(unittest.TestCase):
 
     def test_run_pool_fills_up_to_max_agents(self):
         for i in range(7):
-            create_owned_step(self.store, "build: %d" % i, step="build", role="agent")
+            create_owned_step(self.store, "build: %d" % i, stage="build", role="agent")
         for i in range(3):
-            create_owned_step(self.store, "review: %d" % i, step="review", role="agent")
+            create_owned_step(self.store, "review: %d" % i, stage="review", role="agent")
         rc, _, err = self._run_once()
         self.assertEqual(rc, 0, err)
         self.assertEqual(len(self._workers()), 5)
 
     def test_run_pool_respects_max_agents_env(self):
         for i in range(5):
-            create_owned_step(self.store, "build: %d" % i, step="build", role="agent")
+            create_owned_step(self.store, "build: %d" % i, stage="build", role="agent")
         os.environ["LC_MAX_AGENTS"] = "2"
         self.addCleanup(lambda: os.environ.pop("LC_MAX_AGENTS", None))
         rc, _, err = self._run_once()
@@ -899,7 +899,7 @@ class TestRun(unittest.TestCase):
         return json.loads((Path(self.root) / "logs" / "breaker.json").read_text())
 
     def test_run_opens_breaker_on_a_rejected_rate_limit_event_and_stops_spawning(self):
-        create_owned_step(self.store, "build: t", step="build", role="agent")
+        create_owned_step(self.store, "build: t", stage="build", role="agent")
         log_path = Path(self.root) / "logs" / "worker-agent-dead.log"
         log_path.write_text(
             '{"type":"rate_limit_event","rate_limit_info":'
@@ -918,8 +918,8 @@ class TestRun(unittest.TestCase):
         self.assertEqual(len(self._workers()), 1)
 
     def test_run_pool_wide_spin_guard_trips_and_parks_both_never_claimed_steps(self):
-        step1 = create_owned_step(self.store, "build: a", step="build", role="agent")
-        step2 = create_owned_step(self.store, "build: b", step="build", role="agent")
+        step1 = create_owned_step(self.store, "build: a", stage="build", role="agent")
+        step2 = create_owned_step(self.store, "build: b", stage="build", role="agent")
         no_work_text = (
             "session started\n"
             "Failed to authenticate: OAuth session expired and could not be refreshed\n"
@@ -960,7 +960,7 @@ class TestRun(unittest.TestCase):
         self.assertEqual(len(parked), 2)
 
     def test_run_spawns_nothing_while_breaker_open_pre_reset(self):
-        create_owned_step(self.store, "build: t", step="build", role="agent")
+        create_owned_step(self.store, "build: t", stage="build", role="agent")
         (Path(self.root) / "logs" / "workers.json").write_text("[]")
         (Path(self.root) / "logs" / "breaker.json").write_text(
             json.dumps({"open": True, "reset_at": time.time() + 9999})
@@ -971,8 +971,8 @@ class TestRun(unittest.TestCase):
         self.assertIn("reason=breaker-open", self._run_log())
 
     def test_run_no_free_slots_logs_reason(self):
-        create_owned_step(self.store, "build: t", step="build", role="agent")
-        create_owned_step(self.store, "review: t", step="review", role="agent")
+        create_owned_step(self.store, "build: t", stage="build", role="agent")
+        create_owned_step(self.store, "review: t", stage="review", role="agent")
         claimed = self.store.claim_ready("agent", "boot")
         self._preset_worker(
             spawnid="boot",
@@ -1063,7 +1063,7 @@ class TestRun(unittest.TestCase):
         self.assertIn("no pool running", err)
 
     def test_lc_logs_run_returns_content_after_a_tick(self):
-        create_owned_step(self.store, "build: t", step="build", role="agent")
+        create_owned_step(self.store, "build: t", stage="build", role="agent")
         rc, _, err = self._run_once()
         self.assertEqual(rc, 0, err)
         rc, out, err = call(_cli_mod.cmd_logs, "run")
@@ -1071,7 +1071,7 @@ class TestRun(unittest.TestCase):
         self.assertTrue(out.strip())
 
     def test_run_once_builds_exactly_one_flow_service_and_worktree_service(self):
-        create_owned_step(self.store, "build: t", step="build", role="agent")
+        create_owned_step(self.store, "build: t", stage="build", role="agent")
         flow_calls = []
         worktree_calls = []
         orig_make_flow = _cli_mod.make_flow_service
@@ -1100,7 +1100,7 @@ class TestRun(unittest.TestCase):
         (_steps_dir(self.root) / "auditor.md").write_text(
             "---\nmodel: sonnet\nstep: audit\non_theme_close: true\n---\nstub auditor"
         )
-        tid = create_owned_step(self.store, "audit: theme", step="audit", role="agent")
+        tid = create_owned_step(self.store, "audit: theme", stage="audit", role="agent")
         self.store.complete_node(tid, "done")
         self.store._records[tid]["closed_at"] = "2020-01-01T00:00:00"
         with patch("time.sleep", side_effect=KeyboardInterrupt):
@@ -1115,7 +1115,7 @@ class TestRun(unittest.TestCase):
             "---\nmodel: sonnet\nstep: audit\non_theme_close: true\n---\nstub auditor"
         )
         write_workflow_from_steps(self.root)
-        tid = create_owned_step(self.store, "audit: theme", step="audit", role="agent")
+        tid = create_owned_step(self.store, "audit: theme", stage="audit", role="agent")
 
         orig_run_tick = _cli_mod._run_tick
         calls = {"n": 0}
@@ -1218,7 +1218,7 @@ class TestRunSingletonLock(unittest.TestCase):
         dead = subprocess.Popen(["true"])
         dead.wait()
         self._lock_path().write_text(str(dead.pid))
-        create_owned_step(self.store, "build: t", step="build", role="agent")
+        create_owned_step(self.store, "build: t", stage="build", role="agent")
         rc, _, err = self._run_once()
         self.assertEqual(rc, 0, err)
         workers = json.loads((Path(self.root) / "logs" / "workers.json").read_text())
@@ -1612,7 +1612,7 @@ class TestModelV2(unittest.TestCase):
     def test_task_exposes_type_parent_and_parent_artifacts(self):
         item = self.store.create_item("item s", "a description", workflow="lightcycle/spec-driven")
         self.store.update_metadata(item, {"artifacts": [{"type": "spec", "value": "specs/X.md"}]})
-        step = self.store.create_step(step="build", role="agent", parent=item)
+        step = self.store.create_step(stage="build", role="agent", item=item)
         rc, out, _ = call(_cli_mod.cmd_show, step)
         v = json.loads(out)
         self.assertIn("item", v)
@@ -1796,7 +1796,7 @@ class TestFileBlockedBy(unittest.TestCase):
         _fake_setUp(self, steps=True)
 
     def test_blocked_by_creates_dependency_on_first_task(self):
-        gate = create_owned_step(self.store, "review-plan: foo", step="review-plan", role="human")
+        gate = create_owned_step(self.store, "review-plan: foo", stage="review-plan", role="human")
         rc, out, err = call(
             _file_compat, "specs/X.md", "--step", "build", "--workflow", "lightcycle/spec-driven", "--blocked-by", gate
         )
@@ -1807,7 +1807,7 @@ class TestFileBlockedBy(unittest.TestCase):
         self.assertIn(gate, self.store._deps.get(node_id, set()))
 
     def test_blocked_task_not_claimable_until_gate_closes(self):
-        gate = create_owned_step(self.store, "review-plan: foo", step="review-plan", role="human")
+        gate = create_owned_step(self.store, "review-plan: foo", stage="review-plan", role="human")
         call(_file_compat, "specs/X.md", "--step", "build", "--workflow", "lightcycle/spec-driven", "--blocked-by", gate)
         rc, out, _ = call(_cli_mod.cmd_claim, "agent")
         self.assertEqual(out.strip(), "")
@@ -1995,7 +1995,7 @@ class TestArtifactContracts(unittest.TestCase):
 
     def test_claim_escalates_when_required_input_missing(self):
         item = self.store.create_item("i", "a description", workflow="lightcycle/spec-driven")
-        b = self.store.create_step(step="build", role="agent", parent=item)
+        b = self.store.create_step(stage="build", role="agent", item=item)
         rc, out, err = call(_cli_mod.cmd_claim, "agent")
         self.assertEqual(rc, 0, err)
         self.assertEqual(out.strip(), "")
@@ -2221,7 +2221,7 @@ class TestContractsOptional(unittest.TestCase):
 
     def test_done_without_contract_needs_no_artifacts(self):
         item = self.store.create_item("st", "a description", workflow="lightcycle/spec-driven@%s" % _SHA)
-        b = self.store.create_step(step="build", role="agent", parent=item)
+        b = self.store.create_step(stage="build", role="agent", item=item)
         rc, out, err = call(_cli_mod.cmd_done, b, "done")
         self.assertEqual(rc, 0, err)
 
@@ -2347,7 +2347,7 @@ class TestSpecsWorkspaceWorktree(unittest.TestCase):
     def test_claim_creates_a_worktree_inside_the_specs_repo_not_the_project(self):
         item = self.store.create_item(
             "phase b1", "the settled design", workflow="lightcycle/spec-driven@%s" % _SHA)
-        self.store.create_step(step="spec-writer", role="agent", parent=item)
+        self.store.create_step(stage="spec-writer", role="agent", item=item)
 
         rc, out, err = call(_cli_mod.cmd_claim, "agent")
 
@@ -2385,7 +2385,7 @@ class TestWorktreeNoOrigin(unittest.TestCase):
         os.environ["LC_CONFIG"] = _ABSENT_CONFIG
 
     def test_claim_omits_workspace_without_origin(self):
-        create_owned_step(self.store, "build: t", step="build", role="agent")
+        create_owned_step(self.store, "build: t", stage="build", role="agent")
         _, out, _ = call(_cli_mod.cmd_claim, "agent")
         t = json.loads(out)
         self.assertEqual(t["state"], "running")
@@ -2544,7 +2544,7 @@ class TestUnblock(unittest.TestCase):
         _fake_setUp(self, steps=True)
 
     def test_unblock_returns_blocked_task_to_agent_role(self):
-        b = create_owned_step(self.store, "build: t", step="build", role="agent")
+        b = create_owned_step(self.store, "build: t", stage="build", role="agent")
         self.store.claim_ready("agent")
         call(
             _cli_mod.cmd_set, b, "--state", "waiting", "--needs", "rebase first",
@@ -2558,7 +2558,7 @@ class TestUnblock(unittest.TestCase):
         self.assertIsNone(t.claimed_by)
 
     def test_unblock_clears_needs_and_blocked_note(self):
-        b = create_owned_step(self.store, "build: t", step="build", role="agent")
+        b = create_owned_step(self.store, "build: t", stage="build", role="agent")
         self.store.claim_ready("agent")
         call(
             _cli_mod.cmd_set, b, "--state", "waiting", "--needs", "rebase first",
@@ -2578,7 +2578,7 @@ class TestUnblock(unittest.TestCase):
         (_steps_dir(self.root) / "ready-merge.md").write_text(
             "---\nstep: ready-merge\nroutes:\n  merged: cleanup\n---\n# ready-merge\n"
         )
-        b = create_owned_step(self.store, "ready-merge: t", step="ready-merge", role="human")
+        b = create_owned_step(self.store, "ready-merge: t", stage="ready-merge", role="human")
         rc, out, err = call(_cli_mod.cmd_set, b, "--state", "ready")
         self.assertEqual(rc, 1)
         self.assertIn("ready-merge", err)
@@ -2634,7 +2634,7 @@ class TestClose(unittest.TestCase):
 
     def test_close_item_closes_and_force_closes_its_open_steps(self):
         item = self.store.create_item("item s", "a description", workflow="lightcycle/spec-driven")
-        step = self.store.create_step(step="build", role="agent", parent=item)
+        step = self.store.create_step(stage="build", role="agent", item=item)
         rc, out, err = call(_cli_mod.cmd_done, item, "wontfix", "--disposition", "abandoned")
         self.assertEqual(rc, 0, err)
         self.assertEqual(self.store.get_node(item).state, "done")
@@ -2643,7 +2643,7 @@ class TestClose(unittest.TestCase):
 
     def test_close_item_attaches_no_retro_artifact(self):
         item = self.store.create_item("item s", "a description", workflow="lightcycle/spec-driven")
-        self.store.create_step(step="build", role="agent", parent=item)
+        self.store.create_step(stage="build", role="agent", item=item)
         claimed = self.store.claim_ready("agent")
         self.store.complete_node(claimed.id, "done")
         rc, out, err = call(_cli_mod.cmd_done, item, "done", "--disposition", "completed")
@@ -2969,8 +2969,8 @@ class TestInboxBacklog(unittest.TestCase):
     def test_inbox_shows_action_and_blocked_only(self):
         call(_cli_mod.cmd_new, "item", "--project", "app", "a seed", "--description", "a description")
         host = self.store.create_item("host", "a description", workflow="lightcycle/spec-driven")
-        self.store.create_step(step="ready-merge", role="human", parent=host)
-        self.store.create_step(step="build", role="human", parent=host)
+        self.store.create_step(stage="ready-merge", role="human", item=host)
+        self.store.create_step(stage="build", role="human", item=host)
         _, out, _ = call(_cli_mod.cmd_inbox)
         self.assertIn("[action]", out)
         self.assertIn("[blocked]", out)
@@ -2979,16 +2979,16 @@ class TestInboxBacklog(unittest.TestCase):
 
     def test_backlog_shows_todo_only(self):
         call(_cli_mod.cmd_new, "item", "--project", "app", "a seed", "--description", "a description")
-        create_owned_step(self.store, "merge: z", step="ready-merge", role="human")
+        create_owned_step(self.store, "merge: z", stage="ready-merge", role="human")
         _, out, _ = call(_cli_mod.cmd_backlog)
         self.assertNotIn("[todo]", out)
         self.assertIn("a seed", out)
         self.assertNotIn("[action]", out)
 
     def test_inbox_limit_n(self):
-        create_owned_step(self.store, "merge: p", step="ready-merge", role="human")
-        create_owned_step(self.store, "merge: q", step="ready-merge", role="human")
-        create_owned_step(self.store, "merge: r", step="ready-merge", role="human")
+        create_owned_step(self.store, "merge: p", stage="ready-merge", role="human")
+        create_owned_step(self.store, "merge: q", stage="ready-merge", role="human")
+        create_owned_step(self.store, "merge: r", stage="ready-merge", role="human")
         _, out, _ = call(_cli_mod.cmd_inbox, "1")
         self.assertEqual(len([l for l in out.splitlines() if l.strip()]), 1)
 
@@ -3018,7 +3018,7 @@ class TestInboxBacklog(unittest.TestCase):
 
     def test_inbox_shows_plan_doc_for_gate_task(self):
         item = self.store.create_item("a gate", "a description")
-        self.store.create_step(step="ready-merge", role="human", parent=item)
+        self.store.create_step(stage="ready-merge", role="human", item=item)
         self.store.add_artifact(item, "plan-doc", "/docs/plan.md")
         _, out, _ = call(_cli_mod.cmd_inbox)
         self.assertIn("plan:/docs/plan.md", out)
@@ -3033,7 +3033,7 @@ class TestReflect(unittest.TestCase):
         self.store.update_metadata(
             sid, {"artifacts": [{"type": "spec", "value": spec_path or "/tmp/no-spec.md"}]}
         )
-        tid = self.store.create_step(step="build", role="agent", parent=sid)
+        tid = self.store.create_step(stage="build", role="agent", item=sid)
         return sid, tid
 
     def test_reflect_stores_feedback_on_task(self):
@@ -3138,7 +3138,7 @@ class TestRetro(unittest.TestCase):
 
     def test_retro_shows_feedback(self):
         sid = self._item()
-        tid = self.store.create_step(step="build", role="agent", parent=sid)
+        tid = self.store.create_step(stage="build", role="agent", item=sid)
         call(_cli_mod.cmd_attach, tid, "feedback", "edge case coverage was thin")
         rc, out, err = call(_cli_mod.cmd_retro, sid)
         self.assertEqual(rc, 0, err)
@@ -3148,8 +3148,8 @@ class TestRetro(unittest.TestCase):
 
     def test_retro_signals_review_rounds(self):
         sid = self._item()
-        self.store.create_step(step="review", role="agent", parent=sid)
-        rtid = self.store.create_step(step="review", role="agent", parent=sid)
+        self.store.create_step(stage="review", role="agent", item=sid)
+        rtid = self.store.create_step(stage="review", role="agent", item=sid)
         self.store.complete_node(rtid, "rejected")
         rc, out, err = call(_cli_mod.cmd_retro, sid)
         self.assertEqual(rc, 0, err)
@@ -3157,7 +3157,7 @@ class TestRetro(unittest.TestCase):
 
     def test_retro_signals_conflict(self):
         sid = self._item()
-        pr_tid = self.store.create_step(step="open-pr", role="agent", parent=sid)
+        pr_tid = self.store.create_step(stage="open-pr", role="agent", item=sid)
         self.store.complete_node(pr_tid, "conflict-rebase")
         rc, out, err = call(_cli_mod.cmd_retro, sid)
         self.assertEqual(rc, 0, err)
@@ -3165,7 +3165,7 @@ class TestRetro(unittest.TestCase):
 
     def test_retro_shows_story_duration_for_claimed_and_closed_task(self):
         sid = self._item()
-        self.store.create_step(step="build", role="agent", parent=sid)
+        self.store.create_step(stage="build", role="agent", item=sid)
         claimed = self.store.claim_ready("agent")
         self.store.complete_node(claimed.id, "done")
         rc, out, err = call(_cli_mod.cmd_retro, sid)
@@ -3174,7 +3174,7 @@ class TestRetro(unittest.TestCase):
 
     def test_retro_shows_unknown_duration_when_task_never_claimed(self):
         sid = self._item()
-        tid = self.store.create_step(step="build", role="agent", parent=sid)
+        tid = self.store.create_step(stage="build", role="agent", item=sid)
         self.store.complete_node(tid, "done")
         rc, out, err = call(_cli_mod.cmd_retro, sid)
         self.assertEqual(rc, 0, err)
@@ -3184,13 +3184,13 @@ class TestRetro(unittest.TestCase):
         saga = self.store.create_item("saga work", "a description")
         self.store.complete_node(saga, "merged")
         self.store.add_artifact(saga, "repo", "saga")
-        k1 = self.store.create_step(step="build", role="agent", parent=saga)
+        k1 = self.store.create_step(stage="build", role="agent", item=saga)
         self.store.complete_node(k1, "done")
         call(_cli_mod.cmd_attach, k1, "feedback", "saga friction")
 
         orphan = self.store.create_item("orphan work", "a description")
         self.store.complete_node(orphan, "merged")
-        k2 = self.store.create_step(step="build", role="agent", parent=orphan)
+        k2 = self.store.create_step(stage="build", role="agent", item=orphan)
         self.store.complete_node(k2, "done")
         call(_cli_mod.cmd_attach, k2, "feedback", "orphan friction")
 
@@ -3279,7 +3279,7 @@ class TestWorklog(unittest.TestCase):
         self.assertNotIn("https://", out)
 
     def test_worklog_excludes_tasks(self):
-        create_owned_step(self.store, "build: t", step="build", role="agent")
+        create_owned_step(self.store, "build: t", stage="build", role="agent")
         rc, out, err = call(_cli_mod.cmd_worklog)
         self.assertEqual(rc, 0, err)
         self.assertIn("no items", out)
@@ -3303,7 +3303,7 @@ class TestCadenceStepDTO(unittest.TestCase):
         _fake_setUp(self)
 
     def test_show_cadence_task_includes_since(self):
-        tid = create_owned_step(self.store, "trend: window", step="audit", role="agent")
+        tid = create_owned_step(self.store, "trend: window", stage="audit", role="agent")
         self.store.update_metadata(tid, {"since": "2025-12-01", "fired_at": "2026-01-01"})
         rc, out, err = call(_cli_mod.cmd_show, tid)
         self.assertEqual(rc, 0, err)
@@ -3311,7 +3311,7 @@ class TestCadenceStepDTO(unittest.TestCase):
         self.assertEqual(d["fired_at"], "2026-01-01")
 
     def test_claim_cadence_task_includes_since(self):
-        tid = create_owned_step(self.store, "trend: window", step="audit", role="agent")
+        tid = create_owned_step(self.store, "trend: window", stage="audit", role="agent")
         self.store.update_metadata(tid, {"since": "2025-12-01", "fired_at": "2026-01-01"})
         rc, out, err = call(_cli_mod.cmd_claim, "agent")
         self.assertEqual(rc, 0, err)
@@ -3331,7 +3331,7 @@ class TestRunReadSurface(unittest.TestCase):
 
     def _item_with_a_run(self):
         item = self.store.create_item("an item", "a description")
-        step = self.store.create_step(step="build", role="agent", parent=item)
+        step = self.store.create_step(stage="build", role="agent", item=item)
         pid = self.store.open_pass(item)
         rid = self.store.open_run(item, pid, None)
         self.store.set_comments_handled_through(rid, "1500.0")
@@ -3362,7 +3362,7 @@ class TestShowSurfacesSessionId(unittest.TestCase):
 
     def test_show_surfaces_a_recorded_session_id(self):
         item = self.store.create_item("an item", "a description")
-        step = self.store.create_step(step="build", role="agent", parent=item)
+        step = self.store.create_step(stage="build", role="agent", item=item)
         self.store.add_artifact(step, "session-id", "sess-abc-123", internal=True)
         rc, out, err = call(_cli_mod.cmd_show, step)
         self.assertEqual(rc, 0, err)
@@ -3370,14 +3370,14 @@ class TestShowSurfacesSessionId(unittest.TestCase):
 
     def test_show_omits_session_id_when_none_recorded(self):
         item = self.store.create_item("an item", "a description")
-        step = self.store.create_step(step="build", role="agent", parent=item)
+        step = self.store.create_step(stage="build", role="agent", item=item)
         rc, out, err = call(_cli_mod.cmd_show, step)
         self.assertEqual(rc, 0, err)
         self.assertNotIn("session_id", json.loads(out))
 
     def test_show_on_an_item_never_surfaces_session_id(self):
         item = self.store.create_item("an item", "a description")
-        self.store.create_step(step="build", role="agent", parent=item)
+        self.store.create_step(stage="build", role="agent", item=item)
         self.store.add_artifact(item, "session-id", "sess-on-item", internal=True)
         rc, out, err = call(_cli_mod.cmd_show, item)
         self.assertEqual(rc, 0, err)
@@ -3385,7 +3385,7 @@ class TestShowSurfacesSessionId(unittest.TestCase):
 
     def test_replace_artifact_overwrites_the_prior_session_id(self):
         item = self.store.create_item("an item", "a description")
-        step = self.store.create_step(step="build", role="agent", parent=item)
+        step = self.store.create_step(stage="build", role="agent", item=item)
         self.store.add_artifact(step, "session-id", "sess-old", internal=True)
         self.store.replace_artifact(step, "session-id", "sess-new", internal=True)
         rc, out, err = call(_cli_mod.cmd_show, step)
@@ -3394,7 +3394,7 @@ class TestShowSurfacesSessionId(unittest.TestCase):
 
     def test_claim_also_surfaces_a_prior_session_id(self):
         item = self.store.create_item("an item", "a description")
-        step = self.store.create_step(step="build", role="agent", parent=item)
+        step = self.store.create_step(stage="build", role="agent", item=item)
         self.store.add_artifact(step, "session-id", "sess-prior", internal=True)
         rc, out, err = call(_cli_mod.cmd_claim, "agent")
         self.assertEqual(rc, 0, err)
@@ -3407,7 +3407,7 @@ class TestShowSurfacesGuidanceRecord(unittest.TestCase):
 
     def _step(self):
         item = self.store.create_item("an item", "a description")
-        return item, self.store.create_step(step="build", role="agent", parent=item)
+        return item, self.store.create_step(stage="build", role="agent", item=item)
 
     def test_show_surfaces_delivered_and_skipped_ids_as_lists(self):
         _, step = self._step()
@@ -3482,7 +3482,7 @@ class TestShowAndClaimAgreeOnSharedFields(unittest.TestCase):
 
     def test_claim_then_show_agree_on_every_shared_key(self):
         item = self.store.create_item("st", "a description", workflow="lightcycle/spec-driven@%s" % _SHA)
-        self.store.create_step(step="build", role="agent", parent=item)
+        self.store.create_step(stage="build", role="agent", item=item)
         _, claim_out, err = call(_cli_mod.cmd_claim, "agent")
         self.assertEqual(err, "")
         claimed = json.loads(claim_out)
@@ -3504,7 +3504,7 @@ class TestNodeDTOReadSurface(unittest.TestCase):
 
     def _make_task(self):
         item = self.store.create_item("an item", "a description")
-        tid = self.store.create_step(step="build", role="agent", parent=item)
+        tid = self.store.create_step(stage="build", role="agent", item=item)
         self.store.update_metadata(tid, {"reason": "oops", "needs": "decide"})
         return tid
 
@@ -3577,7 +3577,7 @@ class TestAdmittedCommentsSurfaceOnClaim(unittest.TestCase):
 
     def test_the_admitted_comments_artifact_appears_in_claim_output(self):
         item = self.store.create_item("an item", "a description")
-        tid = self.store.create_step(step="handle-feedback", role="agent", parent=item)
+        tid = self.store.create_step(stage="handle-feedback", role="agent", item=item)
         self.store.add_artifact(
             tid, "admitted-comments", "inline:11\nmention:12", internal=True)
         rc, out, err = call(_cli_mod.cmd_claim, "agent")
@@ -3603,7 +3603,7 @@ class TestTrustedAuthorsSurfaceOnClaim(unittest.TestCase):
         rid = self.store.open_run(self.item, self.pid, "code")
         if pr:
             self.store.set_pr(rid, pr)
-        self.store.create_step(step="code-await-merge", role="agent", parent=self.item)
+        self.store.create_step(stage="code-await-merge", role="agent", item=self.item)
         rc, out, err = call(_cli_mod.cmd_claim, "agent")
         self.assertEqual(rc, 0, err)
         return [a["value"] for a in json.loads(out)["artifacts"] if a["type"] == "trusted-authors"]
@@ -3632,7 +3632,7 @@ class TestResumeFieldsSurfaceOnShow(unittest.TestCase):
         _fake_setUp(self)
 
     def test_show_surfaces_the_park(self):
-        tid = create_owned_step(self.store, "build: t", step="build", role="human")
+        tid = create_owned_step(self.store, "build: t", stage="build", role="human")
         self.store.update_metadata(tid, {"reason": "oops", "tried": "a,b", "needs": "decide"})
         rc, out, err = call(_cli_mod.cmd_show, tid)
         self.assertEqual(rc, 0, err)
@@ -3647,19 +3647,19 @@ class TestWorkflowFieldNeverGoesMissing(unittest.TestCase):
         _fake_setUp(self)
 
     def test_show_includes_workflow_key_when_unset(self):
-        tid = create_owned_step(self.store, "build: t", step="build", role="agent")
+        tid = create_owned_step(self.store, "build: t", stage="build", role="agent")
         rc, out, err = call(_cli_mod.cmd_show, tid)
         self.assertEqual(rc, 0, err)
         self.assertIn("workflow", json.loads(out))
 
     def test_claim_includes_workflow_key_when_unset(self):
-        create_owned_step(self.store, "build: t", step="build", role="agent")
+        create_owned_step(self.store, "build: t", stage="build", role="agent")
         rc, out, err = call(_cli_mod.cmd_claim, "agent")
         self.assertEqual(rc, 0, err)
         self.assertIn("workflow", json.loads(out))
 
     def test_status_json_includes_workflow_key_when_unset(self):
-        create_owned_step(self.store, "build: t", step="build", role="agent")
+        create_owned_step(self.store, "build: t", stage="build", role="agent")
         rc, out, err = call(_cli_mod.cmd_status, "--json")
         self.assertEqual(rc, 0, err)
         lanes = json.loads(out)
@@ -3686,7 +3686,7 @@ class TestShowSurfacesWorkflowResolution(unittest.TestCase):
 
     def test_inherited_workflow_sources_to_the_item_not_the_step(self):
         item = self.store.create_item("item", "a description", workflow="%s@%s" % (_DEFAULT_WORKFLOW, _SHA))
-        step = self.store.create_step(step="build", role="agent", parent=item)
+        step = self.store.create_step(stage="build", role="agent", item=item)
         rc, out, err = call(_cli_mod.cmd_show, step)
         self.assertEqual(rc, 0, err)
         d = json.loads(out)
@@ -3705,7 +3705,7 @@ class TestShowSurfacesWorkflowResolution(unittest.TestCase):
 
     def test_broken_inherited_selector_reports_the_owner_and_the_error(self):
         item = self.store.create_item("item", "a description", workflow="ghost/whatever")
-        step = self.store.create_step(step="build", role="agent", parent=item)
+        step = self.store.create_step(stage="build", role="agent", item=item)
         rc, out, err = call(_cli_mod.cmd_show, step)
         self.assertEqual(rc, 0, err)
         d = json.loads(out)
@@ -3721,7 +3721,7 @@ class TestValidOutcomesOnTheReadSurface(unittest.TestCase):
     def _audit_step(self):
         batch = self.store.create_item("batch", "a description")
         self.store.label_add(batch, "retro-origin")
-        return self.store.create_step(step="audit", role="agent", parent=batch)
+        return self.store.create_step(stage="audit", role="agent", item=batch)
 
     def test_show_lists_the_declared_outcomes_of_an_engine_step(self):
         rc, out, err = call(_cli_mod.cmd_show, self._audit_step())
@@ -3730,14 +3730,14 @@ class TestValidOutcomesOnTheReadSurface(unittest.TestCase):
 
     def test_show_lists_the_routed_outcomes_of_a_workflow_step(self):
         item = self.store.create_item("item", "a description", workflow="%s@%s" % (_DEFAULT_WORKFLOW, _SHA))
-        step = self.store.create_step(step="build", role="agent", parent=item)
+        step = self.store.create_step(stage="build", role="agent", item=item)
         rc, out, err = call(_cli_mod.cmd_show, step)
         self.assertEqual(rc, 0, err)
         self.assertIsInstance(json.loads(out)["valid_outcomes"], list)
 
     def test_show_lists_nothing_for_a_step_with_no_workflow(self):
         item = self.store.create_item("item", "a description")
-        step = self.store.create_step(step="build", role="agent", parent=item)
+        step = self.store.create_step(stage="build", role="agent", item=item)
         rc, out, err = call(_cli_mod.cmd_show, step)
         self.assertEqual(rc, 0, err)
         self.assertEqual(json.loads(out)["valid_outcomes"], [])
@@ -3774,7 +3774,7 @@ class TestShowSurfacesPhaseAndPr(unittest.TestCase):
     def test_step_in_code_phase_gets_its_own_phase_and_pr(self):
         self._open_run("spec", "https://example.com/pr/spec")
         self._open_run("code", "https://example.com/pr/code")
-        step = self.store.create_step(step="code-await-merge", role="human", parent=self.item
+        step = self.store.create_step(stage="code-await-merge", role="human", item=self.item
         )
         rc, out, err = call(_cli_mod.cmd_show, step)
         self.assertEqual(rc, 0, err)
@@ -3785,7 +3785,7 @@ class TestShowSurfacesPhaseAndPr(unittest.TestCase):
     def test_sibling_step_in_spec_phase_gets_the_spec_run(self):
         self._open_run("spec", "https://example.com/pr/spec")
         self._open_run("code", "https://example.com/pr/code")
-        step = self.store.create_step(step="spec-await-merge", role="human", parent=self.item
+        step = self.store.create_step(stage="spec-await-merge", role="human", item=self.item
         )
         rc, out, err = call(_cli_mod.cmd_show, step)
         self.assertEqual(rc, 0, err)
@@ -3795,7 +3795,7 @@ class TestShowSurfacesPhaseAndPr(unittest.TestCase):
 
     def test_step_with_no_workflow_anywhere_gets_neither_key(self):
         item = self.store.create_item("item", "a description")
-        step = self.store.create_step(step="code-await-merge", role="human", parent=item
+        step = self.store.create_step(stage="code-await-merge", role="human", item=item
         )
         rc, out, err = call(_cli_mod.cmd_show, step)
         self.assertEqual(rc, 0, err)
@@ -3805,7 +3805,7 @@ class TestShowSurfacesPhaseAndPr(unittest.TestCase):
 
     def test_phase_present_without_a_pr_when_the_run_has_none_set(self):
         self._open_run("code")
-        step = self.store.create_step(step="code-await-merge", role="human", parent=self.item
+        step = self.store.create_step(stage="code-await-merge", role="human", item=self.item
         )
         rc, out, err = call(_cli_mod.cmd_show, step)
         self.assertEqual(rc, 0, err)
@@ -3834,7 +3834,7 @@ class TestClaimConfigReadSurface(unittest.TestCase):
     def test_claim_surfaces_config_ci_wait(self):
         item = self.store.create_item("st", "a description", workflow="lightcycle/spec-driven@%s" % _SHA)
         self.store.add_artifact(item, "pr", "https://github.com/x/y/pull/1")
-        self.store.create_step(step="watch-pr", role="agent", parent=item)
+        self.store.create_step(stage="watch-pr", role="agent", item=item)
         rc, out, err = call(_cli_mod.cmd_claim, "agent")
         self.assertEqual(rc, 0, err)
         d = json.loads(out)

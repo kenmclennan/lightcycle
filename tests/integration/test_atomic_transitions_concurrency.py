@@ -36,12 +36,12 @@ def _store_for(root, spawn_id=None):
 
 
 def _successor_spec(step_id, item=None):
-    return NodeSpec(step="review", role="agent", parent=item, deps=(step_id,))
+    return NodeSpec(stage="review", role="agent", item=item, deps=(step_id,))
 
 
 def _seed_claimed(root, spawn_id):
     store = _store_for(root, spawn_id)
-    create_owned_step(store, "build: x", step="build", role="agent")
+    create_owned_step(store, "build: x", stage="build", role="agent")
     step_id = store.claim_ready("agent", spawn_id).id
     store.release()
     return step_id
@@ -74,7 +74,7 @@ class TestAtomicClaim(unittest.TestCase):
     def test_concurrent_claim_yields_exactly_one_winner(self):
         root = _make_root()
         seed = _store_for(root)
-        step_id = create_owned_step(seed, "build: x", step="build", role="agent")
+        step_id = create_owned_step(seed, "build: x", stage="build", role="agent")
         seed.release()
 
         n = 8

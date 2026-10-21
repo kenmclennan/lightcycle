@@ -83,7 +83,7 @@ class LifecycleCadenceUseCase:
             self._store.label_add(item_id, LIFECYCLE_ORIGIN_LABEL)
             self._store.label_add(item_id, label)
             step_id = self._store.create_step(
-                step=LIFECYCLE_FAILURE_STEP, role="human", parent=item_id)
+                stage=LIFECYCLE_FAILURE_STEP, role="human", item=item_id)
             if log_path:
                 self._store.set_log(step_id, log_path)
         return item_id

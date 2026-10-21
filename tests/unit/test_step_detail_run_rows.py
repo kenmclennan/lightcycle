@@ -41,7 +41,7 @@ def build(phase="code", detail=None, with_spec_run=False, pr=PR, branch="feat/x"
     rid = store.open_run(item, pid, phase)
     store.set_branch(rid, branch)
     store.set_pr(rid, pr)
-    step = store.create_step(step="s", role="agent", parent=item)
+    step = store.create_step(stage="s", role="agent", item=item)
     store.set_step_pass(step, pid)
     return store, item, step, FlowStub(phase, detail)
 
@@ -92,9 +92,9 @@ class TestLeadingRunRows(unittest.TestCase):
 
     def test_a_ci_judged_sha_on_the_previous_step_adds_the_checks_url(self):
         store, item, _step, flow = build()
-        prior = store.create_step(step="s", role="agent", parent=item)
+        prior = store.create_step(stage="s", role="agent", item=item)
         store.add_artifact(prior, "ci-judged-sha", "def456", internal=True)
-        step = store.create_step(step="s", role="agent", parent=item, previous=prior)
+        step = store.create_step(stage="s", role="agent", item=item, previous=prior)
         store.set_step_pass(step, store.current_pass(item).id)
         self.assertEqual(
             values(resolve(store, step, flow))["ci-checks"], PR + "/checks?sha=def456")
@@ -106,7 +106,7 @@ class TestLeadingRunRows(unittest.TestCase):
     def test_a_step_with_no_run_shows_what_it_showed_before(self):
         store = FakeStore()
         item = store.create_item("item", "desc", shortcode="OWN")
-        step = store.create_step(step="s", role="agent", parent=item)
+        step = store.create_step(stage="s", role="agent", item=item)
         flow = FlowStub(None, ("outcome", "report"))
         self.assertEqual(keys(resolve(store, step, flow)), ["outcome", "report"])
 

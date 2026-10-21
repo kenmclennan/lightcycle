@@ -533,7 +533,7 @@ def _items_store(current, backlog, done):
     for _ in range(current):
         number += 1
         item = store.item("LC-%d" % number, "Current item %d" % number, workflow=WORKFLOW)
-        store.step("LC-%d.1" % number, step="write-code", role="agent", parent=item)
+        store.step("LC-%d.1" % number, stage="write-code", role="agent", item=item)
         store.link_goal_item(gid, item)
         ids["current"].append("LC-%d" % number)
     for _ in range(backlog):

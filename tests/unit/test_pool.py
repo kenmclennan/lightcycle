@@ -122,7 +122,7 @@ class FilingHookCompletions:
 
     def execute(self, since):
         self.calls += 1
-        self.filed = create_owned_step(self._store, "filed", step="build", role="agent", id="filed.1")
+        self.filed = create_owned_step(self._store, "filed", stage="build", role="agent", id="filed.1")
         return NoOpHookCompletions().execute(since)
 
 
@@ -341,7 +341,7 @@ class TestResolveLog(unittest.TestCase):
 
     def test_resolves_log_from_disk_when_registry_entry_is_pruned(self):
         s = FakeStore()
-        step_id = create_owned_step(s, "build: x", step="build", role="agent")
+        step_id = create_owned_step(s, "build: x", stage="build", role="agent")
         s.assign(step_id, "sp1")
         root = "/grid"
         log_path = os.path.join(root, "logs", "worker-agent-sp1.log")
@@ -358,7 +358,7 @@ class TestResolveLog(unittest.TestCase):
 
     def test_step_never_claimed_by_a_spawned_worker_is_none(self):
         s = FakeStore()
-        step_id = create_owned_step(s, "build: x", step="build", role="agent")
+        step_id = create_owned_step(s, "build: x", stage="build", role="agent")
         resp = ResolveLogUseCase(s, FakeWorkers(), FakeFs(), FakeConfig()).execute(
             ResolveLogInput(target=step_id)
         )
@@ -396,10 +396,10 @@ _REAL_ACTIVITY_LOG = b'{"type":"result","subtype":"success"}'
 class TestSweep(unittest.TestCase):
     def test_reclaims_orphans_keeps_live_and_prunes(self):
         s = FakeStore()
-        orphan = create_owned_step(s, "o", step="build", role="agent")
+        orphan = create_owned_step(s, "o", stage="build", role="agent")
         s.update_state(orphan, "in_progress")
         s.assign(orphan, "dead-sp")
-        held = create_owned_step(s, "h", step="build", role="agent")
+        held = create_owned_step(s, "h", stage="build", role="agent")
         s.update_state(held, "in_progress")
         s.assign(held, "live-sp")
         workers = FakeWorkers(
@@ -415,7 +415,7 @@ class TestSweep(unittest.TestCase):
 
     def test_reclaims_no_step_when_the_registry_is_unreadable(self):
         s = FakeStore()
-        held = create_owned_step(s, "h", step="build", role="agent")
+        held = create_owned_step(s, "h", stage="build", role="agent")
         s.update_state(held, "in_progress")
         s.assign(held, "live-sp")
         workers = FakeWorkers(raise_workers_state=True)
@@ -425,7 +425,7 @@ class TestSweep(unittest.TestCase):
 
     def test_second_registry_read_failing_during_prune_still_reports_the_rest(self):
         s = FakeStore()
-        orphan = create_owned_step(s, "o", step="build", role="agent")
+        orphan = create_owned_step(s, "o", stage="build", role="agent")
         s.update_state(orphan, "in_progress")
         s.assign(orphan, "dead-sp")
         workers = FakeWorkers(
@@ -462,7 +462,7 @@ class TestSweep(unittest.TestCase):
 
     def test_does_not_kill_a_live_worker_on_a_claimed_task(self):
         s = FakeStore()
-        held = create_owned_step(s, "h", step="build", role="agent")
+        held = create_owned_step(s, "h", stage="build", role="agent")
         s.update_state(held, "in_progress")
         s.assign(held, "busy-sp")
         workers = FakeWorkers(
@@ -475,7 +475,7 @@ class TestSweep(unittest.TestCase):
 
     def test_kills_a_stale_worker_whose_step_was_reclaimed_by_its_own_replacement(self):
         s = FakeStore()
-        held = create_owned_step(s, "h", step="build", role="agent")
+        held = create_owned_step(s, "h", stage="build", role="agent")
         s.update_state(held, "in_progress")
         s.assign(held, "new-sp")
         workers = FakeWorkers(
@@ -494,7 +494,7 @@ class TestSweep(unittest.TestCase):
     def test_kills_the_worker_of_a_task_whose_story_was_closed_out_from_under_it(self):
         s = FakeStore()
         item = s.create_item("merged feature", "a description")
-        step = s.create_step(step="build", role="agent", parent=item)
+        step = s.create_step(stage="build", role="agent", item=item)
         s.update_state(step, "in_progress")
         s.assign(step, "live-sp")
         workers = FakeWorkers(
@@ -510,7 +510,7 @@ class TestSweep(unittest.TestCase):
 
     def test_booting_worker_suppresses_reclaim_of_uncovered_task(self):
         s = FakeStore()
-        t = create_owned_step(s, "t", step="build", role="agent")
+        t = create_owned_step(s, "t", stage="build", role="agent")
         s.update_state(t, "in_progress")
         workers = FakeWorkers(
             workers=[{"spawnid": "boot", "pid": 666, "step": None, "started": 950}],
@@ -522,7 +522,7 @@ class TestSweep(unittest.TestCase):
 
     def test_live_worker_mid_claim_past_the_boot_window_is_not_reclaimed(self):
         s = FakeStore()
-        t = create_owned_step(s, "t", step="build", role="agent")
+        t = create_owned_step(s, "t", stage="build", role="agent")
         s.update_state(t, "in_progress")
         s.assign(t, "worker-sp")
         workers = FakeWorkers(
@@ -535,7 +535,7 @@ class TestSweep(unittest.TestCase):
 
     def test_a_live_worker_covering_its_step_is_not_reclaimed(self):
         s = FakeStore()
-        held = create_owned_step(s, "h", step="build", role="agent")
+        held = create_owned_step(s, "h", stage="build", role="agent")
         s.update_state(held, "in_progress")
         s.assign(held, "other-sp")
         workers = FakeWorkers(
@@ -549,7 +549,7 @@ class TestSweep(unittest.TestCase):
     def test_reclaiming_a_dirty_worktree_commits_it_before_reclaim(self):
         s = FakeStore()
         item = s.create_item("feature", "a description")
-        step = s.create_step(step="build", role="agent", parent=item)
+        step = s.create_step(stage="build", role="agent", item=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkers()
         worktrees = FakeWorktrees(paths={item: "/worktrees/%s" % item})
@@ -567,8 +567,8 @@ class TestSweep(unittest.TestCase):
     def test_capture_resolves_the_worktree_from_the_reclaimed_step_not_another_open_one(self):
         s = FakeStore()
         item = s.create_item("feature", "a description")
-        s.create_step(step="spec-handle-feedback", role="agent", parent=item)
-        step = s.create_step(step="build", role="agent", parent=item)
+        s.create_step(stage="spec-handle-feedback", role="agent", item=item)
+        step = s.create_step(stage="build", role="agent", item=item)
         s.update_state(step, "in_progress")
         worktrees = FakeWorktrees()
 
@@ -581,7 +581,7 @@ class TestSweep(unittest.TestCase):
     def test_reclaiming_a_clean_worktree_does_not_commit(self):
         s = FakeStore()
         item = s.create_item("feature", "a description")
-        step = s.create_step(step="build", role="agent", parent=item)
+        step = s.create_step(stage="build", role="agent", item=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkers()
         worktrees = FakeWorktrees(paths={item: "/worktrees/%s" % item})
@@ -599,7 +599,7 @@ class TestSweep(unittest.TestCase):
     def test_reclaiming_a_non_git_worktree_does_not_commit(self):
         s = FakeStore()
         item = s.create_item("feature", "a description")
-        step = s.create_step(step="build", role="agent", parent=item)
+        step = s.create_step(stage="build", role="agent", item=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkers()
         worktrees = FakeWorktrees(paths={item: "/worktrees/%s" % item})
@@ -616,7 +616,7 @@ class TestSweep(unittest.TestCase):
 
     def test_reclaiming_with_noop_worktrees_and_git_is_still_a_noop(self):
         s = FakeStore()
-        step = create_owned_step(s, "t", step="build", role="agent")
+        step = create_owned_step(s, "t", stage="build", role="agent")
         s.update_state(step, "in_progress")
         workers = FakeWorkers()
 
@@ -628,7 +628,7 @@ class TestSweep(unittest.TestCase):
 
     def test_reclaiming_a_repo_less_step_does_not_consult_git(self):
         s = FakeStore()
-        step = create_owned_step(s, "build: t", step="build", role="agent")
+        step = create_owned_step(s, "build: t", stage="build", role="agent")
         s.update_state(step, "in_progress")
         workers = FakeWorkers()
         worktrees = FakeWorktrees(has_repo=False)
@@ -645,7 +645,7 @@ class TestSweep(unittest.TestCase):
 
     def test_a_repo_less_step_is_reported_as_not_checked_not_silently_clean(self):
         s = FakeStore()
-        step = create_owned_step(s, "build: t", step="build", role="agent")
+        step = create_owned_step(s, "build: t", stage="build", role="agent")
         s.update_state(step, "in_progress")
         workers = FakeWorkers()
         worktrees = FakeWorktrees(has_repo=False)
@@ -662,7 +662,7 @@ class TestSweep(unittest.TestCase):
     def test_a_checked_clean_repo_is_distinguishable_from_not_checked(self):
         s = FakeStore()
         item = s.create_item("feature", "a description")
-        step = s.create_step(step="build", role="agent", parent=item)
+        step = s.create_step(stage="build", role="agent", item=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkers()
         worktrees = FakeWorktrees(paths={item: "/worktrees/%s" % item})
@@ -679,7 +679,7 @@ class TestSweep(unittest.TestCase):
     def test_a_failed_commit_still_reclaims_and_is_reported(self):
         s = FakeStore()
         item = s.create_item("feature", "a description")
-        step = s.create_step(step="build", role="agent", parent=item)
+        step = s.create_step(stage="build", role="agent", item=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkers()
         worktrees = FakeWorktrees(paths={item: "/worktrees/%s" % item})
@@ -697,7 +697,7 @@ class TestSweep(unittest.TestCase):
     def test_an_unreadable_worktree_is_reported_as_a_capture_failure_not_a_silent_skip(self):
         s = FakeStore()
         item = s.create_item("feature", "a description")
-        step = s.create_step(step="build", role="agent", parent=item)
+        step = s.create_step(stage="build", role="agent", item=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkers()
         worktrees = FakeWorktrees(paths={item: "/worktrees/%s" % item})
@@ -727,7 +727,7 @@ class TestSweep(unittest.TestCase):
 
         s = OrderTrackingStore()
         item = s.create_item("feature", "a description")
-        step = s.create_step(step="build", role="agent", parent=item)
+        step = s.create_step(stage="build", role="agent", item=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkers()
         worktrees = FakeWorktrees(paths={item: "/worktrees/%s" % item})
@@ -741,7 +741,7 @@ class TestSweep(unittest.TestCase):
 
     def test_kills_a_stalled_worker_marks_checked_and_reclaims_its_step(self):
         s = FakeStore()
-        step = create_owned_step(s, "t", step="build", role="agent")
+        step = create_owned_step(s, "t", stage="build", role="agent")
         s.update_state(step, "in_progress")
         s.assign(step, "stalled-sp")
         workers = FakeWorkers(
@@ -759,7 +759,7 @@ class TestSweep(unittest.TestCase):
 
     def test_leaves_a_worker_alone_whose_log_grew_within_the_stall_threshold(self):
         s = FakeStore()
-        step = create_owned_step(s, "t", step="build", role="agent")
+        step = create_owned_step(s, "t", stage="build", role="agent")
         s.update_state(step, "in_progress")
         s.assign(step, "busy-sp")
         workers = FakeWorkers(
@@ -787,7 +787,7 @@ class TestSweep(unittest.TestCase):
 
     def test_a_stalled_worker_with_a_terminal_marker_in_its_log_is_not_killed_for_staleness(self):
         s = FakeStore()
-        step = create_owned_step(s, "t", step="build", role="agent")
+        step = create_owned_step(s, "t", stage="build", role="agent")
         s.update_state(step, "in_progress")
         s.assign(step, "closing-sp")
         workers = FakeWorkers(
@@ -815,7 +815,7 @@ class TestSweep(unittest.TestCase):
 
     def test_a_stalled_worker_with_no_mtime_available_is_left_alone_this_tick(self):
         s = FakeStore()
-        step = create_owned_step(s, "t", step="build", role="agent")
+        step = create_owned_step(s, "t", stage="build", role="agent")
         s.update_state(step, "in_progress")
         s.assign(step, "unreadable-sp")
         workers = FakeWorkers(
@@ -837,7 +837,7 @@ class TestSweep(unittest.TestCase):
 
     def test_a_stalled_worker_is_killed_even_when_fs_is_not_wired(self):
         s = FakeStore()
-        step = create_owned_step(s, "t", step="build", role="agent")
+        step = create_owned_step(s, "t", stage="build", role="agent")
         s.update_state(step, "in_progress")
         s.assign(step, "stalled-sp")
         workers = FakeWorkers(
@@ -854,7 +854,7 @@ class TestSweep(unittest.TestCase):
 
     def _dead_no_work_setup(self, spin_port, spawnid="dead-sp", pid=1):
         s = FakeStore()
-        step = create_owned_step(s, "t", step="build", role="agent")
+        step = create_owned_step(s, "t", stage="build", role="agent")
         s.update_state(step, "in_progress")
         s.assign(step, spawnid)
         log = "/l/%s.log" % spawnid
@@ -876,7 +876,7 @@ class TestSweep(unittest.TestCase):
     def test_the_spin_cap_th_consecutive_no_work_death_parks_instead_of_reclaiming(self):
         spin_port = FakeSpinPort()
         s = FakeStore()
-        step = create_owned_step(s, "t", step="build", role="agent")
+        step = create_owned_step(s, "t", stage="build", role="agent")
         for i in range(3):
             s.update_state(step, "in_progress")
             spawnid = "dead-sp-%d" % i
@@ -897,7 +897,7 @@ class TestSweep(unittest.TestCase):
     def test_real_session_activity_resets_the_no_work_streak(self):
         spin_port = FakeSpinPort()
         s = FakeStore()
-        step = create_owned_step(s, "t", step="build", role="agent")
+        step = create_owned_step(s, "t", stage="build", role="agent")
 
         for i in range(2):
             s.update_state(step, "in_progress")
@@ -942,7 +942,7 @@ class TestSweep(unittest.TestCase):
     def test_no_dead_worker_record_reclaims_normally_and_leaves_spin_state_untouched(self):
         spin_port = FakeSpinPort()
         s = FakeStore()
-        step = create_owned_step(s, "t", step="build", role="agent")
+        step = create_owned_step(s, "t", stage="build", role="agent")
         s.update_state(step, "in_progress")
         workers = FakeWorkers()
         result = make_sweep(s, workers, spin_port=spin_port, spin_cap=3).execute(
@@ -955,7 +955,7 @@ class TestSweep(unittest.TestCase):
     def test_a_stalled_alive_reclaim_never_touches_the_spin_state(self):
         spin_port = FakeSpinPort()
         s = FakeStore()
-        step = create_owned_step(s, "t", step="build", role="agent")
+        step = create_owned_step(s, "t", stage="build", role="agent")
         s.update_state(step, "in_progress")
         s.assign(step, "stalled-sp")
         workers = FakeWorkers(
@@ -990,8 +990,8 @@ class TestTick(unittest.TestCase):
 
     def test_spawns_for_ready_roles_when_slots_free(self):
         s = FakeStore()
-        create_owned_step(s, "b1", step="build", role="agent")
-        create_owned_step(s, "b2", step="build", role="agent")
+        create_owned_step(s, "b1", stage="build", role="agent")
+        create_owned_step(s, "b2", stage="build", role="agent")
         spawner = FakeSpawner()
         result = make_tick(s, FakeWorkers(), spawner, FakeConfig(max_agents=4)).execute(
             TickInput(now=1000.0)
@@ -1002,7 +1002,7 @@ class TestTick(unittest.TestCase):
 
     def test_no_spawn_when_no_slots(self):
         s = FakeStore()
-        create_owned_step(s, "b1", step="build", role="agent")
+        create_owned_step(s, "b1", stage="build", role="agent")
         spawner = FakeSpawner()
         result = make_tick(s, FakeWorkers(), spawner, FakeConfig(max_agents=0)).execute(
             TickInput(now=1000.0)
@@ -1013,7 +1013,7 @@ class TestTick(unittest.TestCase):
 
     def test_drain_spawns_nothing_and_reports_draining_with_no_free_slots(self):
         s = FakeStore()
-        create_owned_step(s, "b1", step="build", role="agent")
+        create_owned_step(s, "b1", stage="build", role="agent")
         spawner = FakeSpawner()
         result = make_tick(s, FakeWorkers(), spawner, FakeConfig(max_agents=4)).execute(
             TickInput(now=1000.0, drain=True)
@@ -1025,7 +1025,7 @@ class TestTick(unittest.TestCase):
 
     def test_not_draining_still_spawns_the_same_ready_work(self):
         s = FakeStore()
-        create_owned_step(s, "b1", step="build", role="agent")
+        create_owned_step(s, "b1", stage="build", role="agent")
         spawner = FakeSpawner()
         result = make_tick(s, FakeWorkers(), spawner, FakeConfig(max_agents=4)).execute(
             TickInput(now=1000.0)
@@ -1069,7 +1069,7 @@ class TestTick(unittest.TestCase):
             )
             s = FakeStore()
             for i in range(n):
-                create_owned_step(s, "s%d" % i, step="build", role="agent", id="s%d" % i)
+                create_owned_step(s, "s%d" % i, stage="build", role="agent", id="s%d" % i)
                 s.claim_ready("agent", "w%d" % i)
             result = make_tick(s, workers, FakeSpawner(), FakeConfig(max_agents=5)).execute(
                 TickInput(now=1000.0, drain=True)
@@ -1095,7 +1095,7 @@ class TestTick(unittest.TestCase):
 
     def test_breaker_open_pre_reset_spawns_nothing(self):
         s = FakeStore()
-        create_owned_step(s, "b1", step="build", role="agent")
+        create_owned_step(s, "b1", stage="build", role="agent")
         spawner = FakeSpawner()
         breaker_gate = FakeBreakerGate(Breaker().trip(2000.0))
         result = make_tick(
@@ -1114,7 +1114,7 @@ class TestTick(unittest.TestCase):
 
     def test_free_slots_positive_when_ready_role_already_has_an_inflight_worker(self):
         s = FakeStore()
-        create_owned_step(s, "b1", step="build", role="agent")
+        create_owned_step(s, "b1", stage="build", role="agent")
         workers = FakeWorkers(
             workers=[{"spawnid": "boot", "role": "agent", "pid": 1, "step": None, "started": 1000.0}],
             alive_pids={1},
@@ -1127,7 +1127,7 @@ class TestTick(unittest.TestCase):
 
     def test_no_spawn_when_the_registry_is_unreadable(self):
         s = FakeStore()
-        create_owned_step(s, "b1", step="build", role="agent")
+        create_owned_step(s, "b1", stage="build", role="agent")
         spawner = FakeSpawner()
         workers = FakeWorkers(raise_workers_state=True)
         backup_gate = FakeBackupGate(
@@ -1154,8 +1154,8 @@ class TestTick(unittest.TestCase):
 
     def test_memory_cap_narrows_slots_even_when_ready_queue_and_breaker_allow_more(self):
         s = FakeStore()
-        create_owned_step(s, "b1", step="build", role="agent")
-        create_owned_step(s, "b2", step="build", role="agent")
+        create_owned_step(s, "b1", stage="build", role="agent")
+        create_owned_step(s, "b2", stage="build", role="agent")
         spawner = FakeSpawner()
         memory_gate = FakeMemoryGate(MemoryGateResponse(cap=0, pool_share=0.9))
         result = make_tick(
@@ -1184,7 +1184,7 @@ class TestTick(unittest.TestCase):
 
     def test_a_failing_guidance_gate_does_not_stop_the_rest_of_the_tick(self):
         s = FakeStore()
-        create_owned_step(s, "b1", step="build", role="agent")
+        create_owned_step(s, "b1", stage="build", role="agent")
         spawner = FakeSpawner()
         gate = FakeGuidanceGate(raises=GitReadError("boom"))
         with contextlib.redirect_stderr(io.StringIO()):
@@ -1196,8 +1196,8 @@ class TestTick(unittest.TestCase):
 
     def test_breaker_half_open_spawns_exactly_one_probe(self):
         s = FakeStore()
-        create_owned_step(s, "b1", step="build", role="agent")
-        create_owned_step(s, "b2", step="build", role="agent")
+        create_owned_step(s, "b1", stage="build", role="agent")
+        create_owned_step(s, "b2", stage="build", role="agent")
         spawner = FakeSpawner()
         breaker_gate = FakeBreakerGate(Breaker().trip(1000.0))
         make_tick(
@@ -1207,8 +1207,8 @@ class TestTick(unittest.TestCase):
 
     def test_breaker_closed_spawns_normally(self):
         s = FakeStore()
-        create_owned_step(s, "b1", step="build", role="agent")
-        create_owned_step(s, "b2", step="build", role="agent")
+        create_owned_step(s, "b1", stage="build", role="agent")
+        create_owned_step(s, "b2", stage="build", role="agent")
         spawner = FakeSpawner()
         breaker_gate = FakeBreakerGate(Breaker())
         result = make_tick(
@@ -1219,9 +1219,9 @@ class TestTick(unittest.TestCase):
 
     def test_spin_open_caps_slots_at_one_even_with_more_free_slots(self):
         s = FakeStore()
-        create_owned_step(s, "b1", step="build", role="agent")
-        create_owned_step(s, "b2", step="build", role="agent")
-        create_owned_step(s, "b3", step="build", role="agent")
+        create_owned_step(s, "b1", stage="build", role="agent")
+        create_owned_step(s, "b2", stage="build", role="agent")
+        create_owned_step(s, "b3", stage="build", role="agent")
         spawner = FakeSpawner()
         breaker_gate = FakeBreakerGate(Breaker(), spin_open=True)
         result = make_tick(
@@ -1232,8 +1232,8 @@ class TestTick(unittest.TestCase):
 
     def test_spin_closed_does_not_limit_slots(self):
         s = FakeStore()
-        create_owned_step(s, "b1", step="build", role="agent")
-        create_owned_step(s, "b2", step="build", role="agent")
+        create_owned_step(s, "b1", stage="build", role="agent")
+        create_owned_step(s, "b2", stage="build", role="agent")
         spawner = FakeSpawner()
         breaker_gate = FakeBreakerGate(Breaker(), spin_open=False)
         result = make_tick(
@@ -1247,8 +1247,8 @@ class TestTick(unittest.TestCase):
         flow_svc = FlowService(
             FakeFs({"auditor": {"model": "sonnet", "step": "audit", "on_deploy_green": True}}), s
         )
-        tid = s.create_step(step="audit", role="agent",
-                            parent=s.create_item("i", "a description", workflow="wf"))
+        tid = s.create_step(stage="audit", role="agent",
+                            item=s.create_item("i", "a description", workflow="wf"))
         s.note(tid, "no finding")
         s.complete_node(tid, "done")
         s._records[tid]["closed_at"] = "2026-01-01T12:00:00"
@@ -1262,8 +1262,8 @@ class TestTick(unittest.TestCase):
         s = FakeStore()
         fs = FakeFs({"auditor": {"model": "sonnet", "step": "audit", "on_deploy_green": True}})
         flow_svc = FlowService(fs, s)
-        tid = s.create_step(step="audit", role="agent",
-                            parent=s.create_item("i", "a description", workflow="wf"))
+        tid = s.create_step(stage="audit", role="agent",
+                            item=s.create_item("i", "a description", workflow="wf"))
         s.note(tid, "no finding")
         s.complete_node(tid, "done")
         s._records[tid]["closed_at"] = "2026-01-01T12:00:00"
@@ -1325,7 +1325,7 @@ class TestTick(unittest.TestCase):
 
     def test_active_seconds_credited_for_covered_step_under_the_cap(self):
         s = FakeStore()
-        tid = create_owned_step(s, "b1", step="build", role="agent")
+        tid = create_owned_step(s, "b1", stage="build", role="agent")
         s.claim_ready("agent", "sp-1")
         workers = FakeWorkers(
             workers=[{"spawnid": "sp-1", "role": "agent", "pid": 1, "step": tid,
@@ -1339,7 +1339,7 @@ class TestTick(unittest.TestCase):
 
     def test_active_seconds_capped_on_a_large_gap(self):
         s = FakeStore()
-        tid = create_owned_step(s, "b1", step="build", role="agent")
+        tid = create_owned_step(s, "b1", stage="build", role="agent")
         s.claim_ready("agent", "sp-1")
         workers = FakeWorkers(
             workers=[{"spawnid": "sp-1", "role": "agent", "pid": 1, "step": tid,
@@ -1353,8 +1353,8 @@ class TestTick(unittest.TestCase):
 
     def test_active_seconds_credits_every_covered_step_the_same_delta(self):
         s = FakeStore()
-        tid_a = create_owned_step(s, "b1", step="build", role="agent")
-        tid_b = create_owned_step(s, "b2", step="build", role="agent")
+        tid_a = create_owned_step(s, "b1", stage="build", role="agent")
+        tid_b = create_owned_step(s, "b2", stage="build", role="agent")
         s.claim_ready("agent", "sp-1")
         s.claim_ready("agent", "sp-2")
         workers = FakeWorkers(
@@ -1372,7 +1372,7 @@ class TestTick(unittest.TestCase):
 
     def test_active_seconds_stays_none_without_a_live_worker(self):
         s = FakeStore()
-        tid = create_owned_step(s, "b1", step="build", role="agent")
+        tid = create_owned_step(s, "b1", stage="build", role="agent")
         s.claim_ready("agent")
         make_tick(s, FakeWorkers(), FakeSpawner(), FakeConfig(max_agents=4)).execute(
             TickInput(now=1005.0, since=1000.0)
@@ -1381,7 +1381,7 @@ class TestTick(unittest.TestCase):
 
     def test_active_seconds_untouched_when_since_is_none(self):
         s = FakeStore()
-        tid = create_owned_step(s, "b1", step="build", role="agent")
+        tid = create_owned_step(s, "b1", stage="build", role="agent")
         s.claim_ready("agent", "sp-1")
         workers = FakeWorkers(
             workers=[{"spawnid": "sp-1", "role": "agent", "pid": 1, "step": tid,
@@ -1395,7 +1395,7 @@ class TestTick(unittest.TestCase):
 
     def test_active_seconds_not_credited_when_delta_is_not_positive(self):
         s = FakeStore()
-        tid = create_owned_step(s, "b1", step="build", role="agent")
+        tid = create_owned_step(s, "b1", stage="build", role="agent")
         s.claim_ready("agent", "sp-1")
         workers = FakeWorkers(
             workers=[{"spawnid": "sp-1", "role": "agent", "pid": 1, "step": tid,
@@ -1410,7 +1410,7 @@ class TestTick(unittest.TestCase):
     def test_lc_start_tick_loop_surfaces_preserved_uncommitted_work_on_reclaim(self):
         s = FakeStore()
         item = s.create_item("feature", "a description")
-        step = s.create_step(step="build", role="agent", parent=item)
+        step = s.create_step(stage="build", role="agent", item=item)
         s.update_state(step, "in_progress")
         workers = FakeWorkers()
         worktrees = FakeWorktrees(paths={item: "/worktrees/%s" % item})

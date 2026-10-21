@@ -32,14 +32,14 @@ class TestCmdQueueTitleComposition(unittest.TestCase):
 
     def test_a_queued_step_with_a_resolvable_item_shows_stage_and_item_title(self):
         item = self.store.create_item("fix the thing", "a description")
-        self.store.create_step(step="build", role="agent", parent=item)
+        self.store.create_step(stage="build", role="agent", item=item)
         rc, out = call(cli.cmd_queue, "5")
         self.assertEqual(rc, 0)
         self.assertIn("build: fix the thing", out)
 
     def test_a_queued_step_whose_item_cannot_be_resolved_falls_back_to_the_bare_stage(self):
         item = self.store.create_item("temporary", "a description")
-        self.store.create_step(step="build", role="agent", parent=item)
+        self.store.create_step(stage="build", role="agent", item=item)
         real_get_node = self.store.get_node
 
         def _unresolvable(tid):

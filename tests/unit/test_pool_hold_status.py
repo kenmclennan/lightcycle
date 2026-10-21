@@ -1,6 +1,7 @@
 import unittest
 
 from lightcycle.application.pool.pool_hold_status import PoolHoldStatusUseCase
+from lightcycle.domain.pool import MemoryGateState
 from lightcycle.ports.memory_gate_status import MemoryGateStatusPort
 from lightcycle.ports.workers import RegistryUnreadable
 from tests.support.fake_workers import FakeWorkers
@@ -8,13 +9,13 @@ from tests.support.fake_workers import FakeWorkers
 
 class FakeMemoryGateStatus(MemoryGateStatusPort):
     def __init__(self, state=None):
-        self._state = state if state is not None else {}
+        self._state = state
 
     def load(self):
-        return dict(self._state)
+        return self._state
 
     def save(self, state):
-        self._state = dict(state)
+        self._state = state
 
 
 class FakeConfig:
@@ -33,7 +34,7 @@ class UnreadableWorkers(FakeWorkers):
 class TestPoolHoldStatusUseCase(unittest.TestCase):
     def test_unreadable_registry_reports_not_holding(self):
         result = PoolHoldStatusUseCase(
-            FakeMemoryGateStatus({"cap": 0}), UnreadableWorkers(), FakeConfig(),
+            FakeMemoryGateStatus(MemoryGateState(cap=0)), UnreadableWorkers(), FakeConfig(),
         ).execute(lambda pid, started=None: True)
 
         self.assertFalse(result.holding)
@@ -45,7 +46,7 @@ class TestPoolHoldStatusUseCase(unittest.TestCase):
             alive_pids=(1,),
         )
         result = PoolHoldStatusUseCase(
-            FakeMemoryGateStatus({"cap": 0}), workers, FakeConfig(),
+            FakeMemoryGateStatus(MemoryGateState(cap=0)), workers, FakeConfig(),
         ).execute(workers.pid_alive)
 
         self.assertTrue(result.holding)
@@ -56,7 +57,7 @@ class TestPoolHoldStatusUseCase(unittest.TestCase):
             alive_pids=(1,),
         )
         result = PoolHoldStatusUseCase(
-            FakeMemoryGateStatus({"cap": 1}), workers, FakeConfig(),
+            FakeMemoryGateStatus(MemoryGateState(cap=1)), workers, FakeConfig(),
         ).execute(workers.pid_alive)
 
         self.assertFalse(result.holding)
@@ -67,7 +68,7 @@ class TestPoolHoldStatusUseCase(unittest.TestCase):
             alive_pids=(1,),
         )
         result = PoolHoldStatusUseCase(
-            FakeMemoryGateStatus({"cap": None}), workers, FakeConfig(),
+            FakeMemoryGateStatus(MemoryGateState(cap=None)), workers, FakeConfig(),
         ).execute(workers.pid_alive)
 
         self.assertFalse(result.holding)
@@ -92,7 +93,7 @@ class TestPoolHoldStatusUseCase(unittest.TestCase):
             alive_pids=(1, 2),
         )
         result = PoolHoldStatusUseCase(
-            FakeMemoryGateStatus({"cap": 0}), workers, FakeConfig(max_agents=9),
+            FakeMemoryGateStatus(MemoryGateState(cap=0)), workers, FakeConfig(max_agents=9),
         ).execute(workers.pid_alive)
 
         self.assertEqual(result.alive, 2)

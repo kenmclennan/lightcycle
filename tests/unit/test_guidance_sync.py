@@ -1,6 +1,7 @@
 import unittest
 
 from lightcycle.application.pool.guidance_sync import GuidanceSyncUseCase
+from lightcycle.domain.pool import GuidanceSyncState
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_git import FakeGit
 from tests.support.fake_store import FakeStore
@@ -34,7 +35,8 @@ class TestGuidanceSync(unittest.TestCase):
         use.execute(1000.0)
         self.assertEqual(len(_fetches(git)), 1)
         self.assertEqual(
-            status.load(), {"ok": True, "at": 1000.0, "detail": "", "ref": "origin/main"})
+            status.load(),
+            GuidanceSyncState(ok=True, at=1000.0, detail="", ref="origin/main"))
 
     def test_failure_records_the_detail_and_does_not_raise(self):
         git = FakeGit(origin="git@x:kb.git", ref="origin/main", fetch_ok=False,
@@ -44,28 +46,28 @@ class TestGuidanceSync(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertEqual(
             status.load(),
-            {"ok": False, "at": 1000.0, "detail": "could not resolve host", "ref": None})
+            GuidanceSyncState(ok=False, at=1000.0, detail="could not resolve host", ref=None))
 
     def test_no_registered_project_makes_no_fetch_and_records_nothing(self):
         use, git, status = _use(registered=False)
         use.execute(1000.0)
         self.assertEqual(_fetches(git), [])
-        self.assertEqual(status.load(), {})
+        self.assertIsNone(status.load())
 
     def test_missing_directory_makes_no_fetch_and_records_nothing(self):
         use, git, status = _use(exists=False)
         use.execute(1000.0)
         self.assertEqual(_fetches(git), [])
-        self.assertEqual(status.load(), {})
+        self.assertIsNone(status.load())
 
     def test_no_origin_remote_makes_no_fetch_and_records_nothing(self):
         use, git, status = _use(git=FakeGit(origin=None, ref="main"))
         use.execute(1000.0)
         self.assertEqual(_fetches(git), [])
-        self.assertEqual(status.load(), {})
+        self.assertIsNone(status.load())
 
     def test_inside_the_interval_makes_no_fetch_and_leaves_the_record(self):
-        record = {"ok": True, "at": 1000.0, "detail": "", "ref": "origin/main"}
+        record = GuidanceSyncState(ok=True, at=1000.0, detail="", ref="origin/main")
         use, git, status = _use(status=FakeGuidanceSyncStatus(record))
         use.execute(1240.0)
         self.assertEqual(_fetches(git), [])
@@ -73,13 +75,13 @@ class TestGuidanceSync(unittest.TestCase):
 
     def test_exactly_at_the_interval_fetches(self):
         use, git, status = _use(status=FakeGuidanceSyncStatus(
-            {"ok": True, "at": 1000.0, "detail": "", "ref": "origin/main"}))
+            GuidanceSyncState(ok=True, at=1000.0, detail="", ref="origin/main")))
         use.execute(1300.0)
         self.assertEqual(len(_fetches(git)), 1)
-        self.assertEqual(status.load()["at"], 1300.0)
+        self.assertEqual(status.load().at, 1300.0)
 
     def test_a_failed_attempt_waits_the_full_interval(self):
-        failed = {"ok": False, "at": 1000.0, "detail": "boom", "ref": None}
+        failed = GuidanceSyncState(ok=False, at=1000.0, detail="boom", ref=None)
         use, git, status = _use(status=FakeGuidanceSyncStatus(failed))
         use.execute(1100.0)
         self.assertEqual(_fetches(git), [])

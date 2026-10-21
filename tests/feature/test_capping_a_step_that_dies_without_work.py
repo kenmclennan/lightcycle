@@ -124,7 +124,7 @@ def _spin_cap(ctx, cap):
 
 @given("a worker has claimed a step")
 def _claimed(ctx):
-    step = create_owned_step(ctx["store"], "build: t", step="build", role="agent")
+    step = create_owned_step(ctx["store"], "build: t", stage="build", role="agent")
     ctx["store"].update_state(step, "in_progress")
     ctx["store"].assign(step, "sp-1")
     ctx["step"] = step
@@ -193,7 +193,7 @@ def _prior_streak_no_work(ctx, prior_count):
 
 @given("a step was never claimed")
 def _never_claimed(ctx):
-    step = create_owned_step(ctx["store"], "build: t", step="build", role="agent")
+    step = create_owned_step(ctx["store"], "build: t", stage="build", role="agent")
     ctx["step"] = step
     ctx["pre_claim_spawn_counter"] = 0
 
@@ -259,7 +259,7 @@ def _past_boot(ctx):
 
 @given("a step was parked after its worker died 3 times in a row with no work")
 def _step_parked(ctx):
-    step = create_owned_step(ctx["store"], "build: t", step="build", role="agent")
+    step = create_owned_step(ctx["store"], "build: t", stage="build", role="agent")
     ctx["step"] = step
     entry = StepSpin(count=3, since=ctx["now"] - 100, last_line="prior")
     ctx["spin_port"].update(

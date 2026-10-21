@@ -136,7 +136,7 @@ def _row_lines(ctx, row_id):
 def _an_item(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step(step="write-code", role="agent", parent=item)
+    step = store.create_step(stage="write-code", role="agent", item=item)
     ctx["item_id"] = item
     ctx["step_id"] = step
     ctx["node_id"] = item
@@ -147,7 +147,7 @@ def _an_item(ctx):
 def _hierarchy_item_step(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step(step="write-code", role="agent", parent=item)
+    step = store.create_step(stage="write-code", role="agent", item=item)
     ctx["item_id"] = item
     ctx["step_id"] = step
     _launch(ctx, store, item)
@@ -157,7 +157,7 @@ def _hierarchy_item_step(ctx):
 def _a_node_in_the_hierarchy(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step(step="write-code", role="agent", parent=item)
+    step = store.create_step(stage="write-code", role="agent", item=item)
     store.claim_ready("agent")
     ctx["item_id"] = item
     ctx["step_id"] = step
@@ -168,7 +168,7 @@ def _a_node_in_the_hierarchy(ctx):
 def _hierarchy_tab_is_open(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step(step="build", role="agent", parent=item)
+    step = store.create_step(stage="build", role="agent", item=item)
     ctx["item_id"] = item
     ctx["step_id"] = step
     _launch(ctx, store, item)
@@ -178,7 +178,7 @@ def _hierarchy_tab_is_open(ctx):
 def _item_with_active_current_step_highlighted(ctx):
     store = FakeStore()
     node_id = store.create_item("Item", "a description")
-    step = store.create_step(step="build", role="agent", parent=node_id)
+    step = store.create_step(stage="build", role="agent", item=node_id)
     store.claim_ready("agent")
     ctx["node_id"] = node_id
     ctx["step_id"] = step
@@ -190,8 +190,8 @@ def _item_with_active_current_step_highlighted(ctx):
 def _item_with_all_steps_done_highlighted(ctx):
     store = FakeStore()
     node_id = store.create_item("Item", "a description")
-    first = store.create_step(step="build", role="agent", parent=node_id)
-    last = store.create_step(step="write-code", role="agent", parent=node_id)
+    first = store.create_step(stage="build", role="agent", item=node_id)
+    last = store.create_step(stage="write-code", role="agent", item=node_id)
     store.complete_node(first, "done")
     store.complete_node(last, "done")
     ctx["node_id"] = node_id
@@ -204,7 +204,7 @@ def _item_with_all_steps_done_highlighted(ctx):
 def _hierarchy_open_queued_step(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step(step="build", role="agent", parent=item)
+    step = store.create_step(stage="build", role="agent", item=item)
     ctx["item_id"] = item
     ctx["step_id"] = step
     _launch(ctx, store, item)
@@ -214,7 +214,7 @@ def _hierarchy_open_queued_step(ctx):
 def _hierarchy_open_active_step(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step(step="build", role="agent", parent=item)
+    step = store.create_step(stage="build", role="agent", item=item)
     store.claim_ready("agent")
     ctx["item_id"] = item
     ctx["step_id"] = step
@@ -225,7 +225,7 @@ def _hierarchy_open_active_step(ctx):
 def _hierarchy_open_engine_step(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step(step="poll-ci", role="engine", parent=item)
+    step = store.create_step(stage="poll-ci", role="engine", item=item)
     ctx["item_id"] = item
     ctx["step_id"] = step
     _launch(ctx, store, item, pool_running=True)
@@ -235,7 +235,7 @@ def _hierarchy_open_engine_step(ctx):
 def _human_step_that_is_done(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step(step="await-merge", role="human", parent=item)
+    step = store.create_step(stage="await-merge", role="human", item=item)
     store.complete_node(step, "done")
     ctx["step_id"] = step
     _launch(ctx, store, item)
@@ -244,9 +244,9 @@ def _human_step_that_is_done(ctx):
 @given("a human step made queued by an unresolved dependency")
 def _human_step_made_queued_by_dependency(ctx):
     store = FakeStore()
-    blocker = create_owned_step(store, "blocker", step="build", role="agent")
+    blocker = create_owned_step(store, "blocker", stage="build", role="agent")
     item = store.create_item("Item", "a description")
-    step = store.create_step(step="await-merge", role="human", parent=item, deps=[blocker])
+    step = store.create_step(stage="await-merge", role="human", item=item, deps=[blocker])
     ctx["step_id"] = step
     _launch(ctx, store, item)
 
@@ -254,11 +254,11 @@ def _human_step_made_queued_by_dependency(ctx):
 @given("a done agent step and a queued agent step, blocked on a dependency")
 def _done_and_queued_agent_steps(ctx):
     store = FakeStore()
-    blocker = create_owned_step(store, "blocker", step="build", role="agent")
+    blocker = create_owned_step(store, "blocker", stage="build", role="agent")
     item = store.create_item("Item", "a description")
-    done_step = store.create_step(step="build", role="agent", parent=item)
+    done_step = store.create_step(stage="build", role="agent", item=item)
     store.complete_node(done_step, "done")
-    queued_step = store.create_step(step="build", role="agent", parent=item, deps=[blocker])
+    queued_step = store.create_step(stage="build", role="agent", item=item, deps=[blocker])
     ctx["done_step_id"] = done_step
     ctx["queued_step_id"] = queued_step
     _launch(ctx, store, item)
@@ -269,7 +269,7 @@ def _step_title_is_step_name_and_body(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
     step = store.create_step(
-        step="implement-features", role="agent", parent=item)
+        stage="implement-features", role="agent", item=item)
     ctx["step_id"] = step
     _launch(ctx, store, item)
 
@@ -280,7 +280,7 @@ def _step_title_is_step_name_and_body(ctx):
 def _step_at_stage_with_display(ctx, stage, phrase):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step(step=stage, role="agent", parent=item)
+    step = store.create_step(stage=stage, role="agent", item=item)
     ctx["step_id"] = step
     ctx["fs"] = FakeFs(metas={
         "coder": {"model": "sonnet", "step": stage, "display": phrase},
@@ -295,7 +295,7 @@ def _step_at_stage_with_display(ctx, stage, phrase):
 def _step_at_stage_with_phase_and_display(ctx, stage, phase, phrase):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step(step=stage, role="agent", parent=item)
+    step = store.create_step(stage=stage, role="agent", item=item)
     ctx["step_id"] = step
     ctx["fs"] = FakeFs(metas={
         "coder": {"model": "sonnet", "step": stage, "display": phrase, "phase": phase},
@@ -308,7 +308,7 @@ def _step_in_first_pass(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
     pid = store.open_pass(item)
-    step = store.create_step(step="build", role="agent", parent=item)
+    step = store.create_step(stage="build", role="agent", item=item)
     store.set_step_pass(step, pid)
     ctx["step_id"] = step
     _launch(ctx, store, item)
@@ -319,11 +319,11 @@ def _step_in_second_pass(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
     pid1 = store.open_pass(item)
-    step1 = store.create_step(step="build", role="agent", parent=item)
+    step1 = store.create_step(stage="build", role="agent", item=item)
     store.set_step_pass(step1, pid1)
     store.close_pass(pid1)
     pid2 = store.open_pass(item)
-    step2 = store.create_step(step="build", role="agent", parent=item)
+    step2 = store.create_step(stage="build", role="agent", item=item)
     store.set_step_pass(step2, pid2)
     ctx["step_id"] = step2
     _launch(ctx, store, item)
@@ -334,7 +334,7 @@ def _step_in_first_pass_item_has_since_run_second_pass(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
     pid1 = store.open_pass(item)
-    step1 = store.create_step(step="build", role="agent", parent=item)
+    step1 = store.create_step(stage="build", role="agent", item=item)
     store.set_step_pass(step1, pid1)
     store.close_pass(pid1)
     store.open_pass(item)
@@ -354,7 +354,7 @@ def _node_with_explicit_id(ctx, node_id, id_source):
 def _colliding_ids(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description", id="LIGHTCYCLE-3.1")
-    step = store.create_step(step="build", role="agent", parent=item, id="LIGHTCYCLE-3.1.1")
+    step = store.create_step(stage="build", role="agent", item=item, id="LIGHTCYCLE-3.1.1")
     ctx["item_id"] = item
     ctx["step_id"] = step
     _launch(ctx, store, item)
@@ -389,7 +389,7 @@ def _row_leaves_less_than_flexible_minimum(ctx, depth, mode):
         width = _hierarchy_stack_terminal_width(mode, ["LC-30.100"], 0)
     else:
         item = store.create_item("Item", "a description", id="LC-30.100")
-        step = store.create_step(step=_HSTACK_TITLE, role="agent", parent=item, id="LC-30.100.100")
+        step = store.create_step(stage=_HSTACK_TITLE, role="agent", item=item, id="LC-30.100.100")
         ctx["item_id"] = item
         ctx["target_id"] = step
         width = _hierarchy_stack_terminal_width(
@@ -402,9 +402,9 @@ def _row_leaves_less_than_flexible_minimum(ctx, depth, mode):
 @given("a step blocked on another item's completion")
 def _step_blocked_on_dependency(ctx):
     store = FakeStore()
-    blocker = create_owned_step(store, "blocker", step="build", role="agent")
+    blocker = create_owned_step(store, "blocker", stage="build", role="agent")
     item = store.create_item("Item", "a description")
-    step = store.create_step(step="build", role="agent", parent=item, deps=[blocker])
+    step = store.create_step(stage="build", role="agent", item=item, deps=[blocker])
     ctx["step_id"] = step
     _launch(ctx, store, item)
 
@@ -413,7 +413,7 @@ def _build_long_store(n=30):
     store = FakeStore()
     item = store.create_item("Item", "a description")
     for i in range(n):
-        store.create_step(step="build", role="agent", parent=item)
+        store.create_step(stage="build", role="agent", item=item)
     return store, item
 
 
@@ -460,7 +460,7 @@ def _hierarchy_longer_than_one_screen(ctx):
 def _node_type_highlighted(ctx, node_type):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step(step="write-code", role="agent", parent=item)
+    step = store.create_step(stage="write-code", role="agent", item=item)
     ids = {"item": item, "step": step}
     ctx["target_id"] = ids[node_type]
     _launch(ctx, store, item)
@@ -473,7 +473,7 @@ def _node_type_highlighted(ctx, node_type):
 def _opened_node_from_hierarchy(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    other = store.create_step(step="write-code", role="agent", parent=item)
+    other = store.create_step(stage="write-code", role="agent", item=item)
     ctx["item_id"] = item
     ctx["other_id"] = other
     _launch(ctx, store, item)
@@ -516,7 +516,7 @@ def _item_highlighted_not_opened(ctx):
 def _step_highlighted_not_opened(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step(step="write-code", role="agent", parent=item)
+    step = store.create_step(stage="write-code", role="agent", item=item)
     ctx["step_id"] = step
     _launch(ctx, store, item)
     table = _table(ctx)
@@ -527,7 +527,7 @@ def _step_highlighted_not_opened(ctx):
 def _active_step_highlighted(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step(step="write-code", role="agent", parent=item)
+    step = store.create_step(stage="write-code", role="agent", item=item)
     store.claim_ready("agent")
     ctx["step_id"] = step
     _launch(ctx, store, item)
@@ -539,8 +539,8 @@ def _active_step_highlighted(ctx):
 def _done_step_highlighted(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step(step="write-code", role="agent", parent=item)
-    store.create_step(step="review-code", role="agent", parent=item)
+    step = store.create_step(stage="write-code", role="agent", item=item)
+    store.create_step(stage="review-code", role="agent", item=item)
     store.complete_node(step, "done")
     ctx["step_id"] = step
     _launch(ctx, store, item)
@@ -552,7 +552,7 @@ def _done_step_highlighted(ctx):
 def _human_step_highlighted(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step(step="await-merge", role="human", parent=item)
+    step = store.create_step(stage="await-merge", role="human", item=item)
     store.complete_node(step, "done")
     ctx["step_id"] = step
     _launch(ctx, store, item)
@@ -564,7 +564,7 @@ def _human_step_highlighted(ctx):
 def _queued_step_highlighted(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step(step="build", role="agent", parent=item)
+    step = store.create_step(stage="build", role="agent", item=item)
     ctx["step_id"] = step
     _launch(ctx, store, item)
     table = _table(ctx)
@@ -583,7 +583,7 @@ def _current_node_root_item(ctx):
 def _current_node_nested_step(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step(step="write-code", role="agent", parent=item)
+    step = store.create_step(stage="write-code", role="agent", item=item)
     ctx["step_id"] = step
     _launch(ctx, store, item)
 
@@ -592,8 +592,8 @@ def _current_node_nested_step(ctx):
 def _item_one_done_one_queued(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    done_step = store.create_step(step="build", role="agent", parent=item)
-    queued_step = store.create_step(step="write-code", role="agent", parent=item)
+    done_step = store.create_step(stage="build", role="agent", item=item)
+    queued_step = store.create_step(stage="write-code", role="agent", item=item)
     store.complete_node(done_step, "done")
     ctx["item_id"] = item
     ctx["step_id"] = queued_step
@@ -605,9 +605,9 @@ def _item_forty_done_one_queued(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
     for i in range(40):
-        step = store.create_step(step="build", role="agent", parent=item)
+        step = store.create_step(stage="build", role="agent", item=item)
         store.complete_node(step, "done")
-    queued_step = store.create_step(step="write-code", role="agent", parent=item)
+    queued_step = store.create_step(stage="write-code", role="agent", item=item)
     ctx["item_id"] = item
     ctx["step_id"] = queued_step
     _launch(ctx, store, item)
@@ -618,7 +618,7 @@ def _item_every_step_done(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
     for i in range(3):
-        step = store.create_step(step="build", role="agent", parent=item)
+        step = store.create_step(stage="build", role="agent", item=item)
         store.complete_node(step, "done")
     ctx["item_id"] = item
     _launch(ctx, store, item)
@@ -628,7 +628,7 @@ def _item_every_step_done(ctx):
 def _step_hub_open_directly(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
-    step = store.create_step(step="write-code", role="agent", parent=item)
+    step = store.create_step(stage="write-code", role="agent", item=item)
     ctx["item_id"] = item
     ctx["step_id"] = step
     ctx["node_id"] = step

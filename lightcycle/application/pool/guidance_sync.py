@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE
+from lightcycle.domain.pool import GuidanceSyncState
 from lightcycle.ports.git import GitOutcome, GitReadError
 
 
@@ -27,9 +28,9 @@ class GuidanceSyncUseCase:
 
     def _due(self, now):
         last = self._status.load()
-        if not last or "at" not in last:
+        if last is None or last.at is None:
             return True
-        return now - last["at"] >= self._config.guidance_fetch_minutes() * 60
+        return now - last.at >= self._config.guidance_fetch_minutes() * 60
 
     def execute(self, now) -> GuidanceSyncResponse:
         project = self._store.get_project(GUIDANCE_WORKSPACE)
@@ -45,5 +46,6 @@ class GuidanceSyncUseCase:
             ref = self._git.default_ref(root) if outcome.ok else None
         except GitReadError as e:
             outcome, ref = GitOutcome(ok=False, detail=str(e)), None
-        self._status.save({"ok": outcome.ok, "at": now, "detail": outcome.detail, "ref": ref})
+        self._status.save(
+            GuidanceSyncState(ok=outcome.ok, at=now, detail=outcome.detail, ref=ref))
         return GuidanceSyncResponse(fetched=True, ok=outcome.ok, detail=outcome.detail)

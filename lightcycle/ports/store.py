@@ -109,7 +109,7 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def ensure_store(self):
+    def ensure_ready(self):
         pass
 
     @abstractmethod
@@ -260,7 +260,7 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def create_step(self, *, step=None, role=None, parent=None, deps=None, id=None,
+    def create_step(self, *, stage=None, role=None, item=None, deps=None, id=None,
                     previous=None):
         pass
 

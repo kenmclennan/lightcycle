@@ -40,7 +40,7 @@ def _store_with(*specs):
     store = FakeStore()
     item = store.create_item("t", "d")
     for role, state in specs:
-        sid = store.create_step(step="poll-ci", role=role, parent=item)
+        sid = store.create_step(stage="poll-ci", role=role, item=item)
         store.update_state(sid, state)
     return store
 

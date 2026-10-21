@@ -43,7 +43,7 @@ class InitGridUseCase:
 
     def execute(self, guidance_path=None) -> InitGridResponse:
         existed = self._fs.store_ready()
-        self._store.ensure_store()
+        self._store.ensure_ready()
         self._fs.ensure_logs_dir()
         created = self._config.ensure_config()
         seeded, unset_reason = self._seed_trusted_authors()

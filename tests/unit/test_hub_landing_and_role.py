@@ -52,42 +52,42 @@ class TestLandingTab(unittest.TestCase):
 
     def test_active_step_lands_on_log(self):
         s = FakeStore()
-        step = create_owned_step(s, "s", step="build", role="agent")
+        step = create_owned_step(s, "s", stage="build", role="agent")
         s.claim_ready("agent")
         self.assertEqual(landing_of(s, step), "log")
 
     def test_waiting_await_merge_step_with_no_pr_yet_falls_to_context(self):
         s = FakeStore()
-        step = create_owned_step(s, "s", step="await-merge", role="human")
+        step = create_owned_step(s, "s", stage="await-merge", role="human")
         self.assertEqual(landing_of(s, step, presents="pr"), "context")
 
     def test_waiting_human_step_presenting_description_lands_on_detail_description(self):
         s = FakeStore()
-        step = create_owned_step(s, "s", step="triage", role="human")
+        step = create_owned_step(s, "s", stage="triage", role="human")
         self.assertEqual(landing_of(s, step, presents="description"), "detail")
 
     def test_dependency_blocked_step_lands_on_detail(self):
         s = FakeStore()
-        blocker = create_owned_step(s, "b", step="build", role="agent")
-        step = create_owned_step(s, "s", step="build", role="agent", deps=[blocker])
+        blocker = create_owned_step(s, "b", stage="build", role="agent")
+        step = create_owned_step(s, "s", stage="build", role="agent", deps=[blocker])
         self.assertEqual(landing_of(s, step), "detail")
 
     def test_queued_step_with_a_report_lands_on_detail(self):
         s = FakeStore()
-        step = create_owned_step(s, "s", step="build", role="agent")
+        step = create_owned_step(s, "s", stage="build", role="agent")
         s.set_report(step, "a report")
         self.assertEqual(landing_of(s, step), "detail")
 
     def test_done_step_with_a_report_lands_on_detail(self):
         s = FakeStore()
-        step = create_owned_step(s, "s", step="build", role="agent")
+        step = create_owned_step(s, "s", stage="build", role="agent")
         s.set_report(step, "a report")
         s.complete_node(step, "done")
         self.assertEqual(landing_of(s, step), "detail")
 
     def test_waiting_gate_presenting_findings_it_does_not_have_falls_to_context(self):
         s = FakeStore()
-        step = create_owned_step(s, "s", step="review-findings", role="human")
+        step = create_owned_step(s, "s", stage="review-findings", role="human")
         s.add_artifact(step, "findings", "text")
         self.assertEqual(landing_of(s, step, presents="artifact:findings"), "context")
 
@@ -96,7 +96,7 @@ class TestStepTabOrder(unittest.TestCase):
     def test_every_step_shows_the_same_five_tabs(self):
         s = FakeStore()
         for role, stage in (("human", "await-merge"), ("agent", "build"), ("engine", "script")):
-            step = create_owned_step(s, "s-" + role, step=stage, role=role)
+            step = create_owned_step(s, "s-" + role, stage=stage, role=role)
             self.assertEqual(
                 _tab_order(s.get_node(step)), ("detail", "context", "workflow", "log", "cost"), role
             )

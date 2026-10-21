@@ -24,7 +24,7 @@ tg-18            item
 
 The prefix is the owning project's **shortcode** (see "Project registry" in [ontology.md](ontology.md)) - explicit at registration or defaulted from the project's identity, uppercased. Every registered project has its own; it is not a single engine-wide config value. A top-level `<shortcode>-N` is always an item. (Aligning spec/branch/PR identity to the item id is tracked as a backlog item.)
 
-A **planned step**'s id (see "The model (nouns)" in [ontology.md](ontology.md)) follows the same `parent.N` nesting as a real step's id, but is advisory, not guaranteed: it is computed positionally from the item's currently-filed step count, and the store's id counter does not roll back when a step is deleted. It matches the id the engine later mints for that position only when no step under the item has ever been deleted.
+A **planned step**'s id (see "The model (nouns)" in [ontology.md](ontology.md)) follows the same `item.N` nesting as a real step's id, but is advisory, not guaranteed: it is computed positionally from the item's currently-filed step count, and the store's id counter does not roll back when a step is deleted. It matches the id the engine later mints for that position only when no step under the item has ever been deleted.
 
 ## The one lifecycle field: `state`
 
