@@ -4,7 +4,7 @@ from typing import List
 from lightcycle.application.flow.complete_step import CompleteInput
 from lightcycle.application.pool.pr_lookups import flow_for, run_of, skip_unpinned
 from lightcycle.application.pool.skip_idle_ci_watch import SkipIdleCiWatchUseCase
-from lightcycle.domain.pool import ci_outcome, failing_check, judged_checks, timed_out_check
+from lightcycle.domain.pool import MISSING_STATUS, ci_outcome, failing_check, judged_checks, timed_out_check
 from lightcycle.domain.work import State
 from lightcycle.ports.github import NotYetRead, PrSync, ReadFailure
 
@@ -45,6 +45,7 @@ class ResolveCiUseCase:
             store, github, flow_service, complete, trusted_authors=trusted_authors)
         self._unread = {}
         self._first_epoch = {}
+        self._first_judged = {}
         ci_ceiling_seconds()
 
     def _note_unread(self, step, reason, failure, still_unread, ci_unread):
@@ -102,7 +103,11 @@ class ResolveCiUseCase:
             required = self._required(pr_value)
             ceiling = self._ci_ceiling_seconds()
             now = self._wall_clock()
-            outcome = ci_outcome(checks, required, now, ceiling)
+            judged_sha, since = self._first_judged.get(step.id, (None, now))
+            if judged_sha != sha:
+                since = now
+            self._first_judged[step.id] = (sha, since)
+            outcome = ci_outcome(checks, required, now, ceiling, since)
             if outcome == "pending":
                 continue
             if outcome == "success" and sd.ci_success:
@@ -117,19 +122,25 @@ class ResolveCiUseCase:
                 if self._github.head_sha(pr_value) != sha:
                     continue
                 self._store.add_artifact(step.id, "ci-judged-sha", sha, internal=True)
-                hung = timed_out_check(judged_checks(checks, required), now, ceiling)
+                hung = timed_out_check(judged_checks(checks, required, since), now, ceiling)
                 url = " %s" % hung.url if hung.url else ""
-                note = (
-                    "CI timed out on %s: check '%s'%s still in progress after %ds, past the "
-                    "ceiling of %ds (ci-check-ceiling-seconds), PR %s."
-                ) % (sha, hung.name, url, int(now - hung.started_at), ceiling, pr_value)
+                if hung.status == MISSING_STATUS:
+                    note = (
+                        "CI timed out on %s: required check '%s' never appeared after %ds, past the "
+                        "ceiling of %ds (ci-check-ceiling-seconds), PR %s."
+                    ) % (sha, hung.name, int(now - since), ceiling, pr_value)
+                else:
+                    note = (
+                        "CI timed out on %s: check '%s'%s still in progress after %ds, past the "
+                        "ceiling of %ds (ci-check-ceiling-seconds), PR %s."
+                    ) % (sha, hung.name, url, int(now - hung.started_at), ceiling, pr_value)
                 self._complete.execute(CompleteInput(step=step.id, outcome=sd.ci_failure, note=note))
                 ci_resolved.append(step.item)
             elif outcome == "failure" and sd.ci_failure:
                 if self._github.head_sha(pr_value) != sha:
                     continue
                 self._store.add_artifact(step.id, "ci-judged-sha", sha, internal=True)
-                fc = failing_check(judged_checks(checks, required))
+                fc = failing_check(judged_checks(checks, required, since))
                 url = " %s" % fc.url if fc and fc.url else ""
                 note = "CI failed on %s: check '%s'%s, PR %s." % (
                     sha, fc.name if fc else "unknown", url, pr_value,
@@ -140,4 +151,6 @@ class ResolveCiUseCase:
             del self._unread[step_id]
         for step_id in [k for k in self._first_epoch if k not in seen]:
             del self._first_epoch[step_id]
+        for step_id in [k for k in self._first_judged if k not in seen]:
+            del self._first_judged[step_id]
         return ResolveCiResponse(ci_resolved=ci_resolved, ci_unread=ci_unread)
