@@ -17,7 +17,8 @@ from tests.support.sqlite_store_factory import make_sqlite_store, plant_legacy_d
 from tests.support.step_factory import create_owned_step
 from tests.support.store_contract import StoreContractBase
 from lightcycle.adapters.sqlite_store import (
-    _LAST_VERSION_ABLE_TO_MIGRATE_NODES_STORES, _SCHEMA_VERSION, SchemaVersionRefused, SqliteStore,
+    _LAST_VERSION_ABLE_TO_MIGRATE_NODES_STORES, _SCHEMA_VERSION, BUSY_TIMEOUT_MS, SchemaVersionRefused,
+    SqliteStore,
 )
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.work.activate_item import ActivateItemInput, ActivateItemUseCase
@@ -37,6 +38,12 @@ class TestSqliteStoreContract(StoreContractBase, unittest.TestCase):
 
     def make_store_with_context_artifact_types(self, types):
         return make_sqlite_store(extra_config={"context-artifact-types": " ".join(types)})
+
+
+class TestBusyTimeout(unittest.TestCase):
+    def test_the_connection_waits_for_a_lock_for_the_shared_busy_timeout(self):
+        s = make_sqlite_store()
+        self.assertEqual(s._conn.execute("PRAGMA busy_timeout").fetchone()[0], BUSY_TIMEOUT_MS)
 
 
 class TestHeldCommentsSchema(unittest.TestCase):
