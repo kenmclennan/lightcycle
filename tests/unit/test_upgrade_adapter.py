@@ -3,11 +3,11 @@ import unittest
 import urllib.error
 from unittest.mock import patch
 
-from lightcycle.adapters.upgrade import UpgradeAdapter
-from lightcycle.ports.upgrade import UpgradeInstallError
-from lightcycle.application.setup.upgrade import (
+from lightcycle.adapters.upgrade import UpgradeAdapter, parse_remote_version
+from lightcycle.ports.upgrade import (
     ProcessListUnreadableError,
     RemoteVersionUnavailableError,
+    UpgradeInstallError,
 )
 
 
@@ -18,6 +18,14 @@ class FakeConfig:
 
 def _adapter():
     return UpgradeAdapter(FakeConfig())
+
+
+class TestParseRemoteVersion(unittest.TestCase):
+    def test_extracts_the_version_from_init_source(self):
+        self.assertEqual(parse_remote_version('__version__ = "1.2.3"\n'), "1.2.3")
+
+    def test_returns_none_when_no_version_line(self):
+        self.assertIsNone(parse_remote_version("no version here\n"))
 
 
 class TestListProcesses(unittest.TestCase):

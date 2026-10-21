@@ -75,7 +75,8 @@ This table documents every `_SEED_KEYS` entry - `tests/unit/test_docs_reference_
 | `shutdown-grace-seconds` | how long `lc start`'s shutdown waits for killed workers to be reaped before sweeping; must be `>= 0` |
 | `tick-failure-cap` | consecutive tick exceptions the pool loop tolerates (logging and continuing) before it re-raises and exits non-gracefully |
 | `personal-origin` | the user's own workflow-origin repo, set by `lc workflow init`. Optional - unset (empty) until one exists |
-| `context-artifact-types` | artifact types an agent step resolves to a repo-relative file path (e.g. `spec`). Optional - soft-defaults to `spec` if unset |
+| `context-artifact-types` | artifact types an agent step resolves to a repo-relative file path (e.g. `spec`). Required, seeded `spec`; a missing or blank value raises `ConfigError` |
+| `context-artifact-project` | the registered project that `filepath`-kind artifacts resolve against and `lc specs-dir` syncs. Required, seeded `specs` |
 | `audit-shortcode` | id prefix for items the engine creates for itself (seeded `AUD`), distinct from `shortcode`, which prefixes items you create. Forward-only: existing ids keep the prefix they were minted with. |
 | `guidance-shortcode` | id prefix `lc init` registers the `guidance` project with, seeded `GDN`, env `LC_GUIDANCE_SHORTCODE`, so `--project guidance` mints `GDN-` ids. Forward-only, like `audit-shortcode`: `lc init` does not rewrite an already-registered `guidance` project (`lc doctor` reports `guidance-shortcode-missing` and its fix sets it) |
 | `held-comment-shortcode` | id prefix for the items the engine files when it holds an untrusted PR comment for your decision, seeded `HLD`. Forward-only, like `audit-shortcode` |

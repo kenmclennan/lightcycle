@@ -1,7 +1,8 @@
 import unittest
 from unittest.mock import patch
 
-from lightcycle.application.setup.upgrade import RemoteVersionUnavailableError, UpgradeResponse
+from lightcycle.application.setup.upgrade import UpgradeResponse
+from lightcycle.ports.upgrade import RemoteVersionUnavailableError
 from lightcycle.application.setup.upgrade_notice import UpgradeNoticeUseCase
 
 

@@ -487,24 +487,29 @@ class TestNamedWorkspaceSeeding(unittest.TestCase):
     def test_a_named_workspace_is_reported_for_seeding(self):
         graph = self._graph({"audit-design": "blueprints"})
 
-        self.assertEqual(_named_workspaces(graph), {"blueprints"})
+        self.assertEqual(_named_workspaces(graph, "specs"), {"blueprints"})
 
     def test_the_item_repo_and_specs_need_no_seeding(self):
         graph = self._graph({"spec-writer": "specs", "build": "project"})
 
-        self.assertEqual(_named_workspaces(graph), set())
+        self.assertEqual(_named_workspaces(graph, "specs"), set())
 
     def test_a_named_default_workspace_is_seeded_too(self):
         graph = self._graph({}, default="blueprints")
 
-        self.assertEqual(_named_workspaces(graph), {"blueprints"})
+        self.assertEqual(_named_workspaces(graph, "specs"), {"blueprints"})
+
+    def test_the_configured_context_project_needs_no_seeding(self):
+        graph = self._graph({"a": "docs", "b": "specs"})
+
+        self.assertEqual(_named_workspaces(graph, "docs"), {"specs"})
 
     def test_every_distinct_named_workspace_is_reported_once(self):
         graph = self._graph(
             {"a": "blueprints", "b": "blueprints", "c": "docs", "d": "specs"}
         )
 
-        self.assertEqual(_named_workspaces(graph), {"blueprints", "docs"})
+        self.assertEqual(_named_workspaces(graph, "specs"), {"blueprints", "docs"})
 
 
 _PASS_END_EDGE_GRAPH = """

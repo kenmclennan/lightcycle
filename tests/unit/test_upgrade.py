@@ -1,13 +1,13 @@
 import unittest
 
+from lightcycle.ports.upgrade import ProcessListUnreadableError
+
 from lightcycle.application.setup.upgrade import (
     BundleRangeError,
-    ProcessListUnreadableError,
     VenvBusyError,
     filter_holders,
     format_holders_message,
     parse_process_list,
-    parse_remote_version,
     upgrade,
 )
 
@@ -18,14 +18,6 @@ class FakeInstaller:
 
     def __call__(self):
         self.calls += 1
-
-
-class TestParseRemoteVersion(unittest.TestCase):
-    def test_extracts_the_version_from_init_source(self):
-        self.assertEqual(parse_remote_version('__version__ = "1.2.3"\n'), "1.2.3")
-
-    def test_returns_none_when_no_version_line(self):
-        self.assertIsNone(parse_remote_version("no version here\n"))
 
 
 class TestParseProcessList(unittest.TestCase):

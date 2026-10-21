@@ -34,7 +34,7 @@ class ReflectUseCase:
         path = spec
         if not os.path.isabs(spec):
             try:
-                path = os.path.join(self._worktrees.specs_path(), spec)
+                path = os.path.join(self._worktrees.context_path(), spec)
             except UseCaseError:
                 return "unknown"
         data = self._fs.read_bytes(path)

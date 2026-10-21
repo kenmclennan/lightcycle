@@ -12,6 +12,22 @@ def _proc(returncode=0, stdout="", stderr=""):
     return MagicMock(returncode=returncode, stdout=stdout, stderr=stderr)
 
 
+class TestIsLockContention(unittest.TestCase):
+    def test_transient_lock_errors_are_contention(self):
+        self.assertTrue(gitio.is_lock_contention("fatal: could not lock working tree"))
+        self.assertTrue(
+            gitio.is_lock_contention(
+                "Unable to create '/r/.git/worktrees/x/index.lock': File exists"
+            )
+        )
+        self.assertTrue(gitio.is_lock_contention("fatal: 'x' is already locked"))
+
+    def test_real_errors_are_not_contention(self):
+        self.assertFalse(gitio.is_lock_contention("fatal: invalid reference: origin/main"))
+        self.assertFalse(gitio.is_lock_contention(""))
+        self.assertFalse(gitio.is_lock_contention(None))
+
+
 class TestRemoteUrl(unittest.TestCase):
     def _run(self, is_repo, remote_result):
         def side_effect(args, **kwargs):

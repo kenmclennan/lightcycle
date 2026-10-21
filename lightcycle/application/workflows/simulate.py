@@ -11,7 +11,7 @@ from lightcycle.application.pool.pr_writes import InlinePrWrites
 from lightcycle.application.pool.monitor_prs import MonitorPrsUseCase
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.domain.contracts import FlowContracts, StepContract
-from lightcycle.domain.flow.flow import PROJECT_WORKSPACE, SPECS_WORKSPACE
+from lightcycle.domain.flow.flow import PROJECT_WORKSPACE
 from lightcycle.domain.flow.hooks import (
     CI_FAILED_CAP,
     HOOK_MIN_ARITY,
@@ -73,11 +73,11 @@ class SimulateResponse:
     violations: List[str] = field(default_factory=list)
 
 
-def _named_workspaces(graph):
+def _named_workspaces(graph, context_project):
     declared = set(graph.workspaces.values()) | {graph.workspace}
     return {
         w for w in declared
-        if w and w not in (PROJECT_WORKSPACE, SPECS_WORKSPACE)
+        if w and w not in (PROJECT_WORKSPACE, context_project)
     }
 
 
@@ -276,7 +276,7 @@ class WorkflowSimulateUseCase:
         return []
 
     def _seed_named_workspaces(self, graph):
-        for workspace in sorted(_named_workspaces(graph)):
+        for workspace in sorted(_named_workspaces(graph, self._config.context_artifact_project())):
             path = os.path.join(self._projects_root, workspace)
             self._scaffold.make_dir(path)
             self._store.add_project("simulate/%s" % workspace, local_path=path)

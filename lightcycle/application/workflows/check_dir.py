@@ -151,7 +151,7 @@ class CheckWorkflowDirUseCase:
         try:
             detail = prompt_drift_detail(
                 merge_problems(
-                    check_prompts(bundle, *engine_sources(self._fs)),
+                    check_prompts(bundle, *engine_sources()),
                     check_step_structure_for(bundle, engine_fragment_names(self._fs)),
                 )
             )

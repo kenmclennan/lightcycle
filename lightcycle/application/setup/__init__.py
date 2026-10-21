@@ -13,13 +13,12 @@ from lightcycle.application.setup.project_scan import (
 )
 from lightcycle.application.setup.restore_store import RestoreInput, RestoreStoreUseCase
 from lightcycle.application.setup.upgrade import (
-    ProcessListUnreadableError,
-    RemoteVersionUnavailableError,
     UpgradeResponse,
     BundleRangeError,
     VenvBusyError,
     upgrade,
 )
+from lightcycle.ports.upgrade import ProcessListUnreadableError, RemoteVersionUnavailableError
 from lightcycle.application.setup.upgrade_notice import UpgradeNoticeResponse, UpgradeNoticeUseCase
 
 __all__ = [

@@ -1,12 +1,9 @@
 import os
-import re
 import sys
 from dataclasses import dataclass
 from typing import Tuple
 
 from lightcycle.domain.workflows.engine_requirement import parse_version
-
-_VERSION_RE = re.compile(r'__version__\s*=\s*"([^"]+)"')
 
 
 @dataclass(frozen=True)
@@ -28,14 +25,6 @@ class BundleRangeError(Exception):
     def __init__(self, conflicts):
         self.conflicts = tuple(conflicts)
         super().__init__("; ".join(self.conflicts))
-
-
-class ProcessListUnreadableError(Exception):
-    pass
-
-
-class RemoteVersionUnavailableError(Exception):
-    pass
 
 
 def parse_process_list(text):
@@ -76,11 +65,6 @@ def scan_venv_holders(list_processes, exclude_pid=None):
     return filter_holders(
         parse_process_list(list_processes()), venv_signatures(), exclude_pid or os.getpid()
     )
-
-
-def parse_remote_version(text):
-    match = _VERSION_RE.search(text)
-    return match.group(1) if match else None
 
 
 def upgrade(current_version, check_only=False, fetch=None,

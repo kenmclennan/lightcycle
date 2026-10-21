@@ -133,12 +133,12 @@ class FakeWorktrees:
     def path_for_run(self, run):
         return self._run_path
 
-    def sync_specs(self):
+    def sync_context(self):
         self.sync_specs_calls += 1
         if self._sync_specs_error is not None:
             raise self._sync_specs_error
 
-    def specs_path(self):
+    def context_path(self):
         return self._specs_path
 
     def remove(self, item):

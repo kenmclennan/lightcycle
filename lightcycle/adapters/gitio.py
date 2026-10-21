@@ -2,7 +2,6 @@ import os
 import subprocess
 import time
 
-from lightcycle.domain.workspace import Worktree
 from lightcycle.ports.git import GitOutcome, GitPort, GitReadError
 
 _GIT_TIMEOUT_SECONDS = 30
@@ -205,6 +204,16 @@ def prune_worktrees(root):
     return GitOutcome(ok=proc.returncode == 0, detail=proc.stderr.strip())
 
 
+def is_lock_contention(stderr):
+    t = (stderr or "").lower()
+    return (
+        "could not lock" in t
+        or "already locked" in t
+        or "index.lock" in t
+        or ".lock': file exists" in t
+    )
+
+
 def add_worktree(root, path, branch, base, retries, backoff):
     args = (
         ["worktree", "add", path, "--no-track", "-b", branch, base]
@@ -213,7 +222,7 @@ def add_worktree(root, path, branch, base, retries, backoff):
     )
     prune_worktrees(root)
     proc = git(root, *args)
-    while proc.returncode != 0 and retries > 0 and Worktree.is_lock_contention(proc.stderr):
+    while proc.returncode != 0 and retries > 0 and is_lock_contention(proc.stderr):
         retries -= 1
         time.sleep(backoff)
         prune_worktrees(root)

@@ -33,12 +33,7 @@ DOMAIN_BANNED_FORMATTER_FUNCTIONS = (
     "format_wall_and_active", "landing_tab", "display_stage", "display_role",
 )
 
-DRIVEN_ADAPTER_IMPORT_EXEMPT = {
-    ADAPTERS / "upgrade.py":
-        "imports plain exception types and a pure helper from application/setup/upgrade.py; "
-        "LC-594 scoped this deliberately, per F-32's convention - lc show LC-594 or read its "
-        "spec for the reasoning",
-}
+DRIVEN_ADAPTER_IMPORT_EXEMPT = {}
 
 
 def _imported_modules(tree):
@@ -296,14 +291,14 @@ class TestHookLiteralsHaveOneDefinition(unittest.TestCase):
 
 
 class TestSingleHomeWorkerRefusalMessage(unittest.TestCase):
-    def test_worker_refusal_literal_appears_only_in_worker_permissions(self):
+    def test_worker_refusal_literal_appears_only_in_render(self):
         token = "workers may not run"
         offenders = []
         for path in sorted(LIGHTCYCLE.rglob("*.py")):
             for lineno, line in enumerate(path.read_text().splitlines(), start=1):
                 if token in line:
                     offenders.append("%s:%d" % (path.relative_to(LIGHTCYCLE), lineno))
-        allowed = "domain/work/worker_permissions.py"
+        allowed = "render.py"
         offenders = [o for o in offenders if not o.startswith(allowed + ":")]
         self.assertEqual(
             offenders, [], "worker-refusal literal respelled outside %s: %s" % (allowed, offenders)

@@ -25,7 +25,9 @@ from lightcycle.adapters.worker_session import (
     run,
     session_cwd,
 )
-from lightcycle.adapters.claude_stream import parse_rate_limit_event, saw_session_activity
+from lightcycle.adapters.claude_stream import (
+    is_terminal_command, parse_rate_limit_event, saw_session_activity,
+)
 from lightcycle.domain.guidance.guidance import GuidanceSelection
 from lightcycle.ports.workflow_bundle import StepPrompt
 from lightcycle.domain.pool.worker_session import (
@@ -33,7 +35,6 @@ from lightcycle.domain.pool.worker_session import (
     MAX_NUDGES,
     NUDGE,
     SessionPolicy,
-    is_terminal_command,
 )
 
 REJECTED_LINE = (
@@ -201,7 +202,7 @@ class TestSessionPolicy(unittest.TestCase):
     def test_close_after_terminal_then_result(self):
         p = SessionPolicy()
         p.observe_claimed(True)
-        p.observe_command("lc done abc.1 done")
+        p.observe_terminal(True)
         self.assertEqual(p.on_result(has_open_step=True), CLOSE)
 
     def test_no_work_exit_closes(self):
@@ -219,7 +220,7 @@ class TestSessionPolicy(unittest.TestCase):
         p = SessionPolicy()
         p.observe_claimed(True)
         self.assertEqual(p.on_result(has_open_step=True), NUDGE)
-        p.observe_command("lc set abc.1 --state waiting --needs x --reason y")
+        p.observe_terminal(True)
         self.assertEqual(p.on_result(has_open_step=True), CLOSE)
 
     def test_rejected_rate_limit_closes_even_with_open_step_and_claimed(self):
@@ -506,6 +507,22 @@ class TestDispatchEvent(unittest.TestCase):
         dispatch_event(json.loads(REJECTED_LINE), REJECTED_LINE, events)
         drain(events, policy)
         self.assertEqual(policy.on_result(has_open_step=True), CLOSE)
+
+    def test_a_terminal_command_event_closes_the_session(self):
+        policy = SessionPolicy()
+        policy.observe_claimed(True)
+        events = queue.Queue()
+        events.put((COMMAND, "lc done abc.1 done"))
+        drain(events, policy)
+        self.assertEqual(policy.on_result(has_open_step=True), CLOSE)
+
+    def test_a_non_terminal_command_event_does_not_close_the_session(self):
+        policy = SessionPolicy()
+        policy.observe_claimed(True)
+        events = queue.Queue()
+        events.put((COMMAND, "lc show abc.1"))
+        drain(events, policy)
+        self.assertEqual(policy.on_result(has_open_step=True), NUDGE)
 
     def test_result_line_queues_a_result_event(self):
         events = queue.Queue()

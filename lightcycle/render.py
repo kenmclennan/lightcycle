@@ -1,5 +1,6 @@
 from lightcycle.application.flow.engine_steps import StepKind
-from lightcycle.domain.flow.hooks import CI_FAILED_CAP, HOOK_MIN_ARITY, PR_FEEDBACK
+from lightcycle.domain.flow.hooks import HOOK_MIN_ARITY, PR_FEEDBACK, graph_caps
+from lightcycle.domain.work import worker_permissions
 from lightcycle.domain.work.behind_marker import BEHIND_NOT_UPDATED_PHRASE
 
 
@@ -143,9 +144,9 @@ def _mermaid_stages(graph):
     for occ in graph.hook_occurrences(PR_FEEDBACK):
         if len(occ) >= HOOK_MIN_ARITY[PR_FEEDBACK]:
             stages.add(occ[1])
-    for occ in graph.hook_occurrences(CI_FAILED_CAP):
-        if len(occ) >= HOOK_MIN_ARITY[CI_FAILED_CAP]:
-            stages.add(occ[3])
+    for _stage, cap in graph_caps(graph):
+        if cap.retry:
+            stages.add(cap.escalate_stage)
     stages.update(graph.signals.keys())
     return stages
 
@@ -212,14 +213,14 @@ def _mermaid_hook_edges(graph, flow, stage):
             edges.append(
                 "%s -.->|pr_head_moved: %s| %s" % (sid, head_moved_o, _mermaid_node_id(target))
             )
-    cap = sd.pr_conflict_cap
-    escalate = sd.pr_conflict_escalate
-    if cap and escalate:
-        target = graph.target(stage, escalate)
+    for cap in sd.caps.values():
+        if not cap.escalate_outcome or not cap.limit:
+            continue
+        target = graph.target(stage, cap.escalate_outcome)
         if target:
             edges.append(
-                "%s -.->|pr_conflict_cap x%d: %s| %s"
-                % (sid, cap, escalate, _mermaid_node_id(target))
+                "%s -.->|%s x%d: %s| %s"
+                % (sid, cap.hook, cap.limit, cap.escalate_outcome, _mermaid_node_id(target))
             )
     feedback = sd.pr_feedback
     if feedback:
@@ -234,17 +235,13 @@ def _mermaid_hook_edges(graph, flow, stage):
         target = graph.target(stage, failure_o)
         if target:
             edges.append("%s -.->|ci_failure: %s| %s" % (sid, failure_o, _mermaid_node_id(target)))
-    ci_target = sd.ci_cap.target if sd.ci_cap else None
-    if ci_target:
+    for cap in sd.caps.values():
+        if not cap.escalate_stage:
+            continue
+        counted = " x%d" % cap.limit if cap.limit is not None else ""
         edges.append(
-            "%s -.->|ci_failed_cap x%d: %s| %s"
-            % (sid, sd.ci_cap.n, sd.ci_cap.outcome, _mermaid_node_id(ci_target))
-        )
-    rr_cap = sd.review_rounds_cap
-    if rr_cap:
-        edges.append(
-            "%s -.->|review_rounds_cap: %s| %s"
-            % (sid, rr_cap.outcome, _mermaid_node_id(rr_cap.target))
+            "%s -.->|%s%s: %s| %s"
+            % (sid, cap.hook, counted, cap.outcome, _mermaid_node_id(cap.escalate_stage))
         )
     return edges
 
@@ -292,3 +289,13 @@ def render_workflow_mermaid(graph, flow):
         lines.extend(_mermaid_hook_edges(graph, flow, stage))
 
     return lines
+
+
+def worker_refusal_message(verb):
+    if verb == "attach":
+        return "lc: workers may not attach an artifact of type %s - attach is otherwise permitted\n" % (
+            ", ".join(worker_permissions.ATTACH_FORBIDDEN_TYPES),
+        )
+    return "lc: workers may not run '%s' - permitted: %s, set --state waiting, workflow check --dir, workflow list, config\n" % (
+        verb, ", ".join(worker_permissions.WORKER_VERBS),
+    )

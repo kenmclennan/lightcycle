@@ -1,4 +1,3 @@
-import ast
 from pathlib import Path
 
 from lightcycle.application.workflows.prompt_commands import json_field_reads, lc_calls
@@ -53,40 +52,8 @@ def _check_call(call, surface):
     return messages
 
 
-def _subscript_keys(tree):
-    out = set()
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Assign):
-            continue
-        for target in node.targets:
-            if (
-                isinstance(target, ast.Subscript)
-                and isinstance(target.slice, ast.Constant)
-                and isinstance(target.slice.value, str)
-            ):
-                out.add(target.slice.value)
-    return out
-
-
-READ_SURFACE_MODULES = (
-    "application/flow/claim_step.py",
-    "application/work/node_read_surface.py",
-)
-
-
 class PromptSurfaceUnavailable(Exception):
     pass
-
-
-def extra_json_keys(fs):
-    root = Path(__file__).resolve().parents[1]
-    keys = set()
-    for rel in READ_SURFACE_MODULES:
-        data = fs.read_bytes(str(root.parent / rel))
-        if data is None:
-            raise PromptSurfaceUnavailable("could not read %s to determine the JSON surface" % rel)
-        keys |= _subscript_keys(ast.parse(data.decode("utf-8")))
-    return keys
 
 
 def engine_fragment_names(fs):
@@ -101,8 +68,8 @@ def engine_fragment_names(fs):
     return names
 
 
-def engine_sources(fs):
-    return flags_by_verb(), json_surface() | extra_json_keys(fs)
+def engine_sources():
+    return flags_by_verb(), json_surface()
 
 
 def prompt_drift_detail(drift):

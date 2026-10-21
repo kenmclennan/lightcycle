@@ -1,15 +1,7 @@
-import re
-
-_TERMINAL = re.compile(r"\blc\s+done\b|\blc\s+set\b[^\n]*--state[= ]waiting\b")
-
 KEEP = "keep"
 NUDGE = "nudge"
 CLOSE = "close"
 MAX_NUDGES = 5
-
-
-def is_terminal_command(command):
-    return bool(command) and _TERMINAL.search(command) is not None
 
 
 class SessionPolicy:
@@ -20,8 +12,8 @@ class SessionPolicy:
         self._rejected = False
         self._session_id = None
 
-    def observe_command(self, command):
-        if is_terminal_command(command):
+    def observe_terminal(self, seen):
+        if seen:
             self._terminal = True
 
     def observe_claimed(self, claimed):

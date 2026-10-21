@@ -30,7 +30,7 @@ from lightcycle.adapters.scaffold import ScaffoldAdapter
 from lightcycle.adapters.workers import process_start_time, register_worker
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.services.worktree import WorktreeService
-from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE, SPECS_WORKSPACE
+from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE
 from lightcycle.domain.work import Artifact, State
 
 from tests.support.isolation import inject_container, make_syncable_git_repo
@@ -119,6 +119,8 @@ def write_config(projects=None, specs=None):
     if specs is not None:
         lines.append("specs: %s" % specs)
     lines += [
+        "context-artifact-project: specs",
+        "context-artifact-types: spec",
         "branch-prefix: feat",
         "default-origin: lightcycle",
         "max-agents: 5",
@@ -363,7 +365,7 @@ def _fake_setUp(test, *, steps=False, contract_steps=False):
     if contract_steps:
         write_contract_steps(test.root)
     test.store = FakeStore()
-    test.store.add_project(SPECS_WORKSPACE, local_path=test.root)
+    test.store.add_project("specs", local_path=test.root)
     test.store.add_project("acme/app", shortcode="APP", local_path=test.root)
     inject_container(test, store=test.store, home=test.root, config_path=cfg)
 
@@ -2241,7 +2243,7 @@ class TestWorktree(unittest.TestCase):
         os.environ["LC_HOME"] = self.root
         self.store = FakeStore()
         self.store.add_project("acme/engine", local_path=self.root)
-        self.store.add_project(SPECS_WORKSPACE, local_path=self.root)
+        self.store.add_project("specs", local_path=self.root)
         self._orig = _cli_mod._container
         _cli_mod.set_container(_cli_mod.Container(store=self.store, machine=FakeMachine()))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
@@ -2335,7 +2337,7 @@ class TestSpecsWorkspaceWorktree(unittest.TestCase):
         os.environ["LC_HOME"] = engine_root
         write_real_library_bundle(engine_root)
         self.store = FakeStore()
-        self.store.add_project(SPECS_WORKSPACE, local_path=self.specs_repo)
+        self.store.add_project("specs", local_path=self.specs_repo)
         self._orig = _cli_mod._container
         _cli_mod.set_container(_cli_mod.Container(store=self.store, machine=FakeMachine()))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
@@ -2406,7 +2408,7 @@ class TestNamedRepo(unittest.TestCase):
         os.environ["LC_HOME"] = self.engine
         self.store = FakeStore()
         self.store.add_project("acme/app", local_path=self.app)
-        self.store.add_project(SPECS_WORKSPACE, local_path=self.engine)
+        self.store.add_project("specs", local_path=self.engine)
         self._orig = _cli_mod._container
         _cli_mod.set_container(_cli_mod.Container(store=self.store, machine=FakeMachine()))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))
@@ -2594,7 +2596,7 @@ class TestCloseWorktree(unittest.TestCase):
         os.environ["LC_HOME"] = self.root
         self.store = FakeStore()
         self.store.add_project("acme/engine", local_path=self.root)
-        self.store.add_project(SPECS_WORKSPACE, local_path=self.root)
+        self.store.add_project("specs", local_path=self.root)
         self._orig = _cli_mod._container
         _cli_mod.set_container(_cli_mod.Container(store=self.store, machine=FakeMachine()))
         self.addCleanup(lambda: _cli_mod.set_container(self._orig))

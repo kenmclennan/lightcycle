@@ -9,7 +9,7 @@ import time
 from dataclasses import dataclass
 from typing import Optional
 
-from lightcycle.adapters.claude_stream import parse_rate_limit_event
+from lightcycle.adapters.claude_stream import is_terminal_command, parse_rate_limit_event
 from lightcycle.adapters.workers import workers_state
 from lightcycle.domain.guidance.guidance import GuidanceSelection
 from lightcycle.domain.pool.worker_session import CLOSE, NUDGE, SessionPolicy
@@ -150,7 +150,7 @@ def drain(events, policy):
         except queue.Empty:
             return results
         if kind == COMMAND:
-            policy.observe_command(payload)
+            policy.observe_terminal(is_terminal_command(payload))
         elif kind == RATE_LIMIT:
             policy.observe_rate_limit(payload)
         elif kind == SESSION_ID:

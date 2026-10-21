@@ -38,13 +38,13 @@ ALLOWED_STATES_BY_FLAG = {
 UNSETTABLE_FIELDS = ("description", "project", "workflow", "notes")
 
 UNSET_REFUSAL_REASONS = {
-    "title": "a title must not be blank; there is nothing to clear, only to replace",
-    "label": "there is no way to clear a label this way",
-    "needs": "a park's fields are cleared as a whole, via --state ready",
-    "reason": "a park's fields are cleared as a whole, via --state ready",
-    "tried": "a park's fields are cleared as a whole, via --state ready",
-    "backlog": "backlog is a list of ids to resolve, not a value to clear",
-    "step": "step is a one-shot input to activation, not a persisted field",
+    "title": "title-not-clearable",
+    "label": "label-not-clearable",
+    "needs": "park-cleared-as-whole",
+    "reason": "park-cleared-as-whole",
+    "tried": "park-cleared-as-whole",
+    "backlog": "backlog-not-a-value",
+    "step": "step-not-persisted",
 }
 
 

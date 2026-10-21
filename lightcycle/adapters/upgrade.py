@@ -3,16 +3,22 @@ import subprocess
 import urllib.error
 import urllib.request
 
-from lightcycle.application.setup.upgrade import (
+from lightcycle.ports.upgrade import (
     ProcessListUnreadableError,
     RemoteVersionUnavailableError,
-    parse_remote_version,
+    UpgradeInstallError,
+    UpgradePort,
 )
-from lightcycle.ports.upgrade import UpgradeInstallError, UpgradePort
 
 _REMOTE_INIT_URL = "https://raw.githubusercontent.com/kenmclennan/lightcycle/main/lightcycle/__init__.py"
 _INSTALL_CMD = ["pipx", "install", "--force", "git+https://github.com/kenmclennan/lightcycle"]
 _SEMVER_RE = re.compile(r"(\d+\.\d+\.\d+)")
+_VERSION_RE = re.compile(r'__version__\s*=\s*"([^"]+)"')
+
+
+def parse_remote_version(text):
+    match = _VERSION_RE.search(text)
+    return match.group(1) if match else None
 
 
 class UpgradeAdapter(UpgradePort):

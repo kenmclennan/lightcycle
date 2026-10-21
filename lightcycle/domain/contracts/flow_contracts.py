@@ -1,10 +1,5 @@
 from lightcycle.domain.contracts.step_contract import StepContract
-from lightcycle.domain.flow.hooks import (
-    CI_FAILED_CAP,
-    HOOK_MIN_ARITY,
-    PR_FEEDBACK,
-    REVIEW_ROUNDS_CAP,
-)
+from lightcycle.domain.flow.hooks import HOOK_MIN_ARITY, PR_FEEDBACK, cap_target_occurrences
 from lightcycle.domain.work.detail import (
     EXECUTION_FIELDS,
     IN_PREFIX,
@@ -164,10 +159,8 @@ class FlowContracts:
         mismatches = []
         for occ in self._graph.hook_occurrences(PR_FEEDBACK):
             self._collect_hook_phase_mismatch(mismatches, PR_FEEDBACK, occ, 1)
-        for occ in self._graph.hook_occurrences(CI_FAILED_CAP):
-            self._collect_hook_phase_mismatch(mismatches, CI_FAILED_CAP, occ, 3)
-        for occ in self._graph.hook_occurrences(REVIEW_ROUNDS_CAP):
-            self._collect_hook_phase_mismatch(mismatches, REVIEW_ROUNDS_CAP, occ, 2)
+        for hook, occ, target_index in cap_target_occurrences(self._graph):
+            self._collect_hook_phase_mismatch(mismatches, hook, occ, target_index)
         return sorted(mismatches)
 
     def _collect_unresolved_hook_target(self, unresolved, hook, occ, target_index, known):
@@ -183,10 +176,8 @@ class FlowContracts:
         known = owned | set(self.terminals())
         for occ in self._graph.hook_occurrences(PR_FEEDBACK):
             self._collect_unresolved_hook_target(unresolved, PR_FEEDBACK, occ, 1, owned)
-        for occ in self._graph.hook_occurrences(CI_FAILED_CAP):
-            self._collect_unresolved_hook_target(unresolved, CI_FAILED_CAP, occ, 3, known)
-        for occ in self._graph.hook_occurrences(REVIEW_ROUNDS_CAP):
-            self._collect_unresolved_hook_target(unresolved, REVIEW_ROUNDS_CAP, occ, 2, known)
+        for hook, occ, target_index in cap_target_occurrences(self._graph):
+            self._collect_unresolved_hook_target(unresolved, hook, occ, target_index, known)
         return sorted(unresolved)
 
     def malformed_hook_occurrences(self):

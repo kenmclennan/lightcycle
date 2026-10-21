@@ -1,6 +1,7 @@
 from lightcycle.domain.flow.flow import (
     Flow,
     consecutive_outcome_count,
+    outcome_counts,
     pr_conflict_failures,
     total_outcome_count,
 )
@@ -8,6 +9,6 @@ from lightcycle.domain.flow.planned_path import planned_path
 from lightcycle.domain.flow.transition import Transition
 
 __all__ = [
-    "Flow", "Transition", "consecutive_outcome_count", "planned_path", "pr_conflict_failures",
-    "total_outcome_count",
+    "Flow", "Transition", "consecutive_outcome_count", "outcome_counts", "planned_path",
+    "pr_conflict_failures", "total_outcome_count",
 ]

@@ -9,7 +9,7 @@ def make_sqlite_store(now=None, extra_config=None):
     root = tempfile.mkdtemp()
     cfg_path = os.path.join(root, "config")
     with open(cfg_path, "w") as f:
-        for k, v in (extra_config or {}).items():
+        for k, v in {"context-artifact-types": "spec", **(extra_config or {})}.items():
             f.write("%s: %s\n" % (k, v))
     config = Config(environ={"LC_HOME": root, "LC_CONFIG": cfg_path})
     return SqliteStore(config, now=now)

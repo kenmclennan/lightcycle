@@ -1,9 +1,8 @@
 import unittest
 from unittest import mock
 
-from lightcycle.domain.work.worker_permissions import (
-    WORKER_VERBS, worker_permitted, worker_refusal_message,
-)
+from lightcycle.domain.work.worker_permissions import WORKER_VERBS, worker_permitted
+from lightcycle.render import worker_refusal_message
 
 
 class TestWorkerPermitted(unittest.TestCase):
@@ -97,13 +96,13 @@ class TestWorkerRefusalMessage(unittest.TestCase):
 
     def test_attach_message_is_derived_from_the_forbidden_type_tuple(self):
         with mock.patch(
-            "lightcycle.domain.work.worker_permissions._ATTACH_FORBIDDEN_TYPES", ("repo", "resolves")
+            "lightcycle.domain.work.worker_permissions.ATTACH_FORBIDDEN_TYPES", ("repo", "resolves")
         ):
             self.assertIn("type repo, resolves", worker_refusal_message("attach"))
 
     def test_message_for_other_verbs_is_unchanged_by_the_forbidden_type_tuple(self):
         with mock.patch(
-            "lightcycle.domain.work.worker_permissions._ATTACH_FORBIDDEN_TYPES", ("repo", "resolves")
+            "lightcycle.domain.work.worker_permissions.ATTACH_FORBIDDEN_TYPES", ("repo", "resolves")
         ):
             self.assertNotIn("resolves", worker_refusal_message("rm"))
 

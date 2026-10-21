@@ -1,6 +1,6 @@
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.setup.project_registry import ProjectRegistry
-from lightcycle.domain.flow.flow import PROJECT_WORKSPACE, SPECS_WORKSPACE
+from lightcycle.domain.flow.flow import PROJECT_WORKSPACE
 from lightcycle.domain.runs import RunState, pass_number
 from lightcycle.domain.workspace import Branch, Worktree
 from lightcycle.ports.git import GitReadError
@@ -182,15 +182,16 @@ class WorktreeService:
             self._git.set_branch_upstream(target, branch)
         return path
 
-    def specs_path(self):
-        return self._resolve_repo(SPECS_WORKSPACE)
+    def context_path(self):
+        return self._resolve_repo(self._config.context_artifact_project())
 
-    def sync_specs(self):
-        project = self._store.get_project(SPECS_WORKSPACE)
+    def sync_context(self):
+        identity = self._config.context_artifact_project()
+        project = self._store.get_project(identity)
         if project is None or not project.local_path:
             raise UseCaseError(
                 "cannot read spec: no '%s' project registered - run `lc init`"
-                % SPECS_WORKSPACE
+                % identity
             )
         root = project.local_path
         if not self._git.is_git_repo(root):

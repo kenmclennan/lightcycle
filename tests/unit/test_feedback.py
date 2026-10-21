@@ -34,7 +34,7 @@ class FakeWorktrees:
         self._specs_path = specs_path
         self._specs_path_error = specs_path_error
 
-    def specs_path(self):
+    def context_path(self):
         if self._specs_path_error is not None:
             raise self._specs_path_error
         return self._specs_path

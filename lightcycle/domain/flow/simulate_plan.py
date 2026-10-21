@@ -3,14 +3,11 @@ from dataclasses import dataclass
 from typing import Optional, Tuple
 
 from lightcycle.domain.flow.hooks import (
-    CI_FAILED_CAP,
     HOOK_MIN_ARITY,
     PR_CONFLICT,
-    PR_CONFLICT_CAP,
-    PR_CONFLICT_ESCALATE,
     PR_FEEDBACK,
     PR_MERGE,
-    REVIEW_ROUNDS_CAP,
+    graph_caps,
 )
 
 _HOOK_OUTCOME_NAMES = (PR_MERGE, PR_CONFLICT)
@@ -88,36 +85,18 @@ def _feedback_occurrences(graph):
 
 def _cap_occurrences(graph, review_rounds_cap_n=None):
     caps = []
-    for occ in graph.hook_occurrences(CI_FAILED_CAP):
-        if len(occ) >= HOOK_MIN_ARITY[CI_FAILED_CAP]:
-            caps.append(("edge", None, occ[0], occ[1], int(occ[2]), occ[3]))
-    conflict_cap = {
-        occ[0]: int(occ[1])
-        for occ in graph.hook_occurrences(PR_CONFLICT_CAP)
-        if len(occ) >= HOOK_MIN_ARITY[PR_CONFLICT_CAP]
-    }
-    conflict_outcome = {
-        occ[0]: occ[1]
-        for occ in graph.hook_occurrences(PR_CONFLICT)
-        if len(occ) >= HOOK_MIN_ARITY[PR_CONFLICT]
-    }
-    conflict_escalate = {
-        occ[0]: occ[1]
-        for occ in graph.hook_occurrences(PR_CONFLICT_ESCALATE)
-        if len(occ) >= HOOK_MIN_ARITY[PR_CONFLICT_ESCALATE]
-    }
-    for stage, n in conflict_cap.items():
-        if stage in conflict_outcome:
-            escalate_outcome = conflict_escalate.get(stage)
+    for stage, cap in graph_caps(graph):
+        n = cap.limit if cap.limit is not None else review_rounds_cap_n
+        if n is None:
+            continue
+        if cap.escalate_stage is not None:
+            caps.append(("edge", None, stage, cap.outcome, n, cap.escalate_stage))
+        elif cap.outcome is not None:
             escalate_target = (
-                (graph.edges.get(stage) or {}).get(escalate_outcome)
-                if escalate_outcome is not None else None
+                (graph.edges.get(stage) or {}).get(cap.escalate_outcome)
+                if cap.escalate_outcome is not None else None
             )
-            caps.append(("hook", PR_CONFLICT, stage, conflict_outcome[stage], n, escalate_target))
-    if review_rounds_cap_n is not None:
-        for occ in graph.hook_occurrences(REVIEW_ROUNDS_CAP):
-            if len(occ) >= HOOK_MIN_ARITY[REVIEW_ROUNDS_CAP]:
-                caps.append(("edge", None, occ[0], occ[1], review_rounds_cap_n, occ[2]))
+            caps.append(("hook", cap.trigger_hook, stage, cap.outcome, n, escalate_target))
     return caps
 
 

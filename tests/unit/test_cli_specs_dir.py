@@ -5,9 +5,16 @@ from contextlib import redirect_stderr, redirect_stdout
 import lightcycle.cli as cli_mod
 from lightcycle.cli import cmd_specs_dir
 from lightcycle.container import Container
-from lightcycle.domain.flow.flow import SPECS_WORKSPACE
 from tests.support.fake_git import FakeGit
 from tests.support.fake_store import FakeStore
+
+
+class FakeConfig:
+    def __init__(self, project="specs"):
+        self._project = project
+
+    def context_artifact_project(self):
+        return self._project
 
 
 class TestSpecsDirCheck(unittest.TestCase):
@@ -17,7 +24,7 @@ class TestSpecsDirCheck(unittest.TestCase):
 
     def _run(self, store, git):
         cli_mod.set_container(Container(
-            config=object(), git=git, store=store, spawner=object(), workers=object(),
+            config=FakeConfig(), git=git, store=store, spawner=object(), workers=object(),
             fs=object(), github=object(), lock=object(), breaker=object(),
         ))
         out, err = io.StringIO(), io.StringIO()
@@ -27,7 +34,7 @@ class TestSpecsDirCheck(unittest.TestCase):
 
     def _store(self, path="/specs", remote="git@github.com:x/specs.git"):
         store = FakeStore()
-        store.add_project(SPECS_WORKSPACE, local_path=path, remote=remote)
+        store.add_project("specs", local_path=path, remote=remote)
         return store
 
     def test_passes_when_origin_matches_specs_remote(self):
@@ -54,11 +61,11 @@ class TestSpecsDirCheck(unittest.TestCase):
     def test_fails_when_no_specs_project_registered(self):
         rc, out, err = self._run(FakeStore(), FakeGit())
         self.assertEqual(rc, 1)
-        self.assertIn("no '%s' project registered" % SPECS_WORKSPACE, err)
+        self.assertIn("no 'specs' project registered", err)
 
     def test_bare_specs_dir_unchanged_by_check_support(self):
         cli_mod.set_container(Container(
-            config=object(), git=FakeGit(), store=self._store(), spawner=object(),
+            config=FakeConfig(), git=FakeGit(), store=self._store(), spawner=object(),
             workers=object(), fs=object(), github=object(), lock=object(), breaker=object(),
         ))
         out, err = io.StringIO(), io.StringIO()
@@ -66,6 +73,22 @@ class TestSpecsDirCheck(unittest.TestCase):
             rc = cmd_specs_dir([]) or 0
         self.assertEqual(rc, 0, err.getvalue())
         self.assertEqual(out.getvalue().strip(), "/specs")
+
+
+class TestSpecsDirHonoursConfiguredProject(unittest.TestCase):
+    def test_resolves_the_project_named_by_config(self):
+        store = FakeStore()
+        store.add_project("docs", local_path="/docs-root")
+        orig = cli_mod._container
+        self.addCleanup(lambda: cli_mod.set_container(orig))
+        cli_mod.set_container(Container(
+            config=FakeConfig("docs"), git=FakeGit(), store=store, spawner=object(),
+            workers=object(), fs=object(), github=object(), lock=object(), breaker=object(),
+        ))
+        out = io.StringIO()
+        with redirect_stdout(out):
+            rc = cmd_specs_dir([]) or 0
+        self.assertEqual((rc, out.getvalue().strip()), (0, "/docs-root"))
 
 
 if __name__ == "__main__":

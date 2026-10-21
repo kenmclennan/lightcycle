@@ -49,7 +49,7 @@ from lightcycle.domain.work.run_log import (
 )
 from lightcycle.domain.work.worker_log import worker_log_filename
 from lightcycle.domain.work.worker_permissions import (
-    WORKER_VERBS, worker_permitted, worker_refusal_message,
+    ATTACH_FORBIDDEN_TYPES, WORKER_VERBS, worker_permitted,
 )
 
 __all__ = [
@@ -77,5 +77,5 @@ __all__ = [
     "hook_log_label",
     "script_log_label",
     "worker_log_filename",
-    "WORKER_VERBS", "worker_permitted", "worker_refusal_message",
+    "ATTACH_FORBIDDEN_TYPES", "WORKER_VERBS", "worker_permitted",
 ]

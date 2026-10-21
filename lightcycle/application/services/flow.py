@@ -255,35 +255,13 @@ class FlowService:
     def owner_of(self, stage, name=None):
         return self.load_flow(name).step_def(stage).owner
 
-    def ci_failed_cap_outcome(self, stage, name=None):
-        cap = self.load_flow(name).step_def(stage).ci_cap
-        return cap.outcome if cap else None
-
-    def ci_failed_cap_n(self, stage, name=None):
-        cap = self.load_flow(name).step_def(stage).ci_cap
-        return cap.n if cap else None
-
-    def ci_failed_cap_target(self, stage, name=None):
-        cap = self.load_flow(name).step_def(stage).ci_cap
-        return cap.target if cap else None
-
-    def effective_transition(self, transition, outcome, prior_count, name=None):
-        return self.load_flow(name).effective_transition(transition, outcome, prior_count)
-
-    def review_rounds_cap_outcome(self, stage, name=None):
-        cap = self.load_flow(name).step_def(stage).review_rounds_cap
-        return cap.outcome if cap else None
-
-    def review_rounds_transition(self, transition, outcome, prior_count, name=None):
-        flow = self.load_flow(name)
-        if transition is None:
-            return transition
-        cap = flow.step_def(transition.from_stage).review_rounds_cap
-        if cap is None or outcome != cap.outcome:
-            return transition
-        return flow.review_rounds_transition(
-            transition, outcome, prior_count, self._config.review_rounds_cap(),
+    def escalated_transition(self, transition, outcome, history, name=None):
+        return self.load_flow(name).escalated_transition(
+            transition, outcome, history, self._cap_limit,
         )
+
+    def _cap_limit(self, key):
+        return getattr(self._config, key.replace("-", "_"))()
 
     def ready_roles(self):
         return ReadyQueue(self._store.ready_steps()).distinct_roles()

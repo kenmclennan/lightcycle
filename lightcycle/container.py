@@ -295,11 +295,12 @@ class SimulationContainer:
             os.makedirs(d, exist_ok=True)
         cfg_path = os.path.join(self.home, "config")
 
-        from lightcycle.domain.flow.flow import SPECS_WORKSPACE
-
+        with open(cfg_path, "w") as f:
+            f.write("context-artifact-types: %s\n" % " ".join(sorted(container.config.context_artifact_types())))
+            f.write("context-artifact-project: %s\n" % container.config.context_artifact_project())
         self.config = SimulateConfig(container.config, self.projects_root)
         self.store = SqliteStore(Config(environ={"LC_HOME": self.home, "LC_CONFIG": cfg_path}))
-        self.store.add_project(SPECS_WORKSPACE, local_path=self.specs_root)
+        self.store.add_project(self.config.context_artifact_project(), local_path=self.specs_root)
         self.git = RecordingGit()
         self.scaffold = container.scaffold
         self.flow = make_flow_service(

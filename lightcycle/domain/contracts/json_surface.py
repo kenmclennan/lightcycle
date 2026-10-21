@@ -5,8 +5,17 @@ from lightcycle.domain.work.node_view import NodeView
 from lightcycle.domain.work.step import Step
 
 
+READ_SURFACE_EXTRA_KEYS = frozenset({
+    "artifacts", "branch", "config", "description", "detail", "detail_presents",
+    "guidance_delivered", "guidance_skipped", "inputs", "item_artifacts", "notes", "outputs",
+    "passes", "phase", "pr", "records", "repo_path", "routes", "runs", "session_id", "skill",
+    "spec_path", "valid_outcomes", "workflow", "workflow_error", "workflow_resolved",
+    "workflow_source", "workspace",
+})
+
+
 def json_surface():
-    keys = set()
+    keys = set(READ_SURFACE_EXTRA_KEYS)
     keys |= Item(id="x").as_dict().keys()
     step = Step(id="x", item="y")
     keys |= step.as_dict().keys()

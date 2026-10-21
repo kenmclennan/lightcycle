@@ -211,6 +211,20 @@ def _reject_flags_ineffective_for_state(a):
     return "%s does not accept %s\n" % (_set_state_label(a.state), "; ".join(parts))
 
 
+_UNSET_REFUSAL_SENTENCES = {
+    "title-not-clearable": "a title must not be blank; there is nothing to clear, only to replace",
+    "label-not-clearable": "there is no way to clear a label this way",
+    "park-cleared-as-whole": "a park's fields are cleared as a whole, via --state ready",
+    "backlog-not-a-value": "backlog is a list of ids to resolve, not a value to clear",
+    "step-not-persisted": "step is a one-shot input to activation, not a persisted field",
+}
+
+
+def _unset_refusal_sentence(field, default):
+    code = UNSET_REFUSAL_REASONS.get(field)
+    return _UNSET_REFUSAL_SENTENCES[code] if code else default
+
+
 def _reject_blank_values(a):
     for f in ("title", "description", "project", "workflow", "label", "notes", "tried"):
         if getattr(a, f, None) != "":
@@ -218,7 +232,7 @@ def _reject_blank_values(a):
         if f in UNSETTABLE_FIELDS:
             return "--%s \"\" is refused; use --unset %s to clear it\n" % (f, f)
         return "--%s \"\" is refused; %s\n" % (
-            f, UNSET_REFUSAL_REASONS.get(f, "it may not be blank")
+            f, _unset_refusal_sentence(f, "it may not be blank")
         )
     return None
 
@@ -236,7 +250,7 @@ def _reject_unset_targets(unset_fields):
     if not bad:
         return None
     parts = [
-        "--unset %s: %s" % (f, UNSET_REFUSAL_REASONS.get(f, "not a field lc set can clear"))
+        "--unset %s: %s" % (f, _unset_refusal_sentence(f, "not a field lc set can clear"))
         for f in bad
     ]
     return "; ".join(parts) + "\n"
