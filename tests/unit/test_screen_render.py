@@ -112,13 +112,13 @@ def test_an_item_rollup_including_an_unpriced_step_notes_the_unpriced_count():
 HEADER_FIELDS = ("14m", "code-await-merge", "lightcycle/spec-driven (abfb01d)")
 
 
-def test_the_demo_fixtures_exercise_every_header_field_the_hub_can_render():
-    hub_frames = "\n".join(render(s) for s in sorted(SCREENS) if s.startswith("hub#"))
-    missing = [f for f in HEADER_FIELDS if f not in hub_frames]
+@pytest.mark.parametrize("field", HEADER_FIELDS)
+def test_the_demo_fixtures_exercise_every_header_field_the_hub_can_render(field):
+    hub_states = sorted(s for s in SCREENS if s.startswith("hub#"))
 
-    assert not missing, (
-        "no demo fixture populates %s, so no rendered frame can ever show it "
-        "and every comparison against the design silently omits it" % missing
+    assert any(field in render(s) for s in hub_states), (
+        "no demo fixture populates %r, so no rendered frame can ever show it "
+        "and every comparison against the design silently omits it" % field
     )
 
 
@@ -487,3 +487,4 @@ def test_no_reading_hides_the_github_segment():
     frame = render("priority-list#normal")
 
     assert "github " not in frame.split("\n")[-3]
+
