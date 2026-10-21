@@ -153,6 +153,10 @@ class CompleteStepUseCase:
                 "cannot close %s: step '%s' must produce %s; none on the item. "
                 "lc link the artifact first." % (input.step, t.stage, ", ".join(sorted(missing)))
             )
+        if self._passes.ends_pass(t.stage, input.outcome, name):
+            findings = self._passes.release_refusals(t.item, self._worktrees)
+            if findings:
+                return self._refuse_pass_end(t, input, findings)
         spec = self._resolver.spec_for(t, transition)
         won, new = self._store.complete_step_atomic(
             input.step, input.outcome, self._expected_assignee(), spec)
@@ -170,6 +174,24 @@ class CompleteStepUseCase:
             self._inputs.freeze(self._store.get_node(new))
         refusal = self._cascade_close(t.item)
         return CompleteResponse(next_step=new, teardown_refusal=refusal)
+
+    def _refuse_pass_end(self, t, input: CompleteInput, findings) -> CompleteResponse:
+        text = "; ".join(findings)
+        ParkStepUseCase(self._store).execute_once(
+            ParkInput(
+                step=input.step,
+                observation="pass end refused: %s" % text,
+                decision=(
+                    "commit, push or discard the work named, then run lc done %s %s again"
+                    % (input.step, input.outcome)
+                ),
+            )
+        )
+        message = (
+            "cannot end the pass for %s: %s. Commit, push or discard that work, "
+            "then complete %s again." % (t.item, text, input.step)
+        )
+        return CompleteResponse(next_step=None, teardown_refusal=message)
 
     def _complete_engine_audit(
         self, t, input: CompleteInput, mark_retroed: bool,

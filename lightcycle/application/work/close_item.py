@@ -53,9 +53,7 @@ class CloseItemUseCase:
         if step is None:
             return
         decision = "commit, push or discard the work named, then close %s again" % item
-        if step.park.needs == decision and step.park.reason == self._observation(finding_text):
-            return
-        ParkStepUseCase(self._store).execute(
+        ParkStepUseCase(self._store).execute_once(
             ParkInput(step=step.id, observation=self._observation(finding_text), decision=decision)
         )
 

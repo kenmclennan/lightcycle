@@ -142,6 +142,12 @@ class FakeWorktrees:
     def teardown_refusals(self, item, merged_prs=frozenset()):
         return []
 
+    def pass_release_refusals(self, item, runs):
+        return []
+
+    def phase_release_refusals(self, run):
+        return []
+
     def release_run(self, run, delete_remote=True):
         self.released = getattr(self, "released", [])
         self.released.append(run.id)
@@ -1050,6 +1056,12 @@ class _RefusingWorktrees(FakeWorktrees):
         self.merged_prs_seen.append(merged_prs)
         return ["worktree /w has uncommitted paths: a.py"]
 
+    def pass_release_refusals(self, item, runs):
+        return []
+
+    def phase_release_refusals(self, run):
+        return []
+
 
 class TestTeardownRefusalSkipsTheItemForTheTick(unittest.TestCase):
     def test_two_ticks_leave_the_item_open_with_one_park_note(self):
@@ -1079,3 +1091,120 @@ class TestTeardownRefusalSkipsTheItemForTheTick(unittest.TestCase):
         self.assertNotEqual(store.get_node(item).state, State.DONE)
         self.assertEqual((store.get_node(step).notes or "").count("BLOCKED:"), 1)
         self.assertEqual(worktrees.merged_prs_seen[0], frozenset({url}))
+
+
+class _GuardCfg:
+    def worktree_retries(self):
+        return 0
+
+    def worktree_retry_sleep(self):
+        return 0
+
+    def branch_prefix(self):
+        return "feat"
+
+    def projects_root(self):
+        return "/projects"
+
+    def engine_root(self):
+        return "lightcycle"
+
+
+class TestPhaseReleaseGuard(unittest.TestCase):
+    REPO = "/elsewhere/app"
+    BRANCH = "feat/app-x"
+    URL = "https://github.com/x/y/pull/21"
+
+    def _setup(self, github, flow=None, **git_kwargs):
+        from lightcycle.application.services.worktree import WorktreeService
+        from tests.support.fake_git import FakeGit
+
+        store = FakeStore()
+        item = store.create_item("my feature", "a description")
+        store.add_artifact(item, "repo", self.REPO)
+        rid = plant_pr(store, item, self.URL, branch=self.BRANCH)
+        step = store.create_step(step="ready-merge", role="human", parent=item)
+        git = FakeGit(branches={(self.REPO, self.BRANCH)}, ref="origin/main", **git_kwargs)
+        svc = WorktreeService(store, git, fs=None, config=_GuardCfg())
+        adapter = _FlowAdapter(flow or _FLOW)
+        uc = ResolveMergedPrsUseCase(
+            store, github, svc, adapter, CompleteStepUseCase(store, adapter),
+            CheckContentPinUseCase(store, github, adapter, trusted_authors=lambda: frozenset({"review-code"})),
+        )
+        path = svc.path_for_run(store.get_run(rid))
+        return store, item, step, rid, git, uc, path
+
+    @staticmethod
+    def _removed(git):
+        return [c for c in git.calls if c[0] in ("remove_worktree", "delete_branch")]
+
+    def test_dirty_merged_phase_worktree_parks_the_gate_and_releases_nothing(self):
+        store, item, step, rid, git, uc, path = self._setup(FakeGitHub(merged_prs={self.URL}))
+        git._registered = {path}
+        git._uncommitted = {path: ["a.py", "b.py"]}
+
+        result = uc.execute()
+
+        self.assertEqual(result.merged, [])
+        self.assertNotEqual(store.get_node(step).state, "done")
+        self.assertTrue(store.get_run(rid).is_open)
+        self.assertEqual(self._removed(git), [])
+        self.assertIn("a.py, b.py", store.get_node(step).park.reason)
+
+    def test_two_ticks_over_a_dirty_tree_leave_one_park_note_then_a_clean_tick_completes(self):
+        store, item, step, rid, git, uc, path = self._setup(FakeGitHub(merged_prs={self.URL}))
+        git._registered = {path}
+        git._uncommitted = {path: ["a.py"]}
+
+        uc.execute()
+        uc.execute()
+
+        self.assertEqual((store.get_node(step).notes or "").count("BLOCKED:"), 1)
+
+        git._uncommitted = {}
+        result = uc.execute()
+
+        self.assertEqual(result.merged, [item])
+        self.assertEqual(store.get_node(step).state, "done")
+
+    def test_clean_worktree_proceeds_even_with_commits_beyond_the_base(self):
+        store, item, step, rid, git, uc, path = self._setup(
+            FakeGitHub(merged_prs={self.URL}), beyond={(self.REPO, self.BRANCH): ["a1"]}
+        )
+        git._registered = {path}
+
+        result = uc.execute()
+
+        self.assertEqual(result.merged, [item])
+        self.assertEqual(store.get_node(step).state, "done")
+
+    def test_abandoned_close_gets_the_same_dirty_only_check(self):
+        flow_with_abandon = flow_from_metas(
+            {
+                "reviewer": {
+                    "step": "ready-merge",
+                    "routes": {"merged": "cleanup", "abandoned": "build"},
+                    "on_pr_merge": "merged",
+                    "on_pr_close": "abandoned",
+                },
+                "cleanup": {"step": "cleanup"},
+                "build": {"step": "build"},
+            }
+        )
+        url = self.URL
+        store, item, step, rid, git, uc, path = self._setup(
+            FakeGitHub(closed_prs={url}), flow=flow_with_abandon
+        )
+        git._registered = {path}
+        git._uncommitted = {path: ["a.py"]}
+
+        result = uc.execute()
+
+        self.assertEqual(result.abandoned, [])
+        self.assertNotEqual(store.get_node(step).state, "done")
+        self.assertEqual(self._removed(git), [])
+
+        git._uncommitted = {}
+        result = uc.execute()
+
+        self.assertEqual(result.abandoned, [item])

@@ -24,6 +24,14 @@ class PassBook:
     def ends_pass(self, stage, outcome, name=None):
         return self._flow.ends_pass(stage, outcome, name)
 
+    def release_refusals(self, item, worktrees):
+        if worktrees is None:
+            return []
+        pass_record = self._store.current_pass(item)
+        if pass_record is None:
+            return []
+        return worktrees.pass_release_refusals(item, self._store.open_runs_of(item, pass_record.id))
+
     def close(self, item, worktrees=None):
         pass_record = self._store.current_pass(item)
         if pass_record is None:
