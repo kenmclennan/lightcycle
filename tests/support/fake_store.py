@@ -341,6 +341,15 @@ class FakeStore(StorePort):
             raise NodeNotFoundError("unknown item '%s'" % tid)
         return self._to_item(record)
 
+    def item_workflow(self, item_id):
+        try:
+            record = self._get(item_id)
+        except NodeNotFoundError:
+            return None
+        if record.get("type") != "item":
+            return None
+        return record.get("workflow")
+
     def get_step(self, tid):
         record = self._get(tid)
         if record.get("type") != "step":

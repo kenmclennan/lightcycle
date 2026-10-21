@@ -87,7 +87,7 @@ class TestNodeHelpersTolerateWorkflowLessNodes(unittest.TestCase):
 
 
 class _BrokenStore(FakeStore):
-    def get_item(self, tid):
+    def item_workflow(self, item_id):
         raise RuntimeError("store is locked")
 
 
@@ -98,6 +98,39 @@ class TestOwningItemPropagatesStoreErrors(unittest.TestCase):
         service = svc(store)
         with self.assertRaises(RuntimeError):
             service.workflow_for(store.get_node(step))
+
+
+class _GetItemCountingStore(FakeStore):
+    def __init__(self):
+        super().__init__()
+        self.get_item_calls = 0
+
+    def get_item(self, tid):
+        self.get_item_calls += 1
+        return super().get_item(tid)
+
+
+class TestWorkflowResolutionSkipsGetItem(unittest.TestCase):
+    def _setup(self):
+        store = _GetItemCountingStore()
+        item = store.create_item("i", "d", workflow="wf")
+        step = store.create_step(step="gate", role="human", parent=item)
+        return store, item, step
+
+    def test_workflow_for_a_step_returns_the_pin_without_get_item(self):
+        store, item, step = self._setup()
+        self.assertEqual(svc(store).workflow_for(store.get_node(step)), "wf")
+        self.assertEqual(store.get_item_calls, 0)
+
+    def test_workflow_owner_returns_pin_and_item_id_without_get_item(self):
+        store, item, step = self._setup()
+        self.assertEqual(svc(store).workflow_owner(store.get_node(step)), ("wf", item))
+        self.assertEqual(store.get_item_calls, 0)
+
+    def test_workflow_owner_is_none_for_an_unpinned_item(self):
+        store = _GetItemCountingStore()
+        item = store.create_item("i", "d")
+        self.assertEqual(svc(store).workflow_owner(store.get_node(item)), (None, None))
 
 
 class TestStepSkill(unittest.TestCase):

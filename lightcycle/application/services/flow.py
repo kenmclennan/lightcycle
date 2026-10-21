@@ -9,7 +9,6 @@ from lightcycle.domain.workflows.identity import (
     parse_selector,
     resolve_pin,
 )
-from lightcycle.ports.store import NodeNotFoundError
 from lightcycle.ports.workflow_bundle import StepPrompt
 
 
@@ -134,16 +133,11 @@ class FlowService:
             return None
         return (parsed.body or "").strip() or None
 
-    def _owning_item(self, node):
-        item_id = getattr(node, "item", None) or node.id
-        try:
-            return self._store.get_item(item_id)
-        except NodeNotFoundError:
-            return None
+    def _item_id(self, node):
+        return getattr(node, "item", None) or node.id
 
     def workflow_for(self, step):
-        item = self._owning_item(step)
-        return item.workflow if item is not None else None
+        return self._store.item_workflow(self._item_id(step))
 
     def unpinned_workflow(self, node):
         if self._workflow_source is None:
@@ -152,9 +146,10 @@ class FlowService:
         return value if value and parse_pin(value) is None else None
 
     def workflow_owner(self, node):
-        item = self._owning_item(node)
-        if item is not None and item.workflow:
-            return item.workflow, item.id
+        item_id = self._item_id(node)
+        workflow = self._store.item_workflow(item_id)
+        if workflow:
+            return workflow, item_id
         return None, None
 
     def load_graph(self, name=None):

@@ -938,6 +938,10 @@ class SqliteStore(StorePort):
             raise NodeNotFoundError("unknown item '%s'" % tid)
         return rows[0]
 
+    def item_workflow(self, item_id):
+        row = self._conn.execute("SELECT workflow FROM items WHERE id = ?", (item_id,)).fetchone()
+        return row[0] if row else None
+
     def get_step(self, tid):
         rows = self._select_steps("id = ?", (tid,))
         if not rows:

@@ -81,6 +81,10 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def item_workflow(self, item_id):
+        pass
+
+    @abstractmethod
     def get_node(self, tid):
         pass
 

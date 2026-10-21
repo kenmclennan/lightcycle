@@ -42,7 +42,7 @@ def node_read_surface(store, flow, view):
                 out[field] = [i for i in artifacts[artifact_type].split("\n") if i]
     if step.type == "item":
         out["outputs"] = {"artifacts": ItemOutputs(store, flow).for_item(step.id).entry_dicts()}
-    out["workflow"] = store.get_item(item_id).workflow
+    out["workflow"] = store.item_workflow(item_id)
     out["passes"] = [p.as_dict() for p in store.passes_of(item_id)]
     out["runs"] = [r.as_dict() for r in store.runs_of(item_id)]
     skill = flow.step_skill(step)
