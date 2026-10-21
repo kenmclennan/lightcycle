@@ -30,6 +30,7 @@ dev = [
     "pytest-bdd>=7",
     "pytest-xdist>=3",
     "ruff>=0.9",
+    "mutmut>=3",
 ]
 
 [tool.uv]
@@ -63,3 +64,10 @@ addopts = "--import-mode=importlib -m 'not wip'"
 markers = ["wip: a scenario written ahead of its step definitions"]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+
+[tool.mutmut]
+source_paths = ["lightcycle/domain"]
+pytest_add_cli_args_test_selection = ["tests/unit"]
+also_copy = ["lightcycle", "tests", "docs", "bin", "scripts", ".github", ".venv", "pyproject.toml", "CLAUDE.md", "DEVELOPING.md", "METHODOLOGY.md", "README.md", "USAGE.md"]
+pytest_add_cli_args = ["-p", "no:xdist", "-m", "not wip"]
+timeout_multiplier = 0.5
