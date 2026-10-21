@@ -43,7 +43,7 @@ class TestConventionsText(unittest.TestCase):
         lines = CONVENTIONS_TEXT.splitlines()
         self.assertEqual(lines[0], "# Conventions")
         self.assertEqual(lines[2], "Conventions version: %d" % CONVENTIONS_VERSION)
-        self.assertEqual(CONVENTIONS_VERSION, 4)
+        self.assertEqual(CONVENTIONS_VERSION, 5)
 
     def test_text_names_every_rule_and_no_item_id(self):
         self.assertEqual(item_ids(CONVENTIONS_TEXT), [])
@@ -64,8 +64,14 @@ class TestConventionsText(unittest.TestCase):
         self.assertIn("\n13. ", CONVENTIONS_TEXT)
         self.assertIn("\n14. `detected-by`", CONVENTIONS_TEXT)
 
-    def test_text_is_version_four_and_drops_the_verified_rules(self):
-        self.assertIn("Conventions version: 4", CONVENTIONS_TEXT)
+    def test_ratchet_class_bullet_names_the_directory_and_headings_in_order(self):
+        self.assertIn("- Entries of the ratchet class live in `ratchets/`.", CONVENTIONS_TEXT)
+        headings = ["## Stack", "## Mechanism", "## Detection", "## Baseline", "## Earned by", "## Size"]
+        positions = [CONVENTIONS_TEXT.index("`%s`" % h) for h in headings]
+        self.assertEqual(positions, sorted(positions))
+
+    def test_text_is_version_five_and_drops_the_verified_rules(self):
+        self.assertIn("Conventions version: 5", CONVENTIONS_TEXT)
         for removed in (
             "fails unless the entry is context-only",
             "with an empty or missing `verified` fails",
