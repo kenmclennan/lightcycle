@@ -1,7 +1,8 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from lightcycle.application.setup.upgrade import RemoteVersionUnavailableError, upgrade
+from lightcycle.application.setup.upgrade import upgrade
+from lightcycle.ports.upgrade import RemoteVersionUnavailableError
 
 
 @dataclass(frozen=True)

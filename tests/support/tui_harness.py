@@ -29,7 +29,6 @@ from lightcycle.adapters.workflow_bundle import WorkflowBundleAdapter
 from lightcycle.adapters.workflow_source import WorkflowSourceAdapter
 from lightcycle.config import Config, _SEED_KEYS
 from lightcycle.container import Container
-from lightcycle.domain.flow.flow import SPECS_WORKSPACE
 from lightcycle.ports.backup import BackupPort
 from lightcycle.ports.breaker import BreakerPort
 from lightcycle.ports.git import GitPort
@@ -318,7 +317,7 @@ def make_test_container(store=None, lock=None, breaker=None, fs=None, workers=No
     if store_double is None:
         store_double = FakeStore()
         store_double.add_project(
-            SPECS_WORKSPACE, local_path=config.load_config().get("specs")
+            "specs", local_path=config.load_config().get("specs")
         )
     container = Container(
         store=store_double,

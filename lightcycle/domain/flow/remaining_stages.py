@@ -1,11 +1,7 @@
 def _successors(flow, stage):
     step = flow.step_def(stage)
     targets = [t for t in step.routes.values() if t]
-    for target in (
-        step.pr_feedback,
-        step.ci_cap.target if step.ci_cap else None,
-        step.review_rounds_cap.target if step.review_rounds_cap else None,
-    ):
+    for target in [step.pr_feedback] + [c.escalate_stage for c in step.caps.values()]:
         if target:
             targets.append(target)
     return targets

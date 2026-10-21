@@ -1,6 +1,5 @@
 import datetime
 
-from lightcycle.domain.flow import consecutive_outcome_count
 from lightcycle.domain.work.node_id import node_id_key
 from lightcycle.domain.work.state import State
 from lightcycle.domain.work.timestamp import parse_timestamp
@@ -26,17 +25,7 @@ class NextStepResolver:
         transition = self._flow.flow_next(t.stage, outcome, name)
         if transition is None:
             return None
-        cap_outcome = self._flow.ci_failed_cap_outcome(t.stage, name)
-        prior = 0
-        if cap_outcome is not None and outcome == cap_outcome:
-            prior = consecutive_outcome_count(self._history(t), outcome)
-        transition = self._flow.effective_transition(transition, outcome, prior, name)
-
-        rr_outcome = self._flow.review_rounds_cap_outcome(t.stage, name)
-        rr_prior = 0
-        if rr_outcome is not None and outcome == rr_outcome:
-            rr_prior = consecutive_outcome_count(self._history(t), outcome)
-        return self._flow.review_rounds_transition(transition, outcome, rr_prior, name)
+        return self._flow.escalated_transition(transition, outcome, lambda: self._history(t), name)
 
     def spec_for(self, t, transition):
         if transition is None:

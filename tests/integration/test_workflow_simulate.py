@@ -19,7 +19,6 @@ from lightcycle.application.workflows.script_tooling import WorkflowScripts
 from lightcycle.application.workflows.simulate import SimulateInput, WorkflowSimulateUseCase
 from lightcycle.config import Config
 from lightcycle.container import Container, make_flow_service, make_worktrees
-from lightcycle.domain.flow.flow import SPECS_WORKSPACE
 from lightcycle.domain.runs.phase_run import RunState
 from lightcycle.domain.work.state import State
 
@@ -142,6 +141,8 @@ def _seed_config(home):
         "backup-retention: 96",
         "max-title-length: 72",
         "review-rounds-cap: 5",
+        "context-artifact-project: specs",
+        "context-artifact-types: spec",
         "lifecycle-timeout-seconds: 300",
     ]
     cfg_path = os.path.join(home, "config")
@@ -239,9 +240,10 @@ class SimulateTestCase(unittest.TestCase):
         os.makedirs(specs_root, exist_ok=True)
         os.makedirs(projects_root, exist_ok=True)
         cfg_path = os.path.join(store_home, "config")
+        Path(cfg_path).write_text("context-artifact-types: spec\ncontext-artifact-project: specs\n")
         store_config = Config(environ={"LC_HOME": store_home, "LC_CONFIG": cfg_path})
         store = SqliteStore(store_config)
-        store.add_project(SPECS_WORKSPACE, local_path=specs_root)
+        store.add_project("specs", local_path=specs_root)
         sim_config = SimulateConfig(c.config, projects_root)
         git = RecordingGit()
         flow = make_flow_service(c.workflow_bundle, store, c.config, c.workflow_source)

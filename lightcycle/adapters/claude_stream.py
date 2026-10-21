@@ -7,12 +7,16 @@ from lightcycle.domain.money import Cost
 from lightcycle.domain.pool.attribution import AttributionEvent, ToolUsage
 from lightcycle.domain.pool.rate_limit import RateLimitEvent
 from lightcycle.domain.pool.usage import UsageEvent
-from lightcycle.domain.pool.worker_session import is_terminal_command
 from lightcycle.ports.claude_stream import ClaudeStreamPort
 
 _ID_PATTERN = r"[A-Za-z][A-Za-z0-9]*-[\w.]+"
 _ID_KEY_RE = re.compile(r'"id"\s*:\s*"(%s)"' % _ID_PATTERN)
 _ID_VALUE_RE = re.compile(r"^%s$" % _ID_PATTERN)
+_TERMINAL = re.compile(r"\blc\s+done\b|\blc\s+set\b[^\n]*--state[= ]waiting\b")
+
+
+def is_terminal_command(command):
+    return bool(command) and _TERMINAL.search(command) is not None
 
 
 def parse_usage_event(lines) -> UsageEvent:

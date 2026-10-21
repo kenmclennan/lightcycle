@@ -72,20 +72,6 @@ class TestWorktree(unittest.TestCase):
     def test_path_in_without_phase_is_unchanged(self):
         self.assertEqual(Worktree("s-9", None).path_in("/r"), "/r/.worktrees/s-9")
 
-    def test_transient_lock_errors_are_contention(self):
-        self.assertTrue(Worktree.is_lock_contention("fatal: could not lock working tree"))
-        self.assertTrue(
-            Worktree.is_lock_contention(
-                "Unable to create '/r/.git/worktrees/x/index.lock': File exists"
-            )
-        )
-        self.assertTrue(Worktree.is_lock_contention("fatal: 'x' is already locked"))
-
-    def test_real_errors_are_not_contention(self):
-        self.assertFalse(Worktree.is_lock_contention("fatal: invalid reference: origin/main"))
-        self.assertFalse(Worktree.is_lock_contention(""))
-        self.assertFalse(Worktree.is_lock_contention(None))
-
 
 if __name__ == "__main__":
     unittest.main()

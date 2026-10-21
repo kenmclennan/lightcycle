@@ -1,22 +1,20 @@
 from dataclasses import replace
 
 from lightcycle.domain.flow.hooks import (
-    CI_FAILED_CAP,
+    CONSECUTIVE,
+    FAILURES,
     HOOK_MIN_ARITY,
-    PR_CONFLICT_CAP,
-    PR_CONFLICT_TOTAL_CAP,
     PR_FEEDBACK,
-    REVIEW_ROUNDS_CAP,
+    TOTAL,
+    graph_caps,
 )
 from lightcycle.domain.flow.step_def import StepDef
 from lightcycle.domain.flow.transition import Transition
 from lightcycle.domain.work.detail import parse_detail
 
-SPECS_WORKSPACE = "specs"
 GUIDANCE_WORKSPACE = "guidance"
 LEGACY_KNOWLEDGE_WORKSPACE = "knowledge"
 PROJECT_WORKSPACE = "project"
-PR_CONFLICT_TOTAL_CAP_MULTIPLIER = 3
 
 
 def consecutive_outcome_count(history, outcome):
@@ -34,6 +32,22 @@ def pr_conflict_failures(prior_tips, current_tip, escalated):
     seq = list(prior_tips) + [current_tip]
     pairs = sum(1 for a, b in zip(seq, seq[1:]) if a and b and a == b)
     return escalated + pairs
+
+
+def outcome_counts(history, outcome, failures=0):
+    return {
+        TOTAL: total_outcome_count(history, outcome),
+        CONSECUTIVE: consecutive_outcome_count(history, outcome),
+        FAILURES: failures,
+    }
+
+
+def _limit_of(cap, limit_for):
+    if cap.limit is not None:
+        return cap.limit
+    if cap.limit_key:
+        return limit_for(cap.limit_key)
+    return None
 
 
 class Flow:
@@ -57,12 +71,9 @@ class Flow:
         for occ in graph.hook_occurrences(PR_FEEDBACK):
             if len(occ) >= HOOK_MIN_ARITY[PR_FEEDBACK]:
                 stages.add(occ[1])
-        for occ in graph.hook_occurrences(CI_FAILED_CAP):
-            if len(occ) >= HOOK_MIN_ARITY[CI_FAILED_CAP]:
-                stages.add(occ[3])
-        for occ in graph.hook_occurrences(REVIEW_ROUNDS_CAP):
-            if len(occ) >= HOOK_MIN_ARITY[REVIEW_ROUNDS_CAP]:
-                stages.add(occ[2])
+        for _stage, cap in graph_caps(graph):
+            if cap.escalate_stage:
+                stages.add(cap.escalate_stage)
         stages.update(graph.nodes.keys())
         stages.update(graph.signals.keys())
         stages.discard(None)
@@ -132,62 +143,37 @@ class Flow:
         sd = self.step_def(stage)
         return sd.workspace if sd.workspace is not None else self._workspace_default
 
-    def effective_transition(self, transition, outcome, prior_count):
+    def escalated_transition(self, transition, outcome, history, limit_for):
         if transition is None:
             return None
         step = transition.from_stage
-        cap = self.step_def(step).ci_cap
-        if cap is None or outcome != cap.outcome:
-            return transition
-        if prior_count < cap.n:
-            return transition
-        return Transition(
-            from_stage=step,
-            outcome=outcome,
-            to_stage=cap.target,
-            to_role=self.step_def(cap.target).owner or "human",
-            to_terminal=self.step_def(cap.target).owner is None,
-        )
+        for cap in self.step_def(step).caps.values():
+            if cap.escalate_stage is None or outcome != cap.outcome:
+                continue
+            limit = _limit_of(cap, limit_for)
+            if limit is None or outcome_counts(history(), outcome)[cap.counting] < limit:
+                continue
+            target = self.step_def(cap.escalate_stage)
+            transition = Transition(
+                from_stage=step,
+                outcome=outcome,
+                to_stage=cap.escalate_stage,
+                to_role=target.owner or "human",
+                to_terminal=target.owner is None,
+            )
+        return transition
 
-    def review_rounds_transition(self, transition, outcome, prior_count, cap_n):
-        if transition is None or cap_n is None:
-            return transition
-        step = transition.from_stage
-        cap = self.step_def(step).review_rounds_cap
-        if cap is None or outcome != cap.outcome:
-            return transition
-        if prior_count < cap_n:
-            return transition
-        return Transition(
-            from_stage=step,
-            outcome=outcome,
-            to_stage=cap.target,
-            to_role=self.step_def(cap.target).owner or "human",
-            to_terminal=self.step_def(cap.target).owner is None,
-        )
-
-    def pr_conflict_total_cap(self, step):
-        sd = self.step_def(step)
-        if sd.pr_conflict_total_cap is not None:
-            return sd.pr_conflict_total_cap
-        if sd.pr_conflict_cap is None:
-            return None
-        return PR_CONFLICT_TOTAL_CAP_MULTIPLIER * sd.pr_conflict_cap
-
-    def pr_conflict_cap_fired(self, step, failures, prior_conflicts):
-        sd = self.step_def(step)
-        if sd.pr_conflict_cap is None or not sd.pr_conflict_escalate:
-            return None
-        if failures >= sd.pr_conflict_cap:
-            return PR_CONFLICT_CAP
-        if prior_conflicts >= self.pr_conflict_total_cap(step):
-            return PR_CONFLICT_TOTAL_CAP
+    def fired_cap(self, stage, outcome, counts):
+        for cap in self.step_def(stage).caps.values():
+            if not cap.escalate_outcome or outcome != cap.outcome:
+                continue
+            if counts[cap.counting] >= cap.limit:
+                return cap
         return None
 
-    def pr_conflict_transition(self, step, conflict_outcome, failures, prior_conflicts):
-        if self.pr_conflict_cap_fired(step, failures, prior_conflicts) is None:
-            return conflict_outcome
-        return self.step_def(step).pr_conflict_escalate
+    def escalated_outcome(self, stage, outcome, counts):
+        cap = self.fired_cap(stage, outcome, counts)
+        return outcome if cap is None else cap.escalate_outcome
 
     def hook_steps(self):
         return [s for s, sd in sorted(self._steps.items()) if sd.hooks and sd.owner]

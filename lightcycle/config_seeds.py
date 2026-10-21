@@ -46,6 +46,7 @@ _SEED_KEYS = [
     ("tick-failure-cap", "5"),
     ("review-rounds-cap", "5"),
     ("context-artifact-types", "spec"),
+    ("context-artifact-project", "specs"),
     ("audit-shortcode", "AUD"),
     ("held-comment-shortcode", "HLD"),
     ("guidance-shortcode", "GDN"),

@@ -11,7 +11,8 @@ from pathlib import Path
 from lightcycle import cli
 from lightcycle.adapters.fsio import FsAdapter
 from lightcycle.adapters.workflow_bundle import WorkflowBundleAdapter
-from lightcycle.domain.work import worker_permitted, worker_refusal_message
+from lightcycle.domain.work import worker_permitted
+from lightcycle.render import worker_refusal_message
 from lightcycle.domain.workflows.contract import ENGINE_CONTRACT
 from tests.support.fake_store import FakeStore
 from tests.support.script_bundle import write_script_bundle

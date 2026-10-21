@@ -6,12 +6,12 @@ _SET_FORBIDDEN_FIELDS = (
     "title", "description", "project", "workflow", "backlog", "label", "step", "unset",
 )
 
-_ATTACH_FORBIDDEN_TYPES = ("repo", "resolves", "resolved-by")
+ATTACH_FORBIDDEN_TYPES = ("repo", "resolves", "resolved-by")
 
 
 def worker_permitted(verb, parsed_flags):
     if verb == "attach":
-        return parsed_flags.get("type") not in _ATTACH_FORBIDDEN_TYPES
+        return parsed_flags.get("type") not in ATTACH_FORBIDDEN_TYPES
     if verb in WORKER_VERBS:
         return True
     if verb == "set":
@@ -26,12 +26,3 @@ def worker_permitted(verb, parsed_flags):
         return "edit" in parsed_flags and not parsed_flags["edit"]
     return False
 
-
-def worker_refusal_message(verb):
-    if verb == "attach":
-        return "lc: workers may not attach an artifact of type %s - attach is otherwise permitted\n" % (
-            ", ".join(_ATTACH_FORBIDDEN_TYPES),
-        )
-    return "lc: workers may not run '%s' - permitted: %s, set --state waiting, workflow check --dir, workflow list, config\n" % (
-        verb, ", ".join(WORKER_VERBS),
-    )

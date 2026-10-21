@@ -2,7 +2,7 @@ import unittest
 
 from lightcycle.application.setup import InitGridUseCase
 from lightcycle.application.errors import UseCaseError
-from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE, SPECS_WORKSPACE
+from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE
 from lightcycle.config import ConfigError
 from tests.support.fake_git import FakeGit
 from tests.support.fake_github import FakeGitHub
@@ -33,6 +33,9 @@ class FakeConfig:
     def guidance_shortcode(self):
         return "GDN"
 
+    def context_artifact_project(self):
+        return "specs"
+
     def load_config(self):
         return self._legacy
 
@@ -49,7 +52,7 @@ class TestInitGuidanceShortcode(unittest.TestCase):
         store = FakeStore()
         _init_grid(store, FakeFs(), FakeConfig(), FakeGit()).execute()
         self.assertEqual(store.get_project(GUIDANCE_WORKSPACE).shortcode, "GDN")
-        self.assertIsNone(store.get_project(SPECS_WORKSPACE).shortcode)
+        self.assertIsNone(store.get_project("specs").shortcode)
 
     def test_a_registered_shortcodeless_guidance_project_is_left_alone(self):
         store = FakeStore()
@@ -79,7 +82,7 @@ class TestInitGrid(unittest.TestCase):
     def test_registers_a_default_specs_project_when_none_is_registered(self):
         store = FakeStore()
         _init_grid(store, FakeFs(), FakeConfig(), FakeGit()).execute()
-        project = store.get_project(SPECS_WORKSPACE)
+        project = store.get_project("specs")
         self.assertEqual(project.local_path, "~/workspace/specs")
         self.assertIsNone(project.remote)
 
@@ -87,15 +90,15 @@ class TestInitGrid(unittest.TestCase):
         store = FakeStore()
         config = FakeConfig(legacy={"specs": "/old/specs", "specs-remote": "git@x:specs.git"})
         _init_grid(store, FakeFs(), config, FakeGit()).execute()
-        project = store.get_project(SPECS_WORKSPACE)
+        project = store.get_project("specs")
         self.assertEqual(project.local_path, "/old/specs")
         self.assertEqual(project.remote, "git@x:specs.git")
 
     def test_leaves_an_already_registered_specs_project_untouched(self):
         store = FakeStore()
-        store.add_project(SPECS_WORKSPACE, local_path="/existing", remote="git@x:existing.git")
+        store.add_project("specs", local_path="/existing", remote="git@x:existing.git")
         _init_grid(store, FakeFs(), FakeConfig(), FakeGit()).execute()
-        project = store.get_project(SPECS_WORKSPACE)
+        project = store.get_project("specs")
         self.assertEqual(project.local_path, "/existing")
         self.assertEqual(project.remote, "git@x:existing.git")
 
@@ -103,7 +106,7 @@ class TestInitGrid(unittest.TestCase):
 class TestInitRefreshesBuiltInRemotes(unittest.TestCase):
     def _run(self, identity, remote, git):
         store = FakeStore()
-        store.add_project(SPECS_WORKSPACE, local_path="/specs", remote=None)
+        store.add_project("specs", local_path="/specs", remote=None)
         store.add_project(GUIDANCE_WORKSPACE, local_path="/kb", remote=None)
         store.add_project(identity, local_path="/" + ("kb" if identity == GUIDANCE_WORKSPACE else "specs"), remote=remote)
         r = _init_grid(store, FakeFs(), FakeConfig(), git).execute()
@@ -116,8 +119,8 @@ class TestInitRefreshesBuiltInRemotes(unittest.TestCase):
         self.assertEqual(r.remote_updates, ("guidance: remote updated to git@x:kb.git",))
 
     def test_specs_with_no_remote_picks_up_a_new_origin(self):
-        r, store = self._run(SPECS_WORKSPACE, None, FakeGit(origin={"/specs": "git@x:specs.git"}))
-        self.assertEqual(store.get_project(SPECS_WORKSPACE).remote, "git@x:specs.git")
+        r, store = self._run("specs", None, FakeGit(origin={"/specs": "git@x:specs.git"}))
+        self.assertEqual(store.get_project("specs").remote, "git@x:specs.git")
         self.assertEqual(r.remote_updates, ("specs: remote updated to git@x:specs.git",))
 
     def test_a_changed_origin_replaces_the_stored_remote(self):
@@ -217,7 +220,7 @@ class TestInitGuidanceRepo(unittest.TestCase):
         self.assertIn('git config --global user.name "<name>"', r.guidance_refusal)
         self.assertIn('git config --global user.email "<email>"', r.guidance_refusal)
         self.assertIsNone(store.get_project(GUIDANCE_WORKSPACE))
-        self.assertIsNotNone(store.get_project(SPECS_WORKSPACE))
+        self.assertIsNotNone(store.get_project("specs"))
         self.assertEqual(fs.writes, [])
         self.assertNotIn("init_repo", self._call_names(git))
 

@@ -1,6 +1,7 @@
 import unittest
+from types import SimpleNamespace
 
-from lightcycle.domain.flow import Flow
+from lightcycle.domain.flow import Flow, Transition, outcome_counts
 from lightcycle.domain.flow.graph import parse_graph
 
 GRAPH_TEXT = """
@@ -82,8 +83,10 @@ class TestFlowFromGraph(unittest.TestCase):
     def test_terminal_and_conflict_outcomes(self):
         self.assertEqual(self.flow.step_def("ready-merge").pr_merge, "merged")
         self.assertEqual(self.flow.step_def("ready-merge").pr_conflict, "conflicted")
-        self.assertEqual(self.flow.step_def("ready-merge").pr_conflict_cap, 3)
-        self.assertEqual(self.flow.step_def("ready-merge").pr_conflict_escalate, "gave-up")
+        cap = self.flow.step_def("ready-merge").caps["pr_conflict_cap"]
+        self.assertEqual(cap.limit, 3)
+        self.assertEqual(cap.outcome, "conflicted")
+        self.assertEqual(cap.escalate_outcome, "gave-up")
 
     def test_pr_head_moved_outcome_is_read_from_the_hook(self):
         self.assertEqual(self.flow.step_def("ready-merge").pr_head_moved, "head-moved")
@@ -114,66 +117,95 @@ class TestFlowFromGraph(unittest.TestCase):
         self.assertIn("clean", self.flow.step_def("audit").routes.keys())
 
     def test_ci_failed_cap_and_target(self):
-        cap = self.flow.step_def("watch-pr").ci_cap
+        cap = self.flow.step_def("watch-pr").caps["ci_failed_cap"]
         self.assertEqual(cap.outcome, "ci-failed")
-        self.assertEqual(cap.n, 3)
-        self.assertEqual(cap.target, "review-ci")
+        self.assertEqual(cap.limit, 3)
+        self.assertEqual(cap.escalate_stage, "review-ci")
 
     def test_ci_failed_cap_absent_by_default(self):
-        self.assertIsNone(self.flow.step_def("build").ci_cap)
+        self.assertNotIn("ci_failed_cap", self.flow.step_def("build").caps)
 
     def test_ci_failed_cap_escalation_target_is_a_known_terminal_human_step(self):
         self.assertEqual(self.flow.step_def("review-ci").owner, "human")
         self.assertEqual(sorted(self.flow.step_def("review-ci").routes.keys()), [])
 
     def test_review_rounds_cap_and_target(self):
-        cap = self.flow.step_def("review").review_rounds_cap
+        cap = self.flow.step_def("review").caps["review_rounds_cap"]
         self.assertEqual(cap.outcome, "rejected")
-        self.assertEqual(cap.target, "review-rounds-exceeded")
+        self.assertEqual(cap.escalate_stage, "review-rounds-exceeded")
+        self.assertIsNone(cap.limit)
+        self.assertEqual(cap.limit_key, "review-rounds-cap")
 
     def test_review_rounds_cap_absent_by_default(self):
-        self.assertIsNone(self.flow.step_def("build").review_rounds_cap)
+        self.assertNotIn("review_rounds_cap", self.flow.step_def("build").caps)
 
     def test_review_rounds_cap_escalation_target_declared_only_via_the_hook_still_resolves(self):
         self.assertEqual(self.flow.step_def("review-rounds-exceeded").owner, "human")
         self.assertEqual(sorted(self.flow.step_def("review-rounds-exceeded").routes.keys()), [])
 
-    def test_effective_transition_non_matching_outcome_is_never_redirected(self):
+    def _ci_failed_edge(self):
+        return Transition("watch-pr", "ci-failed", "build", "agent", False)
+
+    def _escalate(self, raw, outcome, prior, rounds=3):
+        history = [SimpleNamespace(outcome=outcome)] * prior
+        return self.flow.escalated_transition(raw, outcome, lambda: history, lambda key: rounds)
+
+    def test_escalated_transition_non_matching_outcome_is_never_redirected(self):
         raw = self.flow.next("watch-pr", "done")
-        self.assertIs(self.flow.effective_transition(raw, "done", 100), raw)
+        self.assertIs(self._escalate(raw, "done", 100), raw)
 
-    def test_effective_transition_no_cap_configured_is_a_no_op(self):
+    def test_escalated_transition_no_cap_configured_is_a_no_op(self):
         raw = self.flow.next("build", "done")
-        self.assertIs(self.flow.effective_transition(raw, "done", 100), raw)
+        self.assertIs(self._escalate(raw, "done", 100), raw)
 
-    def test_effective_transition_none_transition_stays_none(self):
-        self.assertIsNone(self.flow.effective_transition(None, "ci-failed", 5))
+    def test_escalated_transition_none_transition_stays_none(self):
+        self.assertIsNone(self._escalate(None, "ci-failed", 5))
 
-    def test_review_rounds_transition_below_cap_is_a_no_op(self):
+    def test_ci_failed_cap_below_the_limit_follows_the_normal_edge(self):
+        raw = self._ci_failed_edge()
+        self.assertIs(self._escalate(raw, "ci-failed", 2), raw)
+
+    def test_ci_failed_cap_at_the_limit_escalates(self):
+        raw = self._ci_failed_edge()
+        self.assertEqual(self._escalate(raw, "ci-failed", 3).to_stage, "review-ci")
+
+    def test_review_rounds_cap_below_the_limit_is_a_no_op(self):
         raw = self.flow.next("review", "rejected")
-        self.assertIs(self.flow.review_rounds_transition(raw, "rejected", 2, 3), raw)
+        self.assertIs(self._escalate(raw, "rejected", 2), raw)
 
-    def test_review_rounds_transition_at_cap_reroutes_to_target(self):
+    def test_review_rounds_cap_at_the_limit_reroutes_to_target(self):
         raw = self.flow.next("review", "rejected")
-        t = self.flow.review_rounds_transition(raw, "rejected", 3, 3)
+        t = self._escalate(raw, "rejected", 3)
         self.assertEqual(t.to_stage, "review-rounds-exceeded")
         self.assertEqual(t.to_role, "human")
         self.assertFalse(t.to_terminal)
 
-    def test_review_rounds_transition_non_matching_outcome_is_never_redirected(self):
-        raw = self.flow.next("review", "done")
-        self.assertIs(self.flow.review_rounds_transition(raw, "done", 100, 3), raw)
-
-    def test_review_rounds_transition_no_cap_configured_is_a_no_op(self):
-        raw = self.flow.next("build", "done")
-        self.assertIs(self.flow.review_rounds_transition(raw, "done", 100, 3), raw)
-
-    def test_review_rounds_transition_none_transition_stays_none(self):
-        self.assertIsNone(self.flow.review_rounds_transition(None, "rejected", 5, 3))
-
-    def test_review_rounds_transition_cap_n_none_is_a_no_op(self):
+    def test_review_rounds_cap_with_no_configured_limit_is_a_no_op(self):
         raw = self.flow.next("review", "rejected")
-        self.assertIs(self.flow.review_rounds_transition(raw, "rejected", 100, None), raw)
+        self.assertIs(self._escalate(raw, "rejected", 100, rounds=None), raw)
+
+    def test_review_rounds_cap_uses_the_configured_limit(self):
+        raw = self.flow.next("review", "rejected")
+        self.assertIs(self._escalate(raw, "rejected", 4, rounds=5), raw)
+        self.assertEqual(self._escalate(raw, "rejected", 5, rounds=5).to_stage, "review-rounds-exceeded")
+
+    def test_pr_conflict_cap_swaps_the_outcome_at_the_limit_and_not_below(self):
+        history = [SimpleNamespace(outcome="conflicted")] * 3
+        below = outcome_counts(history, "conflicted", failures=2)
+        at = outcome_counts(history, "conflicted", failures=3)
+        self.assertEqual(self.flow.escalated_outcome("ready-merge", "conflicted", below), "conflicted")
+        self.assertEqual(self.flow.escalated_outcome("ready-merge", "conflicted", at), "gave-up")
+
+    def test_pr_conflict_cap_counts_total_not_consecutive(self):
+        spaced = ["conflicted", "done"] * 8 + ["conflicted"]
+        history = [SimpleNamespace(outcome=o) for o in spaced]
+        counts = outcome_counts(history, "conflicted")
+        self.assertEqual(self.flow.escalated_outcome("ready-merge", "conflicted", counts), "gave-up")
+
+    def test_ci_failed_cap_counts_consecutive_not_total(self):
+        raw = self._ci_failed_edge()
+        history = [SimpleNamespace(outcome=o) for o in ("ci-failed", "ci-failed", "done", "ci-failed")]
+        self.assertIs(self.flow.escalated_transition(raw, "ci-failed", lambda: history, lambda k: 3), raw)
 
     def test_primary_outcome_returns_the_marked_outcome(self):
         self.assertEqual(self.flow.step_def("open-pr").primary, "done")
@@ -242,3 +274,49 @@ class TestFlowDispositionFor(unittest.TestCase):
     def test_a_workflow_with_no_disposition_block_still_parses(self):
         flow = Flow.from_graph(parse_graph("entry: build\n\nedges:\n  build  done  review\n"), STEP_METAS)
         self.assertIsNone(flow.disposition_for("done"))
+
+
+class TestTwoCapsOnOneStage(unittest.TestCase):
+    TEXT = """
+entry: gate
+
+nodes:
+  gate  coder
+  t1    coder
+  t2    coder
+  next  coder
+
+edges:
+  gate  bad   next
+  gate  good  next
+
+hooks:
+  ci_failed_cap      gate  bad  2  t1
+  review_rounds_cap  gate  bad  t2
+"""
+
+    def setUp(self):
+        graph = parse_graph(self.TEXT)
+        metas = {graph.file_for(s): {"step": s} for s in ("gate", "t1", "t2", "next")}
+        self.flow = Flow.from_graph(graph, metas)
+
+    def _escalate(self, outcome, prior, rounds):
+        history = [SimpleNamespace(outcome=outcome)] * prior
+        raw = self.flow.next("gate", outcome)
+        return self.flow.escalated_transition(raw, outcome, lambda: history, lambda key: rounds), raw
+
+    def test_both_firing_lets_the_later_cap_win(self):
+        t, _ = self._escalate("bad", 3, 3)
+        self.assertEqual(t.to_stage, "t2")
+
+    def test_only_the_exceeded_cap_reroutes(self):
+        t, _ = self._escalate("bad", 2, 5)
+        self.assertEqual(t.to_stage, "t1")
+
+    def test_neither_exceeded_leaves_the_normal_edge(self):
+        t, raw = self._escalate("bad", 1, 5)
+        self.assertIs(t, raw)
+
+    def test_other_outcomes_are_untouched(self):
+        t, raw = self._escalate("good", 9, 1)
+        self.assertIs(t, raw)

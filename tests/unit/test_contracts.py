@@ -660,9 +660,9 @@ class TestRealStepsFlowComposition(unittest.TestCase):
 
     def test_ci_failed_cap_escalates_to_review_ci_after_three(self):
         graph, flow, _ = self._graph_flow()
-        cap = flow.step_def("watch-ci").ci_cap
-        self.assertEqual(cap.n, 3)
-        self.assertEqual(cap.target, "review-ci")
+        cap = flow.step_def("watch-ci").caps["ci_failed_cap"]
+        self.assertEqual(cap.limit, 3)
+        self.assertEqual(cap.escalate_stage, "review-ci")
         self.assertEqual(flow.step_def("review-ci").owner, "human")
         self.assertEqual(sorted(flow.step_def("review-ci").routes.keys()), [])
 

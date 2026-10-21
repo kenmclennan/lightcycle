@@ -48,27 +48,8 @@ class _FlowAdapter:
     def owner_of(self, step, name=None, project=None):
         return self._flow.step_def(step).owner
 
-    def ci_failed_cap_outcome(self, step, name=None, project=None):
-        cap = self._flow.step_def(step).ci_cap
-        return cap.outcome if cap else None
-
-    def ci_failed_cap_n(self, step, name=None, project=None):
-        cap = self._flow.step_def(step).ci_cap
-        return cap.n if cap else None
-
-    def ci_failed_cap_target(self, step, name=None, project=None):
-        cap = self._flow.step_def(step).ci_cap
-        return cap.target if cap else None
-
-    def effective_transition(self, transition, outcome, prior_count, name=None, project=None):
-        return self._flow.effective_transition(transition, outcome, prior_count)
-
-    def review_rounds_cap_outcome(self, step, name=None, project=None):
-        cap = self._flow.step_def(step).review_rounds_cap
-        return cap.outcome if cap else None
-
-    def review_rounds_transition(self, transition, outcome, prior_count, name=None, project=None):
-        return self._flow.review_rounds_transition(transition, outcome, prior_count, None)
+    def escalated_transition(self, transition, outcome, history, name=None, project=None):
+        return self._flow.escalated_transition(transition, outcome, history, lambda key: None)
 
     def phase_for(self, node):
         return self._flow.step_def(getattr(node, "stage", None)).phase

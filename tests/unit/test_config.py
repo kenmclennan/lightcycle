@@ -688,12 +688,26 @@ class TestPersonalOrigin(unittest.TestCase):
 
 
 class TestContextArtifactTypes(unittest.TestCase):
-    def test_returns_spec_when_unset(self):
-        self.assertEqual(_cfg().context_artifact_types(), frozenset({"spec"}))
+    def test_unset_raises(self):
+        with self.assertRaises(ConfigError):
+            _cfg().context_artifact_types()
+
+    def test_blank_raises(self):
+        with self.assertRaises(ConfigError):
+            _cfg(context_artifact_types="").context_artifact_types()
 
     def test_returns_declared_types_when_set(self):
         c = _cfg(context_artifact_types="spec brief")
         self.assertEqual(c.context_artifact_types(), frozenset({"spec", "brief"}))
+
+
+class TestContextArtifactProject(unittest.TestCase):
+    def test_unset_raises(self):
+        with self.assertRaises(ConfigError):
+            _cfg().context_artifact_project()
+
+    def test_returns_declared_project(self):
+        self.assertEqual(_cfg(context_artifact_project="docs").context_artifact_project(), "docs")
 
 
 class TestReviewRoundsCap(unittest.TestCase):

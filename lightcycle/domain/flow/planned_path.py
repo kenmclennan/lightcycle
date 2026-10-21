@@ -23,9 +23,9 @@ def _normal_outcome(flow, stage):
     merge = sd.pr_merge
     if merge is not None:
         return merge
-    cap_outcome = sd.ci_cap.outcome if sd.ci_cap else None
-    if cap_outcome is not None:
-        remaining = [o for o in outcomes if o != cap_outcome]
+    retry_outcomes = {c.outcome for c in sd.caps.values() if c.retry}
+    if retry_outcomes:
+        remaining = [o for o in outcomes if o not in retry_outcomes]
         if len(remaining) == 1:
             return remaining[0]
     primary = sd.primary

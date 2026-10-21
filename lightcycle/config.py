@@ -735,8 +735,10 @@ class Config:
         return v or None
 
     def context_artifact_types(self):
-        raw = self.load_config().get("context-artifact-types")
-        return frozenset((raw or "spec").split())
+        return frozenset(self._required_str("context-artifact-types").split())
+
+    def context_artifact_project(self):
+        return self._required_str("context-artifact-project")
 
     def set_personal_origin(self, name):
         p = self.config_path()

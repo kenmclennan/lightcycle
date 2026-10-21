@@ -5,6 +5,14 @@ class UpgradeInstallError(Exception):
     pass
 
 
+class ProcessListUnreadableError(Exception):
+    pass
+
+
+class RemoteVersionUnavailableError(Exception):
+    pass
+
+
 class UpgradePort(ABC):
     @abstractmethod
     def list_processes(self):

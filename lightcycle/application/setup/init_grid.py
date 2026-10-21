@@ -5,7 +5,7 @@ import os
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.git_identity import require_git_identity
 from lightcycle.config import ConfigError
-from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE, SPECS_WORKSPACE
+from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE
 from lightcycle.ports.github import ReadFailure
 from lightcycle.ports.git import GitReadError
 from lightcycle.domain.guidance.conventions import CONVENTIONS_TEXT
@@ -69,7 +69,7 @@ class InitGridUseCase:
 
     def _refresh_remotes(self):
         updates = []
-        for identity in (GUIDANCE_WORKSPACE, SPECS_WORKSPACE):
+        for identity in (GUIDANCE_WORKSPACE, self._config.context_artifact_project()):
             url = self._refreshed_remote(identity)
             if url:
                 updates.append("%s: remote updated to %s" % (identity, url))
@@ -169,7 +169,8 @@ class InitGridUseCase:
         )
 
     def _ensure_specs_project(self):
-        if self._store.get_project(SPECS_WORKSPACE) is not None:
+        identity = self._config.context_artifact_project()
+        if self._store.get_project(identity) is not None:
             return
         legacy = self._config.load_config()
         legacy_path = legacy.get("specs")
@@ -179,4 +180,4 @@ class InitGridUseCase:
         else:
             path = self._config.expand_path(_DEFAULT_SPECS_PATH)
             remote = None
-        self._store.add_project(SPECS_WORKSPACE, local_path=path, remote=remote)
+        self._store.add_project(identity, local_path=path, remote=remote)

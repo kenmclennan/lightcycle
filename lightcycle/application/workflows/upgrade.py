@@ -116,7 +116,7 @@ class UpgradeWorkflowSourceUseCase:
             raise WorkflowSourceError(
                 "bundle has composition problem(s) - %s" % detail)
         try:
-            sources = engine_sources(self._fs)
+            sources = engine_sources()
             fragments = engine_fragment_names(self._fs)
         except PromptSurfaceUnavailable as e:
             raise WorkflowSourceError(

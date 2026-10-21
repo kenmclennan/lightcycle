@@ -20,7 +20,7 @@ from lightcycle.application.inspect.show_audit_criteria import ShowAuditCriteria
 from lightcycle.domain.work.audit_criteria import UnknownMaterial
 from lightcycle.application.inspect.report_guidance import ReportGuidanceUseCase, parse_since
 from lightcycle.domain.guidance.conventions import CONVENTIONS_TEXT
-from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE, SPECS_WORKSPACE
+from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE
 
 
 from lightcycle.commands.context import container, flow as _flow
@@ -56,7 +56,9 @@ def _project_dir(identity, remote_label, check, subject):
 
 def cmd_specs_dir(argv):
     a = build_parser(COMMANDS["specs-dir"]).parse_args(argv)
-    return _project_dir(SPECS_WORKSPACE, "specs-remote", a.check, "specs")
+    return _project_dir(
+        container().config.context_artifact_project(), "specs-remote", a.check, "specs"
+    )
 
 
 def _guidance_flags_text(row):

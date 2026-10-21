@@ -20,7 +20,7 @@ from lightcycle.domain.feedback import (
     outstanding_threads,
     standing,
 )
-from lightcycle.domain.flow import pr_conflict_failures, total_outcome_count
+from lightcycle.domain.flow import outcome_counts, pr_conflict_failures, total_outcome_count
 from lightcycle.domain.flow.hooks import PR_CONFLICT_CAP
 from lightcycle.domain.work import State, node_id_key, parse_timestamp
 from lightcycle.ports.github import NotYetRead, ReadFailure
@@ -182,7 +182,12 @@ class DispatchPrFeedbackUseCase:
     def _escalated_resolutions(self, step, flow, conflict_outcome):
         gate = flow.step_def(step.stage)
         resolve_stage = gate.routes.get(conflict_outcome)
-        escalation = gate.routes.get(gate.pr_conflict_escalate)
+        escalate_outcome = next(
+            (c.escalate_outcome for c in gate.caps.values()
+             if c.outcome == conflict_outcome and c.escalate_outcome),
+            None,
+        )
+        escalation = gate.routes.get(escalate_outcome)
         if not resolve_stage or not escalation:
             return 0
         resolve_routes = flow.step_def(resolve_stage).routes
@@ -247,14 +252,14 @@ class DispatchPrFeedbackUseCase:
                     current_tip,
                     self._escalated_resolutions(step, flow, conflict_outcome),
                 )
-                fired = flow.pr_conflict_cap_fired(step.stage, failures, prior)
-                outcome = flow.pr_conflict_transition(
-                    step.stage, conflict_outcome, failures, prior)
+                counts = outcome_counts(history, conflict_outcome, failures)
+                fired = flow.fired_cap(step.stage, conflict_outcome, counts)
+                outcome = flow.escalated_outcome(step.stage, conflict_outcome, counts)
                 done = self._complete.execute(CompleteInput(step=step.id, outcome=outcome))
-                if fired and done.next_step:
+                if fired is not None and done.next_step:
                     self._store.note_condition(
                         done.next_step,
-                        self._conflict_cap_note(fired, failures, prior, step.stage, done.next_step),
+                        self._conflict_cap_note(fired.hook, failures, prior, step.stage, done.next_step),
                     )
                 conflicted.append(step.item)
         return DispatchPrFeedbackResponse(reworked=reworked, conflicted=conflicted)

@@ -12,9 +12,8 @@ from lightcycle.adapters.workflow_bundle import WorkflowBundleAdapter
 from lightcycle.adapters.workflow_source import WorkflowSourceAdapter
 from lightcycle.adapters.log_parser import LogLineParser
 
-from lightcycle.domain.work import (
-    worker_permitted, worker_refusal_message,
-)
+from lightcycle.domain.work import worker_permitted
+from lightcycle.render import worker_refusal_message
 from lightcycle.application.pool import (
     AcquireRunLockUseCase,
     ClearDrainUseCase,
