@@ -51,6 +51,14 @@ def _pass_end_coverage_violations(graph, plan):
     ]
 
 
+class _LiveReads:
+    def poll_epoch(self):
+        return 0
+
+    def confirmed_after(self, pr, epoch):
+        return True
+
+
 @dataclass(frozen=True)
 class SimulateInput:
     workflow: str
@@ -190,6 +198,7 @@ class WorkflowSimulateUseCase:
                 writes=InlinePrWrites(github, time.monotonic),
                 ci_clock=time.monotonic, ci_poll_seconds=lambda: 60,
                 ci_ceiling_seconds=self._config.ci_check_ceiling_seconds, ci_wall_clock=time.time,
+                ci_views=_LiveReads(),
             )
             violations += self._drive(item_id, pin, graph, walk, github, monitor, trace, index)
         violations += self._run_script_guards(pin, guards, trace)

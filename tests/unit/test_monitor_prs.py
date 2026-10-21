@@ -26,6 +26,7 @@ from lightcycle.application.pool.no_op_gates import (
     NoOpUsageGate,
     NoOpWorktrees,
 )
+from tests.support.fake_view_freshness import AlwaysConfirmed
 from tests.support.fake_fs import flow_from_metas
 from lightcycle.ports.github import CheckRun, Comment
 from tests.support.fake_github import FakeGitHub
@@ -215,7 +216,7 @@ class TestTickWithMonitor(unittest.TestCase):
         monitor = MonitorPrsUseCase(
             store, FakeGitHub(merged_prs={url}), worktrees, _FlowAdapter(_FLOW),
             trusted_authors=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
-            writes=InlinePrWrites(FakeGitHub(), time.monotonic), ci_clock=time.monotonic, ci_poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_wall_clock=lambda: 10000.0,
+            writes=InlinePrWrites(FakeGitHub(), time.monotonic), ci_clock=time.monotonic, ci_poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_wall_clock=lambda: 10000.0, ci_views=AlwaysConfirmed(),
         )
 
         result = make_tick(
@@ -236,7 +237,7 @@ class TestTickWithMonitor(unittest.TestCase):
         monitor = MonitorPrsUseCase(
             store, FakeGitHub(closed_prs={url}), worktrees, _FlowAdapter(_FLOW),
             trusted_authors=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
-            writes=InlinePrWrites(FakeGitHub(), time.monotonic), ci_clock=time.monotonic, ci_poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_wall_clock=lambda: 10000.0,
+            writes=InlinePrWrites(FakeGitHub(), time.monotonic), ci_clock=time.monotonic, ci_poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_wall_clock=lambda: 10000.0, ci_views=AlwaysConfirmed(),
         )
 
         result = make_tick(
@@ -330,7 +331,7 @@ class TestMonitorPrsUseCaseComposesAllThreeJobs(unittest.TestCase):
         uc = MonitorPrsUseCase(
             store, gh, worktrees, _FlowAdapter(flow), complete,
             trusted_authors=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
-            writes=InlinePrWrites(gh, time.monotonic), ci_clock=time.monotonic, ci_poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_wall_clock=lambda: 10000.0,
+            writes=InlinePrWrites(gh, time.monotonic), ci_clock=time.monotonic, ci_poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_wall_clock=lambda: 10000.0, ci_views=AlwaysConfirmed(),
         )
 
         result = uc.execute()
