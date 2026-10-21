@@ -66,7 +66,7 @@ def _tick(monitor, gate):
 
 
 def _gate(snapshot, github, runner):
-    return GithubPollUseCase(snapshot, github, runner, _Config(), PrWrites(time.monotonic), FakeGithubBudgetStatus(), time.time, FakeFs())
+    return GithubPollUseCase(snapshot, github, runner, _Config(), PrWrites(time.monotonic), FakeGithubBudgetStatus(), time.time, FakeFs(), FakeStore())
 
 
 class TestTickIndependence(unittest.TestCase):
@@ -503,7 +503,7 @@ class _Rig:
             self.store, self.snapshot, FakeWorktrees(), flow, CompleteStepUseCase(self.store, flow),
             trusted_authors=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
             writes=self.writes, ci_clock=time.monotonic, ci_poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_wall_clock=lambda: 10000.0, ci_views=self.snapshot)
-        self.poll = GithubPollUseCase(self.snapshot, self.github, runner, _Config(), self.writes, FakeGithubBudgetStatus(), time.time, FakeFs())
+        self.poll = GithubPollUseCase(self.snapshot, self.github, runner, _Config(), self.writes, FakeGithubBudgetStatus(), time.time, FakeFs(), FakeStore())
 
     def notes(self):
         return self.store.get_node(self.step).notes or ""

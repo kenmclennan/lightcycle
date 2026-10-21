@@ -44,6 +44,30 @@ class PrSnapshot(GitHubEventsPort):
         self._pending = _Pending()
         self._epoch = 0
         self._confirmed = {}
+        self._seeds = {}
+        self._cutoff_changes = {}
+
+    def seed_cutoff(self, pr, cutoff, head):
+        with self._lock:
+            self._seeds[pr] = (cutoff, head)
+
+    def seed_of(self, pr):
+        with self._lock:
+            return self._seeds.get(pr)
+
+    def note_cutoff(self, pr, cutoff, head):
+        with self._lock:
+            self._cutoff_changes[pr] = (cutoff, head)
+
+    def take_cutoff_changes(self):
+        with self._lock:
+            changes, self._cutoff_changes = self._cutoff_changes, {}
+        return changes
+
+    def requeue_cutoff_changes(self, changes):
+        with self._lock:
+            for pr, pair in changes.items():
+                self._cutoff_changes.setdefault(pr, pair)
 
     def _entry(self, pr):
         with self._lock:
@@ -113,6 +137,7 @@ class PrSnapshot(GitHubEventsPort):
         with self._lock:
             self._entries = {pr: e for pr, e in self._entries.items() if pr in prs}
             self._confirmed = {pr: e for pr, e in self._confirmed.items() if pr in prs}
+            self._seeds = {pr: s for pr, s in self._seeds.items() if pr in prs}
             self._files = {k: v for k, v in self._files.items() if k[0] in prs}
             self._checks = {
                 k: v for k, v in self._checks.items() if k[0] in prs and k[0] in check_prs
