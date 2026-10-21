@@ -78,13 +78,34 @@ class ResolveMergedPrsUseCase:
                 )
             )
 
+    def _release_refused(self, run, step):
+        if self._worktrees is None:
+            return False
+        findings = self._worktrees.phase_release_refusals(run)
+        if not findings:
+            return False
+        text = "; ".join(findings)
+        ParkStepUseCase(self._store).execute_once(
+            ParkInput(
+                step=step.id,
+                observation="merged-phase release refused: %s" % text,
+                decision=(
+                    "commit, push or discard the work named; the merge is retried on the next tick"
+                ),
+            )
+        )
+        return True
+
     def _close_run_and_complete(self, run, state, step, outcome):
+        if self._release_refused(run, step):
+            return False
         with self._store.transaction():
             self._expire_holds(run)
             self._store.close_run(run.id, state)
             self._complete.execute(CompleteInput(step=step.id, outcome=outcome))
         if self._worktrees is not None:
             self._worktrees.release_run(run)
+        return True
 
     def execute(self) -> ResolveMergedPrsResponse:
         merged, abandoned = [], []
@@ -119,8 +140,10 @@ class ResolveMergedPrsUseCase:
                         step = active_step_at(self._store, item.id, stage)
                         if step is None:
                             continue
-                        self._close_run_and_complete(run, RunState.MERGED, step, merge_outcome)
-                        merged.append(item.id)
+                        if self._close_run_and_complete(
+                            run, RunState.MERGED, step, merge_outcome
+                        ):
+                            merged.append(item.id)
                     else:
                         if self._at_another_gate(item, flow, stage):
                             continue
@@ -145,8 +168,10 @@ class ResolveMergedPrsUseCase:
                         step = active_step_at(self._store, item.id, stage)
                         if step is None:
                             continue
-                        self._close_run_and_complete(run, RunState.ABANDONED, step, close_outcome)
-                        abandoned.append(item.id)
+                        if self._close_run_and_complete(
+                            run, RunState.ABANDONED, step, close_outcome
+                        ):
+                            abandoned.append(item.id)
                     else:
                         if self._at_another_gate(item, flow, stage):
                             continue

@@ -95,6 +95,12 @@ class _RefusingWorktrees:
     def teardown_refusals(self, item, merged_prs=frozenset()):
         return ["worktree /w has uncommitted paths: a.py"]
 
+    def pass_release_refusals(self, item, runs):
+        return []
+
+    def phase_release_refusals(self, run):
+        return []
+
     def remove(self, item):
         raise AssertionError("a refused close removed a worktree")
 

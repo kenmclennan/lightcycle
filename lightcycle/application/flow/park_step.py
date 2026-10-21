@@ -31,3 +31,9 @@ class ParkStepUseCase:
             self._store.update_metadata(input.step, {k: v for k, v in park.as_dict().items() if v})
             self._store.note(input.step, park.as_blocked_note())
             self._store.reassign(input.step, "human")
+
+    def execute_once(self, input: ParkInput) -> None:
+        park = self._store.get_node(input.step).park
+        if park.reason == input.observation and park.needs == input.decision:
+            return
+        self.execute(input)

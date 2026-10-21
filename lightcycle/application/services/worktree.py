@@ -223,22 +223,40 @@ class WorktreeService:
             for run in self._releasable_runs(item)
         ]
 
+    def _run_findings(self, item, run, proven_merged, fetched):
+        target = self._target_for_phase(item, run.phase)
+        if not self._git.is_git_repo(target):
+            return []
+        findings = self._dirty_findings(target, self.path_for_run(run))
+        if proven_merged:
+            return findings
+        if target not in fetched:
+            fetched.add(target)
+            self._git.fetch_origin(target)
+        return findings + self._unmerged_findings(target, run.branch)
+
     def teardown_refusals(self, item, merged_prs=frozenset()):
         findings = []
         fetched = set()
         for run in self._releasable_runs(item):
-            target = self._target_for_phase(item, run.phase)
-            if not self._git.is_git_repo(target):
-                continue
-            path = self.path_for_run(run)
-            findings += self._dirty_findings(target, path)
-            if run.state == RunState.MERGED or (run.pr and run.pr in merged_prs):
-                continue
-            if target not in fetched:
-                fetched.add(target)
-                self._git.fetch_origin(target)
-            findings += self._unmerged_findings(target, run.branch)
+            proven = run.state == RunState.MERGED or bool(run.pr and run.pr in merged_prs)
+            findings += self._run_findings(item, run, proven, fetched)
         return findings
+
+    def pass_release_refusals(self, item, runs):
+        releasable = {run.id for run in self._releasable_runs(item)}
+        findings = []
+        fetched = set()
+        for run in runs:
+            if run.id not in releasable:
+                continue
+            findings += self._run_findings(item, run, run.state == RunState.MERGED, fetched)
+        return findings
+
+    def phase_release_refusals(self, run):
+        if not run.branch:
+            return []
+        return self._run_findings(run.item, run, True, set())
 
     def _dirty_findings(self, target, path):
         try:
