@@ -41,12 +41,17 @@ class PinDrift:
         stages = remaining_stages(flow, graph.entry, open_steps)
         return {graph.file_for(stage) for stage in stages}
 
-    def new_graph_declares(self, origin, name, new_sha, open_steps):
-        graph = self._graph(name, self._workflow_source.pinned_bundle(origin, new_sha))
+    def new_flow(self, origin, name, new_sha):
+        root = self._workflow_source.pinned_bundle(origin, new_sha)
+        graph = self._graph(name, root)
         if graph is None:
-            return False
-        flow = Flow.from_graph(graph, {})
-        return all(flow.declared(stage) for stage, _running in open_steps)
+            return None
+        roots = with_engine_fragments(root, self._config)
+        metas = {}
+        for role in self._workflow_bundle.step_roles(root):
+            parsed = self._workflow_bundle.parse_step(role, roots)
+            metas[role] = parsed.meta if parsed else {}
+        return Flow.from_graph(graph, metas)
 
     def changed_steps_ahead(self, open_steps, origin, name, old_sha, new_sha):
         changed = self.changed_step_roles(origin, old_sha, new_sha)

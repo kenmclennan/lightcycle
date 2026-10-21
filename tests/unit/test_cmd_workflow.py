@@ -150,6 +150,7 @@ class FakeContainer:
         self.config = FakeConfig()
         self.fs = FsAdapter(self.config)
         self.workflow_bundle = FakeFs()
+        self.worker_log = FakeFs()
         self.scaffold = ScaffoldAdapter()
         self.git = FakeGit()
         self._lifecycle = lifecycle_for(source)

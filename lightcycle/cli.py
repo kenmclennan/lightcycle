@@ -524,7 +524,7 @@ def cmd_workflow(argv):
                 c.workflow_source, c.store, c.config, c.fs, c.workflow_lifecycle(),
                 RepinInFlightItemsUseCase(
                     c.store, c.workflow_source, _flow(),
-                    PinDrift(c.workflow_source, c.workflow_bundle, c.config), c.config)
+                    PinDrift(c.workflow_source, c.workflow_bundle, c.config), c.config, c.worker_log)
             ).execute(a.origin, repin=not a.no_repin)
             if not resp.results and not resp.failures:
                 print("no workflow sources registered")
