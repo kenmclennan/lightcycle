@@ -2,7 +2,7 @@ import re
 
 from lightcycle.domain.guidance.detection import validate_element
 
-CONVENTIONS_VERSION = 4
+CONVENTIONS_VERSION = 5
 
 CONVENTIONS_TEXT = """# Conventions
 
@@ -21,6 +21,7 @@ This guidance repo follows the Open Knowledge Format (OKF) 0.2 with the lightcyc
 - Every guidance entry carries three required front-matter fields, each one non-empty line, none delivered to a worker: `purpose` (the problem the entry solves), `when` (the circumstances in which it helps) and `why` (why this approach over the alternatives).
 - An entry names no item id anywhere in the file. Where a finding came from lives on the `guidance-entry` item.
 - A change that touches only `purpose`, `when` and `why` leaves `status`, `verified` and the body byte-identical, and the entry keeps its `stable` status.
+- Entries of the ratchet class live in `ratchets/`. A ratchet entry catalogues a mechanical guard whose baseline can only shrink, and its body carries these headings in order, each non-empty: `## Stack`, `## Mechanism`, `## Detection`, `## Baseline`, `## Earned by`, `## Size`. Ratchet entries are otherwise ordinary entries.
 - `moved-to: <entry id>` is a plain scalar a `status: deprecated` entry may carry to name the entry that replaces it. The old path stays as a stub, since delivery history keys on the id.
 - `covers: <issue url>` marks an entry that stands in for an upstream fix until that issue ships.
 
