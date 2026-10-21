@@ -77,6 +77,40 @@ class TestHeldCommentsSchema(unittest.TestCase):
         self.assertTrue(reopened.file_hold("R-1", "inline:1", "m", "b", None, None, 1.0))
 
 
+class TestPrFeedbackSchema(unittest.TestCase):
+    def test_the_tables_have_the_designed_columns_and_only_autoindexes(self):
+        s = make_sqlite_store()
+
+        def columns(table):
+            return [r[1] for r in s._conn.execute("PRAGMA table_info(%s)" % table)]
+
+        self.assertEqual(
+            columns("pr_feedback_cutoffs"), ["pr", "cutoff", "cutoff_head", "updated_at"])
+        self.assertEqual(columns("pr_pool_updates"), ["pr", "head_sha", "updated_at"])
+        names = {
+            r[0] for r in s._conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'index' "
+                "AND tbl_name IN ('pr_feedback_cutoffs', 'pr_pool_updates')"
+            ).fetchall()
+        }
+        self.assertEqual(names, {
+            "sqlite_autoindex_pr_feedback_cutoffs_1", "sqlite_autoindex_pr_pool_updates_1"})
+        for table in ("pr_feedback_cutoffs", "pr_pool_updates"):
+            self.assertEqual(
+                s._conn.execute("PRAGMA foreign_key_list(%s)" % table).fetchall(), [])
+
+    def test_a_store_without_the_tables_regains_them_on_reopen(self):
+        s = make_sqlite_store()
+        s._conn.execute("DROP TABLE pr_feedback_cutoffs")
+        s._conn.execute("DROP TABLE pr_pool_updates")
+        s._conn.commit()
+        s.release()
+        reopened = SqliteStore(s._config)
+        reopened.save_feedback_cutoff("pr-1", 1.0, "h0")
+        reopened.record_pool_update("pr-1", "h0")
+        self.assertEqual(reopened.feedback_cutoff("pr-1"), (1.0, "h0"))
+
+
 class TestSqliteStoreItemStateMatchesStepRollUp(unittest.TestCase):
     def _item_with(self, shape):
         s = make_sqlite_store()

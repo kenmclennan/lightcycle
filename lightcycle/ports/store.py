@@ -391,6 +391,26 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def feedback_cutoff(self, pr):
+        pass
+
+    @abstractmethod
+    def save_feedback_cutoff(self, pr, cutoff, cutoff_head):
+        pass
+
+    @abstractmethod
+    def pool_updated_heads(self, pr):
+        pass
+
+    @abstractmethod
+    def record_pool_update(self, pr, head_sha):
+        pass
+
+    @abstractmethod
+    def prune_pr_feedback_state(self, max_age_days):
+        pass
+
+    @abstractmethod
     def close_run(self, rid, state="merged"):
         pass
 

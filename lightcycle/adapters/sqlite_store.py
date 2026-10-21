@@ -295,6 +295,20 @@ CREATE TABLE IF NOT EXISTS held_comments (
 );
 CREATE INDEX IF NOT EXISTS idx_held_comments_step_id ON held_comments(step_id);
 CREATE INDEX IF NOT EXISTS idx_held_comments_run_id_state ON held_comments(run_id, state);
+
+CREATE TABLE IF NOT EXISTS pr_feedback_cutoffs (
+    pr          TEXT PRIMARY KEY,
+    cutoff      REAL NOT NULL,
+    cutoff_head TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS pr_pool_updates (
+    pr         TEXT NOT NULL,
+    head_sha   TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (pr, head_sha)
+);
 """
 
 _ITEM_COLUMNS = (
@@ -1737,6 +1751,41 @@ class SqliteStore(StorePort):
         self._conn.execute(
             "UPDATE phase_runs SET comments_handled_through = ? WHERE id = ?", (value, rid)
         )
+        self._commit()
+
+    def feedback_cutoff(self, pr):
+        row = self._conn.execute(
+            "SELECT cutoff, cutoff_head FROM pr_feedback_cutoffs WHERE pr = ?", (pr,)
+        ).fetchone()
+        return (row[0], row[1]) if row else None
+
+    def save_feedback_cutoff(self, pr, cutoff, cutoff_head):
+        self._conn.execute(
+            "INSERT OR REPLACE INTO pr_feedback_cutoffs (pr, cutoff, cutoff_head, updated_at) "
+            "VALUES (?, ?, ?, ?)",
+            (pr, cutoff, cutoff_head, self._now()),
+        )
+        self._commit()
+
+    def pool_updated_heads(self, pr):
+        rows = self._conn.execute(
+            "SELECT head_sha FROM pr_pool_updates WHERE pr = ? ORDER BY head_sha", (pr,)
+        ).fetchall()
+        return [r[0] for r in rows]
+
+    def record_pool_update(self, pr, head_sha):
+        self._conn.execute(
+            "INSERT OR IGNORE INTO pr_pool_updates (pr, head_sha, updated_at) VALUES (?, ?, ?)",
+            (pr, head_sha, self._now()),
+        )
+        self._commit()
+
+    def prune_pr_feedback_state(self, max_age_days):
+        threshold = (
+            datetime.datetime.fromisoformat(self._now()) - datetime.timedelta(days=max_age_days)
+        ).isoformat()
+        for table in ("pr_feedback_cutoffs", "pr_pool_updates"):
+            self._conn.execute("DELETE FROM %s WHERE updated_at < ?" % table, (threshold,))
         self._commit()
 
     def close_run(self, rid, state=RunState.MERGED):

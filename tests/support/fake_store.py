@@ -140,7 +140,8 @@ _TX_ATTRS = (
     "_records", "_labels", "_passes", "_runs", "_deps",
     "_history", "_projects", "_tool_usage", "_backfill_log", "_usage_accrual_state",
     "_counters", "_daily_summaries", "_goals", "_goal_log", "_goal_items", "_holds",
-    "_schedule_run_requests", "_step_inputs", "_artifact_seq",
+    "_schedule_run_requests", "_step_inputs", "_artifact_seq", "_feedback_cutoffs",
+    "_pool_updates",
 )
 
 
@@ -164,6 +165,8 @@ class FakeStore(StorePort):
         self._goal_log = []
         self._goal_items = []
         self._holds = {}
+        self._feedback_cutoffs = {}
+        self._pool_updates = {}
         self._step_inputs = {}
         self._artifact_seq = 0
         self._now = now or (lambda: datetime.datetime.now().astimezone().isoformat())
@@ -969,6 +972,27 @@ class FakeStore(StorePort):
 
     def mark_hold_dispatched(self, run_id, key):
         self._transition_hold(self._holds.get((run_id, key)), DISPATCHED)
+
+    def feedback_cutoff(self, pr):
+        row = self._feedback_cutoffs.get(pr)
+        return (row[0], row[1]) if row else None
+
+    def save_feedback_cutoff(self, pr, cutoff, cutoff_head):
+        self._feedback_cutoffs[pr] = (cutoff, cutoff_head, self._now())
+
+    def pool_updated_heads(self, pr):
+        return sorted(h for (p, h) in self._pool_updates if p == pr)
+
+    def record_pool_update(self, pr, head_sha):
+        self._pool_updates.setdefault((pr, head_sha), self._now())
+
+    def prune_pr_feedback_state(self, max_age_days):
+        threshold = (
+            datetime.datetime.fromisoformat(self._now()) - datetime.timedelta(days=max_age_days)
+        ).isoformat()
+        self._feedback_cutoffs = {
+            k: v for k, v in self._feedback_cutoffs.items() if v[2] >= threshold}
+        self._pool_updates = {k: v for k, v in self._pool_updates.items() if v >= threshold}
 
     def set_comments_handled_through(self, rid, value):
         self._runs = [

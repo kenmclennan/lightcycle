@@ -7,6 +7,7 @@ from lightcycle.application.pool.pr_snapshot import PrSnapshot
 from lightcycle.application.pool.pr_writes import PrWrites
 from lightcycle.config import ConfigError
 from lightcycle.ports.github import CheckRun, Comment, NotYetRead, RateLimit, ReadFailure
+from tests.support.fake_store import FakeStore
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_github import FakeGitHub
 from tests.support.fake_github_budget_status import FakeGithubBudgetStatus
@@ -57,7 +58,7 @@ class _Pool:
         self.fs = FakeFs()
         self.gate = GithubPollUseCase(
             self.snapshot, self.github, self.runner, _Config(refresh=refresh), PrWrites(time.monotonic),
-            self.status, lambda: 1000.0, self.fs)
+            self.status, lambda: 1000.0, self.fs, FakeStore())
 
     def log_lines(self):
         raw = self.fs._files.get("logs/run.log", b"")
@@ -735,7 +736,7 @@ class TestRunnerAndConfig(unittest.TestCase):
     def test_an_unset_key_fails_at_construction_naming_it(self):
         github = _github()
         with self.assertRaises(ConfigError) as ctx:
-            GithubPollUseCase(PrSnapshot(github), github, InlineGithubPollRunner(), _Unset(), PrWrites(time.monotonic), FakeGithubBudgetStatus(), time.time, FakeFs())
+            GithubPollUseCase(PrSnapshot(github), github, InlineGithubPollRunner(), _Unset(), PrWrites(time.monotonic), FakeGithubBudgetStatus(), time.time, FakeFs(), FakeStore())
 
         self.assertIn("github-poll-seconds", str(ctx.exception))
 
@@ -743,7 +744,7 @@ class TestRunnerAndConfig(unittest.TestCase):
         config = _Config(60)
         github = _github()
         snapshot = PrSnapshot(github)
-        gate = GithubPollUseCase(snapshot, github, InlineGithubPollRunner(), config, PrWrites(time.monotonic), FakeGithubBudgetStatus(), time.time, FakeFs())
+        gate = GithubPollUseCase(snapshot, github, InlineGithubPollRunner(), config, PrWrites(time.monotonic), FakeGithubBudgetStatus(), time.time, FakeFs(), FakeStore())
         snapshot.pr_sync_state(_A[0])
         gate.execute(0)
         config.seconds = 10

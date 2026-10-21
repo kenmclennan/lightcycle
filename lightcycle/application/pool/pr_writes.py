@@ -27,6 +27,20 @@ class PrWrites:
         self._rules = {}
         self._required = {}
         self._updated_from = {}
+        self._unsaved_updates = []
+
+    def seed_updated_from(self, pr, heads):
+        with self._lock:
+            self._updated_from.setdefault(pr, set()).update(heads)
+
+    def take_unsaved_updates(self):
+        with self._lock:
+            unsaved, self._unsaved_updates = self._unsaved_updates, []
+        return unsaved
+
+    def requeue_unsaved_updates(self, unsaved):
+        with self._lock:
+            self._unsaved_updates = list(unsaved) + self._unsaved_updates
 
     def request_update(self, pr, head_sha, base_key):
         with self._lock:
@@ -66,6 +80,7 @@ class PrWrites:
             return WriteOutcome(UPDATE_FAILED, failure)
         with self._lock:
             self._updated_from.setdefault(pr, set()).add(head_sha)
+            self._unsaved_updates.append((pr, head_sha))
         return WriteOutcome(UPDATED)
 
     def _rule(self, github, base_key):

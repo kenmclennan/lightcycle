@@ -1611,3 +1611,48 @@ class StoreContractBase:
                 s.file_hold("R-1", "inline:1", "mallory", "b", None, None, 1.0)
                 raise RuntimeError("boom")
         self.assertIsNone(s.hold("R-1", "inline:1"))
+
+    def test_feedback_cutoff_upserts_and_reads_back(self):
+        s = self.make_store()
+        self.assertIsNone(s.feedback_cutoff("pr-1"))
+        s.save_feedback_cutoff("pr-1", 1000.0, "h0")
+        self.assertEqual(s.feedback_cutoff("pr-1"), (1000.0, "h0"))
+        s.save_feedback_cutoff("pr-1", 2000.0, "h1")
+        self.assertEqual(s.feedback_cutoff("pr-1"), (2000.0, "h1"))
+        self.assertIsNone(s.feedback_cutoff("pr-2"))
+
+    def test_pool_updated_heads_is_empty_for_an_unknown_pr_and_records_idempotently(self):
+        s = self.make_store()
+        self.assertEqual(list(s.pool_updated_heads("pr-1")), [])
+        s.record_pool_update("pr-1", "h0")
+        s.record_pool_update("pr-1", "h0")
+        s.record_pool_update("pr-1", "h1")
+        self.assertEqual(sorted(s.pool_updated_heads("pr-1")), ["h0", "h1"])
+        self.assertEqual(list(s.pool_updated_heads("pr-2")), [])
+
+    def test_pr_feedback_writes_roll_back_with_the_transaction(self):
+        s = self.make_store()
+        with self.assertRaises(RuntimeError):
+            with s.transaction():
+                s.save_feedback_cutoff("pr-1", 1.0, "h0")
+                s.record_pool_update("pr-1", "h0")
+                raise RuntimeError("boom")
+        self.assertIsNone(s.feedback_cutoff("pr-1"))
+        self.assertEqual(list(s.pool_updated_heads("pr-1")), [])
+
+    def test_prune_removes_old_rows_from_both_tables_and_keeps_young_ones(self):
+        clock = {"now": datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc)}
+        s = self.make_store(now=lambda: clock["now"].isoformat())
+        s.save_feedback_cutoff("old", 1.0, "h0")
+        s.record_pool_update("old", "h0")
+        clock["now"] += datetime.timedelta(days=20)
+        s.save_feedback_cutoff("young", 2.0, "h1")
+        s.record_pool_update("young", "h1")
+        clock["now"] += datetime.timedelta(days=15)
+
+        s.prune_pr_feedback_state(30)
+
+        self.assertIsNone(s.feedback_cutoff("old"))
+        self.assertEqual(list(s.pool_updated_heads("old")), [])
+        self.assertEqual(s.feedback_cutoff("young"), (2.0, "h1"))
+        self.assertEqual(list(s.pool_updated_heads("young")), ["h1"])

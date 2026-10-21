@@ -171,7 +171,7 @@ class Container:
             ),
             github_poll_gate=GithubPollUseCase(
                 snapshot, self.github, self.github_poll_runner, self.config, writes,
-                self.github_budget_status, time.time, self.worker_log),
+                self.github_budget_status, time.time, self.worker_log, self.store),
             hook_completions=HookCompletionsUseCase(self.store, flow),
             worktrees=worktrees,
             git=self.git,

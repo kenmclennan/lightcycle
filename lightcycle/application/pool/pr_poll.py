@@ -190,7 +190,12 @@ class PrPoll:
         if failures:
             self._snapshot.mark_stale(pr)
             return None
+        seed = self._snapshot.seed_of(pr) if previous.push_time is None else None
+        if seed is not None:
+            previous = replace(previous, push_time=seed[0], cutoff_head=seed[1])
         cutoff, cutoff_head = self._carry_cutoff(pr, previous, view.head_sha, push_time)
+        if (cutoff, cutoff_head) != (previous.push_time, previous.cutoff_head):
+            self._snapshot.note_cutoff(pr, cutoff, cutoff_head)
         self._snapshot.publish(
             pr,
             replace(
