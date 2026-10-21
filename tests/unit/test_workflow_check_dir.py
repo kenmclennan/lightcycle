@@ -14,6 +14,7 @@ from lightcycle.adapters.workflow_bundle import WorkflowBundleAdapter
 from lightcycle.domain.work import worker_permitted, worker_refusal_message
 from lightcycle.domain.workflows.contract import ENGINE_CONTRACT
 from tests.support.fake_store import FakeStore
+from tests.support.script_bundle import write_script_bundle
 
 LIBRARY = Path(__file__).resolve().parents[1] / "support" / "library"
 ENGINE_PROMPTS = Path(cli.__file__).resolve().parent / "prompts"
@@ -417,3 +418,48 @@ class TestAlwaysRunKeyChecks(unittest.TestCase):
         rc, _out, err = run_check("--dir", self._build("true", False), "spec-driven")
         self.assertEqual(rc, 1)
         self.assertIn("declares always-run: but source.toml has no requires-engine", err)
+
+
+class TestWorkflowCheckDirScriptStages(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        cli.set_container(_Container())
+
+    def _check(self, **kwargs):
+        write_script_bundle(self.tmp, **kwargs)
+        return run_check("--dir", self.tmp, "build")
+
+    def test_a_correct_script_stage_passes(self):
+        rc, _out, err = self._check()
+        self.assertEqual((rc, err), (0, ""))
+
+    def test_a_missing_fixture_fails_naming_it(self):
+        rc, _out, err = self._check(stage_fixture=None)
+        self.assertNotEqual(rc, 0)
+        self.assertIn("fixtures/poll.sh.json", err)
+
+    def test_a_non_executable_script_fails_naming_it(self):
+        rc, _out, err = self._check(poll_executable=False)
+        self.assertNotEqual(rc, 0)
+        self.assertIn("not executable", err)
+
+    def _include_plain_language(self):
+        path = os.path.join(self.tmp, "steps", "poll.md")
+        with open(path, "a") as f:
+            f.write("\n@include plain-language\n")
+
+    def test_a_missing_fixture_is_found_when_a_step_includes_an_engine_fragment(self):
+        write_script_bundle(self.tmp, stage_fixture=None)
+        self._include_plain_language()
+        rc, _out, err = run_check("--dir", self.tmp, "build")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("fixtures/poll.sh.json", err)
+
+    def test_a_step_with_an_unknown_include_is_reported_naming_the_fragment(self):
+        write_script_bundle(self.tmp)
+        with open(os.path.join(self.tmp, "steps", "poll.md"), "a") as f:
+            f.write("\n@include no-such-fragment\n")
+        rc, _out, err = run_check("--dir", self.tmp, "build")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("no-such-fragment", err)

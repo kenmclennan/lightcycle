@@ -46,9 +46,10 @@ class DirCheckResponse:
 
 
 class CheckWorkflowDirUseCase:
-    def __init__(self, bundle_port, fs, engine_version):
+    def __init__(self, bundle_port, fs, engine_version, config):
         self._bundle = bundle_port
         self._engine_version = engine_version
+        self._config = config
         self._fs = fs
 
     def _read(self, path):
@@ -129,7 +130,7 @@ class CheckWorkflowDirUseCase:
                         "step %s declares always-run: but source.toml has no requires-engine; "
                         "older engines would ignore it" % role)
         lifecycle_found = {}
-        scripts = WorkflowScripts(self._bundle, self._fs)
+        scripts = WorkflowScripts(self._bundle, self._fs, self._config)
         for wf_name in names:
             found = directory_lifecycle_problems(self._bundle, self._fs, directory, wf_name)
             found = found + scripts.problems(directory, wf_name)

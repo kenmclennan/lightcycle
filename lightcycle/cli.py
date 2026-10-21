@@ -848,7 +848,8 @@ def cmd_audit_criteria(argv):
 def _workflow_check_dir(directory, name, as_json):
     c = _container
     try:
-        resp = CheckWorkflowDirUseCase(c.workflow_bundle, c.fs, c.config.version()).execute(directory, name)
+        resp = CheckWorkflowDirUseCase(
+            c.workflow_bundle, c.fs, c.config.version(), c.config).execute(directory, name)
     except WorkflowSourceError as e:
         sys.stderr.write("lc workflow check: %s\n" % e)
         return 1
@@ -894,7 +895,7 @@ def _workflow_check_pinned(selector, as_json):
     origin, name, sha = parsed
     directory = c.workflow_source.pinned_bundle(origin, sha)
     problems = directory_lifecycle_problems(c.workflow_bundle, c.fs, directory, name)
-    problems = problems + WorkflowScripts(c.workflow_bundle, c.fs).problems(directory, name)
+    problems = problems + WorkflowScripts(c.workflow_bundle, c.fs, c.config).problems(directory, name)
     for message in problems:
         sys.stderr.write("%s: %s\n" % (name, message))
     return 1 if problems else rc
@@ -1064,7 +1065,8 @@ def _workflow_simulate(selector, trace=False):
         use_case = WorkflowSimulateUseCase(
             sim.store, sim.flow, sim.worktrees, sim.claim, sim.complete, sim.projects_root,
             sim.git, lifecycle=_container.workflow_lifecycle(),
-            scripts=WorkflowScripts(_container.workflow_bundle, _container.fs),
+            scripts=WorkflowScripts(
+                _container.workflow_bundle, _container.fs, _container.config),
             source=_container.workflow_source, scaffold=sim.scaffold,
             github_factory=ScriptedGitHub, config=sim.config,
         )
