@@ -294,6 +294,125 @@ class TestGraphResolutionIsCachedPerPinPerInstance(unittest.TestCase):
         self.assertEqual(len(fs.workflow_text_calls), 2)
 
 
+class _PromptsCfg(_RefCfg):
+    def prompts_root(self):
+        return "/prompts"
+
+
+class _ShaRootSource(_WFSource):
+    def pinned_bundle(self, origin, sha):
+        return "/bundle-" + sha
+
+
+class _CountingFromGraph:
+    def __enter__(self):
+        from lightcycle.application.services import flow as flow_module
+        from lightcycle.domain.flow.flow import Flow
+
+        self.calls = 0
+        self._module = flow_module
+        self._original = Flow.from_graph.__func__
+        counter = self
+
+        def counted(cls, *args, **kwargs):
+            counter.calls += 1
+            return counter._original(cls, *args, **kwargs)
+
+        self._flow = Flow
+        Flow.from_graph = classmethod(counted)
+        return self
+
+    def __exit__(self, *exc):
+        self._flow.from_graph = classmethod(self._original)
+
+
+def _surface(flow):
+    stages = sorted(flow.steps())
+    return (
+        stages,
+        [flow.step_def(s) for s in stages],
+        [flow.workspace_of(s) for s in stages],
+        [flow.declared(s) for s in stages],
+        [flow.disposition_for(o) for o in ("done", "rejected", "merged")],
+        flow.hooks(),
+        flow.merge_stages(),
+    )
+
+
+RICH_METAS = {
+    "coder": {
+        "model": "sonnet",
+        "step": "build",
+        "routes": {"done": "review"},
+        "presents": "report",
+        "github": "pr",
+    },
+    "reviewer": {
+        "model": "opus",
+        "step": "review",
+        "routes": {"done": "open-pr", "rejected": "build"},
+        "disposition": {"done": "approved"},
+    },
+}
+
+
+class TestFlowObjectIsCached(unittest.TestCase):
+    def test_repeat_calls_return_the_identical_flow_and_build_once(self):
+        service = svc()
+        with _CountingFromGraph() as counter:
+            first = service.load_flow()
+            second = service.load_flow()
+
+        self.assertIs(first, second)
+        self.assertEqual(counter.calls, 1)
+
+    def test_cached_flow_has_the_same_public_surface_as_an_uncached_one(self):
+        fresh = FlowService(FakeFs(RICH_METAS), FakeStore()).load_flow()
+        cached_service = FlowService(FakeFs(RICH_METAS), FakeStore())
+        cached_service.load_flow()
+        cached = cached_service.load_flow()
+
+        self.assertEqual(_surface(cached), _surface(fresh))
+
+    def test_clear_cache_makes_the_next_load_build_a_new_flow(self):
+        service = svc()
+        first = service.load_flow()
+        service.clear_cache()
+
+        self.assertIsNot(service.load_flow(), first)
+
+    def test_different_pinned_roots_do_not_share_an_entry(self):
+        service = FlowService(
+            FakeFs(METAS), FakeStore(), config=_PromptsCfg(), workflow_source=_ShaRootSource(["wf"]),
+        )
+        a = service.load_flow("lightcycle/wf@aaa")
+        b = service.load_flow("lightcycle/wf@bbb")
+
+        self.assertIsNot(a, b)
+        self.assertIs(a, service.load_flow("lightcycle/wf@aaa"))
+
+    def test_different_workflow_names_do_not_share_an_entry(self):
+        service = FlowService(
+            FakeFs(METAS),
+            FakeStore(),
+            config=_PromptsCfg(),
+            workflow_source=_WFSource(["wf-a", "wf-b"]),
+        )
+
+        self.assertIsNot(
+            service.load_flow("lightcycle/wf-a@abc"), service.load_flow("lightcycle/wf-b@abc"),
+        )
+
+    def test_an_unknown_workflow_raises_every_time(self):
+        service = FlowService(
+            FakeFs(METAS, workflow={"known": graph_text_from_metas(METAS)}), FakeStore(),
+        )
+
+        for _ in range(2):
+            with self.assertRaises(ValueError):
+                service.load_flow("unknown")
+
+
 class _CountingFs(FakeFs):
     def __init__(self, metas):
         super().__init__(metas)
