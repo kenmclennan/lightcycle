@@ -2,7 +2,12 @@ from dataclasses import dataclass, field
 from typing import List
 
 from lightcycle.application.flow.complete_step import CompleteInput
-from lightcycle.application.pool.pr_lookups import flow_for, run_of, skip_unpinned
+from lightcycle.application.pool.pr_lookups import (
+    _MIN_TIMESTAMP,
+    flow_for,
+    run_of,
+    skip_unpinned,
+)
 from lightcycle.application.pool.pr_sync_reads import PrSyncReads
 from lightcycle.application.feedback.hold_comment import HoldCommentUseCase
 from lightcycle.config import ConfigError
@@ -15,9 +20,12 @@ from lightcycle.domain.feedback import (
     outstanding_threads,
     standing,
 )
-from lightcycle.domain.flow import total_outcome_count
-from lightcycle.domain.work import State
+from lightcycle.domain.flow import pr_conflict_failures, total_outcome_count
+from lightcycle.domain.flow.hooks import PR_CONFLICT_CAP
+from lightcycle.domain.work import State, node_id_key, parse_timestamp
 from lightcycle.ports.github import NotYetRead, ReadFailure
+
+CONFLICT_BASE_TIP = "conflict-base-tip"
 
 
 @dataclass(frozen=True)
@@ -156,6 +164,42 @@ class DispatchPrFeedbackUseCase:
             newest = max(h.created_at for h in outstanding.admitted)
             self._store.set_comments_dispatched_through(run.id, str(newest))
 
+    def _recorded_tip(self, step_id):
+        found = None
+        for artifact in self._store.item_artifacts(step_id):
+            if artifact.type == CONFLICT_BASE_TIP:
+                found = artifact.value
+        return found
+
+    def _read_base_tip(self, step, sync):
+        repo, _, base = sync.base_key.partition("@")
+        tip = self._github.branch_tip(repo, base)
+        if isinstance(tip, ReadFailure) or not tip:
+            return None
+        self._store.add_artifact(step.id, CONFLICT_BASE_TIP, tip, internal=True)
+        return tip
+
+    def _escalated_resolutions(self, step, flow, conflict_outcome):
+        gate = flow.step_def(step.stage)
+        resolve_stage = gate.routes.get(conflict_outcome)
+        escalation = gate.routes.get(gate.pr_conflict_escalate)
+        if not resolve_stage or not escalation:
+            return 0
+        resolve_routes = flow.step_def(resolve_stage).routes
+        return sum(
+            1 for t in self._store.steps_at_step(resolve_stage)
+            if t.item == step.item and t.state == State.DONE
+            and resolve_routes.get(t.outcome) == escalation
+        )
+
+    def _conflict_cap_note(self, fired, failures, prior, stage, step_id):
+        resolve = "rebase the branch onto main, resolve, push, then `lc done %s resolved`" % step_id
+        if fired == PR_CONFLICT_CAP:
+            return "%s reached: %d failed resolutions in %d conflicts at %s; %s" % (
+                fired, failures, prior + 1, stage, resolve)
+        return "%s reached: %d conflicts (%d failed resolutions) at %s; %s" % (
+            fired, prior + 1, failures, stage, resolve)
+
     def execute(self, reads=None) -> DispatchPrFeedbackResponse:
         reads = reads or PrSyncReads(self._github)
         reworked, conflicted = [], []
@@ -187,18 +231,30 @@ class DispatchPrFeedbackUseCase:
                     if not open_now:
                         self._open_feedback_step(step, flow, feedback_step, run, outstanding)
                         reworked.append(step.item)
-            if not advanced and conflict_outcome and _is_conflicted(reads.read(pr_value)):
+            sync = reads.read(pr_value) if not advanced and conflict_outcome else None
+            if sync is not None and _is_conflicted(sync):
                 history = [t for t in self._store.steps_at_step(step.stage)
                            if t.item == step.item and t.state == State.DONE]
+                conflicts = sorted(
+                    (t for t in history if t.outcome == conflict_outcome),
+                    key=lambda t: (parse_timestamp(t.created_at) or _MIN_TIMESTAMP,
+                                   node_id_key(t.id)),
+                )
                 prior = total_outcome_count(history, conflict_outcome)
-                outcome = flow.pr_conflict_transition(step.stage, conflict_outcome, prior)
+                current_tip = self._read_base_tip(step, sync)
+                failures = pr_conflict_failures(
+                    [self._recorded_tip(t.id) for t in conflicts],
+                    current_tip,
+                    self._escalated_resolutions(step, flow, conflict_outcome),
+                )
+                fired = flow.pr_conflict_cap_fired(step.stage, failures, prior)
+                outcome = flow.pr_conflict_transition(
+                    step.stage, conflict_outcome, failures, prior)
                 done = self._complete.execute(CompleteInput(step=step.id, outcome=outcome))
-                if outcome != conflict_outcome and done.next_step:
+                if fired and done.next_step:
                     self._store.note_condition(
                         done.next_step,
-                        "pr_conflict_cap reached: %d conflicts at %s; rebase the branch onto main, "
-                        "resolve, push, then `lc done %s resolved`"
-                        % (prior, step.stage, done.next_step),
+                        self._conflict_cap_note(fired, failures, prior, step.stage, done.next_step),
                     )
                 conflicted.append(step.item)
         return DispatchPrFeedbackResponse(reworked=reworked, conflicted=conflicted)
