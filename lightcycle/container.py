@@ -22,6 +22,8 @@ from lightcycle.application.workflows.simulate import WorkflowSimulateUseCase
 from lightcycle.application.pool.gh_call_accrual import GhCallAccrualUseCase
 from lightcycle.application.pool.github_budget import GithubBudgetUseCase
 from lightcycle.application.pool.github_poll import GithubPollUseCase
+from lightcycle.application.pool.note_release_holds import NoteReleaseHoldsUseCase
+from lightcycle.application.work.release_holds import ReleaseHolds
 from lightcycle.application.pool.pr_snapshot import PrSnapshot
 from lightcycle.application.pool.pr_writes import PrWrites
 from lightcycle.adapters.github_poll_runner import GithubPollRunnerAdapter
@@ -189,7 +191,11 @@ class Container:
                 self.store, self.git, self.fs, self.guidance_sync_status, self.config,
             ),
             github_budget=self.github_budget(flow),
-            release_gate=ReleaseInterruptedRunsUseCase(self.store, worktrees),
+            release_gate=ReleaseInterruptedRunsUseCase(
+                self.store, worktrees,
+                NoteReleaseHoldsUseCase(
+                    self.store, ReleaseHolds(self.store, flow), self.monotonic,
+                    self.config.release_hold_note_seconds)),
             stranded_gate=CloseStrandedItemsUseCase(self.store, worktrees),
             config_reload=ReloadConfigUseCase(
                 self.config, self.config_reload_status, os.getpid()),

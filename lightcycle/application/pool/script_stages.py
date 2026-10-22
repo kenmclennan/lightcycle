@@ -12,6 +12,7 @@ from lightcycle.application.workflows.script_tooling import (
     result_violation,
     stdin_for_stage,
 )
+from lightcycle.application.work.release_holds import ReleaseHolds
 from lightcycle.application.work.item_outputs import ItemOutputs
 from lightcycle.application.work.step_inputs import StepInputs
 from lightcycle.domain.work import State, is_engine_step, script_log_label
@@ -121,10 +122,14 @@ class ScriptStageUseCase:
         running = set(self._runner.running()) | {
             k for k in self._runner.orphaned() if k.startswith(STEP_KEY_PREFIX)}
         cap = self._config.script_max_running()
-        for step in self._store.all_steps():
+        queued = [
+            s for s in self._store.all_steps()
+            if s.state == State.QUEUED and is_engine_step(s)]
+        held = ReleaseHolds(self._store, self._flow_service).held_ids(queued)
+        for step in queued:
             if len(running) >= cap:
                 break
-            if step.state != State.QUEUED or not is_engine_step(step):
+            if step.id in held:
                 continue
             key = step_key(step.id)
             if key in running:

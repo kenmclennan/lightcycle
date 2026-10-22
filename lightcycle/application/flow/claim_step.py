@@ -6,6 +6,7 @@ from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.application.setup.project_registry import ProjectRegistry
 from lightcycle.application.work.item_outputs import ItemOutputs
+from lightcycle.application.work.release_holds import ReleaseHolds
 from lightcycle.application.work.node_read_surface import node_read_surface
 from lightcycle.application.work.step_inputs import StepInputs
 from lightcycle.config import ConfigError
@@ -89,9 +90,13 @@ class ClaimStepUseCase:
 
     def _claim(self, role, item=None, stage=None):
         spawnid = self._config.spawn_id()
-        exclude = ()
+        held = set()
+        holds = ReleaseHolds(self._store, self._flow)
+        if holds.release_pending_items():
+            held |= holds.held_ids(self._store.ready_steps())
         if self._github_budget.reading().low:
-            exclude = tuple(sorted(self._github_budget.held(self._store.ready_steps())))
+            held |= set(self._github_budget.held(self._store.ready_steps()))
+        exclude = tuple(sorted(held))
         t = self._store.claim_ready(
             role, spawnid or role, item=item, stage=stage, exclude=exclude)
         if t is None:

@@ -2,6 +2,13 @@ import contextlib
 import io
 import unittest
 
+from tests.support.hold_notes import NoHoldNotes
+from lightcycle.application.flow import ClaimInput, ClaimStepUseCase
+from tests.support.fake_github_budget_status import FakeGithubBudgetStatus
+from tests.unit.test_flow_usecases import FakeConfig as ClaimConfig
+from tests.unit.test_flow_usecases import FakeWorkers as ClaimWorkers
+from tests.unit.test_flow_usecases import FakeWorktrees as FakeClaimWorktrees
+from tests.unit.test_github_budget import _budget as _claim_budget
 from lightcycle.application.flow import CompleteStepUseCase
 from lightcycle.application.flow.complete_step import CompleteResponse
 from lightcycle.application.pool.pr_lookups import active_step_any
@@ -1407,11 +1414,31 @@ class TestMergePathReleaseFinishedByALaterTick(unittest.TestCase):
             store, github, worktrees, flow_service, CompleteStepUseCase(store, flow_service),
             CheckContentPinUseCase(store, github, flow_service, trusted_authors=lambda: frozenset({"review-code"})),
         )
+        self.flow_service = flow_service
         return store, item, rid, git, worktrees, path, uc
+
+    def _claim_next(self, store, role="agent"):
+        flow = self.flow_service
+        claim = ClaimStepUseCase(
+            store, flow, FakeClaimWorktrees(), ClaimWorkers(), ClaimConfig(),
+            _claim_budget(FakeGithubBudgetStatus(), flow))
+        return claim.execute(ClaimInput(role=role))
+
+    def test_the_step_a_merge_enrols_is_not_claimed_until_the_failed_release_is_finished(self):
+        store, item, rid, git, worktrees, path, uc = self._setup()
+        gate = ReleaseInterruptedRunsUseCase(store, worktrees, NoHoldNotes())
+
+        uc.execute()
+
+        next_step = active_step_any(store, item)
+        self.assertIsNone(self._claim_next(store, next_step.role))
+        gate.execute()
+        claimed = self._claim_next(store, next_step.role)
+        self.assertEqual(claimed.view.step.id, next_step.id)
 
     def test_a_failed_release_is_finished_by_the_next_tick_before_the_next_step_uses_the_workspace(self):
         store, item, rid, git, worktrees, path, uc = self._setup()
-        gate = ReleaseInterruptedRunsUseCase(store, worktrees)
+        gate = ReleaseInterruptedRunsUseCase(store, worktrees, NoHoldNotes())
 
         uc.execute()
 

@@ -15,9 +15,10 @@ class ReleaseInterruptedRunsResponse:
 
 
 class ReleaseInterruptedRunsUseCase:
-    def __init__(self, store, worktrees):
+    def __init__(self, store, worktrees, hold_notes):
         self._store = store
         self._worktrees = worktrees
+        self._hold_notes = hold_notes
         self._pending = None
 
     def _releasable(self, item_id):
@@ -73,4 +74,5 @@ class ReleaseInterruptedRunsUseCase:
                 remaining.append(run)
         self._pending = remaining
         self._release_marked(released, failed)
+        self._hold_notes.execute()
         return ReleaseInterruptedRunsResponse(released=released, failed=failed)
