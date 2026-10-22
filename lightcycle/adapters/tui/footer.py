@@ -93,7 +93,7 @@ class StatusBar(Horizontal):
         if config_changed:
             config_glyph, config_colour = FOOTER_GLYPHS["config-changed"]
             config_widget.update(
-                Text("%s config changed - restart to apply" % config_glyph, style=COLOURS[config_colour])
+                Text("%s config changed" % config_glyph, style=COLOURS[config_colour])
             )
             config_widget.display = True
         else:

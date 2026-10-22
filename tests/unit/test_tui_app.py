@@ -1076,7 +1076,7 @@ class TestConfigChangedHint(unittest.TestCase):
         widget, text, style = _rendered_segment(session, "#status-config")
         self.assertTrue(widget.display)
         self.assertEqual(
-            text, "%s config changed - restart to apply" % FOOTER_GLYPHS["config-changed"].glyph
+            text, "%s config changed" % FOOTER_GLYPHS["config-changed"].glyph
         )
         self.assertEqual(_colour_of(style), COLOURS["amber"].lower())
 
