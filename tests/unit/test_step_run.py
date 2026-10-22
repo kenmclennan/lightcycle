@@ -28,6 +28,24 @@ class TestStepRunUseCase(unittest.TestCase):
         self.assertEqual(result.branch, "feat/x")
         self.assertEqual(result.pr, "https://gh/pr/1")
 
+    def test_a_pass_holding_two_rounds_of_the_phase_resolves_to_the_newest(self):
+        s = FakeStore()
+        item = s.create_item("item", "a description")
+        step = s.create_step(stage="write-code", role="agent", item=item)
+        pid = s.open_pass(item)
+        s.set_step_pass(step, pid)
+        first = s.open_run(item, pid, "amend")
+        s.set_branch(first, "feat/x-amend")
+        s.set_pr(first, "https://gh/pr/1")
+        s.close_run(first, "merged")
+        second = s.open_run(item, pid, "amend")
+        s.set_branch(second, "feat/x-amend-r2")
+
+        result = StepRunUseCase(s, _PhaseFlow("amend")).execute(StepRunInput(step=step))
+
+        self.assertEqual(result.branch, "feat/x-amend-r2")
+        self.assertIsNone(result.pr)
+
     def test_no_open_run_yields_no_branch_and_no_pr(self):
         s = FakeStore()
         item = s.create_item("item", "a description")

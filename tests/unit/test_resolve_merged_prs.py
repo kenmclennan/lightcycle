@@ -542,6 +542,49 @@ class TestMonitorPrsPhaseBoundarySameRepo(unittest.TestCase):
 
 
 
+class TestMonitorPrsSecondRound(unittest.TestCase):
+    def _use_case(self, store, github):
+        return ResolveMergedPrsUseCase(
+            store, github, FakeWorktrees(), _FlowAdapter(_FLOW), None,
+            CheckContentPinUseCase(store, github, _FlowAdapter(_FLOW), trusted_authors=lambda: frozenset({"review-code"})),
+        )
+
+    def _two_rounds(self, first, second):
+        store = FakeStore()
+        item = store.create_item("my feature", "a description")
+        plant_pr(store, item, first, branch="feat/x-amend", state="merged")
+        round_two = plant_pr(store, item, second, branch="feat/x-amend-r2")
+        step = store.create_step(stage="ready-merge", role="human", item=item)
+        return store, item, step, round_two
+
+    def test_the_second_round_is_a_new_open_run_with_its_own_pr(self):
+        first, second = "https://github.com/x/y/pull/1", "https://github.com/x/y/pull/2"
+
+        store, item, step, round_two = self._two_rounds(first, second)
+
+        self.assertTrue(store.get_run(round_two).is_open)
+        self.assertTrue(round_two.endswith(".r2"))
+        self.assertEqual(store.current_run(item, None).pr, second)
+
+    def test_the_merged_first_round_pr_does_not_complete_the_second_round(self):
+        first, second = "https://github.com/x/y/pull/1", "https://github.com/x/y/pull/2"
+        store, item, step, _ = self._two_rounds(first, second)
+
+        result = self._use_case(store, FakeGitHub(merged_prs={first})).execute()
+
+        self.assertEqual(result.merged, [])
+        self.assertNotEqual(store.get_node(step).state, "done")
+
+    def test_the_second_round_pr_alone_completes_the_stage(self):
+        first, second = "https://github.com/x/y/pull/1", "https://github.com/x/y/pull/2"
+        store, item, step, _ = self._two_rounds(first, second)
+
+        result = self._use_case(store, FakeGitHub(merged_prs={second})).execute()
+
+        self.assertEqual(result.merged, [item])
+        self.assertEqual(store.get_node(step).state, "done")
+
+
 class TestMonitorPrsMerged(unittest.TestCase):
     def _setup(self, pr_url, github, flow=None):
         store = FakeStore()

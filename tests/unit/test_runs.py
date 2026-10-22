@@ -1,6 +1,6 @@
 import unittest
 
-from lightcycle.domain.runs import Pass, PhaseRun, RunState, pass_id, run_id
+from lightcycle.domain.runs import Pass, PhaseRun, RunState, pass_id, run_id, run_round
 
 
 class TestIds(unittest.TestCase):
@@ -20,6 +20,27 @@ class TestIds(unittest.TestCase):
         self.assertNotEqual(
             run_id(pass_id("LC-1", 1), "code"), run_id(pass_id("LC-1", 2), "code")
         )
+
+
+class TestRounds(unittest.TestCase):
+    def test_round_one_keeps_the_plain_id(self):
+        self.assertEqual(run_id("LC-1.p1", "amend", 1), run_id("LC-1.p1", "amend"))
+        self.assertEqual(run_id("LC-1.p1", "amend", 1), "LC-1.p1.amend")
+
+    def test_round_two_appends_a_round_suffix(self):
+        self.assertEqual(run_id("LC-1.p1", "amend", 2), "LC-1.p1.amend.r2")
+
+    def test_a_phaseless_round_two_has_a_stable_id(self):
+        self.assertEqual(run_id("LC-1.p1", None, 2), "LC-1.p1.-.r2")
+
+    def test_run_round_round_trips_both_forms(self):
+        self.assertEqual(run_round(run_id("LC-1.p1", "amend", 1)), 1)
+        self.assertEqual(run_round(run_id("LC-1.p1", "amend", 3)), 3)
+        self.assertEqual(run_round(run_id("LC-1.p1", None, 12)), 12)
+
+    def test_a_phase_run_reads_its_round_from_its_id(self):
+        self.assertEqual(PhaseRun("LC-1.p1.amend", "LC-1", "LC-1.p1", "amend").round, 1)
+        self.assertEqual(PhaseRun("LC-1.p1.amend.r2", "LC-1", "LC-1.p1", "amend").round, 2)
 
 
 class TestOpenness(unittest.TestCase):

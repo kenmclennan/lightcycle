@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass
 from typing import Optional
 
@@ -8,8 +9,17 @@ class RunState:
     ABANDONED = "abandoned"
 
 
-def run_id(pass_id: str, phase: Optional[str]) -> str:
-    return "%s.%s" % (pass_id, phase or "-")
+_ROUND_SUFFIX = re.compile(r"\.r(\d+)$")
+
+
+def run_id(pass_id: str, phase: Optional[str], round: int = 1) -> str:
+    base = "%s.%s" % (pass_id, phase or "-")
+    return base if round == 1 else "%s.r%d" % (base, round)
+
+
+def run_round(rid: str) -> int:
+    m = _ROUND_SUFFIX.search(rid)
+    return int(m.group(1)) if m else 1
 
 
 @dataclass(frozen=True)
@@ -30,6 +40,10 @@ class PhaseRun:
     @property
     def is_open(self) -> bool:
         return self.state == RunState.OPEN
+
+    @property
+    def round(self) -> int:
+        return run_round(self.id)
 
     def as_dict(self) -> dict:
         return {

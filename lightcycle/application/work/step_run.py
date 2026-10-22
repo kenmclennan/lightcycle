@@ -1,8 +1,6 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from lightcycle.domain.runs import run_id
-
 
 @dataclass(frozen=True)
 class StepRunInput:
@@ -16,6 +14,7 @@ class StepRunResponse:
     item: Optional[str] = None
     phase: Optional[str] = None
     pass_id: Optional[str] = None
+    round: int = 1
 
 
 class StepRunUseCase:
@@ -29,11 +28,13 @@ class StepRunUseCase:
         if run is None:
             return StepRunResponse(branch=None, pr=None)
         return StepRunResponse(
-            branch=run.branch, pr=run.pr, item=run.item, phase=run.phase, pass_id=run.pass_id
+            branch=run.branch, pr=run.pr, item=run.item, phase=run.phase, pass_id=run.pass_id,
+            round=run.round,
         )
 
     def _run_for(self, step):
         if step.pass_id is None:
             return None
         phase = self._flow.phase_for(step)
-        return self._store.get_run(run_id(step.pass_id, phase))
+        runs = [r for r in self._store.runs_of(step.item, step.pass_id) if r.phase == phase]
+        return runs[-1] if runs else None
