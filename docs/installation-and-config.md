@@ -100,12 +100,22 @@ This table documents every `_SEED_KEYS` entry - `tests/unit/test_docs_reference_
 | `guidance-dormant-days` | days without a delivery before `lc guidance` flags a `stable` entry `never-delivered` (an entry never delivered flags only once it has existed that long), seeded at `60`; override with `LC_GUIDANCE_DORMANT_DAYS`; must be `>= 1` |
 | `review-rounds-cap` | consecutive review-reject rounds on one step a workflow's review-rounds-cap transition tolerates before it fires |
 | `tui-autostart-pool` | whether the TUI starts the pool loop automatically on launch |
+| `tui-health-icons` | `on` or `off`, seeded `off`; override with `LC_TUI_HEALTH_ICONS`. `on` asserts the terminal speaks the Kitty graphics protocol (cmux and iTerm2 verified) and shows one health image at the left edge of the footer, spanning both footer rows; `off` leaves the footer as it was. Read at TUI launch |
+| `tui-health-icon-dir` | seeded `icons`: the folder under the data root (`~/.lightcycle/icons`) holding the health images; must be relative and stay under the data root |
+| `tui-health-icon-0` | seeded `health-0.png`: the bare PNG file name shown for health image state `0`, in the folder above. The engine ships no images |
+| `tui-health-icon-1` | seeded `health-1.png`: the bare PNG file name shown for health image state `1`, in the folder above. The engine ships no images |
+| `tui-health-icon-2` | seeded `health-2.png`: the bare PNG file name shown for health image state `2`, in the folder above. The engine ships no images |
+| `tui-health-icon-3` | seeded `health-3.png`: the bare PNG file name shown for health image state `3`, in the folder above. The engine ships no images |
+| `tui-health-icon-4` | seeded `health-4.png`: the bare PNG file name shown for health image state `4`, in the folder above. The engine ships no images |
+| `tui-health-icon-busy` | seeded `health-busy.png`: the bare PNG file name shown for health image state `busy`, in the folder above. The engine ships no images |
 | `tui-metrics` | whether the TUI records its own per-tick refresh timing to the run log |
 | `developer-mode` | whether this machine develops lightcycle itself, so the engine and the plugin count as writable for routing a finding. Seeded `false`; override with `LC_DEVELOPER_MODE`. Nothing reads it yet beyond `lc config` |
 | `tui-upgrade-check-seconds` | how often the TUI rechecks for a new engine version in the background; `0` disables the periodic recheck (the check still runs once on launch); must be `>= 0` |
 | `tui-doctor-check-seconds` | how often the TUI reruns `lc doctor` in the background to drive the footer doctor segment; `0` disables the periodic recheck (the check still runs once on launch); must be `>= 0` |
 | `pool-upgrade-check-seconds` | how often `lc start`'s pool loop rechecks for a new engine version while running; `0` disables the periodic recheck (the check still runs once at startup); must be `>= 0` |
 | `price-<model>-<kind>-per-mtok` | per-million-token USD pricing used for usage cost reporting, one key per `<model>` (`sonnet`/`opus`/`haiku`) x `<kind>` (`input`/`output`/`cache-write`/`cache-read`) - twelve keys total, defaults in `config.py`'s `_SEED_KEYS`; each must be `>= 0` |
+
+The footer health image maps the health score (`0` best to `4` worst, the worst of the pool, Claude, GitHub and upgrade or config signals) to one of six states: `0`-`4`, or `busy` when the score is `0` and any item is active or queued. Put one PNG per state in the folder named by `tui-health-icon-dir`; a state whose file is missing or unreadable shows no image and the footer keeps its usual layout. `lc doctor` names each configured file that is missing or not a readable PNG while `tui-health-icons` is `on`.
 
 Example schedule block (kept in the config file, shown here for reference):
 

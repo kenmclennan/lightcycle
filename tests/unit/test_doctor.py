@@ -1037,3 +1037,40 @@ class TestReloadProblems(unittest.TestCase):
         self.assertEqual(
             [p.message for p in problems],
             ["running pool needs a restart for: poll-seconds, spin-cap"])
+
+
+class TestDoctorHealthIcons(unittest.TestCase):
+    def _problems(self, on, files):
+        from tests.support.png_bytes import png_bytes
+
+        config = _cfg(**{**_ALL_KEYS, "tui_health_icons": on})
+        paths = {
+            s: config.tui_health_icon_path(s) for s in ("0", "1", "2", "3", "4", "busy")
+        }
+        fs = FakeFs(files={paths[s]: (png_bytes() if v == "png" else v) for s, v in files.items()})
+        uc = DoctorUseCase(
+            FakeStore(), FakeWorkflowSource(), config, FakeWorkflowBundle(), fs, FakeMachine(),
+            _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(),
+            FakeLock(running=False), FakeGithubBudget())
+        report = uc.execute(DoctorInput())
+        return [p.message for p in report.problems["config"] if "tui-health-icon" in p.message], paths
+
+    def test_feature_off_reports_nothing_with_every_file_missing(self):
+        messages, _ = self._problems("off", {})
+        self.assertEqual(messages, [])
+
+    def test_on_reports_one_missing_and_one_non_png_naming_key_and_path(self):
+        files = {s: "png" for s in ("0", "1", "2", "3")}
+        files["4"] = b"plain text, not a png image"
+        messages, paths = self._problems("on", files)
+        self.assertEqual(len(messages), 2)
+        self.assertIn("tui-health-icon-4", messages[0])
+        self.assertIn(paths["4"], messages[0])
+        self.assertIn("not a readable PNG", messages[0])
+        self.assertIn("tui-health-icon-busy", messages[1])
+        self.assertIn(paths["busy"], messages[1])
+        self.assertIn("is missing", messages[1])
+
+    def test_on_with_all_six_valid_reports_none(self):
+        messages, _ = self._problems("on", {s: "png" for s in ("0", "1", "2", "3", "4", "busy")})
+        self.assertEqual(messages, [])

@@ -71,6 +71,9 @@ class FakeConfig:
     def resolved_settings(self):
         return ()
 
+    def tui_health_icons(self):
+        return False
+
     def default_origin(self):
         return "acme"
 

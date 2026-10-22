@@ -1516,3 +1516,48 @@ class TestTickTimingKeys(unittest.TestCase):
             with self.assertRaises(ConfigError) as ctx:
                 getattr(_cfg(spin_cap="3"), getter)()
             self.assertIn(key, str(ctx.exception))
+
+
+class TestTuiHealthIconConfig(unittest.TestCase):
+    _KEYS = (
+        "tui-health-icon-dir", "tui-health-icon-0", "tui-health-icon-1", "tui-health-icon-2",
+        "tui-health-icon-3", "tui-health-icon-4", "tui-health-icon-busy",
+    )
+
+    def test_seeds(self):
+        seeds = dict(_SEED_KEYS)
+        self.assertEqual(seeds["tui-health-icons"], "off")
+        self.assertEqual(seeds["tui-health-icon-dir"], "icons")
+        for state in ("0", "1", "2", "3", "4"):
+            self.assertEqual(seeds["tui-health-icon-%s" % state], "health-%s.png" % state)
+        self.assertEqual(seeds["tui-health-icon-busy"], "health-busy.png")
+
+    def test_toggle_parses_on_and_off(self):
+        self.assertTrue(_cfg(tui_health_icons="on").tui_health_icons())
+        self.assertFalse(_cfg(tui_health_icons="off").tui_health_icons())
+
+    def test_toggle_env_override(self):
+        cfg = _cfg(environ={"LC_TUI_HEALTH_ICONS": "on"}, tui_health_icons="off")
+        self.assertTrue(cfg.tui_health_icons())
+
+    def test_unset_names_the_key(self):
+        for key in ("tui-health-icons",) + self._KEYS:
+            getter = key.replace("-", "_")
+            with self.assertRaises(ConfigError) as e:
+                getattr(_cfg(max_agents="5"), getter)()
+            self.assertIn(key, str(e.exception))
+
+    def test_getters_return_the_configured_values(self):
+        cfg = _cfg(tui_health_icon_dir="faces", tui_health_icon_0="a.png", tui_health_icon_busy="b.png")
+        self.assertEqual(cfg.tui_health_icon_dir(), "faces")
+        self.assertEqual(cfg.tui_health_icon_0(), "a.png")
+        self.assertEqual(cfg.tui_health_icon_busy(), "b.png")
+        self.assertEqual(
+            cfg.tui_health_icon_path("0"), os.path.join(cfg.data_root(), "faces", "a.png"))
+
+    def test_absolute_and_parent_paths_are_rejected(self):
+        for bad in ("/etc/x", "../x", "a/../../x"):
+            for key in ("tui_health_icon_dir", "tui_health_icon_3"):
+                with self.assertRaises(ConfigError) as e:
+                    getattr(_cfg(**{key: bad}), key)()
+                self.assertIn("data root", str(e.exception))
