@@ -58,10 +58,3 @@ RETIRED_JOB_SCHEDULES = (
     ("material-audit", "lightcycle/material-audit"),
     ("daily-summary", "lightcycle/daily-summary"),
 )
-
-GUARD_AUTOMATION_KINDS = {
-    PENDING_REFLECTIONS: "audit",
-    MATERIALS_CHANGED: "audit",
-    DAY_UNSUMMARISED: "daily-summary",
-    REPOS_ACTIVE: "audit",
-}

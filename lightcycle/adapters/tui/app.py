@@ -17,8 +17,6 @@ from lightcycle.adapters.tui.design_system import (
     ACTIVE_GLYPH_REST_INDEX,
     ACTIVE_GLYPH_TICKS_PER_SECOND,
     BACKLOG_EMPTY_SHORTCUTS,
-    AUTOMATION_EMPTY_SHORTCUTS,
-    AUTOMATION_SHORTCUTS,
     BACKLOG_FILTERED_EMPTY_SHORTCUTS,
     BACKLOG_SEARCH_EMPTY_SHORTCUTS,
     BACKLOG_SEARCH_SHORTCUTS,
@@ -68,10 +66,11 @@ from lightcycle.application.pool import (
 )
 from lightcycle.application.setup import UpgradeNoticeUseCase, upgrade
 from lightcycle.application.work import (
-    AutomationInput,
-    AutomationUseCase,
     BacklogInput,
     BacklogUseCase,
+    CATEGORY_ALL,
+    CATEGORY_AUTOMATION,
+    CATEGORY_NO_AUTOMATION,
     DoneInput,
     DoneUseCase,
     ReportInput,
@@ -83,7 +82,6 @@ from lightcycle.adapters.tui.views.tables import STACKED_COLUMN_KEY, FilterLineR
 from lightcycle.adapters.tui.views.backlog import BACKLOG_COLUMNS, BACKLOG_CONTINUATION_INDENT, BacklogTable, _backlog_stacked_first_line, _backlog_title_prose, _backlog_title_cell, _backlog_row_cells, _backlog_stacked_cell_builder, BacklogFilterInput, BacklogView
 from lightcycle.adapters.tui.views.done import DONE_COLUMNS, DONE_CONTINUATION_INDENT, DoneTable, _done_stacked_first_line, _done_row_cells, _done_stacked_cell_builder, DoneFilterInput, DoneView
 from lightcycle.adapters.tui.views.report import REPORT_COLUMNS, REPORT_CONTINUATION_INDENT, _report_rows, _report_row_cells, ReportTable, ReportView
-from lightcycle.adapters.tui.views.automation import AUTOMATION_EMPTY_MESSAGE, AutomationTable, AutomationView, _automation_tally_text
 from lightcycle.adapters.tui.modals import PICKER_CANCELLED, POOL_PROMPT_CANCELLED, POOL_PROMPT_STOP, POOL_PROMPT_DRAIN, POOL_PROMPT_QUIT_LEAVE, POOL_PROMPT_QUIT_STOP, POOL_PROMPT_MIN_WIDTH, PICKER_MIN_WIDTH, PICKER_BORDER_WIDTH, PICKER_PADDING_WIDTH, PICKER_CURSOR_PREFIX_WIDTH, PICKER_COLUMN_GAP, ProjectFilterPicker, PoolPromptScreen, pool_prompt_body, PickerOption
 
 __all__ = [
@@ -118,10 +116,6 @@ __all__ = [
     "_report_row_cells",
     "ReportTable",
     "ReportView",
-    "AUTOMATION_EMPTY_MESSAGE",
-    "AutomationTable",
-    "AutomationView",
-    "_automation_tally_text",
     "PICKER_CANCELLED",
     "POOL_PROMPT_CANCELLED",
     "POOL_PROMPT_STOP",
@@ -151,7 +145,7 @@ EMPTY_STATE_MESSAGE = "Nothing needs attention. Nothing's active. Nothing's queu
 
 
 
-_VIEW_CYCLE = ("priority", "backlog", "done", "report", "automation")
+_VIEW_CYCLE = ("priority", "backlog", "done", "report")
 
 
 PRIORITY_CONTINUATION_INDENT = GLYPH_WIDTHS["cursor"] + GLYPH_WIDTHS["icon"]
@@ -168,8 +162,6 @@ class TabStrip(Horizontal):
         yield Static("Done", id="tab-done", classes="tab-dim")
         yield Static(" · ", classes="tab-separator")
         yield Static("Report", id="tab-report", classes="tab-dim")
-        yield Static(" · ", classes="tab-separator")
-        yield Static("Automation", id="tab-automation", classes="tab-dim")
 
     def set_active(self, view) -> None:
         widgets = {
@@ -177,7 +169,6 @@ class TabStrip(Horizontal):
             "backlog": self.query_one("#tab-backlog", Static),
             "done": self.query_one("#tab-done", Static),
             "report": self.query_one("#tab-report", Static),
-            "automation": self.query_one("#tab-automation", Static),
         }
         for key, widget in widgets.items():
             widget.set_class(key == view, "tab-active")
@@ -397,29 +388,6 @@ class LightcycleApp(App):
         display: none;
     }}
 
-    AutomationView {{
-        display: none;
-    }}
-    #automation-tally {{
-        height: auto;
-        padding-bottom: 1;
-    }}
-    #automation-floor {{
-        color: {COLOURS["dim"]};
-        content-align: center middle;
-        height: 1fr;
-        display: none;
-    }}
-    AutomationTable {{
-        height: 1fr;
-        display: none;
-    }}
-    #automation-empty {{
-        color: {COLOURS["dim"]};
-        height: 1fr;
-        display: none;
-    }}
-
     ReportView {{
         display: none;
     }}
@@ -552,6 +520,7 @@ class LightcycleApp(App):
         self._backlog_filtered_count = 0
         self._backlog_filter_timer = None
         self._done_project_filter = None
+        self._done_category = CATEGORY_NO_AUTOMATION
         self._done_text_filter = None
         self._done_day_filter = None
         self._done_total = 0
@@ -590,9 +559,6 @@ class LightcycleApp(App):
         report_view = ReportView(id="report-view")
         report_view.display = self._view == "report"
         yield report_view
-        automation_view = AutomationView(id="automation-view")
-        automation_view.display = self._view == "automation"
-        yield automation_view
         yield DashboardFooter(id="footer")
 
     def on_mount(self) -> None:
@@ -617,7 +583,6 @@ class LightcycleApp(App):
         self.refresh_priority_layout()
         self.query_one(BacklogView).refresh_column_width()
         self.query_one(DoneView).refresh_column_width()
-        self.query_one(AutomationView).refresh_column_width()
 
     def _check_upgrade(self):
         response = UpgradeNoticeUseCase(
@@ -673,7 +638,6 @@ class LightcycleApp(App):
 
         self._refresh_backlog_view()
         self._refresh_done_view()
-        self._refresh_automation_view()
 
         self._apply_view_visibility()
         self._sync_footer_shortcuts()
@@ -804,8 +768,9 @@ class LightcycleApp(App):
         done_uc = DoneUseCase(self._container.store)
         done_resp = done_uc.execute(DoneInput(
             project=self._done_project_filter, text=self._done_text_filter, day=self._done_day_filter,
+            category=self._done_category,
         ))
-        done_counts = done_uc.counts()
+        done_counts = done_uc.counts(self._done_category)
         self._done_total = done_counts.total
         self._done_filtered_count = len(done_resp.rows)
         done_rows = build_done_rows(
@@ -813,17 +778,8 @@ class LightcycleApp(App):
         )
         self.query_one(DoneView).apply_rows(
             done_rows, self._done_total, self._done_project_filter, self._done_text_filter,
-            self._done_day_filter,
+            self._done_day_filter, self._done_category,
         )
-
-    def _refresh_automation_view(self) -> None:
-        if self._view != "automation":
-            return
-        response = AutomationUseCase(self._container.store).execute(AutomationInput())
-        rows = build_done_rows(
-            self._container.store, response.rows, self._now(), self._done_cost_time_cache,
-        )
-        self.query_one(AutomationView).apply_response(response, rows)
 
     def _refresh_report_view(self) -> None:
         if self._view != "report":
@@ -846,7 +802,6 @@ class LightcycleApp(App):
         self.query_one(BacklogView).display = self._view == "backlog"
         self.query_one(DoneView).display = self._view == "done"
         self.query_one(ReportView).display = self._view == "report"
-        self.query_one(AutomationView).display = self._view == "automation"
         self._sync_active_glyph_animation()
 
     def _desired_shortcuts(self):
@@ -862,10 +817,6 @@ class LightcycleApp(App):
             return DONE_SHORTCUTS
         if self._view == "report":
             return REPORT_SHORTCUTS
-        if self._view == "automation":
-            if self.query_one(AutomationView).row_count:
-                return AUTOMATION_SHORTCUTS
-            return AUTOMATION_EMPTY_SHORTCUTS
         if self.focused is self.query_one(BacklogFilterInput):
             return BACKLOG_SEARCH_SHORTCUTS if self._backlog_filtered_count > 0 else BACKLOG_SEARCH_EMPTY_SHORTCUTS
         if self._backlog_total == 0:
@@ -917,8 +868,6 @@ class LightcycleApp(App):
             self._refresh_done_view()
         elif self._view == "report":
             self._refresh_report_view()
-        elif self._view == "automation":
-            self._refresh_automation_view()
         self._apply_view_visibility()
         self.query_one(TabStrip).set_active(self._view)
         self._sync_footer_shortcuts()
@@ -929,8 +878,6 @@ class LightcycleApp(App):
             self.set_focus(self.query_one(BacklogTable))
         elif self._view == "report":
             self.set_focus(self.query_one(ReportView))
-        elif self._view == "automation":
-            self.set_focus(self.query_one(AutomationTable))
         else:
             self.set_focus(self.query_one(DoneTable))
 
@@ -948,7 +895,7 @@ class LightcycleApp(App):
             if row is None:
                 return
             self.push_screen(NodeHubScreen(self._container, row.step_id, self._now))
-        elif table.id in ("backlog-table", "done-table", "automation-table"):
+        elif table.id in ("backlog-table", "done-table"):
             event.stop()
             self.push_screen(NodeHubScreen(self._container, row_id, self._now))
 
@@ -1012,11 +959,15 @@ class LightcycleApp(App):
             return
         if self._view == "backlog":
             counts = BacklogUseCase(self._container.store, None).counts()
+            options = [(None, "All", counts.total)]
         else:
             counts = DoneUseCase(self._container.store).counts()
-        options = [(None, "All", counts.total)] + [
-            (pc.project, pc.project, pc.count) for pc in counts.projects
-        ]
+            options = [
+                (("category", CATEGORY_ALL), "All", counts.all_count),
+                (("category", CATEGORY_NO_AUTOMATION), "All (no automation)", counts.no_automation_count),
+                (("category", CATEGORY_AUTOMATION), "Automations", counts.automation_count),
+            ]
+        options += [(pc.project, pc.project, pc.count) for pc in counts.projects]
         self._picker_open = True
         self.push_screen(ProjectFilterPicker(options), self._on_picker_dismiss)
 
@@ -1029,7 +980,12 @@ class LightcycleApp(App):
             self._refresh()
             self.set_focus(self.query_one(BacklogTable))
         else:
-            self._done_project_filter = result
+            if isinstance(result, tuple):
+                self._done_project_filter = None
+                self._done_category = result[1]
+            else:
+                self._done_project_filter = result
+                self._done_category = CATEGORY_NO_AUTOMATION
             self._refresh()
             self.set_focus(self.query_one(DoneTable))
 
@@ -1038,8 +994,9 @@ class LightcycleApp(App):
             return
         done_uc = DoneUseCase(self._container.store)
         if self._view == "done":
-            options = [(None, "All", done_uc.counts().total)] + [
-                (dc.day, dc.day.isoformat(), dc.count) for dc in done_uc.day_counts()
+            day_counts = done_uc.day_counts(self._done_project_filter, self._done_category)
+            options = [(None, "All", sum(dc.count for dc in day_counts))] + [
+                (dc.day, dc.day.isoformat(), dc.count) for dc in day_counts
             ]
             dismiss = self._on_done_day_picker_dismiss
         else:

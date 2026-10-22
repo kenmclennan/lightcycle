@@ -11,6 +11,11 @@ from lightcycle.adapters.tui.design_system import (
     COLOURS,
     CURSOR_GLYPH,
 )
+from lightcycle.application.work.done import (
+    CATEGORY_ALL,
+    CATEGORY_AUTOMATION,
+    CATEGORY_NO_AUTOMATION,
+)
 from lightcycle.adapters.tui.row_grid import (
     GLYPH_WIDTHS,
     compute_layout,
@@ -97,6 +102,21 @@ class DoneFilterInput(Input):
         self.app.query_one(DoneTable).action_select_cursor()
 
 
+CATEGORY_LABELS = {
+    CATEGORY_ALL: "All",
+    CATEGORY_NO_AUTOMATION: "All (no automation)",
+    CATEGORY_AUTOMATION: "Automations",
+}
+
+
+def _scope(project_filter, category):
+    if project_filter:
+        return project_filter
+    if category != CATEGORY_NO_AUTOMATION:
+        return CATEGORY_LABELS[category]
+    return None
+
+
 class DoneView(Vertical):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -104,6 +124,7 @@ class DoneView(Vertical):
         self._floor = False
         self._total = 0
         self._project_filter = None
+        self._category = CATEGORY_NO_AUTOMATION
         self._text_filter = None
         self._day_filter = None
         self._last_shape = None
@@ -127,9 +148,11 @@ class DoneView(Vertical):
         table.cursor_type = "row"
         table.show_header = False
 
-    def apply_rows(self, rows, total, project_filter, text_filter, day_filter) -> None:
-        shape = (tuple(r.id for r in rows), total, project_filter, text_filter, day_filter)
-        self._render_filter_bar(project_filter, day_filter, len(rows))
+    def apply_rows(
+        self, rows, total, project_filter, text_filter, day_filter, category=CATEGORY_NO_AUTOMATION,
+    ) -> None:
+        shape = (tuple(r.id for r in rows), total, project_filter, category, text_filter, day_filter)
+        self._render_filter_bar(project_filter, day_filter, len(rows), category)
         table = self.query_one(DoneTable)
         layout = self._layout(table)
         if (
@@ -144,21 +167,23 @@ class DoneView(Vertical):
         self._rows = rows
         self._total = total
         self._project_filter = project_filter
+        self._category = category
         self._text_filter = text_filter
         self._day_filter = day_filter
-        self._toggle_state(total, len(rows), project_filter, text_filter, day_filter)
+        self._toggle_state(total, len(rows), _scope(project_filter, category), text_filter, day_filter)
 
     def refresh_column_width(self) -> None:
         self._rebuild_table(self._rows)
-        self._render_filter_bar(self._project_filter, self._day_filter, len(self._rows))
+        self._render_filter_bar(self._project_filter, self._day_filter, len(self._rows), self._category)
         self._toggle_state(
-            self._total, len(self._rows), self._project_filter, self._text_filter, self._day_filter
+            self._total, len(self._rows), _scope(self._project_filter, self._category),
+            self._text_filter, self._day_filter,
         )
 
-    def _render_filter_bar(self, project_filter, day_filter, count) -> None:
+    def _render_filter_bar(self, project_filter, day_filter, count, category=CATEGORY_NO_AUTOMATION) -> None:
         self.query_one("#done-filter-block", FilterBlock).reflow(
             [
-                ("PROJECT", project_filter or "All"),
+                ("PROJECT", project_filter or CATEGORY_LABELS[category]),
                 ("DAY", day_filter.isoformat() if day_filter else "All"),
             ],
             "%d items" % count,

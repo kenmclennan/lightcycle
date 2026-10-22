@@ -3,7 +3,7 @@ import unittest
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.engine_steps import SCHEDULE_ORIGIN_LABEL
-from lightcycle.application.work.automation import automation_kind, is_automation_item
+from lightcycle.application.work.automation import is_automation_item
 from tests.support.fake_git import FakeGit
 from tests.support.schedule_fakes import (
     ScheduleRig,
@@ -62,7 +62,6 @@ class TestFiring(unittest.TestCase):
         self.assertEqual(item.repo, "acme/app")
         self.assertIn("schedule-state", kinds)
         self.assertTrue(is_automation_item(rig.store, item))
-        self.assertEqual(automation_kind(rig.store, item), "audit")
         self.assertIn("schedule-guard:materials-changed", labels)
 
     def test_the_project_shortcode_is_the_default(self):

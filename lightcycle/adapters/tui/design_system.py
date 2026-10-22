@@ -160,19 +160,6 @@ REPORT_SHORTCUTS = (
     ("q", "quit"),
 )
 
-AUTOMATION_SHORTCUTS = (
-    ("↑↓", "move"),
-    ("enter/→", "open"),
-    ("[/]", "switch tab"),
-    ("ctrl-u/ctrl-d", "scroll"),
-    ("q", "quit"),
-)
-
-AUTOMATION_EMPTY_SHORTCUTS = (
-    ("[/]", "switch tab"),
-    ("q", "quit"),
-)
-
 HUB_SHORTCUTS = (
     ("[/]", "switch tab"),
     ("↑↓", "scroll"),

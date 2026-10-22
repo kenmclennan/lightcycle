@@ -96,7 +96,7 @@ class ReportUseCase:
         items = [r.step for r in closed_today]
         completed = sum(1 for i in items if i.disposition == "completed")
         abandoned = sum(1 for i in items if i.disposition in ("abandoned", "aborted"))
-        automation = AutomationUseCase(self._store).execute(AutomationInput(day=input.day)).total
+        automation = AutomationUseCase(self._store).execute(AutomationInput(day=input.day))
         all_children = [s for i in items for s in self._store.children(i.id)]
         spend = item_cost(all_children)
         escalations = _escalations_on(self._store, input.day)
