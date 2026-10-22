@@ -3,6 +3,7 @@ import io
 import os
 import unittest
 
+from tests.support.hold_notes import NoHoldNotes
 from lightcycle.application.pool.monitor_prs import MonitorPrsResponse
 from lightcycle.application.pool.release_interrupted_runs import (
     ReleaseInterruptedRunsResponse,
@@ -51,7 +52,7 @@ class _Fixture:
         self.path = self.worktrees.path_for_run(self.run)
         self.git._registered.add(self.path)
         self.git._branches.add((TARGET, BRANCH))
-        self.use_case = ReleaseInterruptedRunsUseCase(self.store, self.worktrees)
+        self.use_case = ReleaseInterruptedRunsUseCase(self.store, self.worktrees, NoHoldNotes())
 
     def removals(self):
         return [c for c in self.git.calls if c[0] == "remove_worktree"]
@@ -83,7 +84,7 @@ class TestReleaseInterruptedRuns(unittest.TestCase):
         before = len(fx.removals())
 
         again = fx.use_case.execute()
-        fresh = ReleaseInterruptedRunsUseCase(fx.store, fx.worktrees).execute()
+        fresh = ReleaseInterruptedRunsUseCase(fx.store, fx.worktrees, NoHoldNotes()).execute()
 
         self.assertEqual(again, ReleaseInterruptedRunsResponse())
         self.assertEqual(fresh, ReleaseInterruptedRunsResponse())
@@ -275,7 +276,7 @@ class TestPhaseLessRounds(unittest.TestCase):
         self.git._registered.add(path)
         self.git._branches.add((TARGET, "auto/one"))
 
-        response = ReleaseInterruptedRunsUseCase(self.store, self.worktrees).execute()
+        response = ReleaseInterruptedRunsUseCase(self.store, self.worktrees, NoHoldNotes()).execute()
 
         self.assertEqual(self.second.round, 2)
         self.assertNotEqual(path, self.worktrees.path_for_run(self.second))

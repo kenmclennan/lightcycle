@@ -132,6 +132,7 @@ def write_config(projects=None, specs=None):
         "ci-start-window-seconds: 600",
         "ci-no-workflows-wait-seconds: 60",
         "ci-unconfirmed-note-polls: 3",
+        "release-hold-note-seconds: 60",
         "spin-cap: 3",
         "poll-seconds: 5",
         "github-poll-seconds: 60",
