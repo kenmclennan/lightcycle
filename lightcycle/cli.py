@@ -56,7 +56,6 @@ from lightcycle.commands.inspect import cmd_queue as cmd_queue
 from lightcycle.commands.inspect import cmd_status as cmd_status
 from lightcycle.commands.inspect import cmd_trace as cmd_trace
 from lightcycle.commands.intake import cmd_new as cmd_new
-from lightcycle.commands.intake import cmd_goal as cmd_goal
 from lightcycle.commands.intake import cmd_set as cmd_set
 from lightcycle.commands.intake import cmd_attach as cmd_attach
 from lightcycle.commands.intake import cmd_dep as cmd_dep
@@ -179,14 +178,6 @@ COMMAND_GROUPS = [
         ("claim", "<role>", "atomically claim the next ready step for a role"),
         ("done", "<id> <outcome> [--note \"<text>\"] [--disposition completed|abandoned]",
          "close a node; a step done-with-outcome advances the flow"),
-    ]),
-    ("Goals", [
-        ("goal", "<new|list|show|set|log|link|unlink> ...", "maintain a goal by hand: "
-         "new \"<title>\" --project <ref> [--description T], list [--all - include archived], "
-         "show <G-n>, set <G-n> [--title/"
-         "--description/--project/--status \"not started|in progress|done|archived\"], "
-         "log <G-n> \"<title>\" \"<body>\", "
-         "link/unlink <G-n> <item> - a goal is not a node and the flow engine never touches it"),
     ]),
     ("Schedules", [
         ("schedule", "<list|run> ...", "list [--json] shows every schedule - config-enabled and "

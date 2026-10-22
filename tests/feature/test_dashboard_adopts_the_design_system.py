@@ -281,7 +281,6 @@ def _tab_strip_reads(ctx, text):
 
 
 _TAB_WIDGET_IDS = {
-    "Goals": "#tab-goals",
     "Current work": "#tab-current-work",
     "Backlog": "#tab-backlog",
     "Done": "#tab-done",

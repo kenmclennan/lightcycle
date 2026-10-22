@@ -34,8 +34,6 @@ from lightcycle.adapters.tui.design_system import (
     FILTER_DEBOUNCE_SECONDS,
     FILTER_ROW_LABEL_WIDTH,
     GLOBAL_SHORTCUTS,
-    GOALS_EMPTY_SHORTCUTS,
-    GOALS_SHORTCUTS,
     REPORT_SHORTCUTS,
     ROW_SPACER,
     SEARCH_BAR_CSS,
@@ -43,7 +41,6 @@ from lightcycle.adapters.tui.design_system import (
 )
 from lightcycle.adapters.tui.done_list import build_done_rows
 from lightcycle.adapters.tui.footer import DashboardFooter, ShortcutBar, StatusBar
-from lightcycle.adapters.tui.goal_hub import GoalHubScreen
 from lightcycle.adapters.tui.hub import NodeHubScreen
 from lightcycle.adapters.tui.priority_list import assemble_rows, build_priority_rows_from_selection
 from lightcycle.adapters.tui.row_grid import (
@@ -58,7 +55,6 @@ from lightcycle.adapters.tui.row_grid import (
     screen_row_budget_for,
     stacked_cell,
 )
-from lightcycle.application.goals import ListGoalsUseCase
 from lightcycle.application.pool import (
     BreakerStatusUseCase,
     DrainPoolUseCase,
@@ -87,7 +83,6 @@ from lightcycle.adapters.tui.views.tables import STACKED_COLUMN_KEY, FilterLineR
 from lightcycle.adapters.tui.views.backlog import BACKLOG_COLUMNS, BACKLOG_CONTINUATION_INDENT, BacklogTable, _backlog_stacked_first_line, _backlog_title_prose, _backlog_title_cell, _backlog_row_cells, _backlog_stacked_cell_builder, BacklogFilterInput, BacklogView
 from lightcycle.adapters.tui.views.done import DONE_COLUMNS, DONE_CONTINUATION_INDENT, DoneTable, _done_stacked_first_line, _done_row_cells, _done_stacked_cell_builder, DoneFilterInput, DoneView
 from lightcycle.adapters.tui.views.report import REPORT_COLUMNS, REPORT_CONTINUATION_INDENT, _report_rows, _report_row_cells, ReportTable, ReportView
-from lightcycle.adapters.tui.views.goals import GOALS_EMPTY_MESSAGE, GoalsTable, GoalsView
 from lightcycle.adapters.tui.views.automation import AUTOMATION_EMPTY_MESSAGE, AutomationTable, AutomationView, _automation_tally_text
 from lightcycle.adapters.tui.modals import PICKER_CANCELLED, POOL_PROMPT_CANCELLED, POOL_PROMPT_STOP, POOL_PROMPT_DRAIN, POOL_PROMPT_QUIT_LEAVE, POOL_PROMPT_QUIT_STOP, POOL_PROMPT_MIN_WIDTH, PICKER_MIN_WIDTH, PICKER_BORDER_WIDTH, PICKER_PADDING_WIDTH, PICKER_CURSOR_PREFIX_WIDTH, PICKER_COLUMN_GAP, ProjectFilterPicker, PoolPromptScreen, pool_prompt_body, PickerOption
 
@@ -123,9 +118,6 @@ __all__ = [
     "_report_row_cells",
     "ReportTable",
     "ReportView",
-    "GOALS_EMPTY_MESSAGE",
-    "GoalsTable",
-    "GoalsView",
     "AUTOMATION_EMPTY_MESSAGE",
     "AutomationTable",
     "AutomationView",
@@ -159,7 +151,7 @@ EMPTY_STATE_MESSAGE = "Nothing needs attention. Nothing's active. Nothing's queu
 
 
 
-_VIEW_CYCLE = ("goals", "priority", "backlog", "done", "report", "automation")
+_VIEW_CYCLE = ("priority", "backlog", "done", "report", "automation")
 
 
 PRIORITY_CONTINUATION_INDENT = GLYPH_WIDTHS["cursor"] + GLYPH_WIDTHS["icon"]
@@ -169,8 +161,6 @@ PRIORITY_CONTINUATION_INDENT = GLYPH_WIDTHS["cursor"] + GLYPH_WIDTHS["icon"]
 
 class TabStrip(Horizontal):
     def compose(self) -> ComposeResult:
-        yield Static("Goals", id="tab-goals", classes="tab-dim")
-        yield Static(" · ", classes="tab-separator")
         yield Static("Current work", id="tab-current-work", classes="tab-active")
         yield Static(" · ", classes="tab-separator")
         yield Static("Backlog", id="tab-backlog", classes="tab-dim")
@@ -183,7 +173,6 @@ class TabStrip(Horizontal):
 
     def set_active(self, view) -> None:
         widgets = {
-            "goals": self.query_one("#tab-goals", Static),
             "priority": self.query_one("#tab-current-work", Static),
             "backlog": self.query_one("#tab-backlog", Static),
             "done": self.query_one("#tab-done", Static),
@@ -408,19 +397,6 @@ class LightcycleApp(App):
         display: none;
     }}
 
-    GoalsView {{
-        display: none;
-    }}
-    GoalsTable {{
-        height: 1fr;
-    }}
-    #goals-empty {{
-        color: {COLOURS["dim"]};
-        content-align: center middle;
-        height: 1fr;
-        display: none;
-    }}
-
     AutomationView {{
         display: none;
     }}
@@ -605,9 +581,6 @@ class LightcycleApp(App):
         priority_floor = Static(id="priority-list-floor")
         priority_floor.display = showing_floor
         yield priority_floor
-        goals_view = GoalsView(id="goals-view")
-        goals_view.display = self._view == "goals"
-        yield goals_view
         backlog_view = BacklogView(id="backlog-view")
         backlog_view.display = self._view == "backlog"
         yield backlog_view
@@ -698,7 +671,6 @@ class LightcycleApp(App):
 
         self._sync_active_glyph_animation()
 
-        self._refresh_goals_view()
         self._refresh_backlog_view()
         self._refresh_done_view()
         self._refresh_automation_view()
@@ -826,11 +798,6 @@ class LightcycleApp(App):
             backlog_rows, self._backlog_total, self._backlog_project_filter, self._backlog_text_filter
         )
 
-    def _refresh_goals_view(self) -> None:
-        if self._view != "goals":
-            return
-        self.query_one(GoalsView).apply_goals(ListGoalsUseCase(self._container.store).execute())
-
     def _refresh_done_view(self) -> None:
         if self._view != "done":
             return
@@ -876,7 +843,6 @@ class LightcycleApp(App):
         )
         self.query_one("#empty-state", Static).display = on_priority and self._priority_empty
         self.query_one("#priority-list-floor", Static).display = showing_floor
-        self.query_one(GoalsView).display = self._view == "goals"
         self.query_one(BacklogView).display = self._view == "backlog"
         self.query_one(DoneView).display = self._view == "done"
         self.query_one(ReportView).display = self._view == "report"
@@ -900,8 +866,6 @@ class LightcycleApp(App):
             if self.query_one(AutomationView).row_count:
                 return AUTOMATION_SHORTCUTS
             return AUTOMATION_EMPTY_SHORTCUTS
-        if self._view == "goals":
-            return GOALS_SHORTCUTS if self.query_one(GoalsView).count else GOALS_EMPTY_SHORTCUTS
         if self.focused is self.query_one(BacklogFilterInput):
             return BACKLOG_SEARCH_SHORTCUTS if self._backlog_filtered_count > 0 else BACKLOG_SEARCH_EMPTY_SHORTCUTS
         if self._backlog_total == 0:
@@ -917,13 +881,13 @@ class LightcycleApp(App):
             shortcut_bar.set_shortcuts(desired)
 
     def action_prev_strip(self) -> None:
-        if isinstance(self.screen, (NodeHubScreen, GoalHubScreen)):
+        if isinstance(self.screen, NodeHubScreen):
             self.screen.action_prev_tab()
             return
         self._cycle_view(-1)
 
     def action_next_strip(self) -> None:
-        if isinstance(self.screen, (NodeHubScreen, GoalHubScreen)):
+        if isinstance(self.screen, NodeHubScreen):
             self.screen.action_next_tab()
             return
         self._cycle_view(1)
@@ -947,8 +911,6 @@ class LightcycleApp(App):
                 self._render_priority_rows(
                     self._last_priority_selection, force_rebuild=True,
                 )
-        elif self._view == "goals":
-            self._refresh_goals_view()
         elif self._view == "backlog":
             self._refresh_backlog_view()
         elif self._view == "done":
@@ -963,8 +925,6 @@ class LightcycleApp(App):
         self._sync_active_glyph_animation()
         if self._view == "priority":
             self.set_focus(self.query_one(PriorityTable))
-        elif self._view == "goals":
-            self.set_focus(self.query_one(GoalsTable))
         elif self._view == "backlog":
             self.set_focus(self.query_one(BacklogTable))
         elif self._view == "report":
@@ -988,9 +948,6 @@ class LightcycleApp(App):
             if row is None:
                 return
             self.push_screen(NodeHubScreen(self._container, row.step_id, self._now))
-        elif table.id == "goals-table":
-            event.stop()
-            self.push_screen(GoalHubScreen(self._container, row_id, self._now))
         elif table.id in ("backlog-table", "done-table", "automation-table"):
             event.stop()
             self.push_screen(NodeHubScreen(self._container, row_id, self._now))

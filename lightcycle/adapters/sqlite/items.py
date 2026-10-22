@@ -224,5 +224,4 @@ class ItemsAggregate:
         self._conn.execute("DELETE FROM artifacts WHERE item_id = ?", (tid,))
         self._conn.execute("DELETE FROM labels WHERE node_id = ?", (tid,))
         self._conn.execute("DELETE FROM history WHERE node_id = ?", (tid,))
-        self._conn.execute("DELETE FROM goal_items WHERE item_id = ?", (tid,))
         self._commit()

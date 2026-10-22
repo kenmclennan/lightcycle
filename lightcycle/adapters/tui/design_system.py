@@ -69,7 +69,6 @@ COLUMN_GRIDS = {
     "detail": ("key", "value"),
     "context": ("key", "value"),
     "report": ("key", "value"),
-    "goal-items": ("cursor", "icon", "id", "title", "step"),
 }
 
 GLOBAL_SHORTCUTS = (
@@ -77,19 +76,6 @@ GLOBAL_SHORTCUTS = (
     ("enter/→", "open"),
     ("[/]", "switch tab"),
     ("ctrl-u/ctrl-d", "scroll"),
-    ("q", "quit"),
-)
-
-GOALS_SHORTCUTS = (
-    ("↑↓", "move"),
-    ("enter/→", "open goal"),
-    ("[/]", "switch tab"),
-    ("ctrl-u/ctrl-d", "scroll"),
-    ("q", "quit"),
-)
-
-GOALS_EMPTY_SHORTCUTS = (
-    ("[/]", "switch tab"),
     ("q", "quit"),
 )
 
@@ -249,11 +235,3 @@ SEARCH_BAR_CSS = f"""
         background: {COLOURS["selected-bg"]};
     }}
 """
-
-GOAL_LOG_SHORTCUTS = HUB_SHORTCUTS + (("/", "search"),)
-
-GOAL_LOG_SEARCH_SHORTCUTS = (
-    ("esc/tab", "back"),
-    ("[/]", "switch tab"),
-    ("q", "quit"),
-)

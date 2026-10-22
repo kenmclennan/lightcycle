@@ -5,12 +5,8 @@ from typing import Optional
 _SSH_RE = re.compile(r"^git@github\.com:([^/]+)/(.+?)(?:\.git)?/?$")
 _HTTPS_RE = re.compile(r"^https://github\.com/([^/]+)/(.+?)(?:\.git)?/?$")
 
-RESERVED_SHORTCODES = frozenset({"G"})
-
 
 def reserved_shortcode_reason(shortcode: str, guidance_shortcode: Optional[str] = None) -> Optional[str]:
-    if shortcode.upper() in RESERVED_SHORTCODES:
-        return "shortcode '%s' is reserved: goal ids are G-<n>, so an item G-<n> would read as a goal" % shortcode
     if guidance_shortcode and shortcode.upper() == guidance_shortcode.upper():
         return (
             "shortcode '%s' is reserved for the guidance project (config key "
@@ -30,10 +26,7 @@ class ProjectIdentity:
 
     @property
     def default_shortcode(self) -> str:
-        candidate = self.name.upper()
-        if candidate in RESERVED_SHORTCODES:
-            return (self.owner + self.name).upper()
-        return candidate
+        return self.name.upper()
 
     @classmethod
     def parse(cls, raw: str) -> "ProjectIdentity":

@@ -36,9 +36,9 @@ class TestParse(unittest.TestCase):
             ProjectIdentity.parse("owner/")
 
 
-class TestDefaultShortcodeAvoidsReserved(unittest.TestCase):
-    def test_a_repo_named_g_gets_a_shortcode_other_than_g(self):
-        self.assertEqual(ProjectIdentity.parse("acme/g").default_shortcode, "ACMEG")
+class TestDefaultShortcodeForG(unittest.TestCase):
+    def test_a_repo_named_g_keeps_g(self):
+        self.assertEqual(ProjectIdentity.parse("acme/g").default_shortcode, "G")
 
     def test_a_repo_named_goals_keeps_its_plain_default(self):
         self.assertEqual(ProjectIdentity.parse("acme/goals").default_shortcode, "GOALS")

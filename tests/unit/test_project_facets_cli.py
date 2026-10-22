@@ -180,10 +180,10 @@ class TestSetShortcode(unittest.TestCase):
         self._set("acme/x", "NEW")
         self.assertEqual(self.store.get_project("acme/x").shortcode, "NEW")
 
-    def test_a_reserved_shortcode_is_refused(self):
+    def test_the_former_goal_shortcode_is_accepted(self):
         self.store.add_project("acme/x")
-        with self.assertRaisesRegex(UseCaseError, "reserved"):
-            self._set("acme/x", "g")
+        self._set("acme/x", "g")
+        self.assertEqual(self.store.get_project("acme/x").shortcode.upper(), "G")
 
     def test_an_empty_shortcode_is_refused(self):
         self.store.add_project("acme/x")

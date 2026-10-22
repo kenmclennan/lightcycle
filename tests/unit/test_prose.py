@@ -38,8 +38,8 @@ class TestParseProse(unittest.TestCase):
         self.assertEqual([l.kind for l in lines], [BODY, BODY, BODY, HEADING])
         self.assertEqual(lines[1].segments, (Literal("# note [[LC-1]]"),))
 
-    def test_item_step_and_goal_ids_parse_as_references(self):
-        for ref in ("LC-861", "LC-878.1", "G-1"):
+    def test_item_and_step_ids_parse_as_references(self):
+        for ref in ("LC-861", "LC-878.1"):
             self.assertEqual(parse_prose("[[%s]]" % ref)[0].segments, (Reference(ref),))
 
     def test_non_ids_and_labelled_links_stay_literal(self):
@@ -108,14 +108,13 @@ class TestResolveReferences(unittest.TestCase):
     def setUp(self):
         self.store = FakeStore()
         self.item = self.store.create_item("the item title", "d")
-        self.goal = self.store.create_goal("the goal title")
 
-    def test_resolves_an_item_and_a_goal_and_maps_a_dead_id_to_none(self):
+    def test_resolves_an_item_and_maps_a_dead_id_to_none(self):
         result = ResolveReferencesUseCase(self.store).execute(
-            [self.item, self.goal, "LC-9999", self.item]
+            [self.item, "LC-9999", self.item]
         )
         self.assertEqual(
-            result, {self.item: "the item title", self.goal: "the goal title", "LC-9999": None}
+            result, {self.item: "the item title", "LC-9999": None}
         )
 
     def test_an_empty_title_is_unresolved(self):
@@ -131,13 +130,6 @@ class TestCliStaysRaw(unittest.TestCase):
         self.store.add_project("acme/lightcycle")
         self.item = self.store.create_item("an item", "## x\n\nsee [[LC-1]]")
         cli.set_container(SimpleNamespace(store=self.store, flow_service=lambda: None))
-
-    def test_goal_show_prints_the_description_verbatim(self):
-        gid = self.store.create_goal("g", "## x\n\nsee [[LC-1]]", "lightcycle")
-        out = io.StringIO()
-        with redirect_stdout(out):
-            cli.cmd_goal(["show", gid])
-        self.assertIn("description:\n## x\n\nsee [[LC-1]]\n", out.getvalue())
 
     def test_show_json_carries_the_description_unchanged(self):
         out = io.StringIO()

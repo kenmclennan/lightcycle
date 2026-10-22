@@ -6,23 +6,11 @@ from lightcycle.application.feedback import (
     ReflectInput,
     ReflectUseCase,
 )
-from lightcycle.domain.goals import goal_log_stamp
 from lightcycle.domain.work import (
     ALLOWED_STATES_BY_FLAG, FIELDS_BY_TYPE, FieldRefusal, State,
     UNSETTABLE_FIELDS, UNSET_REFUSAL_REASONS, all_states, missing_for_state, refuse_fields, refuse_state, render_cap_refusal,
 )
 from lightcycle.domain.work.state import ALIASES
-from lightcycle.application.goals import (
-    AppendGoalLogUseCase,
-    CreateGoalInput,
-    CreateGoalUseCase,
-    EditGoalInput,
-    EditGoalUseCase,
-    LinkGoalItemUseCase,
-    ListGoalsUseCase,
-    ShowGoalUseCase,
-    UnlinkGoalItemUseCase,
-)
 from lightcycle.application.work.activate_item import ActivateItemInput, ActivateItemUseCase
 from lightcycle.application.work.resolve_backlog import link_resolves
 from lightcycle.application.work.return_to_backlog import (
@@ -126,71 +114,6 @@ def _refuse_over_cap(fields):
         return None
     sys.stderr.write("%s\n" % refusal)
     return 2
-
-
-def cmd_goal(argv):
-    parser = build_parser(COMMANDS["goal"])
-    a = parser.parse_args(argv)
-    if a.sub is None:
-        parser.print_help()
-        return 2
-    store = container().store
-    try:
-        if a.sub == "new":
-            print(CreateGoalUseCase(store, container().fs, container().config).execute(CreateGoalInput(
-                title=a.title,
-                description=a.description,
-                project=resolve_project_ref(store, a.project),
-            )))
-            return 0
-        if a.sub == "list":
-            for g in ListGoalsUseCase(store).execute(include_archived=a.all):
-                print("%s\t%s\t%s" % (g.id, g.status, g.title))
-            return 0
-        if a.sub == "show":
-            _print_goal(ShowGoalUseCase(store).execute(a.id))
-            return 0
-        if a.sub == "set":
-            EditGoalUseCase(store).execute(EditGoalInput(
-                id=a.id,
-                title=a.title,
-                description=a.description,
-                project=resolve_project_ref(store, a.project),
-                status=a.status,
-            ))
-            print("updated %s" % a.id)
-            return 0
-        if a.sub == "log":
-            AppendGoalLogUseCase(store).execute(a.id, a.title, a.body)
-            print("logged to %s" % a.id)
-            return 0
-        if a.sub == "link":
-            LinkGoalItemUseCase(store).execute(a.id, a.item)
-            print("linked %s to %s" % (a.item, a.id))
-            return 0
-        if a.sub == "unlink":
-            UnlinkGoalItemUseCase(store).execute(a.id, a.item)
-            print("unlinked %s from %s" % (a.item, a.id))
-            return 0
-    except UseCaseError as e:
-        sys.stderr.write("%s\n" % e)
-        return 1
-
-
-def _print_goal(view):
-    g = view.goal
-    print("%s  %s" % (g.id, g.title))
-    print("project: %s" % (g.project or "(none)"))
-    print("status: %s" % g.status)
-    print("\ndescription:\n%s" % (g.description or "(none)"))
-    print("\nitems:")
-    for ref in view.items:
-        print("  %s%s" % (ref.id, "  %s" % ref.title if ref.title else ""))
-    print("\nlog:")
-    for e in view.log:
-        print("  %s%s" % (goal_log_stamp(e.created_at), "  %s" % e.title if e.title else ""))
-        for line in e.body.splitlines():
-            print("    %s" % line)
 
 
 def _set_state_label(state):

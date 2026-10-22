@@ -8,7 +8,7 @@ from tests.support.screen_render import (
 )
 
 
-PARAGRAPH_START = {"goal-hub#overview": "Every project", "hub#long-description": "This item exists"}
+PARAGRAPH_START = {"hub#long-description": "This item exists"}
 
 
 def _paragraph(frame, start):

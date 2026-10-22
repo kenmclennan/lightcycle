@@ -8,7 +8,6 @@ from lightcycle.domain.work import State
 class ItemContext:
     repo: Optional[str] = None
     workflow: Optional[str] = None
-    goals: Tuple[Tuple[str, str], ...] = ()
     resolves: Tuple[Tuple[str, Optional[str]], ...] = ()
     note: Optional[str] = None
 
@@ -21,15 +20,8 @@ class ItemContextReader:
         return ItemContext(
             repo=item.repo or None,
             workflow=item.workflow or None,
-            goals=self._goals(item.id),
             resolves=self._resolves(item.id),
             note=item.note if item.state == State.DONE and item.note else None,
-        )
-
-    def _goals(self, item_id):
-        return tuple(
-            (g.id, g.title) for g in self._store.list_goals()
-            if item_id in self._store.goal_items(g.id)
         )
 
     def _resolves(self, item_id):

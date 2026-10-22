@@ -15,7 +15,6 @@ from lightcycle.adapters.tui.app import (
     POOL_START_TIMEOUT_SECONDS,
     PRIORITY_CONTINUATION_INDENT,
     BacklogFilterInput,
-    GoalsView,
     BacklogTable,
     BacklogView,
     AutomationTable,
@@ -398,7 +397,7 @@ class TestActiveGroup(unittest.TestCase):
         session = self._launch(store)
         self.assertIsNotNone(session.app._active_glyph_timer)
 
-        for _ in range(5):
+        for _ in range(4):
             session.press("]")
             self.assertIsNone(session.app._active_glyph_timer)
 
@@ -1580,28 +1579,17 @@ class TestBacklogTabSwitch(unittest.TestCase):
         self.assertIn("tab-active", session.app.query_one("#tab-backlog").classes)
         self.assertIn("tab-dim", session.app.query_one("#tab-current-work").classes)
 
-    def test_bracket_backward_from_the_landing_view_reaches_goals(self):
+    def test_bracket_backward_from_the_landing_view_wraps_to_automation(self):
         session = self._launch()
 
-        session.press("[")
-
-        self.assertTrue(session.app.query_one(GoalsView).display)
-        self.assertFalse(session.app.query_one(PriorityTable).display)
-        self.assertIn("tab-active", session.app.query_one("#tab-goals").classes)
-        self.assertIn("tab-dim", session.app.query_one("#tab-current-work").classes)
-
-    def test_bracket_backward_twice_wraps_to_automation(self):
-        session = self._launch()
-
-        session.press("[")
         session.press("[")
 
         self.assertTrue(session.app.query_one(AutomationView).display)
-        self.assertFalse(session.app.query_one(GoalsView).display)
+        self.assertFalse(session.app.query_one(PriorityTable).display)
         self.assertIn("tab-active", session.app.query_one("#tab-automation").classes)
-        self.assertIn("tab-dim", session.app.query_one("#tab-goals").classes)
+        self.assertIn("tab-dim", session.app.query_one("#tab-current-work").classes)
 
-    def test_bracket_forward_from_automation_wraps_to_goals(self):
+    def test_bracket_forward_from_automation_wraps_to_the_landing_view(self):
         session = self._launch()
 
         for _ in range(4):
@@ -1609,9 +1597,8 @@ class TestBacklogTabSwitch(unittest.TestCase):
         self.assertTrue(session.app.query_one(AutomationView).display)
         session.press("]")
 
-        self.assertTrue(session.app.query_one(GoalsView).display)
         self.assertFalse(session.app.query_one(AutomationView).display)
-        self.assertIn("tab-active", session.app.query_one("#tab-goals").classes)
+        self.assertIn("tab-active", session.app.query_one("#tab-current-work").classes)
 
     def test_bracket_forward_then_backward_returns_to_priority_list(self):
         session = self._launch()
@@ -1648,10 +1635,10 @@ class TestBacklogTabSwitch(unittest.TestCase):
         self.assertIn("tab-active", session.app.query_one("#tab-report").classes)
         self.assertIn("tab-dim", session.app.query_one("#tab-done").classes)
 
-    def test_tab_a_sixth_time_returns_to_priority_list(self):
+    def test_tab_a_fifth_time_returns_to_priority_list(self):
         session = self._launch()
 
-        for _ in range(6):
+        for _ in range(5):
             session.press("]")
 
         self.assertFalse(session.app.query_one(BacklogView).display)
@@ -1957,7 +1944,7 @@ class TestBacklogFooter(unittest.TestCase):
         store.create_item("todo item", "a description")
         session = self._launch(store)
 
-        for _ in range(5):
+        for _ in range(4):
             session.press("]")
 
         self.assertEqual(session.app.query_one(ShortcutBar).shortcuts, GLOBAL_SHORTCUTS)
@@ -2393,10 +2380,10 @@ class TestDoneTabSwitch(unittest.TestCase):
         self.assertTrue(session.app.query_one(ReportView).display)
         self.assertIn("tab-active", session.app.query_one("#tab-report").classes)
 
-    def test_six_presses_returns_to_priority(self):
+    def test_five_presses_returns_to_priority(self):
         session = self._launch()
 
-        for _ in range(6):
+        for _ in range(5):
             session.press("]")
 
         self.assertFalse(session.app.query_one(DoneView).display)

@@ -1,30 +1,22 @@
 # The TUI
 
-`lc tui` opens an interactive dashboard over the same store the CLI reads. It shows three kinds of screen: a **priority list** of work, a **node hub** for one item or step, and a **goal hub** for one goal. This document describes the model those screens present. It is not a keybinding reference - the footer renders the bindings for whatever screen you are on, and a duplicated list here would be the copy that goes stale.
+`lc tui` opens an interactive dashboard over the same store the CLI reads. It shows two kinds of screen: a **priority list** of work and a **node hub** for one item or step. This document describes the model those screens present. It is not a keybinding reference - the footer renders the bindings for whatever screen you are on, and a duplicated list here would be the copy that goes stale.
 
 Where `tests/feature/the-*-tab.feature` and `tests/feature/priority-list-renders-current-work.feature` state behaviour exactly, this document says what the shape is and lets the scenarios hold the detail, the way [data-model.md](data-model.md) does for the store.
 
 ## Screens
 
-**The priority list** answers "what is happening, and what needs me". Its tab strip reads `Goals · Current work · Backlog · Done · Report · Automation`; the dashboard lands on Current work, and `[` from there reaches Goals. Goals, Backlog, Done, Report and Automation are the other views alongside Current work.
+**The priority list** answers "what is happening, and what needs me". Its tab strip reads `Current work · Backlog · Done · Report · Automation`; the dashboard lands on Current work, and `[` from there wraps to Automation. Backlog, Done, Report and Automation are the other views alongside Current work.
 
 Current work is three fixed-order groups - needs-attention, active, queued - with one row per **item**, never per step. A row carries the item's id, its project, its title, the stage of its current or next step, and for active work a live approximate elapsed time. A terminal bell rings the moment something newly enters needs-attention, so it can be noticed in an unfocused pane, and never rings again for the same item while it stays there. An engine step such as CI polling only runs on a pool tick, so it counts as active, with the animated glyph, only while the pool is running; with the pool stopped it shows as queued.
 
 **The node hub** answers "what is the state of this one thing". It opens for a single node and its tab strip is type-aware.
 
-## Goals
+## Prose panes
 
-The Goals tab is a table of project, title and status, omitting archived goals by default - no count, icon or badge. A `done` goal's title is dimmed and struck through, so it reads as finished at a glance. Selecting a goal opens a **goal hub**, a separate screen class from the node hub because a goal is not a node. It reuses the hub's tab strip and the description pane's shape and closes with escape or left. Its tabs, in order:
+**Headings and wiki-links.** One renderer serves the item hub's Description tab. A `#`-to-`######` line renders as a heading with the markers removed, in `HEADING_STYLE` (bold cyan) - the same style used for other headings in the dashboard. Lines inside a fenced block and `#hashtag` stay literal. `[[ID]]` resolves to `Title (ID)` with the parenthesised id dim; an id that resolves to nothing reads `ID (not found)`. Hub refreshes include the resolved titles, so a renamed item repaints without its referencing description changing.
 
-- **Overview** - the goal's description as one scrolling document with headings and wiki-links rendered (see below). The header line above the tab strip carries the title, the hand-set status and the project; the goal id is a CLI handle and is not shown.
-- **Log** - the goal's decisions, newest first. Each entry is a header line (title left, in the shared heading style on every wrapped line, timestamp right-aligned as `YYYY-MM-DD HH:MM`), a blank line, the body, and a blank line. A `SEARCH` row above the log (focused with `/`) filters entries by a case-insensitive substring of title or body; it appears only when the goal has entries.
-- **Items** - linked items in three groups under headers in the shared heading style, in this order: `CURRENT WORK`, `BACKLOG`, `DONE` (an empty group has no header, and the cursor never rests on a header). Current work rows carry the same glyph, dependency glyph and step text Current work shows for the item, the step text right-aligned on its own line under a wrapping title; backlog and done rows are id and title only. Membership is never re-derived here: Current work uses `select_priority_rows`, Backlog `is_backlogged_item`, Done `is_closed_item` (the predicates `BacklogUseCase` and `DoneUseCase` call). An open item that is in no lane and not backlog-shaped (its only live step is watched) is listed under Current work with no step text. Enter or right opens the item's hub (the step's hub for a Current work row that has a step). A `SEARCH` row above the list (focused with `/`) filters all three groups by id, title, project or repo, and appears only when the goal has linked items.
-
-**Headings and wiki-links.** One renderer serves every prose pane: the item hub's Description tab, the goal Overview description, and each goal Log entry body. A `#`-to-`######` line renders as a heading with the markers removed, in `HEADING_STYLE` (bold cyan) - the same style as Log titles, and the Items group headers. Lines inside a fenced block and `#hashtag` stay literal. `[[ID]]` resolves to `Title (ID)` with the parenthesised id dim; an id that resolves to nothing reads `ID (not found)`. Hub refreshes include the resolved titles, so a renamed item repaints without its referencing description changing.
-
-The CLI deliberately does not do this: `lc show` emits the stored description as JSON and `lc goal show` prints the source text the driver edits with `lc goal set --description`, both raw.
-
-The hub refreshes on the same poll interval as the node hub, so `lc goal log` in another terminal appears without reopening it.
+The CLI deliberately does not do this: `lc show` emits the stored description as JSON, raw.
 
 ## The item/step split
 

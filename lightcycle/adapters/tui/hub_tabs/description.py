@@ -19,8 +19,6 @@ class DescriptionTabMixin:
             rows.append(("repo", context.repo))
         if context.workflow:
             rows.append(("workflow", context.workflow))
-        for goal_id, title in context.goals:
-            rows.append(("goal", "%s (%s)" % (title, goal_id)))
         for ref_id, title in context.resolves:
             rows.append(("resolves", "%s (%s)" % (title, ref_id) if title else "%s (not found)" % ref_id))
         if context.note:

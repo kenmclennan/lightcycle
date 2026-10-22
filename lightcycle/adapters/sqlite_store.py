@@ -7,7 +7,6 @@ from contextlib import contextmanager
 
 from lightcycle.adapters.fsio import DB_FILENAME
 from lightcycle.adapters.sqlite.feedback import FeedbackAggregate
-from lightcycle.adapters.sqlite.goals import GoalsAggregate
 from lightcycle.adapters.sqlite.items import ItemsAggregate
 from lightcycle.adapters.sqlite.projects import ProjectsAggregate
 from lightcycle.adapters.sqlite.runs import RunsAggregate
@@ -40,7 +39,7 @@ class SchemaVersionRefused(Exception):
     pass
 
 
-_SCHEMA_VERSION = 2
+_SCHEMA_VERSION = 3
 BUSY_TIMEOUT_MS = 30000
 _LEGACY_LOG_TYPE = "log"
 _LAST_VERSION_ABLE_TO_MIGRATE_PRE_FLOOR_STORES = "0.2.27"
@@ -239,33 +238,6 @@ CREATE TABLE IF NOT EXISTS daily_summaries (
     spawn_count INTEGER
 );
 
-CREATE TABLE IF NOT EXISTS goals (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    project TEXT NOT NULL DEFAULT '',
-    status TEXT NOT NULL DEFAULT 'not started',
-    created_at TEXT,
-    updated_at TEXT
-);
-
-CREATE TABLE IF NOT EXISTS goal_log (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    goal_id TEXT NOT NULL,
-    title TEXT NOT NULL DEFAULT '',
-    body TEXT NOT NULL,
-    created_at TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_goal_log_goal_id ON goal_log(goal_id);
-
-CREATE TABLE IF NOT EXISTS goal_items (
-    goal_id TEXT NOT NULL,
-    item_id TEXT NOT NULL,
-    linked_at TEXT,
-    PRIMARY KEY (goal_id, item_id)
-);
-CREATE INDEX IF NOT EXISTS idx_goal_items_item_id ON goal_items(item_id);
-
 CREATE TABLE IF NOT EXISTS held_comments (
     run_id     TEXT NOT NULL,
     key        TEXT NOT NULL,
@@ -334,7 +306,7 @@ class _ErrorTranslatingConnection:
 
 class SqliteStore(
     ItemsAggregate, StepsAggregate, RunsAggregate, UsageAggregate, FeedbackAggregate,
-    GoalsAggregate, ProjectsAggregate, StorePort,
+    ProjectsAggregate, StorePort,
 ):
     def __init__(self, config, now=None, package_root=None, default_data_root=None):
         self._config = config
@@ -357,12 +329,13 @@ class SqliteStore(
         self._migrate_drop_step_reflection_column()
         self._migrate_drop_step_title_column()
         self._migrate_abandoned_disposition_value()
-        self._migrate_goals_description_and_project()
-        self._migrate_drop_goal_state_of_play_columns()
         self._migrate_rename_knowledge_project()
         self._migrate_drop_legacy_artifact_types()
         if version == 1:
             self._migrate_schema_1_to_2()
+        self._migrate_drop_goal_tables()
+        if version in (1, 2):
+            self._conn.execute("PRAGMA user_version = %d" % _SCHEMA_VERSION)
         self._commit()
 
     def _enable_wal(self):
@@ -426,7 +399,7 @@ class SqliteStore(
         if version == 0:
             self._conn.execute("PRAGMA user_version = %d" % _SCHEMA_VERSION)
             return version
-        if version == 1:
+        if version in (1, 2):
             return version
         raise SchemaVersionRefused(
             "store is stamped at schema version %d, below this engine's floor of "
@@ -459,7 +432,7 @@ class SqliteStore(
             )
         logs = self._backfill_log_paths()
         self.last_migration = {"matched": matched, "unmatched": unmatched, "logs": logs}
-        self._conn.execute("PRAGMA user_version = %d" % _SCHEMA_VERSION)
+        self._conn.execute("PRAGMA user_version = 2")
         sys.stderr.write(
             "schema 2: backfilled %d reports (%d unmatched), copied %d logs\n"
             % (matched, unmatched, logs)
@@ -545,9 +518,6 @@ class SqliteStore(
             ("report", "TEXT"),
             ("log_path", "TEXT"),
         ),
-        "goal_log": (
-            ("title", "TEXT NOT NULL DEFAULT ''"),
-        ),
         "usage_backfill_log": (
             ("had_result_line", "INTEGER"),
         ),
@@ -580,12 +550,6 @@ class SqliteStore(
             self._conn.execute("UPDATE steps SET title = ''")
             self._conn.execute("ALTER TABLE steps DROP COLUMN title")
 
-    def _migrate_drop_goal_state_of_play_columns(self):
-        cols = {r[1] for r in self._conn.execute("PRAGMA table_info(goals)").fetchall()}
-        for name in ("state_of_play", "state_of_play_at", "state_of_play_step"):
-            if name in cols:
-                self._conn.execute("ALTER TABLE goals DROP COLUMN %s" % name)
-
     def _migrate_rename_knowledge_project(self):
         self._conn.execute(
             "UPDATE projects SET identity = ? WHERE identity = ? "
@@ -603,45 +567,11 @@ class SqliteStore(
             "UPDATE items SET disposition = 'abandoned' WHERE disposition = 'aborted'"
         )
 
-    def _migrate_goals_description_and_project(self):
-        cols = {r[1] for r in self._conn.execute("PRAGMA table_info(goals)").fetchall()}
-        if "outcome" in cols:
-            for name in ("description", "project"):
-                if name not in cols:
-                    self._conn.execute(
-                        "ALTER TABLE goals ADD COLUMN %s TEXT NOT NULL DEFAULT ''" % name
-                    )
-            has_scope = "scope" in cols
-            rows = self._conn.execute(
-                "SELECT id, outcome, %s FROM goals" % ("scope" if has_scope else "''")
-            ).fetchall()
-            for goal_id, outcome, scope in rows:
-                questions = []
-                if self._has_table("goal_questions"):
-                    questions = [
-                        r[0]
-                        for r in self._conn.execute(
-                            "SELECT body FROM goal_questions "
-                            "WHERE goal_id = ? AND resolved_at IS NULL ORDER BY id",
-                            (goal_id,),
-                        ).fetchall()
-                    ]
-                parts = [outcome or ""]
-                if (scope or "").strip():
-                    parts.append("## Scope (carried over)\n\n%s" % scope)
-                if questions:
-                    parts.append(
-                        "## Open questions\n\n%s" % "\n".join("- %s" % q for q in questions)
-                    )
-                merged = "\n\n".join(p for i, p in enumerate(parts) if i or p)
-                self._conn.execute(
-                    "UPDATE goals SET description = ? WHERE id = ?", (merged, goal_id)
-                )
-            self._conn.execute("ALTER TABLE goals DROP COLUMN outcome")
-            if has_scope:
-                self._conn.execute("ALTER TABLE goals DROP COLUMN scope")
-        if self._has_table("goal_questions"):
-            self._conn.execute("DROP TABLE goal_questions")
+    def _migrate_drop_goal_tables(self):
+        for table in ("goal_items", "goal_log", "goals", "goal_questions"):
+            self._conn.execute("DROP TABLE IF EXISTS %s" % table)
+        if self._has_table("counters"):
+            self._conn.execute("DELETE FROM counters WHERE namespace = 'goal'")
 
     def _has_table(self, name):
         return self._conn.execute(
