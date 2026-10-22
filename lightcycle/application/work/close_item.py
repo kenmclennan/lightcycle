@@ -1,3 +1,4 @@
+import sys
 from dataclasses import dataclass
 from typing import FrozenSet, Optional
 
@@ -6,6 +7,7 @@ from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.application.work.resolve_backlog import retire_resolved
 from lightcycle.domain.runs import RunState
 from lightcycle.domain.work import State
+from lightcycle.ports.git import GitReadError
 
 TEARDOWN_REFUSED_ARTIFACT = "teardown-refused"
 RELEASE_PENDING_LABEL = "release-pending"
@@ -85,7 +87,14 @@ class CloseItemUseCase:
     def release(self, item) -> None:
         if self._worktrees is None:
             return
-        self._worktrees.remove(item)
+        try:
+            self._worktrees.remove(item)
+        except GitReadError as e:
+            print(
+                "warning: release of %s failed, release-pending marker kept: %s" % (item, e),
+                file=sys.stderr,
+            )
+            return
         self._store.label_remove(item, RELEASE_PENDING_LABEL)
 
     def execute(self, input: CloseItemInput) -> None:

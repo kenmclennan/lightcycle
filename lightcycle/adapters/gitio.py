@@ -119,17 +119,31 @@ def sync_to_default_branch(root):
 
 
 def remove_worktree(root, path):
-    git(root, "worktree", "remove", "--force", path)
-    git(root, "worktree", "prune")
+    proc = git(root, "worktree", "remove", "--force", path)
+    if proc.returncode != 0:
+        if "is not a working tree" in proc.stderr and not os.path.exists(path):
+            return
+        raise GitReadError("git worktree remove failed in %s: %s" % (root, proc.stderr.strip()))
+    pruned = git(root, "worktree", "prune")
+    if pruned.returncode != 0:
+        raise GitReadError("git worktree prune failed in %s: %s" % (root, pruned.stderr.strip()))
 
 
 def delete_branch(root, branch):
-    if branch_exists(root, branch):
-        git(root, "branch", "-D", branch)
+    if not branch_exists(root, branch):
+        return
+    proc = git(root, "branch", "-D", branch)
+    if proc.returncode != 0:
+        raise GitReadError(
+            "git branch -D %s failed in %s: %s" % (branch, root, proc.stderr.strip())
+        )
 
 
 def delete_remote_branch(root, branch):
-    git_ok(root, "push", "origin", "--delete", branch)
+    proc = git(root, "push", "origin", "--delete", branch)
+    if proc.returncode == 0 or "remote ref does not exist" in proc.stderr:
+        return GitOutcome(ok=True)
+    return GitOutcome(ok=False, detail=proc.stderr.strip())
 
 
 def worktree_registered(root, path):

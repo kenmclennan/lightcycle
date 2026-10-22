@@ -107,6 +107,7 @@ class RecordingGit(GitPort, TeardownLedgerPort):
 
     def delete_remote_branch(self, root, branch):
         self._record("delete_remote_branch", root, branch)
+        return GitOutcome(ok=True)
 
     def worktree_registered(self, root, path):
         self._record("worktree_registered", root, path)

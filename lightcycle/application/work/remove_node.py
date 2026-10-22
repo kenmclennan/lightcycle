@@ -1,3 +1,4 @@
+import sys
 from dataclasses import dataclass
 
 from lightcycle.application.errors import UseCaseError
@@ -97,8 +98,11 @@ class RemoveNodeUseCase:
 
         worktree_removed = False
         if node.type == "item":
-            self._worktrees.remove(node.id)
-            worktree_removed = True
+            try:
+                self._worktrees.remove(node.id)
+                worktree_removed = True
+            except GitReadError as e:
+                print("warning: worktree of %s not removed: %s" % (node.id, e), file=sys.stderr)
 
         return RemoveNodeResponse(
             id=node.id, steps_removed=steps_removed, worktree_removed=worktree_removed
