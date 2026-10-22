@@ -532,6 +532,16 @@ class TestEnsureSyncsOrigin(unittest.TestCase):
         self.assertIn("sync_to_origin", kinds)
         self.assertLess(kinds.index("sync_to_origin"), kinds.index("worktree_base"))
 
+    def test_worktree_is_registered_after_ensure_creates_it(self):
+        item = self._item_with_repo()
+        target = os.path.join(self.projects_root, "saga")
+        git = FakeGit(repos={target}, sync_result=True, base="origin/main")
+        svc = WorktreeService(self.store, git, FakeFs(), _Cfg(self.projects_root), scaffold=ScaffoldAdapter())
+
+        path = svc.ensure(self.store.get_node(item))
+
+        self.assertTrue(git.worktree_registered(target, path))
+
     def test_already_registered_worktree_does_not_sync(self):
         item = self._item_with_repo()
         target = os.path.join(self.projects_root, "saga")

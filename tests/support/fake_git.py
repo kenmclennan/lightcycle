@@ -58,6 +58,7 @@ class FakeGit(GitPort, TeardownLedgerPort):
         self.calls.append(("add_worktree", root, path, branch, base))
         if self._worktree_add_fails:
             return GitOutcome(ok=False, detail="boom")
+        self._registered.add(path)
         return GitOutcome(ok=True)
 
     def prune_worktrees(self, root):
