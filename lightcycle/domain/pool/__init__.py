@@ -4,7 +4,7 @@ from lightcycle.domain.pool.ci_result import MISSING_STATUS, ci_outcome, failing
 from lightcycle.domain.pool.ci_workflows import PrWorkflows, pr_workflows_expected
 from lightcycle.domain.pool.config_reload_state import ConfigReloadState
 from lightcycle.domain.pool.github_budget import (
-    GithubBudget, github_budget_from_state, github_budget_low,
+    GithubBudget, github_budget_from_state, github_budget_level, github_budget_low,
 )
 from lightcycle.domain.pool.guidance_sync_state import GuidanceSyncState
 from lightcycle.domain.pool.machine_headroom import MachineHeadroom
@@ -25,6 +25,6 @@ __all__ = [
     "AttributionEvent", "Breaker", "ConfigReloadState", "GithubBudget", "GuidanceSyncState", "MemoryGateState", "MachineHeadroom", "ModelRates", "PoolPlan", "RateLimitEvent",
     "ReadyQueue", "SpinLedger", "StepSpin", "ToolUsage", "UsageEvent", "UsageResume", "Worker",
     "WorkerPool", "admission_cap", "MISSING_STATUS", "ci_outcome",
-    "PrWorkflows", "pr_workflows_expected", "failing_check", "judged_checks", "timed_out_check", "github_budget_from_state", "github_budget_low", "pr_repo", "price_tokens", "resolve_usage", "sum_attribution_events",
+    "PrWorkflows", "pr_workflows_expected", "failing_check", "judged_checks", "timed_out_check", "github_budget_from_state", "github_budget_level", "github_budget_low", "pr_repo", "price_tokens", "resolve_usage", "sum_attribution_events",
     "sum_usage_events",
 ]

@@ -39,3 +39,11 @@ def github_budget_low(budget, reserve, now):
     if budget is None:
         return False
     return now < budget.reset and budget.remaining < reserve
+
+
+def github_budget_level(remaining, reserve, low):
+    if low:
+        return "low"
+    if remaining < 2 * reserve:
+        return "close"
+    return "healthy"

@@ -8,7 +8,7 @@ from lightcycle.application.services.flow import FlowService
 from lightcycle.cli import _tick_event_lines
 from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
-from lightcycle.domain.pool import GithubBudget, github_budget_from_state, github_budget_low
+from lightcycle.domain.pool import GithubBudget, github_budget_from_state, github_budget_level, github_budget_low
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_github_budget_status import FakeGithubBudgetStatus
 from tests.support.fake_store import FakeStore
@@ -74,6 +74,20 @@ class TestBudgetRule(unittest.TestCase):
         self.assertIsNone(github_budget_from_state({"limit": 5000, "remaining": 1}))
         self.assertIsNone(github_budget_from_state({}))
         self.assertIsNone(github_budget_from_state(None))
+
+
+class TestBudgetLevel(unittest.TestCase):
+    def test_exactly_twice_the_reserve_is_healthy(self):
+        self.assertEqual("healthy", github_budget_level(1500, 750, False))
+
+    def test_one_below_twice_the_reserve_is_close(self):
+        self.assertEqual("close", github_budget_level(1499, 750, False))
+
+    def test_low_wins_over_close(self):
+        self.assertEqual("low", github_budget_level(100, 750, True))
+
+    def test_a_zero_reserve_is_always_healthy(self):
+        self.assertEqual("healthy", github_budget_level(0, 0, False))
 
 
 class TestBudgetUseCase(unittest.TestCase):

@@ -6,6 +6,9 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import Static
 
 from lightcycle.adapters.tui.design_system import COLOURS, FOOTER_GLYPHS, GLOBAL_SHORTCUTS
+from lightcycle.domain.pool import github_budget_level
+
+GITHUB_LEVEL_COLOURS = {"healthy": "cyan", "close": "amber", "low": "red"}
 
 
 class StatusBar(Horizontal):
@@ -77,16 +80,11 @@ class StatusBar(Horizontal):
 
         github_widget = self.query_one("#status-github", Static)
         if github is not None and github.known:
-            reset = time.strftime("%H:%M", time.localtime(github.reset))
-            if github.low:
-                github_glyph, github_colour = FOOTER_GLYPHS["pool-holding"]
-                github_widget.update(Text(
-                    "%s github budget low · %d left · resets %s" % (github_glyph, github.remaining, reset),
-                    style=COLOURS[github_colour]))
-            else:
-                github_widget.update(Text(
-                    "github %d/%d · resets %s" % (github.remaining, github.limit, reset),
-                    style=COLOURS["dim"]))
+            level = github_budget_level(github.remaining, github.reserve, github.low)
+            text = "gh %d%%" % (github.remaining * 100 // github.limit)
+            if level == "low":
+                text += " · " + time.strftime("%H:%M", time.localtime(github.reset))
+            github_widget.update(Text(text, style=COLOURS[GITHUB_LEVEL_COLOURS[level]]))
             github_widget.display = True
         else:
             github_widget.update("")

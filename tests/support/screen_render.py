@@ -433,6 +433,12 @@ def _priority_github_budget_low(size):
     return _launch(store, size=size, github_budget_status=status)
 
 
+def _priority_github_budget_close(size):
+    store, _scan, _coding = _populated_store()
+    status = FakeGithubBudgetStatus(replace(_GITHUB_BUDGET_CAPTURE, remaining=1200))
+    return _launch(store, size=size, github_budget_status=status)
+
+
 def _priority_pool_draining(size):
     from tests.support.fake_drain import FakeDrain
 
@@ -1526,6 +1532,7 @@ SCREENS = {
     "priority-list#pool-draining": _priority_pool_draining,
     "priority-list#github-budget": _priority_github_budget,
     "priority-list#github-budget-low": _priority_github_budget_low,
+    "priority-list#github-budget-close": _priority_github_budget_close,
     "priority-list#config-changed": _priority_config_changed,
     "priority-list#engine-active": _priority_engine_active,
     "backlog#normal": _backlog_normal,
