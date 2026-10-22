@@ -91,7 +91,8 @@ def test_a_pool_holding_state_renders_the_hold_segment_in_the_footer():
 def test_a_config_edited_after_launch_renders_the_restart_hint_in_the_footer():
     frame = render("priority-list#config-changed")
 
-    assert "config changed - restart to apply" in frame
+    assert "↻ config changed" in frame
+    assert " - restart" not in frame
     assert "config changed" not in render("priority-list#normal")
 
 
