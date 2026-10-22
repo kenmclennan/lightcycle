@@ -45,9 +45,6 @@ class SweepUseCase:
         message = "wip: preserved %s on reclaim" % t.id
         return self._git.commit_tracked(path, message)
 
-    def _saw_terminal_command(self, log):
-        return self._stream.saw_terminal_command(self._worker_log.iter_lines(log))
-
     def _last_nonempty_line(self, lines):
         last = None
         for line in lines:
@@ -112,7 +109,7 @@ class SweepUseCase:
         stalled = [
             w
             for w in pool.stalled(probe, now, max_boot, stall_seconds, self._worker_log.log_mtime)
-            if not self._saw_terminal_command(w.log)
+            if claimed_owner.get(w.step) == w.spawnid
         ]
         stalled_ids = {w.step for w in stalled}
         for w in stalled:

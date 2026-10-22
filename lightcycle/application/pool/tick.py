@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 from lightcycle.application.pool.backup import BackupResponse
+from lightcycle.application.pool.close_stranded_items import CloseStrandedItemsResponse
 from lightcycle.application.pool.github_budget import GithubBudgetState
 from lightcycle.application.pool.guidance_sync import GuidanceSyncResponse
 from lightcycle.application.pool.hook_completions import HookCompletionsResponse
@@ -68,6 +69,7 @@ class TickResponse:
     config: Optional[ReloadConfigResponse] = None
     github: Optional[GithubBudgetState] = None
     released: Optional[ReleaseInterruptedRunsResponse] = None
+    stranded: Optional[CloseStrandedItemsResponse] = None
 
 
 class TickUseCase:
@@ -75,7 +77,7 @@ class TickUseCase:
         self, store, workers, spawner, config, monitor, breaker_gate,
         hook_completions, backup_gate, flow_service, memory_gate, guidance_gate,
         github_poll_gate, github_budget, config_reload, sweep, cadence, accrual, worker_log,
-        release_gate,
+        release_gate, stranded_gate,
     ):
         self._store = store
         self._workers = workers
@@ -97,6 +99,7 @@ class TickUseCase:
         self._guidance_gate = guidance_gate
         self._github_budget = github_budget
         self._release_gate = release_gate
+        self._stranded_gate = stranded_gate
         self._budget_low = False
 
     def _log_refusals(self, refused, now):
@@ -142,6 +145,7 @@ class TickUseCase:
         self._flow_service.clear_cache()
         self._workers.reap()
         released_result = self._release_interrupted()
+        stranded_result = self._stranded_gate.execute()
         monitor_result = self._monitor.execute()
         self._github_poll_gate.execute(input.now)
         cadence_result = self._cadence.execute(input.now)
@@ -236,4 +240,5 @@ class TickUseCase:
             config=config_result,
             github=github_state,
             released=released_result,
+            stranded=stranded_result,
         )

@@ -7,6 +7,7 @@ from lightcycle.application.pool.guidance_sync import GuidanceSyncResponse
 from lightcycle.application.pool.lifecycle_cadence import LifecycleCadenceResponse
 from lightcycle.application.pool.memory_gate import MemoryGateResponse
 from lightcycle.application.pool.monitor_prs import MonitorPrsResponse
+from lightcycle.application.pool.close_stranded_items import CloseStrandedItemsResponse
 from lightcycle.application.pool.release_interrupted_runs import ReleaseInterruptedRunsResponse
 from lightcycle.application.pool.reload_config import ReloadConfigResponse
 from lightcycle.application.pool.schedule_cadence import ScheduleCadenceResponse
@@ -75,6 +76,11 @@ class NoOpScriptGate:
 class NoOpReleaseGate:
     def execute(self):
         return ReleaseInterruptedRunsResponse()
+
+
+class NoOpStrandedGate:
+    def execute(self):
+        return CloseStrandedItemsResponse()
 
 
 class NoOpBreakerGate:
@@ -148,9 +154,6 @@ class NoOpSpinPort:
 
 
 class NoOpStream:
-    def saw_terminal_command(self, lines):
-        return False
-
     def saw_session_activity(self, lines):
         return False
 

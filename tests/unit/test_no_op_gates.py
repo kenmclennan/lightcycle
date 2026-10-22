@@ -109,8 +109,5 @@ class TestNoOpSpinPort(unittest.TestCase):
 
 
 class TestNoOpStream(unittest.TestCase):
-    def test_saw_terminal_command_is_false(self):
-        self.assertFalse(NoOpStream().saw_terminal_command(["line"]))
-
     def test_saw_session_activity_is_false(self):
         self.assertFalse(NoOpStream().saw_session_activity(["line"]))

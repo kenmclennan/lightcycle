@@ -229,25 +229,6 @@ def extract_claimed_step(lines, limit=60) -> Optional[str]:
     return None
 
 
-def saw_terminal_command(lines):
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            data = json.loads(line)
-        except ValueError:
-            continue
-        if not isinstance(data, dict) or data.get("type") != "assistant":
-            continue
-        for c in _content_blocks(_message(data)):
-            if isinstance(c, dict) and c.get("type") == "tool_use":
-                cmd = str((c.get("input") or {}).get("command", ""))
-                if is_terminal_command(cmd):
-                    return True
-    return False
-
-
 def saw_session_activity(lines):
     for line in lines:
         line = line.strip()
@@ -277,9 +258,6 @@ class ClaudeStreamAdapter(ClaudeStreamPort):
 
     def extract_claimed_step(self, lines, limit=60):
         return extract_claimed_step(lines, limit)
-
-    def saw_terminal_command(self, lines):
-        return saw_terminal_command(lines)
 
     def saw_session_activity(self, lines):
         return saw_session_activity(lines)

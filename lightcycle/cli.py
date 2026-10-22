@@ -449,6 +449,11 @@ def _tick_event_lines(result, ts):
         lines.append("%s  %-7s  %s" % (ts, "park", bid))
     for spawnid in result.sweep.killed:
         lines.append("%s  %-7s  %s" % (ts, "kill", spawnid))
+    if result.stranded is not None:
+        for sid in result.stranded.closed:
+            lines.append("%s  %-7s  %s" % (ts, "recover", sid))
+        for sid, findings in result.stranded.refused:
+            lines.append("%s  %-7s  %s: %s" % (ts, "refused", sid, findings))
     if result.config is not None and result.config.outcome == "reloaded":
         text = "config reloaded"
         if result.config.restart_required:

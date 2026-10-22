@@ -141,6 +141,7 @@ class Container:
         from lightcycle.application.pool.hook_completions import HookCompletionsUseCase
         from lightcycle.application.pool.memory_gate import MemoryGateUseCase
         from lightcycle.application.pool.monitor_prs import MonitorPrsUseCase
+        from lightcycle.application.pool.close_stranded_items import CloseStrandedItemsUseCase
         from lightcycle.application.pool.release_interrupted_runs import (
             ReleaseInterruptedRunsUseCase,
         )
@@ -185,6 +186,7 @@ class Container:
             ),
             github_budget=self.github_budget(flow),
             release_gate=ReleaseInterruptedRunsUseCase(self.store, worktrees),
+            stranded_gate=CloseStrandedItemsUseCase(self.store, worktrees),
             config_reload=ReloadConfigUseCase(
                 self.config, self.config_reload_status, os.getpid()),
             sweep=self.sweep(flow=flow, worktrees=worktrees),

@@ -287,6 +287,14 @@ class FakeStore(StorePort):
         meta["artifacts"] = artifacts
         b["metadata"] = meta
 
+    def remove_artifact(self, item_id, atype):
+        b = self._get(item_id)
+        meta = dict(b.get("metadata") or {})
+        meta["artifacts"] = [
+            a for a in (meta.get("artifacts") or []) if a.get("type") != atype
+        ]
+        b["metadata"] = meta
+
     def all_nodes(self):
         return self.all_steps() + self.all_items()
 

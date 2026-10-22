@@ -531,6 +531,27 @@ class StoreContractBase:
         self.assertEqual(len(arts), 1)
         self.assertEqual(arts[0].value, "specs/new.md")
 
+    def test_remove_artifact_deletes_every_artifact_of_the_type_and_no_other(self):
+        s = self.make_store()
+        sid = s.create_item("item: foo", "a description", shortcode="GRID")
+        s.add_artifact(sid, "teardown-refused", "one", internal=True)
+        s.add_artifact(sid, "teardown-refused", "two", label="x", internal=True)
+        s.add_artifact(sid, "spec", "specs/keep.md")
+        s.remove_artifact(sid, "teardown-refused")
+        self.assertEqual([a.type for a in s.item_artifacts(sid)], ["spec"])
+        s.remove_artifact(sid, "teardown-refused")
+        self.assertEqual([a.type for a in s.item_artifacts(sid)], ["spec"])
+
+    def test_remove_artifact_is_undone_by_a_rolled_back_transaction(self):
+        s = self.make_store()
+        sid = s.create_item("item: foo", "a description", shortcode="GRID")
+        s.add_artifact(sid, "spec", "specs/keep.md")
+        with self.assertRaises(RuntimeError):
+            with s.transaction():
+                s.remove_artifact(sid, "spec")
+                raise RuntimeError("abort")
+        self.assertEqual([a.type for a in s.item_artifacts(sid)], ["spec"])
+
     def test_replace_artifact_is_generic_for_any_type(self):
         s = self.make_store()
         sid = s.create_item("item: foo", "a description", shortcode="GRID")
