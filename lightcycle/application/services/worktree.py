@@ -88,7 +88,7 @@ class WorktreeService:
     @staticmethod
     def _key_for(run):
         if run.phase is None:
-            return run.phase
+            return None if run.round <= 1 else "r%d" % run.round
         n = pass_number(run.pass_id)
         key = run.phase if n <= 1 else "%s-%d" % (run.phase, n)
         return key if run.round <= 1 else "%s-r%d" % (key, run.round)
