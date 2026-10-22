@@ -224,7 +224,7 @@ def _shows_installed_version(ctx):
 def _shows_upgrade_indicator(ctx):
     widget, text, style = _rendered_segment(ctx["session"], "#status-upgrade")
     assert widget.display
-    assert text == "%s v%s available" % (
+    assert text == "%s %s" % (
         FOOTER_GLYPHS["upgrade-available"].glyph, ctx["remote_version"]
     )
     assert _colour_of(style) == COLOURS["amber"].lower()
