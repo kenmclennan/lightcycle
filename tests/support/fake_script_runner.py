@@ -6,7 +6,9 @@ OK_EMPTY = ScriptResult(exit_code=0, stdout="")
 
 
 class FakeScriptRunner(ScriptRunnerPort):
-    def __init__(self):
+    def __init__(self, clock=None):
+        self._clock = clock
+        self._due = {}
         self.calls = []
         self.started = []
         self._programmed = {}
@@ -20,6 +22,22 @@ class FakeScriptRunner(ScriptRunnerPort):
 
     def finish(self, key, result=None):
         self._finished[key] = result if result is not None else self._programmed[key]
+
+    def finish_after(self, key, seconds, result=None):
+        if self._clock is None:
+            raise ValueError("finish_after needs a clock")
+        self._due[key] = (self._clock() + seconds, result)
+
+    def kill(self, key, signal=15):
+        self._due.pop(key, None)
+        self._finished[key] = ScriptResult(exit_code=-signal)
+
+    def orphan_running(self):
+        for key in list(self._running):
+            self._orphans[key] = 0
+            del self._running[key]
+            self._finished.pop(key, None)
+            self._due.pop(key, None)
 
     def run(self, script_path, cwd, env, stdin_text, timeout, log_label):
         self.calls.append({
@@ -42,6 +60,8 @@ class FakeScriptRunner(ScriptRunnerPort):
     def poll(self, key):
         if key not in self._running:
             raise KeyError(key)
+        if key in self._due and self._clock() >= self._due[key][0]:
+            self.finish(key, self._due.pop(key)[1])
         if key not in self._finished:
             return None
         del self._running[key]
