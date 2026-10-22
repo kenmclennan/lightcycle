@@ -6,7 +6,8 @@ from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.application.pool.pr_lookups import flow_for, run_of, skip_unpinned
 from lightcycle.application.pool.skip_idle_ci_watch import SkipIdleCiWatchUseCase
 from lightcycle.domain.pool import (
-    MISSING_STATUS, ci_outcome, failing_check, judged_checks, pr_workflows_expected, timed_out_check,
+    MISSING_STATUS, ci_outcome, failing_check, judged_checks, pr_workflows_expected, status_mismatch,
+    timed_out_check,
 )
 from lightcycle.domain.work import State
 from lightcycle.ports.github import NotYetRead, PrSync, ReadFailure
@@ -55,6 +56,7 @@ class ResolveCiUseCase:
         self._first_epoch = {}
         self._first_judged = {}
         self._expected = {}
+        self._mismatch_noted = set()
         ci_ceiling_seconds()
         ci_start_window_seconds()
         ci_no_workflows_wait_seconds()
@@ -82,6 +84,19 @@ class ResolveCiUseCase:
             "poll-ci is waiting for a GitHub poll to confirm %s; no poll has confirmed it for more "
             "than %d poll intervals (ci-unconfirmed-note-polls)"
             % (pr_value, self._ci_unconfirmed_note_polls()),
+        )
+
+    def _note_mismatch(self, step, judged):
+        if step.id in self._mismatch_noted:
+            return
+        odd = next((c for c in judged if status_mismatch(c)), None)
+        if odd is None:
+            return
+        self._mismatch_noted.add(step.id)
+        self._store.note_condition(
+            step.id,
+            "poll-ci is holding check '%s' pending: GitHub reports it completed with no conclusion"
+            % odd.name,
         )
 
     def _required(self, pr_value):
@@ -176,6 +191,7 @@ class ResolveCiUseCase:
                 since = now
             self._first_judged[step.id] = (sha, since)
             judged = judged_checks(checks, required, since)
+            self._note_mismatch(step, judged)
             runs = None
             expectation = None
             base = ""
@@ -264,4 +280,5 @@ class ResolveCiUseCase:
             del self._first_judged[step_id]
         for step_id in [k for k in self._expected if k not in seen]:
             del self._expected[step_id]
+        self._mismatch_noted &= seen
         return ResolveCiResponse(ci_resolved=ci_resolved, ci_unread=ci_unread)

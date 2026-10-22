@@ -4,8 +4,10 @@ from lightcycle.domain.pool import ci_outcome, failing_check, judged_checks, tim
 from lightcycle.ports.github import CheckRun
 
 
-def _run(name="build", status="completed", conclusion="success", started_at=0.0):
-    return CheckRun(name=name, status=status, conclusion=conclusion, started_at=started_at)
+def _run(name="build", status="completed", conclusion="success", started_at=0.0, completed_at=0.0):
+    return CheckRun(
+        name=name, status=status, conclusion=conclusion, started_at=started_at,
+        completed_at=completed_at)
 
 
 def _running(name, started_at):
@@ -13,6 +15,27 @@ def _running(name, started_at):
 
 
 class TestCiOutcome(unittest.TestCase):
+    def test_in_progress_with_success_and_completed_at_is_success(self):
+        checks = (_run(status="in_progress", conclusion="success", completed_at=100.0),)
+        self.assertEqual(ci_outcome(checks), "success")
+
+    def test_in_progress_with_failure_and_completed_at_is_failure(self):
+        checks = (_run(status="in_progress", conclusion="failure", completed_at=100.0),)
+        self.assertEqual(ci_outcome(checks), "failure")
+
+    def test_in_progress_with_conclusion_but_no_completed_at_stays_pending(self):
+        checks = (_run(status="in_progress", conclusion="success"),)
+        self.assertEqual(ci_outcome(checks), "pending")
+
+    def test_completed_with_no_conclusion_stays_pending(self):
+        checks = (_run(status="completed", conclusion=None, completed_at=100.0),)
+        self.assertEqual(ci_outcome(checks), "pending")
+
+    def test_a_concluded_in_progress_check_does_not_time_out(self):
+        checks = (_run(
+            status="in_progress", conclusion="success", started_at=1.0, completed_at=100.0),)
+        self.assertEqual(ci_outcome(checks, now=99999.0, ceiling=3600, since=1.0), "success")
+
     def test_all_completed_success_is_success(self):
         checks = (_run(conclusion="success"), _run(name="test", conclusion="success"))
         self.assertEqual(ci_outcome(checks), "success")

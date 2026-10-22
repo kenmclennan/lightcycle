@@ -51,6 +51,7 @@ class CheckRun:
     conclusion: Optional[str]
     url: str = ""
     started_at: float = 0.0
+    completed_at: float = 0.0
 
 
 @dataclass(frozen=True)

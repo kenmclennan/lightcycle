@@ -278,7 +278,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
         rows = self._gh_api_lines(
             "/repos/%s/%s/commits/%s/check-runs?per_page=100" % (owner, repo, sha),
             ".total_count as $total | .check_runs[] | "
-            "{name,status,conclusion,started_at,url:.html_url,total:$total}",
+            "{name,status,conclusion,started_at,completed_at,url:.html_url,total:$total}",
             paginate=True,
         )
         if isinstance(rows, ReadFailure):
@@ -297,6 +297,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
                 conclusion=c.get("conclusion"),
                 url=c.get("url") or "",
                 started_at=_parse_iso(c["started_at"]) if c.get("started_at") else 0.0,
+                completed_at=_parse_iso(c["completed_at"]) if c.get("completed_at") else 0.0,
             )
             for c in data
         )

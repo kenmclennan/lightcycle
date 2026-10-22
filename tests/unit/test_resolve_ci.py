@@ -353,6 +353,18 @@ class TestCiUnreadDiagnostics(unittest.TestCase):
         self.assertEqual(self._run(uc, clock, 70.0), [])
         self.assertEqual(self._run(uc, clock, 600.0), [])
 
+    def test_a_completed_check_with_no_conclusion_is_held_pending_and_noted_once(self):
+        odd = (CheckRun(name="build", status="completed", conclusion=None),)
+        github = _ScriptedGitHub("sha1", odd)
+        store, _, step, uc, clock = self._setup(github)
+
+        self._run(uc, clock, 0.0)
+        self._run(uc, clock, 10.0)
+
+        node = store.get_node(step)
+        self.assertEqual((node.notes or "").count("completed with no conclusion"), 1)
+        self.assertNotEqual(node.state, State.DONE)
+
     def test_a_published_view_without_checks_logs_checks_not_yet_read(self):
         github = _ScriptedGitHub("sha1", NotYetRead())
         _, _, step, uc, clock = self._setup(github)
