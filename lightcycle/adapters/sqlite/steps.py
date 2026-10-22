@@ -93,7 +93,8 @@ class StepsAggregate:
             (outcome, self._now(), step, expected, expected),
         )
         if cur.rowcount == 0:
-            self._conn.rollback()
+            if self._tx_depth == 0:
+                self._conn.rollback()
             return (False, None)
         try:
             self._record_history(step, State.DONE)
@@ -102,7 +103,8 @@ class StepsAggregate:
                 new_id = self._insert_step_nocommit(**next_step_spec.as_kwargs())
             self._commit()
         except Exception:
-            self._conn.rollback()
+            if self._tx_depth == 0:
+                self._conn.rollback()
             raise
         return (True, new_id)
 

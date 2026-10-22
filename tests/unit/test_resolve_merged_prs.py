@@ -1,6 +1,7 @@
 import unittest
 
 from lightcycle.application.flow import CompleteStepUseCase
+from lightcycle.application.flow.complete_step import CompleteResponse
 from lightcycle.application.pool.check_content_pin import CheckContentPinUseCase
 from lightcycle.application.pool.pr_lookups import latest_step
 from lightcycle.application.pool.resolve_merged_prs import ResolveMergedPrsUseCase
@@ -369,6 +370,36 @@ class TestMonitorPrsMergeIntoAHumanStage(unittest.TestCase):
 class _RaisingComplete:
     def execute(self, inp):
         raise RuntimeError("completion failed")
+
+
+class _RacingComplete:
+    def __init__(self, store):
+        self._store = store
+
+    def execute(self, inp):
+        self._store.complete_step_atomic(inp.step, inp.outcome, "", None)
+        return CompleteResponse(next_step=None)
+
+
+class TestMonitorPrsLosingTheCompletionRace(unittest.TestCase):
+    def test_a_lost_race_still_records_the_run_close(self):
+        store = FakeStore()
+        item = store.create_item("deliver", "a description")
+        url = "https://github.com/x/y/pull/71"
+        rid = plant_pr(store, item, url)
+        step = store.create_step(stage="ready-merge", role="human", item=item)
+        github = FakeGitHub(merged_prs={url})
+        flow = _FlowAdapter(_ROUTES_TO_STAGE_FLOW)
+        uc = ResolveMergedPrsUseCase(
+            store, github, FakeWorktrees(), flow, _RacingComplete(store),
+            CheckContentPinUseCase(store, github, flow, trusted_authors=lambda: frozenset({"review-code"})),
+        )
+
+        uc.execute()
+
+        self.assertEqual(store.open_runs_of(item), [])
+        self.assertEqual(store.get_run(rid).state, "merged")
+        self.assertEqual(store.get_node(step).state, "done")
 
 
 class TestMonitorPrsResolvePairIsOneTransaction(unittest.TestCase):
