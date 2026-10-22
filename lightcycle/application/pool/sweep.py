@@ -1,3 +1,4 @@
+import sys
 from dataclasses import dataclass, field
 from typing import List
 
@@ -130,6 +131,10 @@ class SweepUseCase:
                 preserved.append(t.id)
             elif captured is False:
                 capture_failed.append(t.id)
+                sys.stderr.write(
+                    "warning: could not preserve work on %s at reclaim; "
+                    "reclaiming without a wip commit\n" % t.id
+                )
             elif captured == "not_checked":
                 not_checked.append(t.id)
             if t.id not in stalled_ids:

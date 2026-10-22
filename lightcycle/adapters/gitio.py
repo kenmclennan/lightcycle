@@ -1,5 +1,6 @@
 import os
 import subprocess
+import sys
 import time
 
 from lightcycle.ports.git import GitOutcome, GitPort, GitReadError
@@ -175,9 +176,19 @@ def missing_identity(root):
     ]
 
 
-def commit_all(root, message):
-    git(root, "add", "-A")
+def _stage_then_commit(root, add_args, message):
+    staged = git(root, *add_args)
+    if staged.returncode != 0:
+        sys.stderr.write(
+            "warning: git %s failed in %s, commit skipped: %s\n"
+            % (" ".join(add_args), root, staged.stderr.strip())
+        )
+        return False
     return git_ok(root, "commit", "-m", message)
+
+
+def commit_all(root, message):
+    return _stage_then_commit(root, ("add", "-A"), message)
 
 
 def has_tracked_changes(root):
@@ -188,8 +199,7 @@ def has_tracked_changes(root):
 
 
 def commit_tracked(root, message):
-    git(root, "add", "-u")
-    return git_ok(root, "commit", "-m", message)
+    return _stage_then_commit(root, ("add", "-u"), message)
 
 
 def common_dir(root):
@@ -218,6 +228,12 @@ def prune_worktrees(root):
     return GitOutcome(ok=proc.returncode == 0, detail=proc.stderr.strip())
 
 
+def _prune_logged(root):
+    outcome = prune_worktrees(root)
+    if not outcome.ok:
+        sys.stderr.write("warning: git worktree prune failed in %s: %s\n" % (root, outcome.detail))
+
+
 def is_lock_contention(stderr):
     t = (stderr or "").lower()
     return (
@@ -234,12 +250,12 @@ def add_worktree(root, path, branch, base, retries, backoff):
         if base is not None
         else ["worktree", "add", path, branch]
     )
-    prune_worktrees(root)
+    _prune_logged(root)
     proc = git(root, *args)
     while proc.returncode != 0 and retries > 0 and is_lock_contention(proc.stderr):
         retries -= 1
         time.sleep(backoff)
-        prune_worktrees(root)
+        _prune_logged(root)
         proc = git(root, *args)
     return GitOutcome(ok=proc.returncode == 0, detail=proc.stderr.strip())
 
