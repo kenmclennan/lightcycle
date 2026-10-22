@@ -421,3 +421,42 @@ class TestMixedOutcomes(unittest.TestCase):
             node = rig.store.get_node(steps[name])
             self.assertEqual(node.role, "human")
             self.assertIn("stage %s" % name, node.park.reason)
+
+
+class TestOrphanedScripts(unittest.TestCase):
+    def test_a_step_whose_script_is_orphaned_alive_is_not_started(self):
+        rig = Rig()
+        step = rig.step()
+        rig.runner.plant_orphan(rig.key(step), 4242)
+
+        rig.gate.execute(0)
+
+        self.assertEqual(rig.runner.started, [])
+
+    def test_a_step_whose_orphan_died_is_started(self):
+        rig = Rig()
+        step = rig.step()
+        rig.runner.plant_orphan(rig.key(step), 4242)
+        rig.gate.execute(0)
+        rig.runner.kill_orphan(rig.key(step))
+
+        rig.gate.execute(1)
+
+        self.assertEqual([c["key"] for c in rig.runner.started], [rig.key(step)])
+
+    def test_a_live_orphan_still_counts_against_the_cap(self):
+        capped = Rig(cap=1)
+        live = capped.step()
+        capped.step()
+        capped.runner.plant_orphan(capped.key(live), 4242)
+
+        capped.gate.execute(0)
+        self.assertEqual(capped.runner.started, [])
+
+        roomy = Rig(cap=2)
+        first = roomy.step()
+        second = roomy.step()
+        roomy.runner.plant_orphan(roomy.key(first), 4242)
+
+        roomy.gate.execute(0)
+        self.assertEqual([c["key"] for c in roomy.runner.started], [roomy.key(second)])

@@ -36,6 +36,7 @@ from lightcycle.application.setup import (
 )
 from lightcycle.application.setup.upgrade import scan_venv_holders
 from lightcycle.application.workflows.engine_requirement_check import installed_bundle_conflicts
+from lightcycle.adapters.stop_signal import StopSignal
 from lightcycle.adapters.sqlite_store import LiveStoreRefused, SchemaVersionRefused
 from lightcycle.config import Config, ConfigError
 from lightcycle.container import (
@@ -577,6 +578,9 @@ def _stop_pool_lines(resp, grace_seconds):
             % (len(resp.survivors), grace_seconds,
                ", ".join("%s (pid %d)" % (w.spawnid, w.pid) for w in resp.survivors))
         )
+    scripts = len(set(resp.scripts_terminated) | set(resp.scripts_killed))
+    if scripts:
+        lines.append("  stopped %d running script(s); their steps re-run on the next pool" % scripts)
     if resp.preserved:
         lines.append("  preserved uncommitted work on: %s" % ", ".join(resp.preserved))
     if resp.capture_failed:
@@ -619,6 +623,13 @@ def _shutdown_pool_lines():
     return lines
 
 
+def _stop_pool_and_report(lead=""):
+    print(lead + "lc start stopping - press Ctrl-C again only if it hangs")
+    for line in _shutdown_pool_lines():
+        print(line)
+    return 0
+
+
 def cmd_start(argv):
     a = build_parser(COMMANDS["start"]).parse_args(argv)
     if not require_store():
@@ -641,12 +652,8 @@ def cmd_start(argv):
     _container.gh_shim.install()
     ClearDrainUseCase(_container.drain).execute()
 
-    def _stop(*_):
-        raise KeyboardInterrupt
-
-    prior_int = signal.getsignal(signal.SIGINT)
-    prior_term = signal.getsignal(signal.SIGTERM)
-    signal.signal(signal.SIGTERM, _stop)
+    stop = StopSignal()
+    stop.install()
     try:
         tick = _container.tick(flow=_flow())
         if a.once:
@@ -673,7 +680,7 @@ def cmd_start(argv):
         consecutive_failures = 0
         tick_failure_cap = _container.config.tick_failure_cap()
         last_waiting = None
-        while True:
+        while not stop.requested:
             now = time.time()
             tick_started = time.monotonic()
             for line in _upgrade_notice_lines(upgrade_cadence.execute(now)):
@@ -688,7 +695,7 @@ def cmd_start(argv):
                     prev_now, consecutive_failures, now, False, tick_failure_cap)
                 if action == "raise":
                     raise
-                time.sleep(interval)
+                stop.pause(interval)
                 continue
             prev_now, consecutive_failures, _ = _advance_tick_state(
                 prev_now, consecutive_failures, now, True, tick_failure_cap)
@@ -706,15 +713,12 @@ def cmd_start(argv):
                     for line in _shutdown_pool_lines():
                         print(line)
                     return 0
-            time.sleep(interval)
+            stop.pause(interval)
+        return _stop_pool_and_report()
     except KeyboardInterrupt:
-        print("\nlc start stopping - press Ctrl-C again only if it hangs")
-        for line in _shutdown_pool_lines():
-            print(line)
-        return 0
+        return _stop_pool_and_report("\n")
     finally:
-        signal.signal(signal.SIGINT, prior_int)
-        signal.signal(signal.SIGTERM, prior_term)
+        stop.restore()
         ClearDrainUseCase(_container.drain).execute()
         ReleaseRunLockUseCase(_container.lock).execute()
 
@@ -736,6 +740,6 @@ def cmd_stop(argv):
     if not resp.signalled:
         sys.stderr.write("no pool running\n")
         return 1
-    print("lc stop signalled pid %d" % resp.pid)
+    print("lc stop signalled pid %d - the pool finishes its current tick, then exits" % resp.pid)
     return 0
 

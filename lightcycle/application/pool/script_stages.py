@@ -118,7 +118,8 @@ class ScriptStageUseCase:
 
     def _start(self):
         started, parked = [], []
-        running = set(self._runner.running())
+        running = set(self._runner.running()) | {
+            k for k in self._runner.orphaned() if k.startswith(STEP_KEY_PREFIX)}
         cap = self._config.script_max_running()
         for step in self._store.all_steps():
             if len(running) >= cap:

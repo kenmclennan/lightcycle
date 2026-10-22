@@ -6,6 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from lightcycle.adapters.run_log import run_logged
+from tests.support.fake_run_groups import FakeRunGroups
 
 
 class TestRunLoggedDuration(unittest.TestCase):
@@ -18,7 +19,7 @@ class TestRunLoggedDuration(unittest.TestCase):
         log_path = os.path.join(root, "script-1.log")
 
         with patch("lightcycle.adapters.run_log.time.time", side_effect=[1_700_000_000.0]):
-            run = run_logged(None, "other", log_path, script, root, dict(os.environ), None, 30)
+            run = run_logged(None, "other", log_path, script, root, dict(os.environ), None, 30, FakeRunGroups())
 
         self.assertEqual(run.exit_code, 0)
         with open(log_path) as f:

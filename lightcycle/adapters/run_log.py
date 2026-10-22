@@ -1,5 +1,6 @@
 import contextlib
 import os
+import signal
 import subprocess
 import threading
 import time
@@ -101,11 +102,14 @@ def _feed_stdin(proc, stdin_bytes):
         return
 
 
-def _run_streamed(script_path, cwd, env, stdin_bytes, timeout, tee):
+def _run_streamed(label, script_path, cwd, env, stdin_bytes, timeout, tee, groups, on_spawn):
     proc = subprocess.Popen(
         [script_path], cwd=cwd, env=env,
         stdin=subprocess.DEVNULL if stdin_bytes is None else subprocess.PIPE,
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+    groups.register(label, proc)
+    if on_spawn is not None:
+        on_spawn(proc)
     threads = [
         threading.Thread(target=_pump, args=(proc.stdout, "stdout", tee), daemon=True),
         threading.Thread(target=_pump, args=(proc.stderr, "stderr", tee), daemon=True),
@@ -119,8 +123,13 @@ def _run_streamed(script_path, cwd, env, stdin_bytes, timeout, tee):
         proc.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
         timed_out = True
-        proc.kill()
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
         proc.wait()
+    finally:
+        groups.release(proc)
     for thread in threads:
         thread.join(STREAM_JOIN_SECONDS)
     proc.stdout.close()
@@ -128,7 +137,8 @@ def _run_streamed(script_path, cwd, env, stdin_bytes, timeout, tee):
     return proc.returncode, timed_out
 
 
-def run_logged(config, label, log_path, script_path, cwd, env, stdin_bytes, timeout):
+def run_logged(config, label, log_path, script_path, cwd, env, stdin_bytes, timeout, groups,
+               on_spawn=None):
     started_at = time.time()
     started = time.monotonic()
     with contextlib.ExitStack() as stack:
@@ -142,7 +152,8 @@ def run_logged(config, label, log_path, script_path, cwd, env, stdin_bytes, time
         tee = _LogTee(handle)
         exit_code, timed_out = None, False
         try:
-            exit_code, timed_out = _run_streamed(script_path, cwd, env, stdin_bytes, timeout, tee)
+            exit_code, timed_out = _run_streamed(
+                label, script_path, cwd, env, stdin_bytes, timeout, tee, groups, on_spawn)
             footer = "timed out after %ss" % timeout if timed_out else "exit %d" % exit_code
             if timed_out:
                 exit_code = None

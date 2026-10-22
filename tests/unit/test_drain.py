@@ -169,7 +169,7 @@ class TestCmdStopDrain(unittest.TestCase):
         drain = FakeDrain()
         workers = FakeWorkers()
         rc, out, _ = self._run(_Container(FakeLock(running=True, pid=42), drain, workers))
-        self.assertEqual((rc, out.strip()), (0, "lc stop signalled pid 42"))
+        self.assertEqual((rc, out.strip()), (0, "lc stop signalled pid 42 - the pool finishes its current tick, then exits"))
         self.assertEqual(workers.killed, [42])
         self.assertFalse(drain.requested())
 

@@ -27,6 +27,7 @@ from lightcycle.application.pool.pr_writes import PrWrites
 from lightcycle.adapters.github_poll_runner import GithubPollRunnerAdapter
 from lightcycle.adapters.script_runner import ScriptRunnerAdapter
 from lightcycle.adapters.lock import RunLockAdapter
+from lightcycle.adapters.run_groups import RunGroupsAdapter
 from lightcycle.adapters.machine import MachineAdapter
 from lightcycle.adapters.guidance_sync_status import GuidanceSyncStatusAdapter
 from lightcycle.adapters.config_reload_status import ConfigReloadStatusAdapter
@@ -60,7 +61,7 @@ class Container:
         claude_stream=None, machine=None, memory_gate_status=None,
         drain=None, guidance_sync_status=None, config_reload_status=None,
         lifecycle_runner=None, script_runner=None, github_poll_runner=None,
-        github_budget_status=None, gh_shim=None,
+        github_budget_status=None, gh_shim=None, run_groups=None,
     ):
         self.config = config if config is not None else Config()
         self.store = store if store is not None else SqliteStore(self.config, now=now)
@@ -83,12 +84,14 @@ class Container:
             workflow_source if workflow_source is not None
             else WorkflowSourceAdapter(self.config, self.workflow_bundle)
         )
+        self.run_groups = run_groups if run_groups is not None else RunGroupsAdapter()
         self.lifecycle_runner = (
             lifecycle_runner if lifecycle_runner is not None
-            else LifecycleRunnerAdapter(self.config)
+            else LifecycleRunnerAdapter(self.config, self.run_groups)
         )
         self.script_runner = (
-            script_runner if script_runner is not None else ScriptRunnerAdapter(self.config)
+            script_runner if script_runner is not None
+            else ScriptRunnerAdapter(self.config, self.run_groups)
         )
         self.github_poll_runner = (
             github_poll_runner if github_poll_runner is not None
@@ -220,7 +223,7 @@ class Container:
         )
 
     def stop_pool(self, flow=None):
-        return StopPoolUseCase(self.workers, self.sweep(flow=flow))
+        return StopPoolUseCase(self.workers, self.sweep(flow=flow), self.run_groups)
 
     def simulation(self):
         return _Simulation(self)

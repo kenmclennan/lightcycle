@@ -1525,6 +1525,30 @@ class StoreContractBase:
                 raise RuntimeError("boom")
         self.assertIsNone(s.hold("R-1", "inline:1"))
 
+    def test_a_keyboard_interrupt_inside_a_transaction_restores_depth_and_rolls_back(self):
+        s = self.make_store()
+        with self.assertRaises(KeyboardInterrupt):
+            with s.transaction():
+                s.file_hold("R-1", "inline:1", "mallory", "b", None, None, 1.0)
+                raise KeyboardInterrupt
+        self.assertEqual(s._tx_depth, 0)
+        self.assertIsNone(s.hold("R-1", "inline:1"))
+        s.file_hold("R-2", "inline:2", "mallory", "b", None, None, 1.0)
+        self.assertIsNotNone(s.hold("R-2", "inline:2"))
+
+    def test_a_keyboard_interrupt_in_a_nested_transaction_unwinds_only_after_the_outer_exits(self):
+        s = self.make_store()
+        with self.assertRaises(KeyboardInterrupt):
+            with s.transaction():
+                s.file_hold("R-1", "inline:1", "mallory", "b", None, None, 1.0)
+                try:
+                    with s.transaction():
+                        raise KeyboardInterrupt
+                finally:
+                    self.assertEqual(s._tx_depth, 1)
+        self.assertEqual(s._tx_depth, 0)
+        self.assertIsNone(s.hold("R-1", "inline:1"))
+
     def test_feedback_cutoff_upserts_and_reads_back(self):
         s = self.make_store()
         self.assertIsNone(s.feedback_cutoff("pr-1"))

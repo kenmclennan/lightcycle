@@ -12,12 +12,15 @@ class StopPoolResponse:
     reclaimed: List[str] = field(default_factory=list)
     preserved: List[str] = field(default_factory=list)
     capture_failed: List[str] = field(default_factory=list)
+    scripts_terminated: List[str] = field(default_factory=list)
+    scripts_killed: List[str] = field(default_factory=list)
 
 
 class StopPoolUseCase:
-    def __init__(self, workers, sweep, sleep=time.sleep, clock=time.monotonic):
+    def __init__(self, workers, sweep, run_groups, sleep=time.sleep, clock=time.monotonic):
         self._workers = workers
         self._sweep = sweep
+        self._run_groups = run_groups
         self._sleep = sleep
         self._clock = clock
 
@@ -26,6 +29,7 @@ class StopPoolUseCase:
         alive = pool.alive(self._workers.pid_alive)
         for worker in alive:
             self._workers.kill(worker.pid)
+        scripts = self._run_groups.stop(shutdown_grace_seconds)
         surviving_pids = self._wait_for_death({w.pid for w in alive}, shutdown_grace_seconds)
         swept = self._sweep.execute(now, max_boot, stall_seconds)
         return StopPoolResponse(
@@ -34,6 +38,8 @@ class StopPoolUseCase:
             reclaimed=list(swept.swept),
             preserved=list(swept.preserved),
             capture_failed=list(swept.capture_failed),
+            scripts_terminated=list(scripts.terminated),
+            scripts_killed=list(scripts.killed),
         )
 
     def _wait_for_death(self, pending, shutdown_grace_seconds):

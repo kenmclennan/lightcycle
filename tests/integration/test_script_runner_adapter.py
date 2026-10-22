@@ -2,10 +2,13 @@ import json
 import os
 import shutil
 import stat
+import subprocess
 import tempfile
 import time
 import unittest
+from urllib.parse import quote
 
+from lightcycle.adapters.run_groups import RunGroupsAdapter
 from lightcycle.adapters.script_runner import ScriptRunnerAdapter
 from lightcycle.config import Config
 
@@ -17,7 +20,7 @@ class ScriptRunnerTestCase(unittest.TestCase):
         self.home = tempfile.mkdtemp()
         self.addCleanup(lambda: shutil.rmtree(self.home, ignore_errors=True))
         self.config = Config(environ={"LC_HOME": self.home, "LC_WORKER_HISTORY": "20"})
-        self.runner = ScriptRunnerAdapter(self.config)
+        self.runner = ScriptRunnerAdapter(self.config, RunGroupsAdapter())
 
     def script(self, body, name="s.sh"):
         path = os.path.join(self.dir, name)
@@ -83,6 +86,25 @@ class TestRun(ScriptRunnerTestCase):
         self.assertTrue(result.timed_out)
         self.assertIsNone(result.exit_code)
         self.assertLess(time.monotonic() - started, 20)
+
+    def test_a_timeout_kills_a_backgrounded_grandchild_too(self):
+        pid_file = os.path.join(self.dir, "grandchild.pid")
+        path = self.script("sleep 300 &\necho $! > %s\nwait\n" % pid_file)
+
+        result = self.runner.run(path, self.dir, self.env(), "", 1, "script-t")
+
+        self.assertTrue(result.timed_out)
+        with open(pid_file) as f:
+            pid = int(f.read().strip())
+        deadline = time.monotonic() + 10
+        alive = True
+        while alive and time.monotonic() < deadline:
+            try:
+                os.kill(pid, 0)
+                time.sleep(0.05)
+            except ProcessLookupError:
+                alive = False
+        self.assertFalse(alive)
 
     def test_a_script_that_cannot_start_is_reported_not_raised(self):
         result = self.runner.run(os.path.join(self.dir, "missing.sh"), self.dir, self.env(), "", 5, "script-t")
@@ -211,7 +233,7 @@ class TestRunLog(ScriptRunnerTestCase):
 
     def test_only_the_newest_logs_of_a_kind_survive_and_other_files_are_untouched(self):
         config = Config(environ={"LC_HOME": self.home, "LC_WORKER_HISTORY": "2"})
-        runner = ScriptRunnerAdapter(config)
+        runner = ScriptRunnerAdapter(config, RunGroupsAdapter())
         logs = os.path.join(self.home, "logs")
         os.makedirs(logs, exist_ok=True)
         for name in ("worker-agent-x.log", "guard-g-1.log"):
@@ -236,7 +258,7 @@ class TestPrunedScriptLog(ScriptRunnerTestCase):
         from tests.support.step_factory import create_owned_step
 
         config = Config(environ={"LC_HOME": self.home, "LC_WORKER_HISTORY": "2"})
-        runner = ScriptRunnerAdapter(config)
+        runner = ScriptRunnerAdapter(config, RunGroupsAdapter())
         path = self.script("true\n")
         store = FakeStore()
         steps = []
@@ -253,3 +275,93 @@ class TestPrunedScriptLog(ScriptRunnerTestCase):
 
         self.assertIsNone(resolved[0])
         self.assertTrue(all(resolved[1:]))
+
+
+class TestOrphanedRecords(ScriptRunnerTestCase):
+    def _record(self, key, pid, started):
+        directory = os.path.join(self.home, "script-runs")
+        os.makedirs(directory, exist_ok=True)
+        path = os.path.join(directory, quote(key, safe="") + ".json")
+        with open(path, "w") as f:
+            json.dump({"pid": pid, "started": started}, f)
+        return path
+
+    def test_an_absent_directory_reads_as_no_orphans(self):
+        self.assertEqual(self.runner.orphaned(), [])
+
+    def test_a_record_left_for_a_live_child_is_reported_by_a_second_instance_then_removed_when_dead(self):
+        path = self.script("exec sleep 300\n")
+        runner = ScriptRunnerAdapter(self.config, RunGroupsAdapter())
+        runner.start("step:S-1", path, self.dir, self.env(), "", 300, "script-t")
+        record = os.path.join(self.home, "script-runs", "step%3AS-1.json")
+        deadline = time.monotonic() + 10
+        while not os.path.exists(record) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        with open(record) as f:
+            pid = json.load(f)["pid"]
+        second = ScriptRunnerAdapter(self.config, RunGroupsAdapter())
+
+        self.assertEqual(second.orphaned(), ["step:S-1"])
+        self.assertTrue(os.path.exists(record))
+        self.assertEqual(runner.orphaned(), [])
+
+        os.killpg(pid, 9)
+        deadline = time.monotonic() + 10
+        while second.orphaned() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        self.assertEqual(second.orphaned(), [])
+        self.assertFalse(os.path.exists(record))
+
+    def test_a_record_with_a_different_start_time_is_treated_as_dead(self):
+        child = subprocess.Popen(["sleep", "300"])
+        self.addCleanup(child.wait)
+        self.addCleanup(child.kill)
+        record = self._record("step:S-2", child.pid, "Mon Jan  1 00:00:00 2001")
+
+        self.assertEqual(self.runner.orphaned(), [])
+        self.assertFalse(os.path.exists(record))
+
+
+class TestRunGroupsStop(ScriptRunnerTestCase):
+    def _spawn(self, groups, label, body):
+        proc = subprocess.Popen(
+            [self.script(body, name=label + ".sh")], cwd=self.dir, env=self.env(),
+            start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        groups.register(label, proc)
+        self.addCleanup(proc.wait)
+        return proc
+
+    def test_nothing_registered_stops_nothing(self):
+        stopped = RunGroupsAdapter().stop(1)
+        self.assertEqual((stopped.terminated, stopped.killed), ([], []))
+
+    def test_a_sigterm_script_is_terminated_and_one_that_ignores_it_is_killed_after_the_grace(self):
+        groups = RunGroupsAdapter()
+        pid_file = os.path.join(self.dir, "stubborn-child.pid")
+        polite = self._spawn(groups, "polite", "exec sleep 300\n")
+        stubborn = self._spawn(
+            groups, "stubborn",
+            "trap '' TERM\n(trap '' TERM; exec sleep 300) &\necho $! > %s\nwhile true; do sleep 1; done\n"
+            % pid_file)
+        deadline = time.monotonic() + 10
+        while not os.path.exists(pid_file) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        time.sleep(0.2)
+
+        stopped = groups.stop(1)
+
+        self.assertEqual(stopped.terminated, ["polite", "stubborn"])
+        self.assertEqual(stopped.killed, ["stubborn"])
+        polite.wait(10)
+        stubborn.wait(10)
+        with open(pid_file) as f:
+            grandchild = int(f.read().strip())
+        deadline = time.monotonic() + 10
+        alive = True
+        while alive and time.monotonic() < deadline:
+            try:
+                os.kill(grandchild, 0)
+                time.sleep(0.05)
+            except ProcessLookupError:
+                alive = False
+        self.assertFalse(alive)
