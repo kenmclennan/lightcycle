@@ -54,6 +54,9 @@ FOOTER_GLYPHS = {
     "pool-draining": Glyph("◑", "amber"),
     "pool-start-timed-out": Glyph("●", "red"),
     "pool-stop-timed-out": Glyph("○", "red"),
+    "github-healthy": Glyph("●", "cyan"),
+    "github-close": Glyph("◐", "amber"),
+    "github-low": Glyph("⊘", "red"),
 }
 
 CURSOR_GLYPH = Glyph("❯", "cyan")
