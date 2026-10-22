@@ -85,6 +85,6 @@ One vocabulary, shared by the priority list and the Workflow tab.
 | `□` dim | a human-role step, done or queued |
 | `⊣` dim | held by a dependency, drawn alongside the state glyph |
 
-The footer carries its own set for pool and Claude availability: `●`/`○` for the pool running or stopped, `◑` amber for a draining pool (`pool draining (N workers, M engine steps)`, with ` - slow` appended once the drain has waited past the bound; the `p` prompt offers "Drain: finish running work, then stop" while the pool runs and is not already draining), `●`/`⊘`/`◐` for Claude available, unavailable or being probed, `⬆` amber when an engine upgrade is available, and `↻` amber when the config file has been edited since the TUI launched (restart to apply).
+The footer carries its own set for pool and Claude availability: `●`/`○` for the pool running or stopped, `◑` amber for a draining pool (`pool draining (N workers, M engine steps)`, with ` - slow` appended once the drain has waited past the bound; the `p` prompt offers "Drain: finish running work, then stop" while the pool runs and is not already draining), `●`/`⊘`/`◐` for Claude available, unavailable or being probed, `⬆` amber when an engine upgrade is available, and `↻` amber when the config file has been edited since the TUI launched (restart to apply). <!-- markdownlint-disable-line MD038 -->
 
 Colour is doing one job in that table: amber means you, red means you urgently, cyan means moving, dim means neither.

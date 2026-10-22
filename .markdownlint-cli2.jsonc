@@ -2,6 +2,7 @@
   "config": {
     "default": true,
     "MD013": false,
+    "MD049": { "style": "underscore" },
     "MD060": false
   },
   "ignores": ["**/.worktrees/**", "**/node_modules/**"]

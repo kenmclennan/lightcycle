@@ -2,7 +2,7 @@
 
 ## Install
 
-```
+```bash
 pipx install git+https://github.com/kenmclennan/lightcycle
 lc init                 # create the store, seed the home config, create + register the guidance repo (run once)
 ```
@@ -118,7 +118,7 @@ schedule-weekly-audit:
 
 Workflows come from pullable git **origins**, not the engine. `lc init` pulls the built-in `lightcycle` origin (from `workflows-remote`) into an immutable, sha-pinned bundle under `~/.lightcycle/workflows/<origin>/<sha>/`. Manage them with:
 
-```
+```bash
 lc workflow init <name>       # scaffold + register a personal workflow-origin repo (registered writable)
 lc workflow add <url> [--writable]  # register + pull an origin; read-only unless --writable
 lc workflow set <origin> --writable|--read-only  # change whether you can edit an origin
@@ -132,7 +132,7 @@ Each item pins `<origin>/<name>@<sha>` at activation, and the loader resolves it
 
 ## Upgrades
 
-```
+```bash
 lc upgrade            # check remote version, upgrade in place if newer
 lc upgrade --check    # report only, do not install
 ```

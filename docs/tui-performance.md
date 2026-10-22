@@ -6,7 +6,7 @@
 
 **`py-spy`** (sampling, attaches to a running `lc tui` process by PID, ~1% overhead, no code changes) answers "where does wall-clock time go" - it finds slow code.
 
-```
+```bash
 pgrep -f "lightcycle.*tui"
 py-spy record -o tui.svg --pid <pid> --duration <seconds>
 ```
@@ -15,7 +15,7 @@ Add `--idle` to include idle/await time in the flame graph. Textual is asyncio -
 
 **`cProfile`** (deterministic, stdlib, distorting) answers "how many times was this called" - it finds repeated code, the [[LC-520]] bug class this item is chasing the residue of.
 
-```
+```bash
 python -m cProfile -o /tmp/tui.prof -m lightcycle tui
 python -m pstats /tmp/tui.prof
 ```
@@ -30,7 +30,7 @@ A lightweight, config-gated counter records each `_refresh()`'s wall duration an
 
 Turn it on with `tui-metrics: true` in `~/.lightcycle/config`, or `LC_TUI_METRICS=true`. Samples land in `<data_root>/logs/run.log` - `~/.lightcycle/logs/run.log` by default (`config.py`'s `data_root()`/`default_data_root()`). Each line:
 
-```
+```text
 10:20:29  tui      wall_ms=79 rss_kb=82384
 ```
 
