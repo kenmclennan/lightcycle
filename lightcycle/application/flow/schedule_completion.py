@@ -56,7 +56,9 @@ class ScheduleCompletion:
         marked = [node_id for node_id in batch if node_id in unretroed]
         for node_id in marked:
             self._store.label_add(node_id, RETROED_LABEL)
-        self._store.note(step.id, "retroed: %d of %d" % (len(marked), len(batch)))
+        current = self._store.get_node(step.id).notes or ""
+        if not any(line.startswith("retroed: ") for line in current.splitlines()):
+            self._store.note(step.id, "retroed: %d of %d" % (len(marked), len(batch)))
 
     def _finish_day(self, day_state, summary):
         day = datetime.date.fromisoformat(day_state[0])

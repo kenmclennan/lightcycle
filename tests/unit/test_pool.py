@@ -754,7 +754,7 @@ class TestSweep(unittest.TestCase):
         self.assertEqual(workers.killed, [])
         self.assertEqual(result.killed, [])
 
-    def test_a_stalled_worker_with_a_terminal_marker_in_its_log_is_not_killed_for_staleness(self):
+    def test_a_stalled_worker_whose_log_mentions_lc_done_for_another_step_is_still_killed(self):
         s = FakeStore()
         step = create_owned_step(s, "t", stage="build", role="agent")
         s.update_state(step, "in_progress")
@@ -769,7 +769,7 @@ class TestSweep(unittest.TestCase):
             {
                 "type": "assistant",
                 "message": {
-                    "content": [{"type": "tool_use", "input": {"command": "lc done t done"}}]
+                    "content": [{"type": "tool_use", "input": {"command": "lc done other.1 changes"}}]
                 },
             }
         )
@@ -777,10 +777,24 @@ class TestSweep(unittest.TestCase):
             files={"/l/1.log": log_line.encode()},
             log_mtimes={"/l/1.log": 1000 - 1800 - 1},
         )
-        result = make_sweep(s, workers, worker_log=fs, stream=ClaudeStreamAdapter()).execute(now=1000, max_boot=120, stall_seconds=1800)
-        self.assertEqual(workers.killed, [])
-        self.assertEqual(result.swept, [])
-        self.assertEqual(s.get_node(step).state, "running")
+        make_sweep(s, workers, worker_log=fs, stream=ClaudeStreamAdapter()).execute(now=1000, max_boot=120, stall_seconds=1800)
+        self.assertEqual(workers.killed, [999])
+        self.assertEqual(workers.checked, ["closing-sp"])
+
+    def test_a_worker_whose_step_is_no_longer_in_progress_under_its_spawn_id_is_not_stalled(self):
+        s = FakeStore()
+        step = create_owned_step(s, "t", stage="build", role="agent")
+        s.update_state(step, "in_progress")
+        s.assign(step, "someone-else")
+        workers = FakeWorkers(
+            workers=[
+                {"spawnid": "closing-sp", "pid": 999, "step": step, "started": 100, "log": "/l/1.log"}
+            ],
+            alive_pids={999},
+        )
+        fs = FakeFs(files={"/l/1.log": b""}, log_mtimes={"/l/1.log": 1000 - 1800 - 1})
+        make_sweep(s, workers, worker_log=fs, stream=ClaudeStreamAdapter()).execute(now=1000, max_boot=120, stall_seconds=1800)
+        self.assertEqual(workers.checked, [])
 
     def test_a_stalled_worker_with_no_mtime_available_is_left_alone_this_tick(self):
         s = FakeStore()

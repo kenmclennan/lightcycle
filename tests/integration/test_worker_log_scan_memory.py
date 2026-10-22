@@ -5,7 +5,7 @@ import sys
 import tempfile
 import unittest
 
-from lightcycle.adapters.claude_stream import parse_rate_limit_event, saw_terminal_command
+from lightcycle.adapters.claude_stream import parse_rate_limit_event
 from lightcycle.adapters.worker_log import iter_lines
 
 _TARGET_BYTES = 20 * 1024 * 1024
@@ -53,7 +53,6 @@ class TestWorkerLogScanMemory(unittest.TestCase):
 
         measurements = []
         for _ in range(_ITERATIONS):
-            self.assertFalse(saw_terminal_command(iter_lines(path)))
             self.assertIsNone(parse_rate_limit_event(iter_lines(path)))
             measurements.append(_ru_maxrss_bytes())
 

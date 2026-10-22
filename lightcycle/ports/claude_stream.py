@@ -23,9 +23,5 @@ class ClaudeStreamPort(ABC):
         pass
 
     @abstractmethod
-    def saw_terminal_command(self, lines):
-        pass
-
-    @abstractmethod
     def saw_session_activity(self, lines):
         pass

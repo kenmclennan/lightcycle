@@ -17,7 +17,15 @@ Feature: Pool detects and reclaims a stalled worker
       | log_growth                        | terminal_state                | verdict        |
       | more than the stall threshold ago | contains no terminal marker   | identified     |
       | within the stall threshold        | contains no terminal marker   | not identified |
-      | more than the stall threshold ago | contains a terminal marker    | not identified |
+      | more than the stall threshold ago | contains a terminal marker    | identified     |
+
+  Scenario: A worker whose step is no longer in progress is not identified as stalled
+    Given a worker has claimed a step
+    And the worker is past its boot window
+    And the worker's log last grew more than the stall threshold ago
+    And the worker's step has been closed
+    When the pool sweeps
+    Then the worker's record is not marked checked
 
   Scenario: A worker still inside its boot window is governed by the boot window, not the stall check
     Given a worker has not yet claimed a step

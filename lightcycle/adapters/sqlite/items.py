@@ -56,6 +56,12 @@ class ItemsAggregate:
         )
         self._commit()
 
+    def remove_artifact(self, item_id, atype):
+        self._conn.execute(
+            "DELETE FROM artifacts WHERE item_id = ? AND atype = ?", (item_id, atype)
+        )
+        self._commit()
+
     def all_nodes(self):
         return self.all_steps() + self.all_items()
 

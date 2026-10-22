@@ -194,6 +194,11 @@ def _terminal_marker(ctx):
     ctx["fs"].files[ctx["log"]] = TERMINAL_LOG
 
 
+@given("the worker's step has been closed")
+def _step_closed(ctx):
+    ctx["store"].complete_node(ctx["step"], "done")
+
+
 @given("the worker's log stopped growing well before a multi-hour suspend")
 def _log_stopped_before_suspend(ctx):
     ctx["fs"].set_log_mtime(ctx["log"], ctx["now"] - 60)
@@ -239,6 +244,11 @@ def _verdict(ctx, verdict):
 def _killed(ctx):
     assert ctx["pid"] in ctx["workers"].killed
     assert ctx["spawnid"] in ctx["result"].killed
+
+
+@then("the worker's record is not marked checked")
+def _not_marked_checked(ctx):
+    assert ctx["spawnid"] not in ctx["workers"].checked
 
 
 @then("the worker's record is marked checked")

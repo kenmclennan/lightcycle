@@ -45,6 +45,10 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def remove_artifact(self, item_id, atype):
+        pass
+
+    @abstractmethod
     def all_nodes(self):
         pass
 

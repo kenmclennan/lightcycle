@@ -37,9 +37,6 @@ class TestClaudeStreamAdapterOverARecordedLog(unittest.TestCase):
     def test_saw_session_activity_is_true(self):
         self.assertTrue(self.adapter.saw_session_activity(self.lines))
 
-    def test_saw_terminal_command_is_false(self):
-        self.assertFalse(self.adapter.saw_terminal_command(self.lines))
-
 
 if __name__ == "__main__":
     unittest.main()
