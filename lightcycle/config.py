@@ -66,6 +66,7 @@ _ENV_OVERRIDE_VARS = {
     "tui-metrics": "LC_TUI_METRICS",
     "developer-mode": "LC_DEVELOPER_MODE",
     "tui-upgrade-check-seconds": "LC_TUI_UPGRADE_CHECK_SECONDS",
+    "tui-doctor-check-seconds": "LC_TUI_DOCTOR_CHECK_SECONDS",
     "pool-upgrade-check-seconds": "LC_POOL_UPGRADE_CHECK_SECONDS",
     "shutdown-grace-seconds": "LC_SHUTDOWN_GRACE_SECONDS",
     "tick-failure-cap": "LC_TICK_FAILURE_CAP",
@@ -559,6 +560,11 @@ class Config:
         env = self._env_int("LC_TUI_UPGRADE_CHECK_SECONDS", None)
         value = env if env is not None else self._required_int("tui-upgrade-check-seconds")
         return self._check_range("tui-upgrade-check-seconds", value)
+
+    def tui_doctor_check_seconds(self):
+        env = self._env_int("LC_TUI_DOCTOR_CHECK_SECONDS", None)
+        value = env if env is not None else self._required_int("tui-doctor-check-seconds")
+        return self._check_range("tui-doctor-check-seconds", value)
 
     def pool_upgrade_check_seconds(self):
         env = self._env_int("LC_POOL_UPGRADE_CHECK_SECONDS", None)

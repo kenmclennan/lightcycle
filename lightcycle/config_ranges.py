@@ -24,6 +24,7 @@ _NUMERIC_RANGES = {
     "release-hold-note-seconds": (1, None),
     "probe-cooldown-seconds": (0, None),
     "tui-upgrade-check-seconds": (0, None),
+    "tui-doctor-check-seconds": (0, None),
     "pool-upgrade-check-seconds": (0, None),
     "shutdown-grace-seconds": (0, None),
     "price-sonnet-input-per-mtok": (0.0, None),

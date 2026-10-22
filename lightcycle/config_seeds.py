@@ -32,6 +32,7 @@ _SEED_KEYS = [
     ("tui-metrics", "false"),
     ("developer-mode", "false"),
     ("tui-upgrade-check-seconds", "900"),
+    ("tui-doctor-check-seconds", "3600"),
     ("pool-upgrade-check-seconds", "900"),
     ("personal-origin", ""),
     ("price-sonnet-input-per-mtok", "2.00"),

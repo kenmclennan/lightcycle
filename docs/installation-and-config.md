@@ -100,6 +100,7 @@ This table documents every `_SEED_KEYS` entry - `tests/unit/test_docs_reference_
 | `tui-metrics` | whether the TUI records its own per-tick refresh timing to the run log |
 | `developer-mode` | whether this machine develops lightcycle itself, so the engine and the plugin count as writable for routing a finding. Seeded `false`; override with `LC_DEVELOPER_MODE`. Nothing reads it yet beyond `lc config` |
 | `tui-upgrade-check-seconds` | how often the TUI rechecks for a new engine version in the background; `0` disables the periodic recheck (the check still runs once on launch); must be `>= 0` |
+| `tui-doctor-check-seconds` | how often the TUI reruns `lc doctor` in the background to drive the footer doctor segment; `0` disables the periodic recheck (the check still runs once on launch); must be `>= 0` |
 | `pool-upgrade-check-seconds` | how often `lc start`'s pool loop rechecks for a new engine version while running; `0` disables the periodic recheck (the check still runs once at startup); must be `>= 0` |
 | `price-<model>-<kind>-per-mtok` | per-million-token USD pricing used for usage cost reporting, one key per `<model>` (`sonnet`/`opus`/`haiku`) x `<kind>` (`input`/`output`/`cache-write`/`cache-read`) - twelve keys total, defaults in `config.py`'s `_SEED_KEYS`; each must be `>= 0` |
 
