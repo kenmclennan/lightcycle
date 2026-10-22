@@ -1412,6 +1412,7 @@ class TestCiEmptyHeadConfig(unittest.TestCase):
     _KEYS = (
         ("ci-start-window-seconds", "LC_CI_START_WINDOW_SECONDS", "ci_start_window_seconds", "600"),
         ("ci-no-workflows-wait-seconds", "LC_CI_NO_WORKFLOWS_WAIT_SECONDS", "ci_no_workflows_wait_seconds", "60"),
+        ("ci-unconfirmed-note-polls", "LC_CI_UNCONFIRMED_NOTE_POLLS", "ci_unconfirmed_note_polls", "3"),
     )
 
     def test_seeded_defaults(self):

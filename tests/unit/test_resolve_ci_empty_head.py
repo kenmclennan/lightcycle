@@ -59,7 +59,7 @@ class _Case(unittest.TestCase):
         self.uc = ResolveCiUseCase(
             self.store, self.github, flow, CompleteStepUseCase(self.store, flow),
             clock=lambda: self.wall.now, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600,
-            ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60,
+            ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3,
             wall_clock=self.wall, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
 
     def _at(self, elapsed):

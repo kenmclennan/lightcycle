@@ -165,6 +165,7 @@ class Container:
                 ci_ceiling_seconds=self.config.ci_check_ceiling_seconds,
                 ci_start_window_seconds=self.config.ci_start_window_seconds,
                 ci_no_workflows_wait_seconds=self.config.ci_no_workflows_wait_seconds,
+                ci_unconfirmed_note_polls=self.config.ci_unconfirmed_note_polls,
                 ci_wall_clock=time.time,
                 ci_views=snapshot,
             ),
