@@ -1134,6 +1134,75 @@ class StoreContractBase:
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0][0], parked)
 
+    def test_open_run_after_a_merged_close_opens_the_next_round(self):
+        s = self.make_store()
+        item = s.create_item("t", "a description", shortcode="GRID")
+        pid = s.open_pass(item)
+        first = s.open_run(item, pid, "amend")
+        s.set_pr(first, "https://gh/pr/1")
+        s.close_run(first, "merged")
+
+        second = s.open_run(item, pid, "amend")
+
+        self.assertEqual(second, "%s.amend.r2" % pid)
+        self.assertNotEqual(second, first)
+        self.assertTrue(s.get_run(second).is_open)
+        self.assertEqual(s.current_run(item, "amend").id, second)
+        self.assertEqual(s.get_run(first).state, "merged")
+        self.assertEqual(s.get_run(first).pr, "https://gh/pr/1")
+
+    def test_open_run_after_an_abandoned_close_opens_the_next_round(self):
+        s = self.make_store()
+        item = s.create_item("t", "a description", shortcode="GRID")
+        pid = s.open_pass(item)
+        first = s.open_run(item, pid, "amend")
+        s.close_run(first, "abandoned")
+
+        second = s.open_run(item, pid, "amend")
+
+        self.assertEqual(second, "%s.amend.r2" % pid)
+        self.assertEqual(s.get_run(first).state, "abandoned")
+
+    def test_a_third_round_gets_the_r3_suffix(self):
+        s = self.make_store()
+        item = s.create_item("t", "a description", shortcode="GRID")
+        pid = s.open_pass(item)
+        s.close_run(s.open_run(item, pid, "amend"), "merged")
+        s.close_run(s.open_run(item, pid, "amend"), "merged")
+
+        self.assertEqual(s.open_run(item, pid, "amend"), "%s.amend.r3" % pid)
+
+    def test_open_run_while_a_run_is_open_returns_the_same_id(self):
+        s = self.make_store()
+        item = s.create_item("t", "a description", shortcode="GRID")
+        pid = s.open_pass(item)
+        first = s.open_run(item, pid, "amend")
+
+        self.assertEqual(s.open_run(item, pid, "amend"), first)
+        self.assertEqual(len(s.runs_of(item, pid)), 1)
+
+    def test_a_new_round_leaves_another_phase_of_the_pass_alone(self):
+        s = self.make_store()
+        item = s.create_item("t", "a description", shortcode="GRID")
+        pid = s.open_pass(item)
+        s.close_run(s.open_run(item, pid, "amend"), "merged")
+        code = s.open_run(item, pid, "code")
+        s.open_run(item, pid, "amend")
+
+        self.assertEqual(code, "%s.code" % pid)
+        self.assertEqual(s.current_run(item, "code").id, code)
+
+    def test_runs_sharing_an_opened_at_resolve_by_insertion_order(self):
+        s = self.make_store(now=lambda: "SENTINEL-1999-01-01T00:00:00")
+        item = s.create_item("t", "a description", shortcode="GRID")
+        pid = s.open_pass(item)
+        first = s.open_run(item, pid, "amend")
+        s.close_run(first, "merged")
+        second = s.open_run(item, pid, "amend")
+
+        self.assertEqual([r.id for r in s.runs_of(item, pid)], [first, second])
+        self.assertEqual(s.current_run(item, "amend").id, second)
+
     def test_every_live_write_path_stamps_from_the_injected_clock_not_the_wall_clock(self):
         sentinel = "SENTINEL-1999-01-01T00:00:00"
         s = self.make_store(now=lambda: sentinel)

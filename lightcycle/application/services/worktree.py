@@ -87,10 +87,11 @@ class WorktreeService:
 
     @staticmethod
     def _key_for(run):
-        n = pass_number(run.pass_id)
-        if run.phase is None or n <= 1:
+        if run.phase is None:
             return run.phase
-        return "%s-%d" % (run.phase, n)
+        n = pass_number(run.pass_id)
+        key = run.phase if n <= 1 else "%s-%d" % (run.phase, n)
+        return key if run.round <= 1 else "%s-r%d" % (key, run.round)
 
     def worktree_path(self, node):
         return Worktree(self._item_of(node), self._phase_key(node)).path_in(self.target_repo(node))

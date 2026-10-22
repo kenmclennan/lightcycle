@@ -191,6 +191,44 @@ class TestWorktreePath(unittest.TestCase):
         self.assertNotEqual(feat_branch, code_branch)
 
 
+class TestSecondRoundWorktree(unittest.TestCase):
+    def test_a_second_round_gets_its_own_worktree_and_branch(self):
+        store = FakeStore()
+        item = store.create_item("Login feature", "a description")
+        store.add_project(
+            "acme/app", local_path=os.path.join("/home/u/workspace/projects", "app")
+        )
+        store.add_artifact(item, "repo", "app")
+        svc = WorktreeService(
+            store, git=None, fs=None,
+            config=_Cfg("/home/u/workspace/projects"), flow=_PhaseFlow("amend"),
+        )
+        first = plant_run(store, item, "amend", branch="feat/x-amend", state="merged")
+        node = store.get_node(item)
+
+        second = svc._run(node, create=True)
+
+        self.assertEqual(second.id, "%s.amend.r2" % store.current_pass(item).id)
+        self.assertEqual(
+            os.path.basename(svc.worktree_path(node)), "%s-amend-r2" % item
+        )
+        self.assertIn("amend-r2", svc._branch_for(node))
+        self.assertNotEqual(store.get_run(first).id, second.id)
+
+    def test_a_second_round_of_a_later_pass_keeps_the_pass_suffix_first(self):
+        store = FakeStore()
+        item = store.create_item("Login feature", "a description")
+        plant_run(store, item, "amend", n=2, state="merged")
+        svc = WorktreeService(
+            store, git=None, fs=None, config=_Cfg("/home/u/workspace/projects"),
+            flow=_PhaseFlow("amend"),
+        )
+        node = store.get_node(item)
+        svc._run(node, create=True)
+
+        self.assertEqual(svc._phase_key(node), "amend-2-r2")
+
+
 class TestItemRepoNoFallback(unittest.TestCase):
     def setUp(self):
         self.store = FakeStore()

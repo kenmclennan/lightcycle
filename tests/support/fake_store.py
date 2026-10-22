@@ -869,9 +869,12 @@ class FakeStore(StorePort):
         ]
 
     def open_run(self, item, pid, phase):
-        rid = run_id(pid, phase)
-        if not any(r.id == rid for r in self._runs):
-            self._runs.append(PhaseRun(rid, item, pid, phase, opened_at=self._now()))
+        same = [r for r in self._runs if r.item == item and r.pass_id == pid and r.phase == phase]
+        found = next((r for r in reversed(same) if r.is_open), None)
+        if found:
+            return found.id
+        rid = run_id(pid, phase, len(same) + 1)
+        self._runs.append(PhaseRun(rid, item, pid, phase, opened_at=self._now()))
         return rid
 
     def get_run(self, rid):

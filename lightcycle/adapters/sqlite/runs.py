@@ -44,14 +44,24 @@ class RunsAggregate:
         self._commit()
 
     def open_run(self, item, pid, phase):
-        rid = run_id(pid, phase)
+        open_sql = (
+            "SELECT id FROM phase_runs WHERE item = ? AND pass_id = ? AND phase IS ? "
+            "AND state = 'open' ORDER BY opened_at DESC, rowid DESC LIMIT 1"
+        )
+        found = self._conn.execute(open_sql, (item, pid, phase)).fetchone()
+        if found:
+            return found[0]
+        (existing,) = self._conn.execute(
+            "SELECT COUNT(*) FROM phase_runs WHERE item = ? AND pass_id = ? AND phase IS ?",
+            (item, pid, phase),
+        ).fetchone()
         self._conn.execute(
             "INSERT OR IGNORE INTO phase_runs (id, item, pass_id, phase, state, opened_at) "
             "VALUES (?, ?, ?, ?, 'open', ?)",
-            (rid, item, pid, phase, self._now()),
+            (run_id(pid, phase, existing + 1), item, pid, phase, self._now()),
         )
         self._commit()
-        return rid
+        return self._conn.execute(open_sql, (item, pid, phase)).fetchone()[0]
 
     def _run_row_to_record(self, row):
         return PhaseRun(*row)
@@ -65,7 +75,7 @@ class RunsAggregate:
     def current_run(self, item, phase):
         row = self._conn.execute(
             "%s WHERE item = ? AND phase IS ? AND state = 'open' "
-            "ORDER BY opened_at DESC LIMIT 1" % _RUN_SELECT,
+            "ORDER BY opened_at DESC, rowid DESC LIMIT 1" % _RUN_SELECT,
             (item, phase),
         ).fetchone()
         return self._run_row_to_record(row) if row else None
@@ -73,11 +83,11 @@ class RunsAggregate:
     def runs_of(self, item, pid=None):
         if pid is None:
             rows = self._conn.execute(
-                "%s WHERE item = ? ORDER BY opened_at" % _RUN_SELECT, (item,)
+                "%s WHERE item = ? ORDER BY opened_at, rowid" % _RUN_SELECT, (item,)
             ).fetchall()
         else:
             rows = self._conn.execute(
-                "%s WHERE item = ? AND pass_id = ? ORDER BY opened_at" % _RUN_SELECT, (item, pid)
+                "%s WHERE item = ? AND pass_id = ? ORDER BY opened_at, rowid" % _RUN_SELECT, (item, pid)
             ).fetchall()
         return [self._run_row_to_record(r) for r in rows]
 

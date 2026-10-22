@@ -76,7 +76,8 @@ class StepDetail:
         if not run.pass_id or run.phase == SPEC_PHASE:
             return None
         return next(
-            (r for r in self._store.runs_of(run.item, run.pass_id) if r.phase == SPEC_PHASE),
+            (r for r in reversed(self._store.runs_of(run.item, run.pass_id))
+             if r.phase == SPEC_PHASE),
             None,
         )
 
