@@ -1406,3 +1406,33 @@ class TestCiCheckCeilingConfig(unittest.TestCase):
         with self.assertRaises(ConfigError) as ctx:
             _cfg().ci_check_ceiling_seconds()
         self.assertIn("ci-check-ceiling-seconds", str(ctx.exception))
+
+
+class TestCiEmptyHeadConfig(unittest.TestCase):
+    _KEYS = (
+        ("ci-start-window-seconds", "LC_CI_START_WINDOW_SECONDS", "ci_start_window_seconds", "600"),
+        ("ci-no-workflows-wait-seconds", "LC_CI_NO_WORKFLOWS_WAIT_SECONDS", "ci_no_workflows_wait_seconds", "60"),
+    )
+
+    def test_seeded_defaults(self):
+        seeds = dict(_SEED_KEYS)
+        for key, _env, getter, default in self._KEYS:
+            self.assertEqual(seeds[key], default)
+            self.assertEqual(getattr(_cfg(**{getter: default}), getter)(), int(default))
+
+    def test_env_override_wins(self):
+        for _key, env, getter, default in self._KEYS:
+            self.assertEqual(getattr(_cfg({env: "7"}, **{getter: default}), getter)(), 7)
+
+    def test_zero_and_negative_are_refused_naming_the_key(self):
+        for key, _env, getter, _default in self._KEYS:
+            for bad in ("0", "-1"):
+                with self.assertRaises(ConfigError) as ctx:
+                    getattr(_cfg(**{getter: bad}), getter)()
+                self.assertIn(key, str(ctx.exception))
+
+    def test_missing_key_names_it(self):
+        for key, _env, getter, _default in self._KEYS:
+            with self.assertRaises(ConfigError) as ctx:
+                getattr(_cfg(), getter)()
+            self.assertIn(key, str(ctx.exception))

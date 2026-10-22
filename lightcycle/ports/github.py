@@ -54,6 +54,12 @@ class CheckRun:
 
 
 @dataclass(frozen=True)
+class WorkflowFile:
+    name: str
+    text: Optional[str]
+
+
+@dataclass(frozen=True)
 class PrSync:
     behind: bool
     conflicted: bool
@@ -121,6 +127,14 @@ class GitHubEventsPort(ABC):
 
     @abstractmethod
     def check_runs(self, pr: str, sha: str) -> Union[Tuple[CheckRun, ...], ReadFailure]:
+        pass
+
+    @abstractmethod
+    def workflow_sources(self, pr: str, sha: str) -> Union[Tuple[WorkflowFile, ...], ReadFailure]:
+        pass
+
+    @abstractmethod
+    def workflow_runs(self, pr: str, sha: str) -> Union[int, ReadFailure]:
         pass
 
     @abstractmethod

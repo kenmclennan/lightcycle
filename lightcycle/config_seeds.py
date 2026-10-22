@@ -10,6 +10,8 @@ _SEED_KEYS = [
     ("max-session-seconds", "1800"),
     ("stall-seconds", "1800"),
     ("ci-check-ceiling-seconds", "3600"),
+    ("ci-start-window-seconds", "600"),
+    ("ci-no-workflows-wait-seconds", "60"),
     ("probe-cooldown-seconds", "1800"),
     ("spin-cap", "3"),
     ("poll-seconds", "5"),

@@ -6,6 +6,7 @@ from typing import Optional, Tuple, Union
 
 from lightcycle.ports.github import (
     CheckRun, Comment, GitHubEventsPort, ListedPr, PrSync, PrView, RateLimit, ReadFailure, Review,
+    WorkflowFile,
 )
 
 _PR_URL_RE = re.compile(r"https://github\.com/([^/]+)/([^/]+)/pull/(\d+)")
@@ -299,6 +300,68 @@ class GitHubEventsAdapter(GitHubEventsPort):
             )
             for c in data
         )
+
+    def workflow_sources(self, pr: str, sha: str) -> Union[Tuple[WorkflowFile, ...], ReadFailure]:
+        parts = _repo_parts(pr)
+        if not parts:
+            return ReadFailure(-1, "pr is not a parseable GitHub PR URL: %r" % pr)
+        owner, repo, _number = parts
+        directory = "repos/%s/%s/contents/.github/workflows" % (owner, repo)
+        try:
+            listing = subprocess.run(
+                ["gh", "api", "%s?ref=%s" % (directory, sha),
+                 "--jq", '[.[]? | select(.type=="file") | .name]'],
+                capture_output=True, text=True, timeout=_GH_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired:
+            return _timeout_read_failure()
+        if listing.returncode != 0:
+            if "404" in listing.stderr or "Not Found" in listing.stderr:
+                return ()
+            return ReadFailure(listing.returncode, listing.stderr)
+        try:
+            names = json.loads(listing.stdout)
+        except (json.JSONDecodeError, ValueError):
+            return ReadFailure(-1, "could not parse gh api JSON for the workflow listing")
+        files = []
+        for name in names:
+            if not name.endswith((".yml", ".yaml")):
+                continue
+            try:
+                raw = subprocess.run(
+                    ["gh", "api", "-H", "Accept: application/vnd.github.raw",
+                     "%s/%s?ref=%s" % (directory, name, sha)],
+                    capture_output=True, text=True, timeout=_GH_TIMEOUT_SECONDS,
+                )
+            except subprocess.TimeoutExpired:
+                files.append(WorkflowFile(name, None))
+                continue
+            files.append(WorkflowFile(name, raw.stdout if raw.returncode == 0 else None))
+        return tuple(files)
+
+    def workflow_runs(self, pr: str, sha: str) -> Union[int, ReadFailure]:
+        parts = _repo_parts(pr)
+        if not parts:
+            return ReadFailure(-1, "pr is not a parseable GitHub PR URL: %r" % pr)
+        owner, repo, _number = parts
+        total = 0
+        for event in ("pull_request", "pull_request_target"):
+            try:
+                r = subprocess.run(
+                    ["gh", "api",
+                     "repos/%s/%s/actions/runs?head_sha=%s&event=%s" % (owner, repo, sha, event),
+                     "--jq", ".total_count"],
+                    capture_output=True, text=True, timeout=_GH_TIMEOUT_SECONDS,
+                )
+            except subprocess.TimeoutExpired:
+                return _timeout_read_failure()
+            if r.returncode != 0:
+                return ReadFailure(r.returncode, r.stderr)
+            try:
+                total += int(r.stdout.strip())
+            except ValueError:
+                return ReadFailure(-1, "could not parse gh api total_count for workflow runs")
+        return total
 
     def reviews(self, pr: str, since: float):
         parts = _repo_parts(pr)

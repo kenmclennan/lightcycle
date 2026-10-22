@@ -130,6 +130,8 @@ def _seed_config(home):
         "poll-seconds: 5",
         "github-poll-seconds: 60",
         "ci-check-ceiling-seconds: 3600",
+        "ci-start-window-seconds: 600",
+        "ci-no-workflows-wait-seconds: 60",
         "github-reserve-calls: 750",
         "github-view-refresh-polls: 10",
         "worker-history: 20",

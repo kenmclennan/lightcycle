@@ -8,7 +8,7 @@ class FakeGitHub(GitHubEventsPort):
                  check_runs_by_sha=None, failing_calls=(), issue_states=None,
                  behind_prs=(), strict_bases=(), base_keys=None, login="operator",
                  updated_ats=None, failing_prs=(), required_by_base=None,
-                 update_pushed_at=None):
+                 update_pushed_at=None, workflows_by_sha=None, runs_by_sha=None):
         self._login = login
         self._update_pushed_at = update_pushed_at
         self._merged = set(merged_prs)
@@ -20,6 +20,8 @@ class FakeGitHub(GitHubEventsPort):
         self._head_shas = head_shas or {}
         self._files_by_sha = files_by_sha or {}
         self._check_runs_by_sha = check_runs_by_sha or {}
+        self._workflows_by_sha = workflows_by_sha or {}
+        self._runs_by_sha = runs_by_sha or {}
         self._failing_calls = set(failing_calls)
         self._failing_prs = set(failing_prs)
         self._issue_states = issue_states or {}
@@ -175,6 +177,18 @@ class FakeGitHub(GitHubEventsPort):
         if "check_runs" in self._failing_calls:
             return ReadFailure(1, "boom")
         return self._check_runs_by_sha.get((pr, sha), ())
+
+    def workflow_sources(self, pr, sha):
+        self._record("workflow_sources", pr, sha)
+        if "workflow_sources" in self._failing_calls:
+            return ReadFailure(1, "boom")
+        return tuple(self._workflows_by_sha.get((pr, sha), ()))
+
+    def workflow_runs(self, pr, sha):
+        self._record("workflow_runs", pr, sha)
+        if "workflow_runs" in self._failing_calls:
+            return ReadFailure(1, "boom")
+        return self._runs_by_sha.get((pr, sha), 0)
 
     def pr_sync_state(self, pr):
         self.sync_calls.append(pr)

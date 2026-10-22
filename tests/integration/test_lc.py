@@ -129,6 +129,8 @@ def write_config(projects=None, specs=None):
         "max-boot-seconds: 120",
         "stall-seconds: 1800",
         "ci-check-ceiling-seconds: 3600",
+        "ci-start-window-seconds: 600",
+        "ci-no-workflows-wait-seconds: 60",
         "spin-cap: 3",
         "poll-seconds: 5",
         "github-poll-seconds: 60",

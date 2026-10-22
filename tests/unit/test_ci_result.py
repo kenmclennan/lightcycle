@@ -13,9 +13,6 @@ def _running(name, started_at):
 
 
 class TestCiOutcome(unittest.TestCase):
-    def test_no_checks_is_success(self):
-        self.assertEqual(ci_outcome(()), "success")
-
     def test_all_completed_success_is_success(self):
         checks = (_run(conclusion="success"), _run(name="test", conclusion="success"))
         self.assertEqual(ci_outcome(checks), "success")
@@ -49,10 +46,6 @@ class TestFailingCheck(unittest.TestCase):
     def test_none_when_nothing_is_failing(self):
         checks = (_run(conclusion="success"), _run(name="lint", conclusion="skipped"))
         self.assertIsNone(failing_check(checks))
-
-
-if __name__ == "__main__":
-    unittest.main()
 
 
 _REQUIRED = frozenset({"build", "test"})
@@ -118,3 +111,74 @@ class TestRequiredAndCeiling(unittest.TestCase):
     def test_judged_checks_with_no_set_is_everything(self):
         checks = (_run("build"), _run("codacy"))
         self.assertEqual(judged_checks(checks, None), checks)
+
+
+def _empty(elapsed, runs=0, expected=("ci.yml",), now=10000.0, since=None):
+    since = now - elapsed if since is None else since
+    return ci_outcome(
+        (), None, now, 3600, since, runs=runs, expected=expected, start_window=600, quiet_wait=60)
+
+
+class TestEmptyCheckSet(unittest.TestCase):
+    def test_a_fresh_head_with_no_runs_read_is_pending_not_success(self):
+        self.assertEqual(ci_outcome((), None, 10000.0, 3600, 9999.0), "pending")
+
+    def test_unread_runs_are_pending_whatever_the_elapsed_time(self):
+        self.assertEqual(_empty(700, runs=None), "pending")
+
+    def test_unclassified_expectation_is_pending(self):
+        self.assertEqual(_empty(5000, expected=None), "pending")
+
+    def test_unknown_since_is_pending(self):
+        self.assertEqual(_empty(0, since=0.0), "pending")
+
+    def test_expected_workflow_inside_the_start_window_is_pending(self):
+        self.assertEqual(_empty(1), "pending")
+
+    def test_exactly_on_the_start_window_is_pending(self):
+        self.assertEqual(_empty(600), "pending")
+
+    def test_past_the_start_window_with_an_expected_workflow_is_stalled(self):
+        self.assertEqual(_empty(601), "stalled")
+
+    def test_no_expected_workflow_exactly_on_the_quiet_wait_is_pending(self):
+        self.assertEqual(_empty(60, expected=()), "pending")
+
+    def test_no_expected_workflow_past_the_quiet_wait_is_success(self):
+        self.assertEqual(_empty(61, expected=()), "success")
+
+    def test_a_listed_run_exactly_on_the_ceiling_is_pending(self):
+        self.assertEqual(_empty(3600, runs=1), "pending")
+
+    def test_a_listed_run_past_the_ceiling_is_timeout(self):
+        self.assertEqual(_empty(3601, runs=1), "timeout")
+
+    def test_a_listed_run_is_never_stalled_or_success(self):
+        for elapsed in (1, 601, 3000):
+            self.assertEqual(_empty(elapsed, runs=1), "pending")
+            self.assertEqual(_empty(elapsed, runs=1, expected=()), "pending")
+
+
+class TestEveryNonCompletedStatusTimesOut(unittest.TestCase):
+    def test_queued_past_the_ceiling_from_started_at_is_timeout(self):
+        checks = (_run("build", status="queued", conclusion=None, started_at=6399.0),)
+        self.assertEqual(_outcome(checks), "timeout")
+        self.assertEqual(timed_out_check(checks, 10000.0, 3600).name, "build")
+
+    def test_queued_exactly_on_the_ceiling_is_pending(self):
+        checks = (_run("build", status="queued", conclusion=None, started_at=6400.0),)
+        self.assertEqual(_outcome(checks), "pending")
+
+    def test_other_statuses_time_out_like_in_progress(self):
+        for status in ("waiting", "pending", "requested"):
+            checks = (_run("build", status=status, conclusion=None, started_at=6399.0),)
+            self.assertEqual(_outcome(checks), "timeout", status)
+
+    def test_unknown_start_times_out_from_since(self):
+        checks = (_run("build", status="queued", conclusion=None),)
+        self.assertEqual(ci_outcome(checks, None, 10000.0, 3600, 6399.0), "timeout")
+        self.assertEqual(ci_outcome(checks, None, 10000.0, 3600, 6400.0), "pending")
+        self.assertEqual(ci_outcome(checks, None, 10000.0, 3600, 0.0), "pending")
+
+    def test_a_completed_check_never_times_out(self):
+        self.assertIsNone(timed_out_check((_run("build", started_at=1.0),), 10000.0, 3600))

@@ -28,7 +28,8 @@ class MonitorPrsUseCase:
     def __init__(
         self, store, github, worktrees, flow_service, complete=None, *,
         trusted_authors, held_shortcode, writes, ci_clock, ci_poll_seconds,
-        ci_ceiling_seconds, ci_wall_clock, ci_views,
+        ci_ceiling_seconds, ci_start_window_seconds, ci_no_workflows_wait_seconds, ci_wall_clock,
+        ci_views,
     ):
         check_content_pin = CheckContentPinUseCase(
             store, github, flow_service, trusted_authors=trusted_authors
@@ -45,7 +46,8 @@ class MonitorPrsUseCase:
         self._update_behind = UpdateBehindPrsUseCase(store, github, flow_service, writes)
         self._resolve_ci = ResolveCiUseCase(
             store, github, flow_service, complete, clock=ci_clock, poll_seconds=ci_poll_seconds,
-            ci_ceiling_seconds=ci_ceiling_seconds, wall_clock=ci_wall_clock,
+            ci_ceiling_seconds=ci_ceiling_seconds, ci_start_window_seconds=ci_start_window_seconds,
+            ci_no_workflows_wait_seconds=ci_no_workflows_wait_seconds, wall_clock=ci_wall_clock,
             views=ci_views, trusted_authors=trusted_authors,
         )
 

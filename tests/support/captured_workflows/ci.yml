@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      docs_only: ${{ steps.check.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: check
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            files=$(git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}")
+          else
+            files=""
+          fi
+          runtime_files=$(echo "$files" | grep -E '^(lightcycle/|tests/)' | grep -vE '^lightcycle/prompts/' || true)
+          if [ -n "$files" ] && ! echo "$files" | grep -qvE '\.md$' && [ -z "$runtime_files" ]; then
+            echo "docs_only=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync
+      - run: uv run ruff check .
+
+  unit-feature:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync
+      - run: bash tests/run.sh tests/unit tests/feature
+
+  integration:
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: git fetch origin main
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync
+      - run: bash tests/run.sh tests/integration
+
+  hermetic-tui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync
+      - name: Run the TUI test files with an empty HOME and LC_HOME
+        run: |
+          set -euo pipefail
+          files=$(uv run python -c "from tests.integration.test_tui_harness_is_hermetic import _tui_harness_test_files as f; print(*f())")
+          test -n "$files"
+          empty_home="$(mktemp -d)"
+          env -u LC_CONFIG HOME="$empty_home" LC_HOME="$empty_home" uv run pytest -n auto --dist=loadgroup $files
+
+  packaging:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync
+      - run: bash tests/run.sh tests/packaging
+
+  workflow-simulate:
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: kenmclennan/lightcycle-workflows
+          ref: main
+          path: lightcycle-workflows
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - run: pip install .
+      - name: Dry-run every workflow in the official origin through the engine under change
+        run: |
+          set -euo pipefail
+          export LC_HOME="$(mktemp -d)"
+          lc init >/dev/null 2>&1 || true
+          lc workflow add "$GITHUB_WORKSPACE/lightcycle-workflows" --name ci-bundle --ref HEAD
+          fail=0
+          for f in lightcycle-workflows/workflows/*.md; do
+            name="$(basename "$f" .md)"
+            echo "== lc workflow simulate ci-bundle/$name =="
+            lc workflow simulate "ci-bundle/$name" || fail=1
+          done
+          exit "$fail"
