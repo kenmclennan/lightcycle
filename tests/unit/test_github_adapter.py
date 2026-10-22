@@ -587,6 +587,19 @@ class TestCheckRuns(unittest.TestCase):
         self.assertEqual(runs[0].started_at, 1792504635.0)
         self.assertEqual(runs[1].started_at, 0.0)
 
+    def test_completed_at_parses_to_epoch_and_missing_is_zero(self):
+        mock_run = self._run([
+            {"name": "a", "status": "in_progress", "conclusion": "success",
+             "completed_at": "2026-10-20T13:57:15Z"},
+            {"name": "b", "status": "queued", "conclusion": None, "completed_at": None},
+        ])
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            runs = self.adapter.check_runs(_PR, "sha1")
+
+        self.assertEqual(runs[0].completed_at, 1792504635.0)
+        self.assertEqual(runs[1].completed_at, 0.0)
+        self.assertIn("completed_at", " ".join(mock_run.call_args[0][0]))
+
     def test_empty_check_runs_list(self):
         mock_run = self._run([])
         with patch("lightcycle.adapters.github.subprocess.run", mock_run):
