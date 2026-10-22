@@ -34,3 +34,7 @@ class BlockingGithubPollRunner(GithubPollRunnerPort):
 
     def running(self):
         return bool(self.pending)
+
+    def release(self):
+        fn = self.pending.pop(0)
+        fn()

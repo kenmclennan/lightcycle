@@ -84,6 +84,21 @@ Each seam below is a place where the engine relies on a timing, ordering or owne
 - **Shutdown and restart.** `StopPoolUseCase` (`lightcycle/application/pool/stop_pool.py`) stops workers, reclaims their steps and asks `RunGroupsPort` (`lightcycle/adapters/run_groups.py`) to SIGTERM each script process group, wait the grace period, then SIGKILL it. `ScriptRunnerAdapter` (`lightcycle/adapters/script_runner.py`) records each live script in `script-runs/`. A restarted pool's `orphaned()` keeps a record whose process is still alive, counts it against `script-max-running` and does not start a second copy; a record whose process is gone is deleted, and the step, still `QUEUED`, runs again. The sweep (`lightcycle/application/pool/sweep.py`) reclaims claims whose worker is gone or stalled, so a script must tolerate being re-run from the start.
 - **Worktrees.** A worktree is created by `WorktreeService.ensure` (`lightcycle/application/services/worktree.py`), either at claim time for an agent step or by a script stage whose workflow declares a workspace. It is removed only through the teardown guard: `teardown_refusals`, `pass_release_refusals` and `phase_release_refusals` in the same file refuse while a worktree has uncommitted paths or a branch holds unmerged commits, and `release_run` is the one removal path. Deleting a worktree any other way strands the branch and the run record that names it.
 
+### Testing a seam
+
+The kit under `tests/support/` reproduces the conditions the seams above depend on, on an injected clock and without sleeping on the real one. A spec that touches a seam names the tool it uses from this table.
+
+| Seam | Tool | What it reproduces |
+| --- | --- | --- |
+| The pool tick | `PoolRig`, `crash_after_gate`, `crash_before_gate`, `restart` | A stop between two gates, then a fresh tick over the same store. |
+| Step ownership | `FakeScriptRunner.finish_after`, `kill`, `orphan_running`, with `ScriptStageUseCase` | A script that outruns a tick, is killed, or outlives the pool. |
+| Phase runs and rounds | `PoolRig`, `LatentGitHub.merge`, `rig.worktrees` | A merged PR closing a run, then the phase re-entered. |
+| GitHub timing | `LatentGitHub`, `SimClock`, `stepped_poll`, `poll_between_ticks` | Checks and runs that register late, reads that fail or time out, a poll that omits a PR. |
+| Shutdown and restart | `crash_on`, `restart`, `orphan_running`, `StopPoolUseCase(sleep=clock.sleep, clock=clock)` | A stop inside a transaction or a side effect, then a restart. |
+| Worktrees | `crash_on(rig.git, "remove_worktree")`, `seed_worktree` | A removal that stops half way. |
+
+The kit's own tests are in `tests/unit/test_pool_kit.py`. `PoolRig` builds a real `TickUseCase` through `Container.tick` and redirects the five `time` reads that method makes by patching `lightcycle.container.time` for the duration of the call, so a test advances `SimClock` instead of waiting. A `PoolCrash` derives from `BaseException`, so no `except Exception` in a use case swallows it and `FakeStore.transaction` unwinds on it, as a killed process looks to the store. Using the kit is not required of every engine PR; that is left to the guidance on implicit guarantees and to review.
+
 ## Agnostic by construction
 
 The engine and `lc` know nothing about a specific workflow. The stages (`write-code`, `review-code`, `open-pr`, ...) and their artifact contracts live in a **workflow source** - `workflows/*.md` + `steps/*.md` in a pullable git origin - composed from generic primitives (`lc new`, `lc attach`, `lc done`, `lc dep`). Point lightcycle at a different workflow - a frontend repo, a data pipeline - by authoring or pulling a different source, not by editing the code. See [installation-and-config.md](installation-and-config.md) for workflow sources.
