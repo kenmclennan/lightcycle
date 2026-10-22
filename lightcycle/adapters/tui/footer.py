@@ -106,7 +106,7 @@ class StatusBar(Horizontal):
         if upgrade_version is not None:
             upgrade_glyph, upgrade_colour = FOOTER_GLYPHS["upgrade-available"]
             upgrade_widget.update(
-                Text("%s v%s available" % (upgrade_glyph, upgrade_version), style=COLOURS[upgrade_colour])
+                Text("%s %s" % (upgrade_glyph, upgrade_version), style=COLOURS[upgrade_colour])
             )
             upgrade_widget.display = True
         elif upgrade_error is not None:

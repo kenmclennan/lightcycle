@@ -1006,7 +1006,7 @@ class TestFooterUpgradeSegment(unittest.TestCase):
         widget, text, style = _rendered_segment(session, "#status-upgrade")
 
         self.assertTrue(widget.display)
-        self.assertEqual(text, "%s v9.9.9 available" % FOOTER_GLYPHS["upgrade-available"].glyph)
+        self.assertEqual(text, "%s 9.9.9" % FOOTER_GLYPHS["upgrade-available"].glyph)
         self.assertEqual(_colour_of(style), COLOURS["amber"].lower())
 
     def test_no_newer_version_renders_no_upgrade_segment(self):
@@ -1114,7 +1114,7 @@ class TestPeriodicUpgradeCheck(unittest.TestCase):
             upgrade_check_seconds=0,
         )
         _, text, _ = _rendered_segment(session, "#status-upgrade")
-        self.assertEqual(text, "%s v9.9.9 available" % FOOTER_GLYPHS["upgrade-available"].glyph)
+        self.assertEqual(text, "%s 9.9.9" % FOOTER_GLYPHS["upgrade-available"].glyph)
 
     def test_periodic_recheck_updates_the_footer_from_empty_to_available(self):
         results = iter([
@@ -1131,7 +1131,7 @@ class TestPeriodicUpgradeCheck(unittest.TestCase):
         session.check_upgrade_tick()
 
         _, text, _ = _rendered_segment(session, "#status-upgrade")
-        self.assertEqual(text, "%s v9.9.9 available" % FOOTER_GLYPHS["upgrade-available"].glyph)
+        self.assertEqual(text, "%s 9.9.9" % FOOTER_GLYPHS["upgrade-available"].glyph)
 
     def test_a_failed_periodic_recheck_leaves_a_standing_upgrade_notice_in_place(self):
         results = iter([
@@ -1147,12 +1147,12 @@ class TestPeriodicUpgradeCheck(unittest.TestCase):
         session = self._launch(upgrade_check=_check)
 
         _, text, _ = _rendered_segment(session, "#status-upgrade")
-        self.assertEqual(text, "%s v9.9.9 available" % FOOTER_GLYPHS["upgrade-available"].glyph)
+        self.assertEqual(text, "%s 9.9.9" % FOOTER_GLYPHS["upgrade-available"].glyph)
 
         session.check_upgrade_tick()
 
         _, text, style = _rendered_segment(session, "#status-upgrade")
-        self.assertEqual(text, "%s v9.9.9 available" % FOOTER_GLYPHS["upgrade-available"].glyph)
+        self.assertEqual(text, "%s 9.9.9" % FOOTER_GLYPHS["upgrade-available"].glyph)
         self.assertEqual(_colour_of(style), COLOURS["amber"].lower())
 
     def test_a_failed_periodic_recheck_is_shown_when_no_upgrade_is_currently_known(self):
