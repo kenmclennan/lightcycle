@@ -609,14 +609,14 @@ class GitHubEventsAdapter(GitHubEventsPort):
         rows = self._gh_api_lines(
             "repos/%s/pulls/comments?since=%s&sort=updated&direction=desc&per_page=%d"
             % (repo, _iso(since), _LISTING_PAGE_SIZE),
-            ".[] | .pull_request_url",
+            ".[] | {url: .pull_request_url}",
             paginate=True,
         )
         if isinstance(rows, ReadFailure):
             return rows
         urls = set()
-        for api_url in rows:
-            m = _PULL_API_URL_RE.search(api_url or "")
+        for row in rows:
+            m = _PULL_API_URL_RE.search(row.get("url") or "")
             if m:
                 urls.add("https://github.com/%s/%s/pull/%s" % m.groups())
         return frozenset(urls)

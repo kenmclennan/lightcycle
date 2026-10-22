@@ -1148,7 +1148,7 @@ class TestListPrs(unittest.TestCase):
 class TestRepoInlineComments(unittest.TestCase):
     def test_maps_api_urls_to_pr_urls(self):
         out = "\n".join(
-            json.dumps(u) for u in [
+            json.dumps({"url": u}) for u in [
                 "https://api.github.com/repos/x/y/pulls/7",
                 "https://api.github.com/repos/x/y/pulls/7",
                 "https://api.github.com/repos/x/y/pulls/9",
@@ -1163,6 +1163,28 @@ class TestRepoInlineComments(unittest.TestCase):
         self.assertIn(
             "repos/x/y/pulls/comments?since=2026-01-01T00:00:00Z&sort=updated"
             "&direction=desc&per_page=100", run.call_args.args[0])
+
+    def test_asks_gh_for_objects_not_bare_strings(self):
+        with patch("lightcycle.adapters.github.subprocess.run",
+                   return_value=_proc("")) as run:
+            GitHubEventsAdapter().repo_inline_comments("x/y", 1767225600.0)
+
+        jq = run.call_args.args[0][run.call_args.args[0].index("--jq") + 1]
+        self.assertEqual(jq, ".[] | {url: .pull_request_url}")
+
+    def test_an_empty_result_is_an_empty_set(self):
+        with patch("lightcycle.adapters.github.subprocess.run", return_value=_proc("")):
+            urls = GitHubEventsAdapter().repo_inline_comments("x/y", 1767225600.0)
+
+        self.assertEqual(urls, frozenset())
+
+    def test_a_raw_string_line_from_a_scalar_filter_is_a_read_failure(self):
+        raw = "https://api.github.com/repos/x/y/pulls/7\n"
+        with patch("lightcycle.adapters.github.subprocess.run", return_value=_proc(raw)):
+            rows = GitHubEventsAdapter()._gh_api_lines("repos/x/y/pulls/comments", ".[] | .pull_request_url")
+
+        self.assertIsInstance(rows, ReadFailure)
+        self.assertEqual(rows.returncode, -1)
 
 
 class TestBranchTipAndPrView(unittest.TestCase):
