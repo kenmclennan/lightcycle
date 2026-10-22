@@ -272,7 +272,7 @@ def _long_hierarchy_store(passes=4):
 
 def _launch(store, *, lock_running=True, breaker_open=False, size=DEFAULT_SIZE, fs=None, workers=None,
             launcher=None, machine=None, memory_gate_status=None, drain=None,
-            github_budget_status=None):
+            github_budget_status=None, tick_timing_status=None):
     container = make_test_container(
         store=store,
         lock=FakeLock(running=lock_running),
@@ -287,6 +287,7 @@ def _launch(store, *, lock_running=True, breaker_open=False, size=DEFAULT_SIZE, 
         memory_gate_status=memory_gate_status,
         drain=drain,
         github_budget_status=github_budget_status,
+        tick_timing_status=tick_timing_status,
     )
     return launch(container, now=lambda: NOW, size=size)
 

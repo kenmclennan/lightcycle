@@ -13,6 +13,7 @@ from tests.support.fake_fs import FakeFs
 from tests.support.fake_git import FakeGit
 from tests.support.fake_github import FakeGitHub
 from tests.support.fake_github_budget_status import FakeGithubBudgetStatus
+from tests.support.fake_tick_timing_status import FakeTickTimingStatus
 from tests.support.fake_github_poll_runner import (
     BlockingGithubPollRunner,
     InlineGithubPollRunner,
@@ -142,6 +143,8 @@ class PoolRig:
             "spin": fakes.pop("spin", None) or FakeSpinPort(),
             "github_budget_status": (
                 fakes.pop("github_budget_status", None) or FakeGithubBudgetStatus()),
+            "tick_timing_status": (
+                fakes.pop("tick_timing_status", None) or FakeTickTimingStatus()),
         }
         self._extras.update(fakes)
         self.config = _write_config(self.home, config or {})

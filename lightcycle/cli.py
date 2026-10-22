@@ -18,6 +18,7 @@ from lightcycle.application.pool import (
     AcquireRunLockUseCase,
     ClearDrainUseCase,
     DrainPoolUseCase,
+    RecordTickTimingUseCase,
     ReleaseRunLockUseCase,
     StartPoolUseCase,
     ResolveLogInput,
@@ -673,6 +674,11 @@ def cmd_start(argv):
             return 0
         interval = _container.config.poll_seconds()
         max_agents = _container.config.max_agents()
+        _container.config.tick_lag_window_seconds()
+        _container.config.tick_lag_share()
+        _container.config.tick_stall_seconds()
+        record = RecordTickTimingUseCase(_container.tick_timing_status, _container.config)
+        record.started(os.getpid(), time.time())
         upgrade_cadence = UpgradeCadenceUseCase(
             UpgradeNoticeUseCase(__version__, port=_container.upgrade),
             _container.config.pool_upgrade_check_seconds(),
@@ -696,16 +702,19 @@ def cmd_start(argv):
                     tick, _container.worker_log, TickInput(now=now, since=prev_now, drain=drain), now
                 )
             except Exception:
+                record.finished(os.getpid(), time.time(), time.monotonic() - tick_started)
                 prev_now, consecutive_failures, action = _advance_tick_state(
                     prev_now, consecutive_failures, now, False, tick_failure_cap)
                 if action == "raise":
                     raise
                 stop.pause(interval)
                 continue
+            duration = time.monotonic() - tick_started
+            record.finished(os.getpid(), time.time(), duration)
             prev_now, consecutive_failures, _ = _advance_tick_state(
                 prev_now, consecutive_failures, now, True, tick_failure_cap)
             lines, prev_snapshot = _format_tick(result, prev_snapshot, now)
-            lines += _tick_duration_lines(time.monotonic() - tick_started, interval)
+            lines += _tick_duration_lines(duration, interval)
             for line in lines:
                 print(line)
             if result.pool.draining:

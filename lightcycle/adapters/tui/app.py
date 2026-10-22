@@ -63,6 +63,7 @@ from lightcycle.application.pool import (
     PoolRunningUseCase,
     StartPoolUseCase,
     StopPoolSignalUseCase,
+    TickHealthUseCase,
 )
 from lightcycle.application.inspect import DoctorInput
 from lightcycle.application.setup import UpgradeNoticeUseCase, upgrade
@@ -708,7 +709,8 @@ class LightcycleApp(App):
         else:
             self._rebuild_table(table, rows)
 
-    def _render_status_bar(self, status_bar, running, breaker, hold, drain=None, github=None) -> None:
+    def _render_status_bar(self, status_bar, running, breaker, hold, drain=None, github=None,
+                           tick_health=None) -> None:
         status_bar.report(
             pool_running=running,
             pool_transition_kind=self._pool_transition_kind,
@@ -725,10 +727,12 @@ class LightcycleApp(App):
             github=github,
             doctor_areas=self._doctor_areas,
             doctor_failed=self._doctor_failed,
+            pool_tick_health=tick_health,
         )
 
     def _refresh_status_bar(self) -> None:
-        running = PoolRunningUseCase(self._container.lock).execute().running
+        pool = PoolRunningUseCase(self._container.lock).execute()
+        running = pool.running
         if self._pool_transition_kind == "start" and running:
             self._clear_pool_transition()
         elif self._pool_transition_kind == "stop" and not running:
@@ -744,12 +748,15 @@ class LightcycleApp(App):
             self._container.github_budget_status, self._container.flow_service(),
             self._container.config, lambda: self._now().timestamp(),
         ).reading()
+        tick_health = TickHealthUseCase(
+            self._container.tick_timing_status, self._container.config,
+        ).reading(running, pool.holder_pid, self._now().timestamp())
         for screen in self.screen_stack:
             try:
                 status_bar = screen.query_one(StatusBar)
             except NoMatches:
                 continue
-            self._render_status_bar(status_bar, running, breaker, hold, drain, github)
+            self._render_status_bar(status_bar, running, breaker, hold, drain, github, tick_health)
 
     def _begin_pool_transition(self, kind) -> None:
         self._pool_transition_kind = kind

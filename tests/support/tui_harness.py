@@ -20,6 +20,7 @@ from lightcycle.adapters.guidance_sync_status import GuidanceSyncStatusAdapter
 from lightcycle.adapters.config_reload_status import ConfigReloadStatusAdapter
 from lightcycle.adapters.gh_shim import GhShimAdapter
 from lightcycle.adapters.github_budget_status import GithubBudgetStatusAdapter
+from lightcycle.adapters.tick_timing_status import TickTimingStatusAdapter
 from lightcycle.adapters.memory_gate_status import MemoryGateStatusAdapter
 from lightcycle.adapters.scaffold import ScaffoldAdapter
 from lightcycle.adapters.spawner import SpawnerAdapter
@@ -48,6 +49,7 @@ from tests.support.fake_drain import FakeDrain
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_gh_shim import FakeGhShim
 from tests.support.fake_github_budget_status import FakeGithubBudgetStatus
+from tests.support.fake_tick_timing_status import FakeTickTimingStatus
 from tests.support.fake_github import FakeGitHub
 from tests.support.fake_machine import FakeMachine
 from tests.support.fake_store import FakeStore
@@ -294,6 +296,7 @@ _LIVE_ADAPTER_TYPES = {
     "machine": MachineAdapter,
     "memory_gate_status": MemoryGateStatusAdapter,
     "github_budget_status": GithubBudgetStatusAdapter,
+    "tick_timing_status": TickTimingStatusAdapter,
     "gh_shim": GhShimAdapter,
     "config_reload_status": ConfigReloadStatusAdapter,
     "guidance_sync_status": GuidanceSyncStatusAdapter,
@@ -313,7 +316,7 @@ def make_test_container(store=None, lock=None, breaker=None, fs=None, workers=No
                          launcher=None, git=None, spawner=None, github=None, backup=None,
                          workflow_bundle=None, worker_log=None, autostart_pool=False,
                          machine=None, memory_gate_status=None, guidance_sync_status=None,
-                         github_budget_status=None,
+                         github_budget_status=None, tick_timing_status=None,
                          tui_metrics=False,
                          upgrade_check_seconds=3600, doctor_check_seconds=3600, drain=None,
                          config_reload_status=None):
@@ -351,6 +354,10 @@ def make_test_container(store=None, lock=None, breaker=None, fs=None, workers=No
         github_budget_status=(
             github_budget_status if github_budget_status is not None
             else FakeGithubBudgetStatus()
+        ),
+        tick_timing_status=(
+            tick_timing_status if tick_timing_status is not None
+            else FakeTickTimingStatus()
         ),
         gh_shim=FakeGhShim(),
         guidance_sync_status=(

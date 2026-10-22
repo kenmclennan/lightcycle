@@ -6,6 +6,7 @@ from lightcycle.application.pool.breaker_status import (
     BreakerStatusUseCase,
 )
 from lightcycle.application.pool.github_budget import GithubBudgetUseCase
+from lightcycle.application.pool.tick_timing import RecordTickTimingUseCase, TickHealthUseCase
 from lightcycle.application.pool.hook_completions import (
     HookCompletionsResponse,
     HookCompletionsUseCase,
@@ -56,6 +57,8 @@ __all__ = [
     "DrainPoolResponse",
     "DrainPoolUseCase",
     "GithubBudgetUseCase",
+    "RecordTickTimingUseCase",
+    "TickHealthUseCase",
     "HookCompletionsResponse",
     "HookCompletionsUseCase",
     "ListWorkersUseCase",

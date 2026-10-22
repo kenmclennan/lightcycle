@@ -43,6 +43,8 @@ HUMAN_STEP_GLYPH = Glyph("□", "dim")
 FOOTER_GLYPHS = {
     "pool-running": Glyph("●", "cyan"),
     "pool-stopped": Glyph("○", "dim"),
+    "pool-lagging": Glyph("◐", "amber"),
+    "pool-stalled": Glyph("⊘", "red"),
     "claude-available": Glyph("●", "cyan"),
     "claude-unavailable": Glyph("⊘", "red"),
     "claude-probing": Glyph("◐", "amber"),
