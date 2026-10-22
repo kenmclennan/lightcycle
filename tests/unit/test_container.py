@@ -105,7 +105,7 @@ class TestContainerTickGithubPoll(unittest.TestCase):
 
         container = Container(
             store=object(),
-            config=self._config(spin_cap="3", ci_check_ceiling_seconds="3600"))
+            config=self._config(spin_cap="3", ci_check_ceiling_seconds="3600", ci_start_window_seconds="600", ci_no_workflows_wait_seconds="60"))
 
         with self.assertRaises(ConfigError) as ctx:
             container.tick(flow=object())
@@ -118,7 +118,7 @@ class TestContainerTickGithubPoll(unittest.TestCase):
         container = Container(
             store=object(), config=self._config(
                 spin_cap="3", github_poll_seconds="60", github_reserve_calls="750",
-                ci_check_ceiling_seconds="3600"))
+                ci_check_ceiling_seconds="3600", ci_start_window_seconds="600", ci_no_workflows_wait_seconds="60"))
 
         with self.assertRaises(ConfigError) as ctx:
             container.tick(flow=object())
@@ -132,7 +132,7 @@ class TestContainerTickGithubPoll(unittest.TestCase):
             store=object(), github=object(),
             config=self._config(
                 spin_cap="3", github_poll_seconds="60", github_reserve_calls="750",
-                ci_check_ceiling_seconds="3600", github_view_refresh_polls="10"))
+                ci_check_ceiling_seconds="3600", ci_start_window_seconds="600", ci_no_workflows_wait_seconds="60", github_view_refresh_polls="10"))
 
         tick = container.tick(flow=object())
 
@@ -156,7 +156,7 @@ class TestContainerTickGithubPoll(unittest.TestCase):
 
         container = Container(
             store=object(), config=self._config(
-                spin_cap="3", github_poll_seconds="60", ci_check_ceiling_seconds="3600",
+                spin_cap="3", github_poll_seconds="60", ci_check_ceiling_seconds="3600", ci_start_window_seconds="600", ci_no_workflows_wait_seconds="60",
                 github_view_refresh_polls="10"))
 
         with self.assertRaises(ConfigError) as ctx:

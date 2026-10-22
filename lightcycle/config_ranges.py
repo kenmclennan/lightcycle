@@ -18,6 +18,8 @@ _NUMERIC_RANGES = {
     "max-session-seconds": (0, None),
     "stall-seconds": (0, None),
     "ci-check-ceiling-seconds": (1, None),
+    "ci-start-window-seconds": (1, None),
+    "ci-no-workflows-wait-seconds": (1, None),
     "probe-cooldown-seconds": (0, None),
     "tui-upgrade-check-seconds": (0, None),
     "pool-upgrade-check-seconds": (0, None),

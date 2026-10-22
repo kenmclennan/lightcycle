@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from lightcycle.adapters.github import GitHubEventsAdapter
-from lightcycle.ports.github import CheckRun, PrSync, RateLimit, ReadFailure
+from lightcycle.ports.github import CheckRun, PrSync, RateLimit, ReadFailure, WorkflowFile
 
 _PR = "https://github.com/x/y/pull/7"
 
@@ -1221,3 +1221,61 @@ class TestBranchTipAndPrView(unittest.TestCase):
         self.assertEqual(files, frozenset(["a.py"]))
         self.assertEqual(run.call_count, 1)
         self.assertIn("/repos/x/y/compare/main...sha1", run.call_args.args[0])
+
+
+class TestWorkflowSources(unittest.TestCase):
+    def _run(self, side_effect):
+        with patch("lightcycle.adapters.github.subprocess.run", side_effect=side_effect) as run:
+            return GitHubEventsAdapter().workflow_sources(_PR, "sha1"), run
+
+    def test_a_listing_and_file_reads_give_the_workflow_files(self):
+        result, run = self._run([
+            _proc(json.dumps(["ci.yml", "notes.md", "b.yaml"])),
+            _proc("name: ci\n"),
+            _proc("name: b\n"),
+        ])
+        self.assertEqual(result, (WorkflowFile("ci.yml", "name: ci\n"), WorkflowFile("b.yaml", "name: b\n")))
+        listing = run.call_args_list[0].args[0]
+        self.assertIn("repos/x/y/contents/.github/workflows?ref=sha1", listing)
+        raw = run.call_args_list[1].args[0]
+        self.assertIn("Accept: application/vnd.github.raw", raw)
+        self.assertIn("repos/x/y/contents/.github/workflows/ci.yml?ref=sha1", raw)
+        for call in run.call_args_list:
+            self.assertIsNotNone(call.kwargs["timeout"])
+
+    def test_a_404_listing_means_no_workflow_directory(self):
+        result, _ = self._run([_proc("", 1, "gh: Not Found (HTTP 404)")])
+        self.assertEqual(result, ())
+
+    def test_another_listing_failure_is_a_read_failure(self):
+        result, _ = self._run([_proc("", 1, "gh: HTTP 500")])
+        self.assertEqual(result, ReadFailure(1, "gh: HTTP 500"))
+
+    def test_a_failed_file_read_gives_that_file_no_text_without_failing_the_call(self):
+        result, _ = self._run([
+            _proc(json.dumps(["a.yml", "b.yml"])),
+            _proc("", 1, "boom"),
+            _proc("name: b\n"),
+        ])
+        self.assertEqual(result, (WorkflowFile("a.yml", None), WorkflowFile("b.yml", "name: b\n")))
+
+    def test_a_timeout_on_the_listing_is_a_read_failure(self):
+        result, _ = self._run(subprocess.TimeoutExpired("gh", 30))
+        self.assertIsInstance(result, ReadFailure)
+
+
+class TestWorkflowRuns(unittest.TestCase):
+    def test_sums_the_two_pull_request_events(self):
+        with patch("lightcycle.adapters.github.subprocess.run", side_effect=[_proc("1\n"), _proc("2\n")]) as run:
+            result = GitHubEventsAdapter().workflow_runs(_PR, "sha1")
+        self.assertEqual(result, 3)
+        urls = [c.args[0][2] for c in run.call_args_list]
+        self.assertEqual(urls, [
+            "repos/x/y/actions/runs?head_sha=sha1&event=pull_request",
+            "repos/x/y/actions/runs?head_sha=sha1&event=pull_request_target",
+        ])
+
+    def test_a_failed_call_is_a_read_failure(self):
+        with patch("lightcycle.adapters.github.subprocess.run", return_value=_proc("", 1, "boom")):
+            result = GitHubEventsAdapter().workflow_runs(_PR, "sha1")
+        self.assertEqual(result, ReadFailure(1, "boom"))

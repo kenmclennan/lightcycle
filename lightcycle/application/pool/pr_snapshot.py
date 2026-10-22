@@ -146,6 +146,12 @@ class PrSnapshot(GitHubEventsPort):
     def authenticated_login(self):
         return self._github.authenticated_login()
 
+    def workflow_sources(self, pr, sha):
+        return self._github.workflow_sources(pr, sha)
+
+    def workflow_runs(self, pr, sha):
+        return self._github.workflow_runs(pr, sha)
+
     def issue_state(self, url):
         return self._github.issue_state(url)
 

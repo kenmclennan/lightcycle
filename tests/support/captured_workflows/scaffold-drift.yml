@@ -1,0 +1,36 @@
+name: scaffold-drift
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+
+jobs:
+  scaffold-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Diff the packaged simulate.yml scaffold against lightcycle-workflows
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api repos/kenmclennan/lightcycle-workflows/contents/.github/workflows/simulate.yml --jq .content \
+            | base64 -d > /tmp/workflows-simulate.yml
+          label=scaffold-drift
+          norm() { sed -E 's/^( *ENGINE_PIN: *).*/\1PIN/' "$1"; }
+          if ! diff -q <(norm lightcycle/templates/origin/simulate.yml) <(norm /tmp/workflows-simulate.yml) > /dev/null; then
+            gh label create "$label" --repo "$GITHUB_REPOSITORY" --color B60205 \
+              --description "the packaged origin scaffold's simulate.yml has drifted from lightcycle-workflows" || true
+            existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --label "$label" --state open --json number --jq '.[0].number // empty')"
+            body="lightcycle/templates/origin/simulate.yml no longer matches lightcycle-workflows' .github/workflows/simulate.yml at main. Reconcile by hand - update the scaffold to adopt the change, or close this issue if the divergence is intentional."
+            if [ -n "$existing" ]; then
+              gh issue edit "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
+            else
+              gh issue create --repo "$GITHUB_REPOSITORY" --title "origin scaffold has drifted from lightcycle-workflows" --label "$label" --body "$body"
+            fi
+          else
+            existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --label "$label" --state open --json number --jq '.[0].number // empty')"
+            if [ -n "$existing" ]; then
+              gh issue close "$existing" --repo "$GITHUB_REPOSITORY" --comment "scaffold and lightcycle-workflows are back in sync."
+            fi
+          fi

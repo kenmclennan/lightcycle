@@ -253,6 +253,12 @@ class ScriptedGitHub(GitHubEventsPort):
     def check_runs(self, pr, sha):
         return self._check_runs.get(pr, ())
 
+    def workflow_sources(self, pr, sha):
+        return ()
+
+    def workflow_runs(self, pr, sha):
+        return 0
+
     def pr_sync_state(self, pr):
         hit = pr in self._conflicted
         self._conflicted.discard(pr)

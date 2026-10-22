@@ -162,7 +162,10 @@ class Container:
                 trusted_authors=self.config.trusted_authors,
                 held_shortcode=self.config.held_comment_shortcode, writes=writes,
                 ci_clock=time.monotonic, ci_poll_seconds=self.config.github_poll_seconds,
-                ci_ceiling_seconds=self.config.ci_check_ceiling_seconds, ci_wall_clock=time.time,
+                ci_ceiling_seconds=self.config.ci_check_ceiling_seconds,
+                ci_start_window_seconds=self.config.ci_start_window_seconds,
+                ci_no_workflows_wait_seconds=self.config.ci_no_workflows_wait_seconds,
+                ci_wall_clock=time.time,
                 ci_views=snapshot,
             ),
             breaker_gate=BreakerGateUseCase(

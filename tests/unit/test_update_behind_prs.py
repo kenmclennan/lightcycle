@@ -432,7 +432,7 @@ class TestConflictFallThrough(unittest.TestCase):
         monitor = MonitorPrsUseCase(
             store, github, FakeWorktrees(), flow, CompleteStepUseCase(store, flow),
             trusted_authors=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
-            writes=InlinePrWrites(github, time.monotonic), ci_clock=time.monotonic, ci_poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_wall_clock=lambda: 10000.0, ci_views=AlwaysConfirmed(),
+            writes=InlinePrWrites(github, time.monotonic), ci_clock=time.monotonic, ci_poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_wall_clock=lambda: 10000.0, ci_views=AlwaysConfirmed(),
         )
 
         first = monitor.execute()
@@ -456,7 +456,7 @@ class TestOneReadPerPrPerTick(unittest.TestCase):
         return MonitorPrsUseCase(
             store, github, FakeWorktrees(), flow, CompleteStepUseCase(store, flow),
             trusted_authors=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
-            writes=InlinePrWrites(github, time.monotonic), ci_clock=time.monotonic, ci_poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_wall_clock=lambda: 10000.0, ci_views=AlwaysConfirmed(),
+            writes=InlinePrWrites(github, time.monotonic), ci_clock=time.monotonic, ci_poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_wall_clock=lambda: 10000.0, ci_views=AlwaysConfirmed(),
         )
 
     def test_behind_pr_is_read_once_per_tick(self):

@@ -102,7 +102,7 @@ class TestResolveCiJudgedSha(unittest.TestCase):
             (_URL, "sha1"): (CheckRun(name="build", status=conclusion[0], conclusion=conclusion[1]),)
         })
         flow = _FlowAdapter(_FLOW)
-        ResolveCiUseCase(store, gh, flow, CompleteStepUseCase(store, flow), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset()).execute()
+        ResolveCiUseCase(store, gh, flow, CompleteStepUseCase(store, flow), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset()).execute()
         return [a.value for a in store.item_artifacts(step) if a.type == "ci-judged-sha"]
 
     def test_success_writes_the_judged_sha(self):
@@ -139,7 +139,7 @@ class TestResolveCiConfirmsHeadBeforeFailed(unittest.TestCase):
         step = store.create_step(stage="poll-ci", role="engine", item=item)
 
         flow = _FlowAdapter(_FLOW)
-        uc = ResolveCiUseCase(store, github, flow, CompleteStepUseCase(store, flow), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
+        uc = ResolveCiUseCase(store, github, flow, CompleteStepUseCase(store, flow), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
         return store, item, step, uc
 
     def _judged(self, store, step):
@@ -221,7 +221,7 @@ class TestResolveCiUseCase(unittest.TestCase):
         step = store.create_step(stage="poll-ci", role="engine", item=item)
 
         complete = CompleteStepUseCase(store, _FlowAdapter(flow))
-        uc = ResolveCiUseCase(store, github, _FlowAdapter(flow), complete, clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
+        uc = ResolveCiUseCase(store, github, _FlowAdapter(flow), complete, clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
         return store, item, step, uc
 
     def test_ci_still_pending_does_not_complete(self):
@@ -335,7 +335,7 @@ class TestCiUnreadDiagnostics(unittest.TestCase):
         uc = ResolveCiUseCase(
             store, github, flow, CompleteStepUseCase(store, flow),
             clock=clock, poll_seconds=lambda: 60,
-            ci_ceiling_seconds=lambda: 3600, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
+            ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
         return store, item, step, uc, clock
 
     def _run(self, uc, clock, at):
@@ -428,7 +428,7 @@ class TestCiUnreadDiagnostics(unittest.TestCase):
         uc = ResolveCiUseCase(
             store, split, flow, CompleteStepUseCase(store, flow),
             clock=clock, poll_seconds=lambda: 60,
-            ci_ceiling_seconds=lambda: 3600, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
+            ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
         clock.now = 0.0
         first = uc.execute()
         clock.now = 61.0
@@ -448,7 +448,7 @@ def _ci_setup(github):
     uc = ResolveCiUseCase(
         store, github, flow, CompleteStepUseCase(store, flow),
         clock=time.monotonic, poll_seconds=lambda: 60,
-        ci_ceiling_seconds=lambda: 3600, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset(),
+        ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset(),
     )
     return store, item, step, uc
 
@@ -626,7 +626,7 @@ class TestRequiredChecksAndCeiling(unittest.TestCase):
         with self.assertRaises(ValueError):
             ResolveCiUseCase(
                 FakeStore(), FakeGitHub(), None, None, clock=time.monotonic, poll_seconds=lambda: 60,
-                ci_ceiling_seconds=_missing, wall_clock=lambda: 0.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset(),
+                ci_ceiling_seconds=_missing, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, wall_clock=lambda: 0.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset(),
             )
 
 
@@ -646,7 +646,7 @@ class TestViewConfirmationHold(unittest.TestCase):
         flow = _FlowAdapter(_FLOW)
         return ResolveCiUseCase(
             store, github, flow, CompleteStepUseCase(store, flow), clock=clock,
-            poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600,
+            poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60,
             wall_clock=lambda: 10000.0, views=views, trusted_authors=lambda: frozenset())
 
     def test_an_unconfirmed_view_holds_the_step_and_judges_nothing(self):
