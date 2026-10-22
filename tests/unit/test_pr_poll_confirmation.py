@@ -61,6 +61,20 @@ class TestPrPollConfirmation(unittest.TestCase):
         self.assertFalse(snapshot.confirmed_after(_TWO, epoch))
 
 
+class TestPrPollHeldConfirmation(unittest.TestCase):
+    def test_a_held_pr_stays_confirmed_across_a_poll_nothing_re_requested_it_for(self):
+        github = FakeGitHub(updated_ats={_ONE: 1.0, _TWO: 1.0}, head_shas={_ONE: "a", _TWO: "b"})
+        poll, snapshot = _poll(github)
+        epoch = snapshot.poll_epoch()
+        snapshot.hold_prs([_TWO])
+
+        _round(poll, snapshot, 0.0)
+        snapshot.head_sha(_ONE)
+        poll.run(snapshot.take_wanted(), 60.0, 10)
+
+        self.assertTrue(snapshot.confirmed_after(_TWO, epoch))
+
+
 class _MovingBase(FakeGitHub):
     def pr_view(self, pr):
         view = super().pr_view(pr)

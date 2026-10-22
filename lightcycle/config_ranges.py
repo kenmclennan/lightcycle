@@ -20,6 +20,7 @@ _NUMERIC_RANGES = {
     "ci-check-ceiling-seconds": (1, None),
     "ci-start-window-seconds": (1, None),
     "ci-no-workflows-wait-seconds": (1, None),
+    "ci-unconfirmed-note-polls": (1, None),
     "probe-cooldown-seconds": (0, None),
     "tui-upgrade-check-seconds": (0, None),
     "pool-upgrade-check-seconds": (0, None),

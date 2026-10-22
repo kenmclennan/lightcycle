@@ -34,6 +34,7 @@ class ResolveCiUseCase:
     def __init__(
         self, store, github, flow_service, complete, *, clock, poll_seconds, ci_ceiling_seconds,
         ci_start_window_seconds, ci_no_workflows_wait_seconds, wall_clock, views, trusted_authors,
+        ci_unconfirmed_note_polls,
     ):
         self._store = store
         self._github = github
@@ -44,17 +45,20 @@ class ResolveCiUseCase:
         self._ci_ceiling_seconds = ci_ceiling_seconds
         self._ci_start_window_seconds = ci_start_window_seconds
         self._ci_no_workflows_wait_seconds = ci_no_workflows_wait_seconds
+        self._ci_unconfirmed_note_polls = ci_unconfirmed_note_polls
         self._wall_clock = wall_clock
         self._views = views
         self._skip_idle = SkipIdleCiWatchUseCase(
             store, github, flow_service, complete, trusted_authors=trusted_authors)
         self._unread = {}
+        self._noted = {}
         self._first_epoch = {}
         self._first_judged = {}
         self._expected = {}
         ci_ceiling_seconds()
         ci_start_window_seconds()
         ci_no_workflows_wait_seconds()
+        ci_unconfirmed_note_polls()
 
     def _note_unread(self, step, reason, failure, still_unread, ci_unread):
         now = self._clock()
@@ -64,6 +68,21 @@ class ResolveCiUseCase:
             logged = reason
             ci_unread.append(CiUnread(step.id, reason, getattr(failure, "stderr", "") or ""))
         self._unread[step.id] = (since, reason, logged)
+
+    def _note_unconfirmed(self, step, pr_value):
+        now = self._clock()
+        since = self._unread[step.id][0]
+        interval = self._ci_unconfirmed_note_polls() * self._poll_seconds()
+        last = self._noted.get(step.id, since)
+        if now - last <= interval:
+            return
+        self._noted[step.id] = now
+        self._store.note_condition(
+            step.id,
+            "poll-ci is waiting for a GitHub poll to confirm %s; no poll has confirmed it for more "
+            "than %d poll intervals (ci-unconfirmed-note-polls)"
+            % (pr_value, self._ci_unconfirmed_note_polls()),
+        )
 
     def _required(self, pr_value):
         sync = self._github.pr_sync_state(pr_value)
@@ -115,6 +134,7 @@ class ResolveCiUseCase:
         ci_unread = []
         still_unread = set()
         seen = set()
+        awaited = set()
         for step in self._store.all_nodes():
             if step.type != "step" or step.state == State.DONE or step.role != "engine":
                 continue
@@ -130,11 +150,13 @@ class ResolveCiUseCase:
                 continue
             epoch = self._first_epoch.setdefault(step.id, self._views.poll_epoch())
             seen.add(step.id)
+            awaited.add(pr_value)
             if not self._views.confirmed_after(pr_value, epoch):
                 held_sha = self._github.head_sha(pr_value)
                 if held_sha and not isinstance(held_sha, ReadFailure):
                     self._github.check_runs(pr_value, held_sha)
                 self._note_unread(step, "view-not-confirmed", None, still_unread, ci_unread)
+                self._note_unconfirmed(step, pr_value)
                 continue
             sha = self._github.head_sha(pr_value)
             if isinstance(sha, ReadFailure):
@@ -233,6 +255,9 @@ class ResolveCiUseCase:
                 ci_resolved.append(step.item)
         for step_id in [k for k in self._unread if k not in still_unread]:
             del self._unread[step_id]
+        for step_id in [k for k in self._noted if k not in still_unread]:
+            del self._noted[step_id]
+        self._views.hold_prs(awaited)
         for step_id in [k for k in self._first_epoch if k not in seen]:
             del self._first_epoch[step_id]
         for step_id in [k for k in self._first_judged if k not in seen]:

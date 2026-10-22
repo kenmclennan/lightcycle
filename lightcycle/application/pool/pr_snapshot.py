@@ -42,6 +42,7 @@ class PrSnapshot(GitHubEventsPort):
         self._checks = {}
         self._required = {}
         self._pending = _Pending()
+        self._held = frozenset()
         self._epoch = 0
         self._confirmed = {}
         self._seeds = {}
@@ -82,13 +83,18 @@ class PrSnapshot(GitHubEventsPort):
         entry = self.entry_of(pr)
         return entry is not None and entry.stale
 
+    def hold_prs(self, prs):
+        with self._lock:
+            self._held = frozenset(prs)
+
     def take_wanted(self):
         with self._lock:
             pending, self._pending = self._pending, _Pending()
             self._epoch += 1
             epoch = self._epoch
+            held = self._held
         return Wanted(
-            prs=frozenset(pending.prs), files=frozenset(pending.files),
+            prs=frozenset(pending.prs) | held, files=frozenset(pending.files),
             checks=frozenset(pending.checks), epoch=epoch,
         )
 
@@ -135,6 +141,7 @@ class PrSnapshot(GitHubEventsPort):
 
     def retain(self, prs, check_prs):
         with self._lock:
+            prs = frozenset(prs) | self._held
             self._entries = {pr: e for pr, e in self._entries.items() if pr in prs}
             self._confirmed = {pr: e for pr, e in self._confirmed.items() if pr in prs}
             self._seeds = {pr: s for pr, s in self._seeds.items() if pr in prs}

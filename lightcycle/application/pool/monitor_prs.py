@@ -29,7 +29,7 @@ class MonitorPrsUseCase:
         self, store, github, worktrees, flow_service, complete=None, *,
         trusted_authors, held_shortcode, writes, ci_clock, ci_poll_seconds,
         ci_ceiling_seconds, ci_start_window_seconds, ci_no_workflows_wait_seconds, ci_wall_clock,
-        ci_views,
+        ci_views, ci_unconfirmed_note_polls,
     ):
         check_content_pin = CheckContentPinUseCase(
             store, github, flow_service, trusted_authors=trusted_authors
@@ -48,6 +48,7 @@ class MonitorPrsUseCase:
             store, github, flow_service, complete, clock=ci_clock, poll_seconds=ci_poll_seconds,
             ci_ceiling_seconds=ci_ceiling_seconds, ci_start_window_seconds=ci_start_window_seconds,
             ci_no_workflows_wait_seconds=ci_no_workflows_wait_seconds, wall_clock=ci_wall_clock,
+            ci_unconfirmed_note_polls=ci_unconfirmed_note_polls,
             views=ci_views, trusted_authors=trusted_authors,
         )
 

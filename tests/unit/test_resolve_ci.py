@@ -102,7 +102,7 @@ class TestResolveCiJudgedSha(unittest.TestCase):
             (_URL, "sha1"): (CheckRun(name="build", status=conclusion[0], conclusion=conclusion[1]),)
         })
         flow = _FlowAdapter(_FLOW)
-        ResolveCiUseCase(store, gh, flow, CompleteStepUseCase(store, flow), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset()).execute()
+        ResolveCiUseCase(store, gh, flow, CompleteStepUseCase(store, flow), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset()).execute()
         return [a.value for a in store.item_artifacts(step) if a.type == "ci-judged-sha"]
 
     def test_success_writes_the_judged_sha(self):
@@ -139,7 +139,7 @@ class TestResolveCiConfirmsHeadBeforeFailed(unittest.TestCase):
         step = store.create_step(stage="poll-ci", role="engine", item=item)
 
         flow = _FlowAdapter(_FLOW)
-        uc = ResolveCiUseCase(store, github, flow, CompleteStepUseCase(store, flow), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
+        uc = ResolveCiUseCase(store, github, flow, CompleteStepUseCase(store, flow), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
         return store, item, step, uc
 
     def _judged(self, store, step):
@@ -221,7 +221,7 @@ class TestResolveCiUseCase(unittest.TestCase):
         step = store.create_step(stage="poll-ci", role="engine", item=item)
 
         complete = CompleteStepUseCase(store, _FlowAdapter(flow))
-        uc = ResolveCiUseCase(store, github, _FlowAdapter(flow), complete, clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
+        uc = ResolveCiUseCase(store, github, _FlowAdapter(flow), complete, clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
         return store, item, step, uc
 
     def test_ci_still_pending_does_not_complete(self):
@@ -335,7 +335,7 @@ class TestCiUnreadDiagnostics(unittest.TestCase):
         uc = ResolveCiUseCase(
             store, github, flow, CompleteStepUseCase(store, flow),
             clock=clock, poll_seconds=lambda: 60,
-            ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
+            ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
         return store, item, step, uc, clock
 
     def _run(self, uc, clock, at):
@@ -428,7 +428,7 @@ class TestCiUnreadDiagnostics(unittest.TestCase):
         uc = ResolveCiUseCase(
             store, split, flow, CompleteStepUseCase(store, flow),
             clock=clock, poll_seconds=lambda: 60,
-            ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
+            ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
         clock.now = 0.0
         first = uc.execute()
         clock.now = 61.0
@@ -448,7 +448,7 @@ def _ci_setup(github):
     uc = ResolveCiUseCase(
         store, github, flow, CompleteStepUseCase(store, flow),
         clock=time.monotonic, poll_seconds=lambda: 60,
-        ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset(),
+        ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset(),
     )
     return store, item, step, uc
 
@@ -626,7 +626,7 @@ class TestRequiredChecksAndCeiling(unittest.TestCase):
         with self.assertRaises(ValueError):
             ResolveCiUseCase(
                 FakeStore(), FakeGitHub(), None, None, clock=time.monotonic, poll_seconds=lambda: 60,
-                ci_ceiling_seconds=_missing, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, wall_clock=lambda: 0.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset(),
+                ci_ceiling_seconds=_missing, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 0.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset(),
             )
 
 
@@ -640,13 +640,16 @@ class _ConfirmsOnly:
     def confirmed_after(self, pr, epoch):
         return pr in self._confirmed
 
+    def hold_prs(self, prs):
+        return None
+
 
 class TestViewConfirmationHold(unittest.TestCase):
-    def _uc(self, store, github, views, clock):
+    def _uc(self, store, github, views, clock, note_polls=3):
         flow = _FlowAdapter(_FLOW)
         return ResolveCiUseCase(
             store, github, flow, CompleteStepUseCase(store, flow), clock=clock,
-            poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60,
+            poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: note_polls,
             wall_clock=lambda: 10000.0, views=views, trusted_authors=lambda: frozenset())
 
     def test_an_unconfirmed_view_holds_the_step_and_judges_nothing(self):
@@ -707,3 +710,99 @@ class TestViewConfirmationHold(unittest.TestCase):
         self.assertEqual(store.get_node(step_a).state, State.DONE)
         self.assertEqual(store.get_node(step_b).state, State.QUEUED)
         self.assertEqual([(u.step, u.reason) for u in response.ci_unread], [(step_b, "view-not-confirmed")])
+
+
+class _RecordingConfirmsOnly(_ConfirmsOnly):
+    def __init__(self, confirmed):
+        super().__init__(confirmed)
+        self.held = []
+
+    def hold_prs(self, prs):
+        self.held.append(set(prs))
+
+
+def _condition_notes(store, step):
+    return [line for line in (store.get_node(step).notes or "").splitlines() if "ci-unconfirmed-note-polls" in line]
+
+
+class TestUnconfirmedNote(unittest.TestCase):
+    def _run(self, note_polls, times):
+        clock = _Clock()
+        store, item, step, _ = _ci_setup(_gh([_ok("build")]))
+        uc = TestViewConfirmationHold()._uc(store, _gh([_ok("build")]), NeverConfirmed(), clock, note_polls)
+        counts = []
+        for t in times:
+            clock.now = t
+            uc.execute()
+            counts.append(len(_condition_notes(store, step)))
+        return store, step, counts
+
+    def test_a_note_appears_past_three_poll_intervals_and_repeats_every_three(self):
+        store, step, counts = self._run(3, [0.0, 179.0, 181.0, 200.0, 361.0, 362.0])
+
+        self.assertEqual([0, 0, 1, 1, 1, 1], counts)
+        self.assertIn("no poll has confirmed it for more than 3 poll intervals", store.get_node(step).notes)
+        self.assertIn("x2", store.get_node(step).notes)
+
+    def test_the_bound_is_read_from_the_callable(self):
+        _, _, counts = self._run(1, [0.0, 59.0, 61.0])
+
+        self.assertEqual([0, 0, 1], counts)
+
+    def test_only_the_unconfirmed_step_is_noted_and_both_prs_are_held(self):
+        other = "https://github.com/acme/widget/pull/9"
+        store = FakeStore()
+        item_a = store.create_item("a", "d")
+        item_b = store.create_item("b", "d")
+        plant_pr(store, item_a, _URL, branch=_BRANCH)
+        plant_pr(store, item_b, other, branch="feat/other")
+        step_a = store.create_step(stage="poll-ci", role="engine", item=item_a)
+        step_b = store.create_step(stage="poll-ci", role="engine", item=item_b)
+        github = FakeGitHub(
+            head_shas={_URL: "sha1", other: "sha1"},
+            check_runs_by_sha={(_URL, "sha1"): (_ok("build"),), (other, "sha1"): (_ok("build"),)})
+        views = _RecordingConfirmsOnly({_URL})
+        clock = _Clock()
+        uc = TestViewConfirmationHold()._uc(store, github, views, clock)
+
+        for t in (0.0, 181.0):
+            clock.now = t
+            uc.execute()
+
+        self.assertEqual(_condition_notes(store, step_a), [])
+        self.assertEqual(len(_condition_notes(store, step_b)), 1)
+        self.assertEqual(views.held, [{_URL, other}, {other}])
+
+
+class _Log:
+    def append_run_log(self, text):
+        pass
+
+
+class TestHeldPrResolvesWithinOnePoll(unittest.TestCase):
+    def test_a_step_whose_pr_no_reader_touches_resolves_after_one_poll(self):
+        from lightcycle.application.pool.pr_poll import PrPoll
+        from lightcycle.application.pool.pr_writes import PrWrites
+
+        other = "https://github.com/acme/widget/pull/9"
+        store = FakeStore()
+        item_a = store.create_item("a", "d")
+        item_b = store.create_item("b", "d")
+        plant_pr(store, item_a, other, branch="feat/other")
+        plant_pr(store, item_b, _URL, branch=_BRANCH)
+        store.create_step(stage="poll-ci", role="engine", item=item_a)
+        step_b = store.create_step(stage="poll-ci", role="engine", item=item_b)
+        github = FakeGitHub(
+            updated_ats={_URL: 1.0, other: 1.0},
+            head_shas={_URL: "sha1", other: "sha1"},
+            check_runs_by_sha={(_URL, "sha1"): (_ok("build"),), (other, "sha1"): (_ok("build"),)})
+        snapshot = PrSnapshot(github)
+        poll = PrPoll(github, snapshot, PrWrites(time.monotonic), _Log())
+        uc = TestViewConfirmationHold()._uc(store, snapshot, snapshot, time.monotonic)
+
+        for now in (0.0, 60.0, 120.0):
+            uc.execute()
+            poll.run(snapshot.take_wanted(), now, 10)
+        uc.execute()
+
+        self.assertEqual(store.get_node(step_b).state, State.DONE)

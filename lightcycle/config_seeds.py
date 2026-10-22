@@ -12,6 +12,7 @@ _SEED_KEYS = [
     ("ci-check-ceiling-seconds", "3600"),
     ("ci-start-window-seconds", "600"),
     ("ci-no-workflows-wait-seconds", "60"),
+    ("ci-unconfirmed-note-polls", "3"),
     ("probe-cooldown-seconds", "1800"),
     ("spin-cap", "3"),
     ("poll-seconds", "5"),

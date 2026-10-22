@@ -59,7 +59,7 @@ class _World:
         self.monitor = MonitorPrsUseCase(
             self.store, self.github, FakeWorktrees(), flow, CompleteStepUseCase(self.store, flow),
             trusted_authors=lambda: frozenset(), held_shortcode=lambda: "HLD",
-            writes=InlinePrWrites(self.github, time.monotonic), ci_clock=time.monotonic, ci_poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_wall_clock=lambda: 10000.0, ci_views=AlwaysConfirmed(),
+            writes=InlinePrWrites(self.github, time.monotonic), ci_clock=time.monotonic, ci_poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, ci_wall_clock=lambda: 10000.0, ci_views=AlwaysConfirmed(),
         )
 
 

@@ -95,6 +95,32 @@ class TestReadPr(unittest.TestCase):
 
         self.assertIsInstance(self.snap.head_sha(_PR), NotYetRead)
 
+    def test_retain_keeps_entry_and_confirmation_of_a_held_pr(self):
+        self.snap.publish(_PR, PrEntry(state="OPEN", view=_view()))
+        self.snap.confirm([_PR], 5)
+        self.snap.hold_prs([_PR])
+
+        self.snap.retain(frozenset(), frozenset())
+
+        self.assertTrue(self.snap.confirmed_after(_PR, 4))
+        self.assertIsNotNone(self.snap.entry_of(_PR))
+
+    def test_retain_drops_a_pr_once_it_is_no_longer_held(self):
+        self.snap.publish(_PR, PrEntry(state="OPEN", view=_view()))
+        self.snap.confirm([_PR], 5)
+        self.snap.hold_prs([_PR])
+        self.snap.hold_prs([])
+
+        self.snap.retain(frozenset(), frozenset())
+
+        self.assertFalse(self.snap.confirmed_after(_PR, 4))
+        self.assertIsNone(self.snap.entry_of(_PR))
+
+    def test_take_wanted_includes_a_held_pr_no_reader_asked_about(self):
+        self.snap.hold_prs([_PR])
+
+        self.assertIn(_PR, self.snap.take_wanted().prs)
+
     def test_retain_drops_check_runs_no_ci_step_asked_for(self):
         self.snap.publish_checks(_PR, "h1", ["run"])
 

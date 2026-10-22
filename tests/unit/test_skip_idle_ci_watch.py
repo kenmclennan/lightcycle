@@ -60,7 +60,7 @@ class _Rig:
             complete = wrap(self.store, complete)
         self.uc = ResolveCiUseCase(
             self.store, github, adapter, complete, clock=time.monotonic, poll_seconds=lambda: 60,
-            ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, wall_clock=lambda: 10000.0,
+            ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0,
             views=views or AlwaysConfirmed(), trusted_authors=trusted)
 
     def step(self, stage):

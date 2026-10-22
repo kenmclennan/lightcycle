@@ -52,6 +52,7 @@ _ENV_OVERRIDE_VARS = {
     "ci-check-ceiling-seconds": "LC_CI_CHECK_CEILING_SECONDS",
     "ci-start-window-seconds": "LC_CI_START_WINDOW_SECONDS",
     "ci-no-workflows-wait-seconds": "LC_CI_NO_WORKFLOWS_WAIT_SECONDS",
+    "ci-unconfirmed-note-polls": "LC_CI_UNCONFIRMED_NOTE_POLLS",
     "probe-cooldown-seconds": "LC_PROBE_COOLDOWN_SECONDS",
     "spin-cap": "LC_SPIN_CAP",
     "poll-seconds": "LC_POLL_SECONDS",
@@ -462,6 +463,11 @@ class Config:
         env = self._env_int("LC_CI_NO_WORKFLOWS_WAIT_SECONDS", None)
         value = env if env is not None else self._required_int("ci-no-workflows-wait-seconds")
         return self._check_range("ci-no-workflows-wait-seconds", value)
+
+    def ci_unconfirmed_note_polls(self):
+        env = self._env_int("LC_CI_UNCONFIRMED_NOTE_POLLS", None)
+        value = env if env is not None else self._required_int("ci-unconfirmed-note-polls")
+        return self._check_range("ci-unconfirmed-note-polls", value)
 
     def probe_cooldown_seconds(self):
         env = self._env_int("LC_PROBE_COOLDOWN_SECONDS", None)
