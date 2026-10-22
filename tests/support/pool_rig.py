@@ -3,8 +3,6 @@ import inspect
 import os
 import tempfile
 from pathlib import Path
-from types import SimpleNamespace
-from unittest import mock
 
 from lightcycle.application.pool.tick import TickInput
 from lightcycle.config import _SEED_KEYS, Config
@@ -161,16 +159,15 @@ class PoolRig:
             config=self.config, store=self.store, git=self.git, spawner=self.spawner,
             workers=self.workers, fs=self.fs, github=self.github,
             github_poll_runner=self.poll_runner, script_runner=self.script_runner,
-            run_groups=self.run_groups, **self._extras)
+            run_groups=self.run_groups, clock=self.clock, monotonic=self.clock,
+            **self._extras)
         return Container(**{k: v for k, v in wanted.items() if k in params and v is not None})
 
     def _build(self):
         self.container = self._container()
         self.flow_service = RigFlow(self.flow) if not isinstance(
             self.flow, RigFlow) else self.flow
-        simulated_time = SimpleNamespace(monotonic=self.clock, time=self.clock)
-        with mock.patch("lightcycle.container.time", simulated_time):
-            self.tick_use_case = self.container.tick(flow=self.flow_service)
+        self.tick_use_case = self.container.tick(flow=self.flow_service)
         self.worktrees = self.container.worktrees(flow=self.flow_service)
         self.poll_gate = self.tick_use_case._github_poll_gate
         self.snapshot = self.poll_gate._snapshot
