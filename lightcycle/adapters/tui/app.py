@@ -64,6 +64,7 @@ from lightcycle.application.pool import (
     StartPoolUseCase,
     StopPoolSignalUseCase,
 )
+from lightcycle.application.inspect import DoctorInput
 from lightcycle.application.setup import UpgradeNoticeUseCase, upgrade
 from lightcycle.application.work import (
     BacklogInput,
@@ -446,6 +447,9 @@ class LightcycleApp(App):
     #status-github {{
         display: none;
     }}
+    #status-doctor {{
+        display: none;
+    }}
     #status-config {{
         display: none;
     }}
@@ -482,7 +486,7 @@ class LightcycleApp(App):
         Binding("right", "open_done_for_report_day", "Open", show=False),
     ]
 
-    def __init__(self, container, now=None, upgrade_check=None):
+    def __init__(self, container, now=None, upgrade_check=None, doctor_check=None):
         super().__init__()
         self._container = container
         self._now = now or (lambda: datetime.datetime.now().astimezone())
@@ -491,6 +495,11 @@ class LightcycleApp(App):
                 self._container.config.version(), check_only=True,
                 fetch=self._container.upgrade.fetch_remote_version)
         )
+        self._doctor_check = doctor_check or (
+            lambda: self._container.doctor_for_current_thread().execute(DoctorInput())
+        )
+        self._doctor_areas = ()
+        self._doctor_failed = False
         self._upgrade_version = None
         self._upgrade_error = None
         self._config_mtime_at_load = container.config.config_mtime()
@@ -527,6 +536,7 @@ class LightcycleApp(App):
         self._done_filtered_count = 0
         self._done_filter_timer = None
         self._upgrade_check_timer = None
+        self._doctor_check_timer = None
         self._done_cost_time_cache = {}
         self._report_cache = {}
         self._report_day = None
@@ -566,6 +576,7 @@ class LightcycleApp(App):
         table.cursor_type = "row"
         table.show_header = False
         self._start_upgrade_check()
+        self._start_doctor_check()
         self.screen_change_signal.subscribe(self, lambda screen: self._sync_active_glyph_animation())
         self.call_after_refresh(self._refresh)
         self.set_interval(POLL_INTERVAL_SECONDS, self._refresh)
@@ -573,6 +584,10 @@ class LightcycleApp(App):
         if upgrade_check_interval > 0:
             self._upgrade_check_timer = self.set_interval(
                 upgrade_check_interval, self._start_upgrade_check)
+        doctor_check_interval = self._container.config.tui_doctor_check_seconds()
+        if doctor_check_interval > 0:
+            self._doctor_check_timer = self.set_interval(
+                doctor_check_interval, self._start_doctor_check)
         if self._container.config.tui_autostart_pool():
             self._start_pool()
 
@@ -605,6 +620,29 @@ class LightcycleApp(App):
             self._upgrade_error = error
         elif self._upgrade_version is None:
             self._upgrade_error = error
+        self._refresh_status_bar()
+
+    def _start_doctor_check(self) -> None:
+        self.run_worker(
+            self._check_doctor_worker, thread=True,
+            group="doctor-check", exclusive=True, exit_on_error=False,
+        )
+
+    def _check_doctor_worker(self) -> None:
+        try:
+            report = self._doctor_check()
+        except Exception:
+            self.call_from_thread(self._apply_doctor_result, (), True)
+            return
+        areas = tuple(
+            category for category, problems in report.problems.items()
+            if problems and category != "github"
+        )
+        self.call_from_thread(self._apply_doctor_result, areas, False)
+
+    def _apply_doctor_result(self, areas, failed) -> None:
+        self._doctor_areas = areas
+        self._doctor_failed = failed
         self._refresh_status_bar()
 
     def _refresh(self) -> None:
@@ -685,6 +723,8 @@ class LightcycleApp(App):
             hold=hold,
             config_changed=self._container.config.config_mtime() != self._config_mtime_at_load,
             github=github,
+            doctor_areas=self._doctor_areas,
+            doctor_failed=self._doctor_failed,
         )
 
     def _refresh_status_bar(self) -> None:

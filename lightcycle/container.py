@@ -14,6 +14,7 @@ from lightcycle.adapters.github_budget_status import GithubBudgetStatusAdapter
 from lightcycle.adapters.gitio import GitAdapter
 from lightcycle.adapters.launcher import LauncherAdapter
 from lightcycle.adapters.lifecycle_runner import LifecycleRunnerAdapter
+from lightcycle.application.inspect.doctor import DoctorUseCase
 from lightcycle.application.pool.accrual_gates import AccrualGatesUseCase
 from lightcycle.application.pool.cadence_gates import CadenceGatesUseCase
 from lightcycle.application.pool.stop_pool import StopPoolUseCase
@@ -134,6 +135,17 @@ class Container:
 
     def worktrees(self, flow=None):
         return worktrees_for(self, flow=flow)
+
+    def doctor(self):
+        return DoctorUseCase(
+            self.store, self.workflow_source, self.config, self.workflow_bundle,
+            self.fs, self.machine, self.worktrees(),
+            self.git, self.guidance_sync_status,
+            self.config_reload_status, self.lock, self.github_budget(),
+        )
+
+    def doctor_for_current_thread(self):
+        return Container(config=self.config, clock=self.clock, monotonic=self.monotonic).doctor()
 
     def github_budget(self, flow=None):
         return GithubBudgetUseCase(

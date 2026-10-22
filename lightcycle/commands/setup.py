@@ -5,7 +5,7 @@ import time
 from lightcycle.cli_commands import COMMANDS, build_parser
 
 from lightcycle.application.errors import UseCaseError
-from lightcycle.application.inspect import DoctorInput, DoctorUseCase
+from lightcycle.application.inspect import DoctorInput
 from lightcycle.application.workflows.add import AddWorkflowSourceUseCase
 from lightcycle.application.setup import (
     AddProjectInput,
@@ -46,12 +46,7 @@ def cmd_restore(argv):
 
 def cmd_doctor(argv):
     a = build_parser(COMMANDS["doctor"]).parse_args(argv)
-    report = DoctorUseCase(
-        container().store, container().workflow_source, container().config, container().workflow_bundle,
-        container().fs, container().machine, container().worktrees(),
-        container().git, container().guidance_sync_status,
-        container().config_reload_status, container().lock, container().github_budget(),
-    ).execute(DoctorInput())
+    report = container().doctor().execute(DoctorInput())
     if a.json:
         print(json.dumps(
             {cat: [p.as_dict() for p in probs] for cat, probs in report.problems.items()},

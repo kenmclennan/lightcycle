@@ -5,6 +5,7 @@ import shutil
 import tempfile
 
 from lightcycle import __version__
+from lightcycle.application.inspect import DoctorReport
 from lightcycle.application.setup import UpgradeResponse
 from lightcycle.adapters.backup import SqliteBackupAdapter
 from lightcycle.adapters.breaker import BreakerAdapter
@@ -51,6 +52,10 @@ from tests.support.fake_github import FakeGitHub
 from tests.support.fake_machine import FakeMachine
 from tests.support.fake_store import FakeStore
 from tests.support.fake_workers import FakeWorkers
+
+
+def _healthy_doctor():
+    return DoctorReport(problems={})
 
 
 def _no_upgrade_available():
@@ -215,7 +220,8 @@ def _sweep_temp_roots():
 
 
 class HermeticTuiConfig(Config):
-    def __init__(self, autostart_pool=False, tui_metrics=False, upgrade_check_seconds=3600):
+    def __init__(self, autostart_pool=False, tui_metrics=False, upgrade_check_seconds=3600,
+                 doctor_check_seconds=3600):
         root = _tracked_mkdtemp()
         home = os.path.join(root, "home")
         os.makedirs(home)
@@ -224,6 +230,7 @@ class HermeticTuiConfig(Config):
         seeded["tui-autostart-pool"] = "true" if autostart_pool else "false"
         seeded["tui-metrics"] = "true" if tui_metrics else "false"
         seeded["tui-upgrade-check-seconds"] = str(upgrade_check_seconds)
+        seeded["tui-doctor-check-seconds"] = str(doctor_check_seconds)
         seeded["projects"] = os.path.join(root, "projects")
         seeded["specs"] = os.path.join(root, "specs")
         seeded["backups-dir"] = os.path.join(root, "backups-dir")
@@ -308,11 +315,12 @@ def make_test_container(store=None, lock=None, breaker=None, fs=None, workers=No
                          machine=None, memory_gate_status=None, guidance_sync_status=None,
                          github_budget_status=None,
                          tui_metrics=False,
-                         upgrade_check_seconds=3600, drain=None, config_reload_status=None):
+                         upgrade_check_seconds=3600, doctor_check_seconds=3600, drain=None,
+                         config_reload_status=None):
     fs_double = fs or FakeFs()
     config = HermeticTuiConfig(
         autostart_pool=autostart_pool, tui_metrics=tui_metrics,
-        upgrade_check_seconds=upgrade_check_seconds)
+        upgrade_check_seconds=upgrade_check_seconds, doctor_check_seconds=doctor_check_seconds)
     store_double = store
     if store_double is None:
         store_double = FakeStore()
@@ -362,6 +370,7 @@ def _start_background_timers_paused(set_interval):
     def _set_interval(self, interval, callback=None, **kwargs):
         if getattr(callback, "__name__", None) in (
             "_tick_active_glyph", "_refresh", "_tick_pool_transition", "_start_upgrade_check",
+            "_start_doctor_check",
         ):
             kwargs.setdefault("pause", True)
         return set_interval(self, interval, callback, **kwargs)
@@ -384,8 +393,10 @@ NodeHubScreen.set_interval = _start_background_timers_paused(NodeHubScreen.set_i
 
 
 class TuiSession:
-    def __init__(self, container, now=None, upgrade_check=None, size=None, settle=True):
-        self.app = LightcycleApp(container, now=now, upgrade_check=upgrade_check or _no_upgrade_available)
+    def __init__(self, container, now=None, upgrade_check=None, size=None, settle=True,
+                 doctor_check=None):
+        self.app = LightcycleApp(container, now=now, upgrade_check=upgrade_check or _no_upgrade_available,
+                               doctor_check=doctor_check or _healthy_doctor)
         self.store = container.store
         self._loop = asyncio.new_event_loop()
         self._ctx = contextvars.copy_context()
@@ -429,6 +440,11 @@ class TuiSession:
         self._run(self.app.workers.wait_for_complete())
         self.pause()
 
+    def check_doctor_tick(self):
+        self.run(self.app._start_doctor_check)
+        self._run(self.app.workers.wait_for_complete())
+        self.pause()
+
     def pause_for(self, seconds):
         self._run(self.pilot.pause(seconds))
         self.pause()
@@ -460,8 +476,10 @@ class TuiSession:
         self._loop.close()
 
 
-def launch(container, now=None, upgrade_check=None, size=None, settle=True):
-    session = TuiSession(container, now=now, upgrade_check=upgrade_check, size=size, settle=settle)
+def launch(container, now=None, upgrade_check=None, size=None, settle=True, doctor_check=None):
+    session = TuiSession(
+        container, now=now, upgrade_check=upgrade_check, size=size, settle=settle,
+        doctor_check=doctor_check)
     if settle:
         session.pause()
     return session

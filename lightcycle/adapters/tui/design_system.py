@@ -49,6 +49,8 @@ FOOTER_GLYPHS = {
     "upgrade-available": Glyph("⬆", "amber"),
     "pool-holding": Glyph("◐", "amber"),
     "config-changed": Glyph("↻", "amber"),
+    "doctor-problems": Glyph("✚", "amber"),
+    "doctor-store": Glyph("✚", "red"),
     "pool-starting": Glyph("●", "amber"),
     "pool-stopping": Glyph("○", "amber"),
     "pool-draining": Glyph("◑", "amber"),

@@ -1,5 +1,6 @@
 import datetime
 import os
+import threading
 import time
 import unittest
 from unittest.mock import patch
@@ -8,6 +9,7 @@ from textual.css.query import NoMatches
 from textual.widgets import DataTable, Input, Static
 
 from lightcycle import __version__
+from lightcycle.container import Container
 from lightcycle.application.work.done import CATEGORY_ALL
 from lightcycle.adapters.tui.app import (
     BACKLOG_COLUMNS,
@@ -59,14 +61,17 @@ from lightcycle.adapters.tui.design_system import (
 from lightcycle.adapters.tui.row_grid import (
     FLEXIBLE_MINIMUM, atomic_column_width, scrollbar_reservation_width,
 )
+from lightcycle.application.inspect import DoctorReport
 from lightcycle.application.setup import UpgradeResponse
+from lightcycle.domain.health import Problem
 from lightcycle.domain.work import State
 from tests.support.fake_machine import FakeMachine
 from tests.support.fake_store import FakeStore
 from tests.support.fake_workers import FakeWorkers
 from tests.support.filter_block import block_rows, block_text, last_text_row
 from tests.support.tui_harness import (
-    row_key, FakeBreakerPort, FakeLock, FakeSpawner, launch, make_test_container,
+    row_key, FakeBreakerPort, FakeLock, FakeSpawner, HermeticTuiConfig, launch,
+    make_test_container,
 )
 from tests.support.step_factory import create_owned_step
 
@@ -1177,6 +1182,130 @@ class TestPeriodicUpgradeCheck(unittest.TestCase):
 
         _, text, _ = _rendered_segment(session, "#status-upgrade")
         self.assertEqual(text.strip(), "upgrade check failed: network down")
+
+
+def _doctor_report(*categories, healthy=("orphans", "config", "store", "github")):
+    problems = {c: [] for c in healthy}
+    for c in categories:
+        problems[c] = [Problem(category=c, message="%s is off" % c)]
+    return DoctorReport(problems=problems)
+
+
+class TestFooterDoctorSegment(unittest.TestCase):
+    def _launch(self, doctor_check, doctor_check_seconds=3600):
+        session = launch(
+            make_test_container(doctor_check_seconds=doctor_check_seconds),
+            doctor_check=doctor_check,
+        )
+        self.addCleanup(session.close)
+        return session
+
+    def _segment(self, session):
+        widget, text, style = _rendered_segment(session, "#status-doctor")
+        return widget, text.strip(), style
+
+    def test_is_hidden_when_doctor_is_healthy(self):
+        session = self._launch(lambda: _doctor_report())
+        widget, text, _ = self._segment(session)
+        self.assertFalse(widget.display)
+        self.assertEqual(text, "")
+
+    def test_names_a_single_problem_category(self):
+        session = self._launch(lambda: _doctor_report("orphans"))
+        widget, text, style = self._segment(session)
+        self.assertTrue(widget.display)
+        self.assertEqual(text, "%s doctor · orphans" % FOOTER_GLYPHS["doctor-problems"].glyph)
+        self.assertEqual(_colour_of(style), COLOURS["amber"].lower())
+
+    def test_names_two_problem_categories_in_report_order(self):
+        session = self._launch(lambda: _doctor_report("config", "orphans"))
+        _, text, _ = self._segment(session)
+        self.assertEqual(text, "%s doctor · orphans, config" % FOOTER_GLYPHS["doctor-problems"].glyph)
+
+    def test_counts_three_or_more_problem_categories_as_areas(self):
+        session = self._launch(lambda: _doctor_report("orphans", "config", "github", "store"))
+        _, text, _ = self._segment(session)
+        self.assertEqual(text, "%s doctor · 3 areas" % FOOTER_GLYPHS["doctor-store"].glyph)
+
+    def test_github_only_problems_leave_it_hidden(self):
+        session = self._launch(lambda: _doctor_report("github"))
+        widget, text, _ = self._segment(session)
+        self.assertFalse(widget.display)
+        self.assertEqual(text, "")
+
+    def test_a_store_problem_turns_it_red(self):
+        session = self._launch(lambda: _doctor_report("store"))
+        _, text, style = self._segment(session)
+        self.assertEqual(text, "%s doctor · store" % FOOTER_GLYPHS["doctor-store"].glyph)
+        self.assertEqual(_colour_of(style), COLOURS["red"].lower())
+
+    def test_a_raising_doctor_shows_a_dim_failure(self):
+        def _boom():
+            raise RuntimeError("store locked")
+
+        session = self._launch(_boom)
+        widget, text, style = self._segment(session)
+        self.assertTrue(widget.display)
+        self.assertEqual(text, "doctor check failed")
+        self.assertEqual(_colour_of(style), COLOURS["dim"].lower())
+
+    def test_sits_after_gh_and_before_config_changed(self):
+        session = self._launch(lambda: _doctor_report())
+        ids = [w.id for w in session.app.query_one("#status-bar").children]
+        self.assertLess(ids.index("status-github"), ids.index("status-doctor"))
+        self.assertLess(ids.index("status-doctor"), ids.index("status-config"))
+
+    def test_the_check_runs_in_a_worker_thread_not_on_the_poll_refresh(self):
+        threads = []
+        main = threading.get_ident()
+
+        def _check():
+            threads.append(threading.get_ident())
+            return _doctor_report()
+
+        session = self._launch(_check)
+        self.assertEqual(len(threads), 1)
+        self.assertNotEqual(threads[0], main)
+
+        session.poll_tick()
+        self.assertEqual(len(threads), 1)
+
+        session.check_doctor_tick()
+        self.assertEqual(len(threads), 2)
+        self.assertNotEqual(threads[1], main)
+
+    def test_the_default_check_runs_from_a_thread_against_a_store_used_on_the_main_thread(self):
+        container = Container(config=HermeticTuiConfig())
+        container.store.all_nodes()
+        app = LightcycleApp(container)
+        outcome = []
+
+        def _run():
+            try:
+                outcome.append(app._doctor_check())
+            except Exception as e:
+                outcome.append(e)
+
+        worker = threading.Thread(target=_run)
+        worker.start()
+        worker.join()
+
+        self.assertIsInstance(outcome[0], DoctorReport)
+
+    def test_periodic_timer_is_scheduled_unless_disabled(self):
+        enabled = self._launch(lambda: _doctor_report())
+        self.assertIsNotNone(enabled.app._doctor_check_timer)
+        disabled = self._launch(lambda: _doctor_report(), doctor_check_seconds=0)
+        self.assertIsNone(disabled.app._doctor_check_timer)
+
+    def test_a_recheck_updates_the_footer(self):
+        results = iter([_doctor_report(), _doctor_report("orphans")])
+        session = self._launch(lambda: next(results))
+        self.assertEqual(self._segment(session)[1], "")
+        session.check_doctor_tick()
+        self.assertEqual(
+            self._segment(session)[1], "%s doctor · orphans" % FOOTER_GLYPHS["doctor-problems"].glyph
+        )
 
 
 class TestFooterPoolSegment(unittest.TestCase):

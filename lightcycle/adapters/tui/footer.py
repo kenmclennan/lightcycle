@@ -15,6 +15,7 @@ class StatusBar(Horizontal):
         yield Static(id="status-claude")
         yield Static(id="status-hold")
         yield Static(id="status-github")
+        yield Static(id="status-doctor")
         yield Static(id="status-config")
         yield Static(id="status-version")
         yield Static(id="status-upgrade")
@@ -35,6 +36,8 @@ class StatusBar(Horizontal):
         hold=None,
         config_changed=False,
         github=None,
+        doctor_areas=(),
+        doctor_failed=False,
     ):
         if pool_transition_kind == "start":
             glyph_key = "pool-start-timed-out" if pool_transition_expired else "pool-starting"
@@ -88,6 +91,23 @@ class StatusBar(Horizontal):
         else:
             github_widget.update("")
             github_widget.display = False
+
+        doctor_widget = self.query_one("#status-doctor", Static)
+        if doctor_failed:
+            doctor_widget.update(Text("doctor check failed", style=COLOURS["dim"]))
+            doctor_widget.display = True
+        elif doctor_areas:
+            doctor_glyph, doctor_colour = FOOTER_GLYPHS[
+                "doctor-store" if "store" in doctor_areas else "doctor-problems"
+            ]
+            areas = ", ".join(doctor_areas) if len(doctor_areas) < 3 else "%d areas" % len(doctor_areas)
+            doctor_widget.update(
+                Text("%s doctor · %s" % (doctor_glyph, areas), style=COLOURS[doctor_colour])
+            )
+            doctor_widget.display = True
+        else:
+            doctor_widget.update("")
+            doctor_widget.display = False
 
         config_widget = self.query_one("#status-config", Static)
         if config_changed:
