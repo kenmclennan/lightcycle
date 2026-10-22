@@ -62,7 +62,11 @@ class Container:
         drain=None, guidance_sync_status=None, config_reload_status=None,
         lifecycle_runner=None, script_runner=None, github_poll_runner=None,
         github_budget_status=None, gh_shim=None, run_groups=None,
+        clock=time.time, monotonic=time.monotonic, sleep=time.sleep,
     ):
+        self.clock = clock
+        self.monotonic = monotonic
+        self.sleep = sleep
         self.config = config if config is not None else Config()
         self.store = store if store is not None else SqliteStore(self.config, now=now)
         self.git = git if git is not None else GitAdapter()
@@ -132,7 +136,7 @@ class Container:
     def github_budget(self, flow=None):
         return GithubBudgetUseCase(
             self.github_budget_status, flow if flow is not None else self.flow_service(),
-            self.config, time.time)
+            self.config, self.clock)
 
     def tick(self, flow=None):
         from lightcycle.application.flow.complete_step import CompleteStepUseCase
@@ -152,7 +156,7 @@ class Container:
         worktrees = worktrees_for(self, flow=flow)
         complete = CompleteStepUseCase(self.store, flow, worktrees, self.config)
         snapshot = PrSnapshot(self.github)
-        writes = PrWrites(time.monotonic)
+        writes = PrWrites(self.monotonic)
         return TickUseCase(
             self.store,
             self.workers,
@@ -162,12 +166,12 @@ class Container:
                 self.store, snapshot, worktrees, flow, complete,
                 trusted_authors=self.config.trusted_authors,
                 held_shortcode=self.config.held_comment_shortcode, writes=writes,
-                ci_clock=time.monotonic, ci_poll_seconds=self.config.github_poll_seconds,
+                ci_clock=self.monotonic, ci_poll_seconds=self.config.github_poll_seconds,
                 ci_ceiling_seconds=self.config.ci_check_ceiling_seconds,
                 ci_start_window_seconds=self.config.ci_start_window_seconds,
                 ci_no_workflows_wait_seconds=self.config.ci_no_workflows_wait_seconds,
                 ci_unconfirmed_note_polls=self.config.ci_unconfirmed_note_polls,
-                ci_wall_clock=time.time,
+                ci_wall_clock=self.clock,
                 ci_views=snapshot,
             ),
             breaker_gate=BreakerGateUseCase(
@@ -176,7 +180,7 @@ class Container:
             ),
             github_poll_gate=GithubPollUseCase(
                 snapshot, self.github, self.github_poll_runner, self.config, writes,
-                self.github_budget_status, time.time, self.worker_log, self.store),
+                self.github_budget_status, self.clock, self.worker_log, self.store),
             hook_completions=HookCompletionsUseCase(self.store, flow),
             backup_gate=BackupUseCase(self.backup, self.config),
             flow_service=flow,
@@ -229,7 +233,9 @@ class Container:
         )
 
     def stop_pool(self, flow=None):
-        return StopPoolUseCase(self.workers, self.sweep(flow=flow), self.run_groups)
+        return StopPoolUseCase(
+            self.workers, self.sweep(flow=flow), self.run_groups, sleep=self.sleep,
+            clock=self.monotonic)
 
     def simulation(self):
         return _Simulation(self)

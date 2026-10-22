@@ -240,3 +240,32 @@ class TestContainerStopPool(unittest.TestCase):
         self.assertIs(use_case._workers, workers)
         self.assertIs(use_case._sweep, sweep)
         container.sweep.assert_called_once_with(flow="f")
+
+
+class TestContainerClockSeam(unittest.TestCase):
+    def test_stop_pool_receives_the_injected_sleep_and_monotonic_clock(self):
+        from unittest import mock
+
+        def sleep(seconds):
+            return None
+
+        def monotonic():
+            return 1.0
+
+        container = Container(
+            store=object(), workers=object(), sleep=sleep, monotonic=monotonic)
+        container.sweep = mock.Mock(return_value=object())
+
+        use_case = container.stop_pool()
+
+        self.assertIs(use_case._sleep, sleep)
+        self.assertIs(use_case._clock, monotonic)
+
+    def test_defaults_are_the_real_time_functions(self):
+        import time
+
+        container = Container(store=object(), workers=object())
+
+        self.assertIs(container.clock, time.time)
+        self.assertIs(container.monotonic, time.monotonic)
+        self.assertIs(container.sleep, time.sleep)
