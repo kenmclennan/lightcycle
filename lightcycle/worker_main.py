@@ -3,7 +3,7 @@ import sys
 
 from lightcycle.adapters.sqlite_store import LiveStoreRefused, SchemaVersionRefused
 from lightcycle.adapters.worker_session import (
-    SessionError, plan_session, record_guidance, run, session_cwd,
+    SessionError, has_open_step, plan_session, record_guidance, run, session_cwd,
 )
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.claim_step import ClaimInput, ClaimStepUseCase
@@ -45,8 +45,9 @@ def main():
     record_guidance(container.store, plan)
     with session_cwd(plan.workspace) as cwd:
         return run(
-            config.data_root(), cwd, plan.stage, spawnid, plan.model, plan.sysprompt,
+            config.data_root(), cwd, plan.stage, plan.model, plan.sysprompt,
             config.max_session_seconds(),
+            open_step=lambda: has_open_step(container.store, spawnid),
             env=config.agent_env(),
             record_session_id=lambda sid: container.store.replace_artifact(
                 plan.step_id, "session-id", sid, internal=True

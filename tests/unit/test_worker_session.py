@@ -8,13 +8,13 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 import queue
+import sqlite3
 
 import lightcycle.adapters.worker_session as worker_session_mod
 from lightcycle.adapters.worker_session import (
     EXIT_GRACE_SECONDS,
     MAX_LINE_BYTES,
     SessionError,
-    COMMAND,
     RESULT,
     SESSION_ID,
     dispatch_event,
@@ -26,7 +26,7 @@ from lightcycle.adapters.worker_session import (
     session_cwd,
 )
 from lightcycle.adapters.claude_stream import (
-    is_terminal_command, parse_rate_limit_event, saw_session_activity,
+    parse_rate_limit_event, saw_session_activity,
 )
 from lightcycle.domain.guidance.guidance import GuidanceSelection
 from lightcycle.ports.workflow_bundle import StepPrompt
@@ -153,28 +153,6 @@ class TestPlanSession(unittest.TestCase):
         self.assertEqual(plan.step_id, "s-42")
 
 
-class TestTerminalCommand(unittest.TestCase):
-    def test_tg_done_is_terminal(self):
-        self.assertTrue(is_terminal_command("lc done abc.1 done"))
-        self.assertTrue(is_terminal_command("bin/lc done abc.1 rejected"))
-
-    def test_park_command_is_terminal(self):
-        self.assertTrue(
-            is_terminal_command("lc set abc.1 --state waiting --needs x --reason y"))
-        self.assertTrue(
-            is_terminal_command("./bin/lc set abc.1 --needs x --reason y --state waiting"))
-
-    def test_non_terminal_tg_commands(self):
-        self.assertFalse(is_terminal_command("lc claim coder"))
-        self.assertFalse(is_terminal_command("lc reflect abc.1 --feedback ok"))
-        self.assertFalse(is_terminal_command("lc show abc.1"))
-        self.assertFalse(is_terminal_command("lc set abc.1 --state active"))
-
-    def test_empty(self):
-        self.assertFalse(is_terminal_command(""))
-        self.assertFalse(is_terminal_command(None))
-
-
 class TestSawSessionActivity(unittest.TestCase):
     def test_true_for_an_assistant_event(self):
         line = json.dumps({"type": "assistant", "message": {"content": []}})
@@ -199,33 +177,20 @@ class TestSawSessionActivity(unittest.TestCase):
 
 
 class TestSessionPolicy(unittest.TestCase):
-    def test_close_after_terminal_then_result(self):
-        p = SessionPolicy()
-        p.observe_claimed(True)
-        p.observe_terminal(True)
-        self.assertEqual(p.on_result(has_open_step=True), CLOSE)
+    def test_a_step_no_longer_in_progress_closes(self):
+        self.assertEqual(SessionPolicy().on_result(has_open_step=False), CLOSE)
 
-    def test_no_work_exit_closes(self):
-        p = SessionPolicy()
-        self.assertEqual(p.on_result(has_open_step=False), CLOSE)
+    def test_a_step_still_in_progress_nudges_whatever_commands_were_run(self):
+        self.assertEqual(SessionPolicy().on_result(has_open_step=True), NUDGE)
 
     def test_unresolved_task_nudges_up_to_the_cap_then_closes(self):
         p = SessionPolicy()
-        p.observe_claimed(True)
         for _ in range(MAX_NUDGES):
             self.assertEqual(p.on_result(has_open_step=True), NUDGE)
         self.assertEqual(p.on_result(has_open_step=True), CLOSE)
 
-    def test_terminal_overrides_nudge(self):
-        p = SessionPolicy()
-        p.observe_claimed(True)
-        self.assertEqual(p.on_result(has_open_step=True), NUDGE)
-        p.observe_terminal(True)
-        self.assertEqual(p.on_result(has_open_step=True), CLOSE)
-
     def test_rejected_rate_limit_closes_even_with_open_step_and_claimed(self):
         p = SessionPolicy()
-        p.observe_claimed(True)
         p.observe_rate_limit(parse_rate_limit_event([REJECTED_LINE]))
         self.assertEqual(p.on_result(has_open_step=True), CLOSE)
 
@@ -234,13 +199,11 @@ class TestSessionPolicy(unittest.TestCase):
             '{"type":"rate_limit_event","rate_limit_info":{"status":"allowed"}}'
         )
         p = SessionPolicy()
-        p.observe_claimed(True)
         p.observe_rate_limit(parse_rate_limit_event([allowed_line]))
         self.assertEqual(p.on_result(has_open_step=True), NUDGE)
 
     def test_none_event_does_not_close(self):
         p = SessionPolicy()
-        p.observe_claimed(True)
         p.observe_rate_limit(None)
         self.assertEqual(p.on_result(has_open_step=True), NUDGE)
 
@@ -286,56 +249,54 @@ class TestSessionCwd(unittest.TestCase):
         self.assertFalse(os.path.isdir(created))
 
 
-def _fail_has_open_step(root, spawnid):
-    raise AssertionError("has_open_step should not be called")
+def _open():
+    return True
+
+
+def _fail_open_step():
+    raise AssertionError("open_step should not be called")
 
 
 class TestPollDecision(unittest.TestCase):
-    def test_pending_result_looks_up_open_step_against_add_dir(self):
-        policy = SessionPolicy()
+    def test_pending_result_asks_the_store_whether_the_step_is_open(self):
         events = queue.Queue()
         events.put((RESULT, None))
-        seen = {}
+        asked = []
 
-        def fake_has_open_step(root, spawnid):
-            seen["root"] = root
+        def open_step():
+            asked.append(True)
             return True
 
-        with patch("lightcycle.adapters.worker_session.has_open_step", fake_has_open_step):
-            poll_decision("/data/root", "spid", policy, events)
-        self.assertEqual(seen["root"], "/data/root")
+        poll_decision(open_step, SessionPolicy(), events)
+        self.assertEqual(asked, [True])
 
     def test_no_pending_result_skips_lookup_and_returns_none(self):
-        policy = SessionPolicy()
-        events = queue.Queue()
-
-        def fail_has_open_step(root, spawnid):
-            raise AssertionError("has_open_step should not be called")
-
-        with patch("lightcycle.adapters.worker_session.has_open_step", fail_has_open_step):
-            decision = poll_decision("/data/root", "spid", policy, events)
+        decision = poll_decision(_fail_open_step, SessionPolicy(), queue.Queue())
         self.assertIsNone(decision)
 
     def test_a_result_is_consumed_so_the_next_poll_is_quiet(self):
         policy = SessionPolicy()
         events = queue.Queue()
         events.put((RESULT, None))
-        with patch("lightcycle.adapters.worker_session.has_open_step", lambda r, s: True):
-            first = poll_decision("/data/root", "spid", policy, events)
-        with patch("lightcycle.adapters.worker_session.has_open_step",
-                   _fail_has_open_step):
-            second = poll_decision("/data/root", "spid", policy, events)
+        first = poll_decision(_open, policy, events)
+        second = poll_decision(_fail_open_step, policy, events)
         self.assertIsNotNone(first)
         self.assertIsNone(second)
 
-    def test_a_terminal_command_queued_before_the_result_is_applied_first(self):
-        policy = SessionPolicy()
-        policy.observe_claimed(True)
+    def test_a_session_whose_done_was_refused_is_nudged_not_closed(self):
         events = queue.Queue()
-        events.put((COMMAND, "lc done abc.1 done"))
         events.put((RESULT, None))
-        with patch("lightcycle.adapters.worker_session.has_open_step", lambda r, s: True):
-            self.assertEqual(poll_decision("/data/root", "spid", policy, events), CLOSE)
+        self.assertEqual(poll_decision(_open, SessionPolicy(), events), NUDGE)
+
+    def test_a_session_whose_done_named_another_step_is_nudged_not_closed(self):
+        events = queue.Queue()
+        events.put((RESULT, None))
+        self.assertEqual(poll_decision(_open, SessionPolicy(), events), NUDGE)
+
+    def test_a_session_whose_own_step_is_closed_is_closed(self):
+        events = queue.Queue()
+        events.put((RESULT, None))
+        self.assertEqual(poll_decision(lambda: False, SessionPolicy(), events), CLOSE)
 
 
 class _FakeStdout:
@@ -376,16 +337,16 @@ class TestRun(unittest.TestCase):
             return self._fake_popen({})(cmd, cwd, **kwargs)
 
         with patch("lightcycle.adapters.worker_session.subprocess.Popen", popen):
-            run("/d", "/w", "coder", "spid", "opus", "sys", 5, env={"A": "1"})
+            run("/d", "/w", "coder", "opus", "sys", 5, env={"A": "1"}, open_step=_open)
             self.assertEqual(seen["env"], {"A": "1"})
-            run("/d", "/w", "coder", "spid", "opus", "sys", 5)
+            run("/d", "/w", "coder", "opus", "sys", 5, open_step=_open)
             self.assertIsNone(seen["env"])
 
     def test_launches_with_given_cwd_and_add_dir(self):
         captured = {}
         with patch("lightcycle.adapters.worker_session.subprocess.Popen",
                     self._fake_popen(captured)):
-            run("/data/root", "/work/item-1", "coder", "spid", "opus", "sys", 5)
+            run("/data/root", "/work/item-1", "coder", "opus", "sys", 5, open_step=_open)
         self.assertEqual(captured["cwd"], "/work/item-1")
         cmd = captured["cmd"]
         self.assertIn("--add-dir", cmd)
@@ -395,7 +356,7 @@ class TestRun(unittest.TestCase):
         captured = {}
         with patch("lightcycle.adapters.worker_session.subprocess.Popen",
                     self._fake_popen(captured)):
-            run("/data/root", "/tmp/lc-worker-xyz", "coder", "spid", "opus", "sys", 5)
+            run("/data/root", "/tmp/lc-worker-xyz", "coder", "opus", "sys", 5, open_step=_open)
         self.assertEqual(captured["cwd"], "/tmp/lc-worker-xyz")
 
     def test_reader_bounds_an_unterminated_line_instead_of_growing_without_limit(self):
@@ -403,7 +364,7 @@ class TestRun(unittest.TestCase):
         huge = "x" * (MAX_LINE_BYTES + 100)
         with patch("lightcycle.adapters.worker_session.subprocess.Popen",
                     self._fake_popen(captured, stdout_text=huge)):
-            rc = run("/data/root", "/work/item-1", "coder", "spid", "opus", "sys", 5)
+            rc = run("/data/root", "/work/item-1", "coder", "opus", "sys", 5, open_step=_open)
         self.assertEqual(rc, 0)
 
     class _NeverExitsProc:
@@ -442,7 +403,7 @@ class TestRun(unittest.TestCase):
         clock = self._CountingClock()
         with patch("lightcycle.adapters.worker_session.subprocess.Popen", popen), \
                 patch("lightcycle.adapters.worker_session.time.sleep"):
-            run("/data/root", "/work/item-1", "coder", "spid", "opus", "sys", 0, clock=clock)
+            run("/data/root", "/work/item-1", "coder", "opus", "sys", 0, clock=clock, open_step=_open)
         self.assertEqual(proc.terminate_calls, 2)
         self.assertEqual(proc.kill_calls, 1)
 
@@ -455,7 +416,7 @@ class TestRun(unittest.TestCase):
         clock = self._CountingClock()
         with patch("lightcycle.adapters.worker_session.subprocess.Popen", popen), \
                 patch("lightcycle.adapters.worker_session.time.sleep"):
-            run("/data/root", "/work/item-1", "coder", "spid", "opus", "sys", 0, clock=clock)
+            run("/data/root", "/work/item-1", "coder", "opus", "sys", 0, clock=clock, open_step=_open)
         self.assertGreaterEqual(clock.calls, EXIT_GRACE_SECONDS)
 
     def test_time_time_is_never_called(self):
@@ -463,7 +424,7 @@ class TestRun(unittest.TestCase):
         with patch("lightcycle.adapters.worker_session.subprocess.Popen",
                     self._fake_popen(captured)), \
                 patch("lightcycle.adapters.worker_session.time.time") as faketime:
-            run("/data/root", "/work/item-1", "coder", "spid", "opus", "sys", 5)
+            run("/data/root", "/work/item-1", "coder", "opus", "sys", 5, open_step=_open)
         faketime.assert_not_called()
 
     class _TwoTicksThenExitProc:
@@ -494,35 +455,25 @@ class TestRun(unittest.TestCase):
 
         recorded = []
         with patch("lightcycle.adapters.worker_session.subprocess.Popen", popen):
-            run("/data/root", "/work/item-1", "coder", "spid", "opus", "sys", 5,
-                record_session_id=recorded.append)
+            run("/data/root", "/work/item-1", "coder", "opus", "sys", 5,
+                record_session_id=recorded.append, open_step=_open)
         self.assertEqual(recorded, ["sess-49d8ac0f-6398"])
 
 
 class TestDispatchEvent(unittest.TestCase):
     def test_rejected_rate_limit_line_forwards_to_policy_and_closes(self):
         policy = SessionPolicy()
-        policy.observe_claimed(True)
         events = queue.Queue()
         dispatch_event(json.loads(REJECTED_LINE), REJECTED_LINE, events)
         drain(events, policy)
         self.assertEqual(policy.on_result(has_open_step=True), CLOSE)
 
-    def test_a_terminal_command_event_closes_the_session(self):
-        policy = SessionPolicy()
-        policy.observe_claimed(True)
+    def test_an_assistant_command_line_queues_nothing(self):
         events = queue.Queue()
-        events.put((COMMAND, "lc done abc.1 done"))
-        drain(events, policy)
-        self.assertEqual(policy.on_result(has_open_step=True), CLOSE)
-
-    def test_a_non_terminal_command_event_does_not_close_the_session(self):
-        policy = SessionPolicy()
-        policy.observe_claimed(True)
-        events = queue.Queue()
-        events.put((COMMAND, "lc show abc.1"))
-        drain(events, policy)
-        self.assertEqual(policy.on_result(has_open_step=True), NUDGE)
+        line = json.dumps({"type": "assistant", "message": {"content": [
+            {"type": "tool_use", "input": {"command": "lc done abc.1 done"}}]}})
+        dispatch_event(json.loads(line), line, events)
+        self.assertEqual(events.qsize(), 0)
 
     def test_result_line_queues_a_result_event(self):
         events = queue.Queue()
@@ -559,13 +510,22 @@ class TestDispatchEvent(unittest.TestCase):
 
 
 class TestHasOpenStep(unittest.TestCase):
-    def test_returns_true_not_false_when_registry_is_unreadable(self):
-        root = tempfile.mkdtemp()
-        path = os.path.join(root, "logs", "workers.json")
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w") as f:
-            f.write("{not valid json")
-        self.assertTrue(has_open_step(root, "spawn1"))
+    def _store(self, *claimed):
+        store = MagicMock()
+        store.claimed_steps.return_value = [
+            types.SimpleNamespace(claimed_by=c) for c in claimed]
+        return store
+
+    def test_true_while_a_step_is_claimed_by_this_spawn(self):
+        self.assertTrue(has_open_step(self._store("other", "spawn1"), "spawn1"))
+
+    def test_false_once_no_step_is_claimed_by_this_spawn(self):
+        self.assertFalse(has_open_step(self._store("other"), "spawn1"))
+
+    def test_true_not_false_when_the_store_cannot_be_read(self):
+        store = MagicMock()
+        store.claimed_steps.side_effect = sqlite3.OperationalError("locked")
+        self.assertTrue(has_open_step(store, "spawn1"))
 
 
 if __name__ == "__main__":
@@ -603,5 +563,5 @@ class TestSessionPolicyHasOneWriter(unittest.TestCase):
                         and child.value.id == "policy"
                         and child.attr.startswith("observe_")):
                     callers.add(node.name)
-        self.assertEqual(callers, {"drain", "poll_decision"})
+        self.assertEqual(callers, {"drain"})
         self.assertEqual(callers.intersection(self.READER_THREAD_FUNCTIONS), set())

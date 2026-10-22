@@ -1,6 +1,7 @@
 import contextlib
 import json
 import queue
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -9,11 +10,9 @@ import time
 from dataclasses import dataclass
 from typing import Optional
 
-from lightcycle.adapters.claude_stream import is_terminal_command, parse_rate_limit_event
-from lightcycle.adapters.workers import workers_state
+from lightcycle.adapters.claude_stream import parse_rate_limit_event
 from lightcycle.domain.guidance.guidance import GuidanceSelection
 from lightcycle.domain.pool.worker_session import CLOSE, NUDGE, SessionPolicy
-from lightcycle.ports.workers import RegistryUnreadable
 
 
 class SessionError(Exception):
@@ -99,7 +98,6 @@ def user_message(text):
                        "message": {"role": "user", "content": [{"type": "text", "text": text}]}})
 
 
-COMMAND = "command"
 RESULT = "result"
 RATE_LIMIT = "rate-limit"
 SESSION_ID = "session-id"
@@ -107,12 +105,7 @@ SESSION_ID = "session-id"
 
 def dispatch_event(d, line, events):
     t = d.get("type")
-    if t == "assistant":
-        for c in d.get("message", {}).get("content", []):
-            if c.get("type") == "tool_use":
-                inp = c.get("input", {}) or {}
-                events.put((COMMAND, str(inp.get("command", ""))))
-    elif t == "result":
+    if t == "result":
         events.put((RESULT, None))
     elif t == "rate_limit_event":
         events.put((RATE_LIMIT, parse_rate_limit_event([line])))
@@ -120,15 +113,11 @@ def dispatch_event(d, line, events):
         events.put((SESSION_ID, d.get("session_id")))
 
 
-def has_open_step(root, spawnid):
+def has_open_step(store, spawnid):
     try:
-        entries = workers_state(root)
-    except RegistryUnreadable:
+        return any(t.claimed_by == spawnid for t in store.claimed_steps())
+    except sqlite3.Error:
         return True
-    for e in entries:
-        if e.get("spawnid") == spawnid:
-            return e.get("step") is not None
-    return False
 
 
 def build_command(model, sysprompt, root):
@@ -149,9 +138,7 @@ def drain(events, policy):
             kind, payload = events.get_nowait()
         except queue.Empty:
             return results
-        if kind == COMMAND:
-            policy.observe_terminal(is_terminal_command(payload))
-        elif kind == RATE_LIMIT:
+        if kind == RATE_LIMIT:
             policy.observe_rate_limit(payload)
         elif kind == SESSION_ID:
             policy.observe_session_id(payload)
@@ -159,16 +146,14 @@ def drain(events, policy):
             results += 1
 
 
-def poll_decision(add_dir, spawnid, policy, events):
+def poll_decision(open_step, policy, events):
     if not drain(events, policy):
         return None
-    open_step = has_open_step(add_dir, spawnid)
-    policy.observe_claimed(open_step)
-    return policy.on_result(open_step)
+    return policy.on_result(open_step())
 
 
-def run(add_dir, cwd, stage, spawnid, model, sysprompt, max_session_seconds, clock=time.monotonic,
-        record_session_id=lambda session_id: None, env=None):
+def run(add_dir, cwd, stage, model, sysprompt, max_session_seconds, *, open_step,
+        clock=time.monotonic, record_session_id=lambda session_id: None, env=None):
     proc = subprocess.Popen(build_command(model, sysprompt, add_dir), cwd=cwd,
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             text=True, bufsize=1, env=env)
@@ -208,7 +193,7 @@ def run(add_dir, cwd, stage, spawnid, model, sysprompt, max_session_seconds, clo
         if clock() - start > max_session_seconds:
             proc.terminate()
             break
-        decision = poll_decision(add_dir, spawnid, policy, events)
+        decision = poll_decision(open_step, policy, events)
         if not session_recorded and policy.session_id:
             record_session_id(policy.session_id)
             session_recorded = True
