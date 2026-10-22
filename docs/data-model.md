@@ -16,7 +16,7 @@ graph TD
 
 An id nests under its parent: a child's id is its parent's id plus `.N`.
 
-```
+```text
 tg-18            item
   tg-18.1        step (write-code)
   tg-18.5        step (await-merge)

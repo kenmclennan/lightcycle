@@ -83,27 +83,25 @@ The built-in `lightcycle` origin ships one workflow, **`spec-driven`**: a brief 
 
 A workflow file has these sections; only `entry` is required:
 
-```
+```yaml
 # spec-driven
 
 entry: spec-writer
-requires: repo              # artifacts the item must carry to start
+requires: repo # artifacts the item must carry to start
 
-workspace:                  # which repo a stage runs in (default: project)
+workspace: # which repo a stage runs in (default: project)
   spec-writer  specs
 
-nodes:                      # stage -> step file (when one step serves two positions)
+nodes: # stage -> step file (when one step serves two positions)
   spec-open-pr  open-pr
 
-edges:                      # from-stage  outcome  to-stage
-  spec-writer       done         spec-open-pr
-  spec-await-merge  spec-merged  write-code
-  write-code        done         code-open-pr
+edges: # from-stage  outcome  to-stage
+  spec-writer       done         spec-open-pr spec-await-merge  spec-merged  write-code write-code        done         code-open-pr
 
-hooks:                      # engine event -> handling stage (+ value)
+hooks: # engine event -> handling stage (+ value)
   pr_merge  code-await-merge  merged
 
-signals:                    # stage  metric-name  outcome
+signals: # stage  metric-name  outcome
   review-code  review_rounds  rejected
 ```
 
@@ -126,7 +124,7 @@ Because selection is per item, two items can run different workflows concurrentl
 
 The mutating CLI is a small set of generic primitives over nodes; the read views and engine ops sit alongside. Initialise once with `lc init`, then run the parts in separate terminals.
 
-**Node primitives**
+### Node primitives
 
 | Command | What it does |
 | --- | --- |
@@ -140,7 +138,7 @@ The mutating CLI is a small set of generic primitives over nodes; the read views
 | `lc dep <id> --needs <id>` | link one node as a blocker of another |
 | `lc claim agent` | (agents) atomically claim the next ready agent step, whatever its stage |
 
-**See what's happening / run**
+### See what's happening / run
 
 | Command | What it does |
 | --- | --- |
