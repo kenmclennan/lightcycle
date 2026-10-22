@@ -138,6 +138,9 @@ class Container:
         from lightcycle.application.pool.hook_completions import HookCompletionsUseCase
         from lightcycle.application.pool.memory_gate import MemoryGateUseCase
         from lightcycle.application.pool.monitor_prs import MonitorPrsUseCase
+        from lightcycle.application.pool.release_interrupted_runs import (
+            ReleaseInterruptedRunsUseCase,
+        )
         from lightcycle.application.pool.tick import TickUseCase
         from lightcycle.application.pool.live_usage import LiveUsageAccrualUseCase
 
@@ -174,6 +177,7 @@ class Container:
                 self.store, self.git, self.fs, self.guidance_sync_status, self.config,
             ),
             github_budget=self.github_budget(flow),
+            release_gate=ReleaseInterruptedRunsUseCase(self.store, worktrees),
             config_reload=ReloadConfigUseCase(
                 self.config, self.config_reload_status, os.getpid()),
             sweep=self.sweep(flow=flow, worktrees=worktrees),

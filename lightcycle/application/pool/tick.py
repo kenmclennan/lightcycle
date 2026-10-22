@@ -10,6 +10,7 @@ from lightcycle.application.pool.hook_completions import HookCompletionsResponse
 from lightcycle.application.pool.lifecycle_cadence import LifecycleCadenceResponse
 from lightcycle.application.pool.memory_gate import MemoryGateResponse
 from lightcycle.application.pool.monitor_prs import MonitorPrsResponse
+from lightcycle.application.pool.release_interrupted_runs import ReleaseInterruptedRunsResponse
 from lightcycle.application.pool.reload_config import ReloadConfigResponse
 from lightcycle.application.pool.schedule_cadence import ScheduleCadenceResponse
 from lightcycle.application.pool.script_stages import ScriptStagesResponse
@@ -66,6 +67,7 @@ class TickResponse:
     scripts: Optional[ScriptStagesResponse] = None
     config: Optional[ReloadConfigResponse] = None
     github: Optional[GithubBudgetState] = None
+    released: Optional[ReleaseInterruptedRunsResponse] = None
 
 
 class TickUseCase:
@@ -73,6 +75,7 @@ class TickUseCase:
         self, store, workers, spawner, config, monitor, breaker_gate,
         hook_completions, backup_gate, flow_service, memory_gate, guidance_gate,
         github_poll_gate, github_budget, config_reload, sweep, cadence, accrual, worker_log,
+        release_gate,
     ):
         self._store = store
         self._workers = workers
@@ -93,6 +96,7 @@ class TickUseCase:
         self._memory_gate = memory_gate
         self._guidance_gate = guidance_gate
         self._github_budget = github_budget
+        self._release_gate = release_gate
         self._budget_low = False
 
     def _log_refusals(self, refused, now):
@@ -110,6 +114,13 @@ class TickUseCase:
         except (OSError, GitReadError) as e:
             sys.stderr.write("warning: guidance sync failed: %s\n" % e)
             return None
+
+    def _release_interrupted(self):
+        result = self._release_gate.execute()
+        for run_id, message in result.failed:
+            sys.stderr.write(
+                "warning: interrupted-run release failed for %s: %s\n" % (run_id, message))
+        return result
 
     def _reload_config(self):
         result = self._config_reload.execute()
@@ -130,6 +141,7 @@ class TickUseCase:
         config_result = self._reload_config()
         self._flow_service.clear_cache()
         self._workers.reap()
+        released_result = self._release_interrupted()
         monitor_result = self._monitor.execute()
         self._github_poll_gate.execute(input.now)
         cadence_result = self._cadence.execute(input.now)
@@ -223,4 +235,5 @@ class TickUseCase:
             scripts=scripts_result,
             config=config_result,
             github=github_state,
+            released=released_result,
         )

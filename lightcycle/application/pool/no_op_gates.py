@@ -7,6 +7,7 @@ from lightcycle.application.pool.guidance_sync import GuidanceSyncResponse
 from lightcycle.application.pool.lifecycle_cadence import LifecycleCadenceResponse
 from lightcycle.application.pool.memory_gate import MemoryGateResponse
 from lightcycle.application.pool.monitor_prs import MonitorPrsResponse
+from lightcycle.application.pool.release_interrupted_runs import ReleaseInterruptedRunsResponse
 from lightcycle.application.pool.reload_config import ReloadConfigResponse
 from lightcycle.application.pool.schedule_cadence import ScheduleCadenceResponse
 from lightcycle.application.pool.script_stages import ScriptStagesResponse
@@ -69,6 +70,11 @@ class NoOpScriptGate:
 
     def in_flight(self):
         return []
+
+
+class NoOpReleaseGate:
+    def execute(self):
+        return ReleaseInterruptedRunsResponse()
 
 
 class NoOpBreakerGate:

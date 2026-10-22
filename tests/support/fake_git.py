@@ -122,9 +122,11 @@ class FakeGit(GitPort, TeardownLedgerPort):
 
     def remove_worktree(self, root, path):
         self.calls.append(("remove_worktree", root, path))
+        self._registered.discard(path)
 
     def delete_branch(self, root, branch):
         self.calls.append(("delete_branch", root, branch))
+        self._branches.discard((root, branch))
 
     def delete_remote_branch(self, root, branch):
         self.calls.append(("delete_remote_branch", root, branch))

@@ -124,6 +124,19 @@ class WorktreeService:
         if delete_remote:
             self._git.delete_remote_branch(target, run.branch)
 
+    def release_interrupted(self, run):
+        if run is None or run.state == RunState.OPEN or run.branch is None:
+            return False
+        target = self._target_for_phase(run.item, run.phase)
+        if not self._git.is_git_repo(target):
+            return False
+        path = self.path_for_run(run)
+        if not (self._git.worktree_registered(target, path)
+                or self._git.branch_exists(target, run.branch)):
+            return False
+        self.release_run(run)
+        return True
+
     def _ensure_branch_artifact(self, node, branch):
         run = self._run(node, create=True)
         if run.branch == branch:
