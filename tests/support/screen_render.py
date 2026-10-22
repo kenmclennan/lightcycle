@@ -5,6 +5,7 @@ from dataclasses import replace
 import sys
 
 from lightcycle.application.work.step_inputs import StepInputs
+from lightcycle.application.work.done import CATEGORY_AUTOMATION
 from lightcycle.application.flow.engine_steps import (
     RETRO_ORIGIN_LABEL,
     SUMMARY_ORIGIN_LABEL,
@@ -698,17 +699,13 @@ def _automation_store():
     return store
 
 
-def _automation_populated(size):
+def _done_automations(size):
     session = _launch(_automation_store(), size=size)
-    for _ in range(4):
-        session.press("]")
-    return session
-
-
-def _automation_empty(size):
-    session = _launch(DemoStore(now=lambda: NOW.isoformat()), size=size)
-    for _ in range(4):
-        session.press("]")
+    session.press("]")
+    session.press("]")
+    session.app._done_category = CATEGORY_AUTOMATION
+    session.run(session.app._refresh)
+    session.pause()
     return session
 
 
@@ -1552,8 +1549,7 @@ SCREENS = {
     "done#day-picker": _done_day_picker,
     "done#day-filtered": _done_day_filtered,
     "done#filter-wrapped": _done_filter_wrapped,
-    "automation#populated": _automation_populated,
-    "automation#empty": _automation_empty,
+    "done#automations": _done_automations,
     "report#with-automation": _report_with_automation,
     "report#with-slow-steps": _report_with_slow_steps,
     "report#today": _report_today,

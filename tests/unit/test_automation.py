@@ -4,16 +4,19 @@ import unittest
 from lightcycle.application.flow.engine_steps import (
     HELD_COMMENT_ORIGIN_LABEL,
     RETRO_ORIGIN_LABEL,
-    SCHEDULE_GUARD_LABEL_PREFIX,
     SCHEDULE_ORIGIN_LABEL,
     SUMMARY_ORIGIN_LABEL,
 )
-from lightcycle.application.work import DoneInput, DoneUseCase
+from lightcycle.application.work import (
+    CATEGORY_ALL,
+    CATEGORY_AUTOMATION,
+    DoneInput,
+    DoneUseCase,
+)
 from lightcycle.application.work.automation import (
     AUTOMATION_LABELS,
     AutomationInput,
     AutomationUseCase,
-    automation_kind,
     is_automation_item,
 )
 from lightcycle.application.work.closed_count import closed_count
@@ -37,42 +40,6 @@ def _closed(store, id, label=None, step="build", closed_at="2026-01-01T10:00:00+
     return item
 
 
-class TestScheduledItemsAreCountedByGuard(unittest.TestCase):
-    def _kind(self, guard):
-        s = FakeStore()
-        item_id = _closed(s, "SCH-1", label=SCHEDULE_ORIGIN_LABEL)
-        if guard:
-            s.label_add(item_id, SCHEDULE_GUARD_LABEL_PREFIX + guard)
-        return automation_kind(s, s.get_item(item_id))
-
-    def test_pending_reflections_is_an_audit(self):
-        self.assertEqual(self._kind("pending-reflections"), "audit")
-
-    def test_materials_changed_is_an_audit(self):
-        self.assertEqual(self._kind("materials-changed"), "audit")
-
-    def test_day_unsummarised_is_a_daily_summary(self):
-        self.assertEqual(self._kind("day-unsummarised"), "daily-summary")
-
-    def test_an_unlabelled_scheduled_item_stays_scheduled(self):
-        self.assertEqual(self._kind(None), "scheduled")
-
-    def test_another_guard_stays_scheduled(self):
-        self.assertEqual(self._kind("something-else"), "scheduled")
-
-    def test_lc_automation_tallies_each_under_its_row(self):
-        s = FakeStore()
-        for i, guard in enumerate(["pending-reflections", "day-unsummarised", None]):
-            item_id = _closed(s, "SCH-%d" % i, label=SCHEDULE_ORIGIN_LABEL)
-            if guard:
-                s.label_add(item_id, SCHEDULE_GUARD_LABEL_PREFIX + guard)
-        resp = AutomationUseCase(s).execute(AutomationInput(day=DAY))
-        counts = {t.kind: t.count for t in resp.tallies}
-        self.assertEqual(counts["audit"], 1)
-        self.assertEqual(counts["daily-summary"], 1)
-        self.assertEqual(counts["scheduled"], 1)
-
-
 class TestMembershipIsByLabel(unittest.TestCase):
     def test_the_label_set_is_the_four_origin_labels(self):
         self.assertEqual(
@@ -83,17 +50,15 @@ class TestMembershipIsByLabel(unittest.TestCase):
             }),
         )
 
-    def test_a_scheduled_item_is_automation_of_kind_scheduled(self):
+    def test_a_scheduled_item_is_automation(self):
         s = FakeStore()
         item = s.get_item(_closed(s, "SCH-1", label=SCHEDULE_ORIGIN_LABEL, step="build"))
         self.assertTrue(is_automation_item(s, item))
-        self.assertEqual(automation_kind(s, item), "scheduled")
 
     def test_the_same_workflow_filed_by_hand_is_project_work(self):
         s = FakeStore()
         item = s.get_item(_closed(s, "SCH-1", step="build"))
         self.assertFalse(is_automation_item(s, item))
-        self.assertIsNone(automation_kind(s, item))
 
     def test_a_scheduled_item_is_not_counted_as_a_close(self):
         s = FakeStore()
@@ -101,105 +66,95 @@ class TestMembershipIsByLabel(unittest.TestCase):
         _closed(s, "SCH-1", label=SCHEDULE_ORIGIN_LABEL)
         self.assertEqual(closed_count(s, DAY), 1)
 
-    def test_a_scheduled_item_is_listed_and_tallied_under_scheduled(self):
-        s = FakeStore()
-        _closed(s, "SCH-1", label=SCHEDULE_ORIGIN_LABEL, cost=0.5)
-
-        resp = AutomationUseCase(s).execute(AutomationInput())
-
-        self.assertEqual([r.step.id for r in resp.rows], ["SCH-1"])
-        self.assertEqual(resp.tallies[3].label, "Scheduled")
-        self.assertEqual(resp.tallies[3].count, 1)
-        self.assertEqual(resp.total.spend.cost_usd.micros, 500_000)
-
     def test_an_unlabelled_aud_item_is_project_work(self):
         s = FakeStore()
         item = s.get_item(_closed(s, "AUD-1"))
         self.assertFalse(is_automation_item(s, item))
-        self.assertIsNone(automation_kind(s, item))
 
     def test_a_labelled_lc_item_is_automation(self):
         s = FakeStore()
         item = s.get_item(_closed(s, "LC-1", label=RETRO_ORIGIN_LABEL, step="audit"))
         self.assertTrue(is_automation_item(s, item))
-        self.assertEqual(automation_kind(s, item), "audit")
 
-    def test_summary_kinds_are_told_apart_by_step_stage(self):
+
+def _mixed_store():
+    s = FakeStore()
+    _closed(s, "LC-1", closed_at="2026-01-01T09:00:00+00:00")
+    _closed(s, "AUD-1", label=RETRO_ORIGIN_LABEL, step="audit", closed_at="2026-01-01T11:00:00+00:00")
+    _closed(s, "SUM-1", label=SUMMARY_ORIGIN_LABEL, step="daily-summary", closed_at="2026-01-02T10:00:00+00:00")
+    return s
+
+
+class TestDoneCategories(unittest.TestCase):
+    def _ids(self, uc, **kwargs):
+        return [r.step.id for r in uc.execute(DoneInput(**kwargs)).rows]
+
+    def test_the_default_filter_returns_no_automation_items(self):
+        self.assertEqual(self._ids(DoneUseCase(_mixed_store())), ["LC-1"])
+
+    def test_all_returns_work_and_automation_newest_first(self):
+        self.assertEqual(
+            self._ids(DoneUseCase(_mixed_store()), category=CATEGORY_ALL), ["SUM-1", "AUD-1", "LC-1"]
+        )
+
+    def test_automation_returns_only_automation_items(self):
+        self.assertEqual(
+            self._ids(DoneUseCase(_mixed_store()), category=CATEGORY_AUTOMATION), ["SUM-1", "AUD-1"]
+        )
+
+    def test_counts_report_every_category_and_projects_exclude_automation(self):
+        s = _mixed_store()
+        counts = DoneUseCase(s).counts()
+
+        self.assertEqual(
+            (counts.all_count, counts.no_automation_count, counts.automation_count), (3, 1, 2)
+        )
+        self.assertEqual(counts.total, 1)
+        self.assertEqual(DoneUseCase(s).counts(CATEGORY_AUTOMATION).total, 2)
+        self.assertEqual(DoneUseCase(s).counts(CATEGORY_ALL).total, 3)
+
+    def test_a_project_choice_excludes_that_projects_automation_items(self):
         s = FakeStore()
-        daily = s.get_item(_closed(s, "SUM-1", label=SUMMARY_ORIGIN_LABEL, step="daily-summary"))
-        self.assertEqual(automation_kind(s, daily), "daily-summary")
+        for id, label in [("P-1", None), ("P-2", RETRO_ORIGIN_LABEL)]:
+            item = s.create_item("item %s" % id, "d", id=id, project="proj")
+            s.complete_node(item, "merged", disposition="completed")
+            if label:
+                s.label_add(item, label)
 
-    def test_a_legacy_goal_state_of_play_item_has_no_kind_but_is_still_automation(self):
-        s = FakeStore()
-        legacy = s.get_item(_closed(s, "SUM-2", label=SUMMARY_ORIGIN_LABEL, step="goal-state-of-play"))
-        self.assertIsNone(automation_kind(s, legacy))
-        self.assertTrue(is_automation_item(s, legacy))
+        rows = DoneUseCase(s).execute(DoneInput(project="proj")).rows
 
+        self.assertEqual([r.step.id for r in rows], ["P-1"])
 
-class TestDoneExcludesAutomation(unittest.TestCase):
-    def test_execute_counts_and_day_counts_drop_automation_and_keep_project_items(self):
-        s = FakeStore()
-        _closed(s, "LC-1")
-        _closed(s, "AUD-1", label=RETRO_ORIGIN_LABEL, step="audit")
-        _closed(s, "SUM-1", label=SUMMARY_ORIGIN_LABEL, step="daily-summary")
+    def test_day_counts_follow_the_category(self):
+        uc = DoneUseCase(_mixed_store())
 
-        uc = DoneUseCase(s)
-
-        self.assertEqual([r.step.id for r in uc.execute(DoneInput()).rows], ["LC-1"])
-        self.assertEqual(uc.counts().total, 1)
-        self.assertEqual([(d.day, d.count) for d in uc.day_counts()], [(DAY, 1)])
-
-    def test_two_items_of_the_same_id_shape_land_on_opposite_sides(self):
-        s = FakeStore()
-        _closed(s, "AUD-1")
-        _closed(s, "AUD-2", label=RETRO_ORIGIN_LABEL, step="audit")
-
-        rows = DoneUseCase(s).execute(DoneInput()).rows
-
-        self.assertEqual([r.step.id for r in rows], ["AUD-1"])
+        self.assertEqual([(d.day.day, d.count) for d in uc.day_counts()], [(1, 1)])
+        self.assertEqual(
+            [(d.day.day, d.count) for d in uc.day_counts(category=CATEGORY_ALL)], [(2, 1), (1, 2)]
+        )
+        self.assertEqual(
+            [(d.day.day, d.count) for d in uc.day_counts(category=CATEGORY_AUTOMATION)], [(2, 1), (1, 1)]
+        )
 
 
 class TestAutomationUseCase(unittest.TestCase):
-    def test_tallies_are_always_one_per_kind_in_order_with_absent_kind_at_zero(self):
+    def test_total_counts_and_sums_spend_across_automation_items(self):
         s = FakeStore()
         _closed(s, "AUD-1", label=RETRO_ORIGIN_LABEL, step="audit", cost=1.0)
         _closed(s, "SUM-1", label=SUMMARY_ORIGIN_LABEL, step="daily-summary", cost=0.5)
+        _closed(s, "LC-1", cost=9.0)
 
-        resp = AutomationUseCase(s).execute(AutomationInput())
+        total = AutomationUseCase(s).execute(AutomationInput())
 
-        self.assertEqual([t.kind for t in resp.tallies], ["audit", "daily-summary", "held-comment", "scheduled"])
-        self.assertEqual([t.count for t in resp.tallies], [1, 1, 0, 0])
-        self.assertEqual(resp.total.count, 2)
-        self.assertEqual(resp.total.spend.cost_usd.micros, 1_500_000)
-
-    def test_a_legacy_goal_state_of_play_item_is_listed_and_counted_nowhere(self):
-        s = FakeStore()
-        _closed(s, "SUM-1", label=SUMMARY_ORIGIN_LABEL, step="daily-summary")
-        _closed(s, "SUM-2", label=SUMMARY_ORIGIN_LABEL, step="goal-state-of-play")
-
-        resp = AutomationUseCase(s).execute(AutomationInput())
-
-        self.assertEqual([r.step.id for r in resp.rows], ["SUM-1"])
-        self.assertEqual([t.count for t in resp.tallies], [0, 1, 0, 0])
-        self.assertEqual(resp.total.count, 1)
+        self.assertEqual(total.count, 2)
+        self.assertEqual(total.spend.cost_usd.micros, 1_500_000)
 
     def test_day_filters_by_closed_date(self):
         s = FakeStore()
         _closed(s, "AUD-1", label=RETRO_ORIGIN_LABEL, step="audit")
         _closed(s, "AUD-2", label=RETRO_ORIGIN_LABEL, step="audit", closed_at="2026-01-02T10:00:00+00:00")
 
-        resp = AutomationUseCase(s).execute(AutomationInput(day=DAY))
-
-        self.assertEqual([r.step.id for r in resp.rows], ["AUD-1"])
-
-    def test_rows_are_newest_closed_first(self):
-        s = FakeStore()
-        _closed(s, "AUD-1", label=RETRO_ORIGIN_LABEL, step="audit")
-        _closed(s, "AUD-2", label=RETRO_ORIGIN_LABEL, step="audit", closed_at="2026-01-02T10:00:00+00:00")
-
-        resp = AutomationUseCase(s).execute(AutomationInput())
-
-        self.assertEqual([r.step.id for r in resp.rows], ["AUD-2", "AUD-1"])
+        self.assertEqual(AutomationUseCase(s).execute(AutomationInput(day=DAY)).count, 1)
 
     def test_an_in_flight_automation_item_is_excluded(self):
         s = FakeStore()
@@ -207,23 +162,10 @@ class TestAutomationUseCase(unittest.TestCase):
         s.create_step(stage="audit", role="agent", item=item)
         s.label_add(item, RETRO_ORIGIN_LABEL)
 
-        self.assertEqual(AutomationUseCase(s).execute(AutomationInput()).total.count, 0)
+        self.assertEqual(AutomationUseCase(s).execute(AutomationInput()).count, 0)
 
     def test_an_abandoned_automation_item_is_counted(self):
         s = FakeStore()
         _closed(s, "AUD-1", label=RETRO_ORIGIN_LABEL, step="audit", disposition="abandoned")
 
-        self.assertEqual(AutomationUseCase(s).execute(AutomationInput()).total.count, 1)
-
-
-class TestHeldCommentItemsAreAutomation(unittest.TestCase):
-    def test_a_closed_hold_item_is_listed_under_its_own_kind(self):
-        s = FakeStore()
-        _closed(s, "HLD-1", label=HELD_COMMENT_ORIGIN_LABEL, step="review-held-comment")
-
-        resp = AutomationUseCase(s).execute(AutomationInput())
-
-        self.assertEqual([r.step.id for r in resp.rows], ["HLD-1"])
-        self.assertEqual([t.count for t in resp.tallies], [0, 0, 1, 0])
-        self.assertEqual(resp.tallies[2].label, "Held comments")
-        self.assertTrue(is_automation_item(s, s.get_item("HLD-1")))
+        self.assertEqual(AutomationUseCase(s).execute(AutomationInput()).count, 1)

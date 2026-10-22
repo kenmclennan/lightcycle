@@ -8,6 +8,7 @@ from textual.css.query import NoMatches
 from textual.widgets import DataTable, Input, Static
 
 from lightcycle import __version__
+from lightcycle.application.work.done import CATEGORY_ALL
 from lightcycle.adapters.tui.app import (
     BACKLOG_COLUMNS,
     DATA_COLUMNS,
@@ -17,8 +18,6 @@ from lightcycle.adapters.tui.app import (
     BacklogFilterInput,
     BacklogTable,
     BacklogView,
-    AutomationTable,
-    AutomationView,
     DoneFilterInput,
     DoneTable,
     DoneView,
@@ -35,7 +34,6 @@ from lightcycle.adapters.tui.app import (
     _tui_metric_line,
 )
 from lightcycle.adapters.tui import app as tui_app_module
-from lightcycle.adapters.tui.hub import NodeHubScreen
 from lightcycle.application.flow.engine_steps import RETRO_ORIGIN_LABEL, SUMMARY_ORIGIN_LABEL
 from lightcycle.adapters.tui.design_system import (
     BACKLOG_EMPTY_SHORTCUTS,
@@ -51,8 +49,6 @@ from lightcycle.adapters.tui.design_system import (
     DONE_FILTERED_EMPTY_SHORTCUTS,
     DONE_SEARCH_EMPTY_SHORTCUTS,
     DONE_SEARCH_SHORTCUTS,
-    AUTOMATION_EMPTY_SHORTCUTS,
-    AUTOMATION_SHORTCUTS,
     DONE_SHORTCUTS,
     FOOTER_GLYPHS,
     GLOBAL_SHORTCUTS,
@@ -397,7 +393,7 @@ class TestActiveGroup(unittest.TestCase):
         session = self._launch(store)
         self.assertIsNotNone(session.app._active_glyph_timer)
 
-        for _ in range(4):
+        for _ in range(3):
             session.press("]")
             self.assertIsNone(session.app._active_glyph_timer)
 
@@ -1579,25 +1575,25 @@ class TestBacklogTabSwitch(unittest.TestCase):
         self.assertIn("tab-active", session.app.query_one("#tab-backlog").classes)
         self.assertIn("tab-dim", session.app.query_one("#tab-current-work").classes)
 
-    def test_bracket_backward_from_the_landing_view_wraps_to_automation(self):
+    def test_bracket_backward_from_the_landing_view_wraps_to_report(self):
         session = self._launch()
 
         session.press("[")
 
-        self.assertTrue(session.app.query_one(AutomationView).display)
+        self.assertTrue(session.app.query_one(ReportView).display)
         self.assertFalse(session.app.query_one(PriorityTable).display)
-        self.assertIn("tab-active", session.app.query_one("#tab-automation").classes)
+        self.assertIn("tab-active", session.app.query_one("#tab-report").classes)
         self.assertIn("tab-dim", session.app.query_one("#tab-current-work").classes)
 
-    def test_bracket_forward_from_automation_wraps_to_the_landing_view(self):
+    def test_bracket_forward_from_report_wraps_to_the_landing_view(self):
         session = self._launch()
 
-        for _ in range(4):
+        for _ in range(3):
             session.press("]")
-        self.assertTrue(session.app.query_one(AutomationView).display)
+        self.assertTrue(session.app.query_one(ReportView).display)
         session.press("]")
 
-        self.assertFalse(session.app.query_one(AutomationView).display)
+        self.assertFalse(session.app.query_one(ReportView).display)
         self.assertIn("tab-active", session.app.query_one("#tab-current-work").classes)
 
     def test_bracket_forward_then_backward_returns_to_priority_list(self):
@@ -1635,10 +1631,10 @@ class TestBacklogTabSwitch(unittest.TestCase):
         self.assertIn("tab-active", session.app.query_one("#tab-report").classes)
         self.assertIn("tab-dim", session.app.query_one("#tab-done").classes)
 
-    def test_tab_a_fifth_time_returns_to_priority_list(self):
+    def test_tab_a_fourth_time_returns_to_priority_list(self):
         session = self._launch()
 
-        for _ in range(5):
+        for _ in range(4):
             session.press("]")
 
         self.assertFalse(session.app.query_one(BacklogView).display)
@@ -1944,7 +1940,7 @@ class TestBacklogFooter(unittest.TestCase):
         store.create_item("todo item", "a description")
         session = self._launch(store)
 
-        for _ in range(4):
+        for _ in range(3):
             session.press("]")
 
         self.assertEqual(session.app.query_one(ShortcutBar).shortcuts, GLOBAL_SHORTCUTS)
@@ -2380,10 +2376,10 @@ class TestDoneTabSwitch(unittest.TestCase):
         self.assertTrue(session.app.query_one(ReportView).display)
         self.assertIn("tab-active", session.app.query_one("#tab-report").classes)
 
-    def test_five_presses_returns_to_priority(self):
+    def test_four_presses_returns_to_priority(self):
         session = self._launch()
 
-        for _ in range(5):
+        for _ in range(4):
             session.press("]")
 
         self.assertFalse(session.app.query_one(DoneView).display)
@@ -2424,7 +2420,7 @@ class TestDoneFilterRowFlow(unittest.TestCase):
     def _flowed(self, width, project=None, day=DAY, count=149, store=None):
         session = _launch_sized(width, 2, store)
         self.addCleanup(session.close)
-        session.app.query_one(DoneView)._render_filter_bar(project, day, count)
+        session.app.query_one(DoneView)._render_filter_bar(project, day, count, CATEGORY_ALL)
         session.pause()
         return session
 
@@ -2503,7 +2499,7 @@ class TestDoneFilterRowFlow(unittest.TestCase):
         self.addCleanup(session.close)
         self.assertEqual(_block_height(session, "done"), 4)
 
-        session.resize(40, 30)
+        session.resize(70, 30)
         self.assertEqual(_block_height(session, "done"), 5)
         self.assertTrue(last_text_row(session.app, "done").rstrip().endswith("1 items"))
 
@@ -3689,13 +3685,6 @@ class TestTuiMetricsRecording(unittest.TestCase):
         self.assertEqual(self._run_log_lines(container), before)
 
 
-def _launch_automation(store, **kwargs):
-    session = launch(make_test_container(store=store), **kwargs)
-    for _ in range(4):
-        session.press("]")
-    return session
-
-
 def _automation_item(store, id, label, step, closed_at="2026-01-01T10:00:00+00:00"):
     item = store.create_item("title %s" % id, "d", id=id)
     child = store.create_step(stage=step, role="agent", item=item)
@@ -3706,72 +3695,75 @@ def _automation_item(store, id, label, step, closed_at="2026-01-01T10:00:00+00:0
     return item
 
 
-class TestAutomationTab(unittest.TestCase):
-    def test_tab_strip_reads_automation_last(self):
+class TestDoneTabAutomationFilter(unittest.TestCase):
+    def _store(self):
+        store = FakeStore()
+        _automation_item(store, "AUD-1", RETRO_ORIGIN_LABEL, "audit")
+        _automation_item(store, "SUM-1", SUMMARY_ORIGIN_LABEL, "daily-summary")
+        return store
+
+    def _ids(self, session):
+        return {r.key.value for r in session.app.query_one(DoneTable).ordered_rows}
+
+    def test_tab_strip_reads_report_last(self):
         session = launch(make_test_container(store=FakeStore()))
         self.addCleanup(session.close)
         strip = session.app.query_one(TabStrip)
         text = "".join(str(w.render()) for w in strip.query(Static))
-        self.assertTrue(text.endswith("Report · Automation"))
+        self.assertTrue(text.endswith("Done · Report"))
 
-    def test_shows_tally_lines_and_rows_for_a_mixed_fixture(self):
-        store = FakeStore()
-        _automation_item(store, "AUD-1", RETRO_ORIGIN_LABEL, "audit")
-        _automation_item(store, "SUM-1", SUMMARY_ORIGIN_LABEL, "daily-summary")
-        session = _launch_automation(store)
+    def test_done_opens_without_automation_and_names_the_choice(self):
+        session = _launch_done(self._store())
         self.addCleanup(session.close)
 
-        tally = session.app.query_one("#automation-tally", Static).render().plain.splitlines()
+        self.assertEqual(self._ids(session), set())
+        bar = "\n".join(block_rows(session.app, "done"))
+        self.assertIn("All (no automation)", bar)
 
-        self.assertEqual(len(tally), 5)
-        self.assertTrue(tally[0].startswith("Audits"))
-        self.assertTrue(tally[2].startswith("Held comments"))
-        self.assertTrue(tally[3].startswith("Scheduled"))
-        self.assertTrue(tally[4].startswith("Total"))
-        table = session.app.query_one(AutomationTable)
-        self.assertEqual({r.key.value for r in table.ordered_rows}, {"AUD-1", "SUM-1"})
-        self.assertEqual(session.app.query_one(ShortcutBar).shortcuts, AUTOMATION_SHORTCUTS)
-
-    def test_empty_state_and_footer_with_zero_items(self):
-        session = _launch_automation(FakeStore())
+    def test_f_lists_the_categories_then_projects_with_counts(self):
+        session = _launch_done(self._store())
         self.addCleanup(session.close)
 
-        empty = session.app.query_one("#automation-empty", Static)
+        session.press("f")
+        screen = session.app.screen
+        labels = [
+            _rendered_text(o.query_one("#picker-option-label", Static)).strip()
+            for o in screen.query(".picker-option")
+        ]
 
-        self.assertTrue(empty.display)
-        self.assertEqual(empty.render().plain, "No automation has run yet.")
-        self.assertFalse(session.app.query_one(AutomationTable).display)
-        self.assertEqual(session.app.query_one(ShortcutBar).shortcuts, AUTOMATION_EMPTY_SHORTCUTS)
+        labels = [l.lstrip("❯ ") for l in labels]
+        self.assertEqual(labels[:3], ["All", "All (no automation)", "Automations"])
+        counts = [
+            _rendered_text(o.query_one(".picker-option-count", Static)).strip()
+            for o in screen.query(".picker-option")
+        ]
+        self.assertEqual(counts[:3], ["2", "0", "2"])
 
-    def test_in_flight_automation_is_not_listed(self):
-        store = FakeStore()
-        item = store.create_item("running", "d", id="AUD-1")
-        store.create_step(stage="audit", role="agent", item=item)
-        store.label_add(item, RETRO_ORIGIN_LABEL)
-        session = _launch_automation(store)
+    def test_choosing_automations_lists_only_automation_items(self):
+        session = _launch_done(self._store())
         self.addCleanup(session.close)
 
-        self.assertEqual(session.app.query_one(AutomationTable).row_count, 0)
-
-    def test_enter_opens_the_node_hub(self):
-        store = FakeStore()
-        _automation_item(store, "AUD-1", RETRO_ORIGIN_LABEL, "audit")
-        session = _launch_automation(store)
-        self.addCleanup(session.close)
-
+        session.press("f")
+        session.press("down")
+        session.press("down")
         session.press("enter")
+        session.pause()
 
-        self.assertIsInstance(session.app.screen, NodeHubScreen)
+        self.assertEqual(self._ids(session), {"AUD-1", "SUM-1"})
+        bar = "\n".join(block_rows(session.app, "done"))
+        self.assertIn("Automations", bar)
 
-    def test_polling_from_another_view_never_scans_for_automation(self):
-        store = FakeStore()
-        _automation_item(store, "AUD-1", RETRO_ORIGIN_LABEL, "audit")
-        session = launch(make_test_container(store=store))
+    def test_the_day_picker_counts_the_chosen_category(self):
+        session = _launch_done(self._store())
         self.addCleanup(session.close)
-        calls = _spy_all_items_including_done_calls(store)
-
-        session.run(session.app._refresh_automation_view)
+        session.app._done_category = "automation"
         session.run(session.app._refresh)
         session.pause()
 
-        self.assertEqual(calls["n"], 0)
+        session.press("d")
+        counts = [
+            _rendered_text(o.query_one(".picker-option-count", Static)).strip()
+            for o in session.app.screen.query(".picker-option")
+        ]
+
+        self.assertEqual(counts, ["2", "2"])

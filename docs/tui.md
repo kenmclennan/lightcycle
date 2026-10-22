@@ -6,7 +6,7 @@ Where `tests/feature/the-*-tab.feature` and `tests/feature/priority-list-renders
 
 ## Screens
 
-**The priority list** answers "what is happening, and what needs me". Its tab strip reads `Current work · Backlog · Done · Report · Automation`; the dashboard lands on Current work, and `[` from there wraps to Automation. Backlog, Done, Report and Automation are the other views alongside Current work.
+**The priority list** answers "what is happening, and what needs me". Its tab strip reads `Current work · Backlog · Done · Report`; the dashboard lands on Current work, and `[` from there wraps to Report. Backlog, Done and Report are the other views alongside Current work. The Done tab's `f` picker lists `All`, `All (no automation)`, `Automations`, then one entry per project, each with its count; it opens on `All (no automation)`, a project choice never includes that project's automation items, and the `d` day picker counts the set the current choice shows.
 
 Current work is three fixed-order groups - needs-attention, active, queued - with one row per **item**, never per step. A row carries the item's id, its project, its title, the stage of its current or next step, and for active work a live approximate elapsed time. A terminal bell rings the moment something newly enters needs-attention, so it can be noticed in an unfocused pane, and never rings again for the same item while it stays there. An engine step such as CI polling only runs on a pool tick, so it counts as active, with the animated glyph, only while the pool is running; with the pool stopped it shows as queued.
 

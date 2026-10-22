@@ -46,6 +46,8 @@ Feature: The done screen
     Given the done tab is shown with the registered projects "org-a/proj-a" and "org-b/proj-b", each with a closed item
     When f is pressed
     And Down is pressed
+    And Down is pressed
+    And Down is pressed
     And Enter is pressed
     Then the picker is closed
     And the done tab is filtered to "proj-a"
@@ -53,6 +55,8 @@ Feature: The done screen
   Scenario: A typed search term composes with an already-picked project to their intersection
     Given the done tab is shown with the registered projects "org-a/proj-a" and "org-b/proj-b", each with a closed item titled "shared name"
     When f is pressed
+    And Down is pressed
+    And Down is pressed
     And Down is pressed
     And Enter is pressed
     And / is pressed
@@ -172,6 +176,8 @@ Feature: The done screen
   Scenario: A picked day composes with an already-active project filter to their intersection
     Given the done tab is shown with the registered projects "org-a/proj-a" and "org-b/proj-b", each with a closed item, closed on different days
     When f is pressed
+    And Down is pressed
+    And Down is pressed
     And Down is pressed
     And Enter is pressed
     And d is pressed

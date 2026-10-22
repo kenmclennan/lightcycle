@@ -2,10 +2,8 @@ from lightcycle.application.work.active_steps import ActiveStepsUseCase
 from lightcycle.application.work.automation import (
     AUTOMATION_LABELS,
     AutomationInput,
-    AutomationResponse,
-    AutomationTally,
+    AutomationTotal,
     AutomationUseCase,
-    automation_kind,
     is_automation_item,
 )
 from lightcycle.application.work.backlog import BacklogInput, BacklogUseCase
@@ -13,7 +11,14 @@ from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseC
 from lightcycle.application.work.cost import CostInput, CostUseCase
 from lightcycle.application.work.create_item import CreateItemInput, CreateItemUseCase
 from lightcycle.application.work.create_step import CreateStepInput, CreateStepUseCase
-from lightcycle.application.work.done import DayCount, DoneInput, DoneUseCase
+from lightcycle.application.work.done import (
+    CATEGORY_ALL,
+    CATEGORY_AUTOMATION,
+    CATEGORY_NO_AUTOMATION,
+    DayCount,
+    DoneInput,
+    DoneUseCase,
+)
 from lightcycle.application.work.reopen_item import (
     ReopenItemInput,
     ReopenItemResponse,
@@ -41,11 +46,12 @@ from lightcycle.application.work.trace import TraceInput, TraceUseCase
 
 __all__ = [
     "AUTOMATION_LABELS",
+    "CATEGORY_ALL",
+    "CATEGORY_AUTOMATION",
+    "CATEGORY_NO_AUTOMATION",
     "AutomationInput",
-    "AutomationResponse",
-    "AutomationTally",
+    "AutomationTotal",
     "AutomationUseCase",
-    "automation_kind",
     "is_automation_item",
     "ActiveStepsUseCase",
     "BacklogInput",

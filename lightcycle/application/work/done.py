@@ -12,12 +12,17 @@ from lightcycle.domain.work import node_id_key, parse_timestamp
 
 _MIN_TIMESTAMP = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
 
+CATEGORY_ALL = "all"
+CATEGORY_NO_AUTOMATION = "no-automation"
+CATEGORY_AUTOMATION = "automation"
+
 
 @dataclass(frozen=True)
 class DoneInput:
     project: Optional[str] = None
     text: Optional[str] = None
     day: Optional[datetime.date] = None
+    category: str = CATEGORY_NO_AUTOMATION
 
 
 @dataclass(frozen=True)
@@ -30,12 +35,23 @@ class DoneCountsResponse:
     projects: List[ProjectCount]
     unscoped: int
     total: int
+    all_count: int = 0
+    no_automation_count: int = 0
+    automation_count: int = 0
 
 
 @dataclass(frozen=True)
 class DayCount:
     day: datetime.date
     count: int
+
+
+def _category_matches(is_automation, category):
+    if category == CATEGORY_ALL:
+        return True
+    if category == CATEGORY_AUTOMATION:
+        return is_automation
+    return not is_automation
 
 
 def _day_matches(item, day):
@@ -51,7 +67,7 @@ class DoneUseCase:
         self._closed_items_cache = None
 
     def execute(self, input: DoneInput) -> DoneResponse:
-        items = self._closed_items()
+        items = self._items_in(input.category)
         items = [t for t in items if project_matches(t, input.project)]
         items = [t for t in items if text_matches(t, input.text)]
         items = [t for t in items if _day_matches(t, input.day)]
@@ -71,15 +87,25 @@ class DoneUseCase:
         ]
         return DoneResponse(rows=rows)
 
-    def counts(self) -> DoneCountsResponse:
-        items = self._closed_items()
-        projects, unscoped = project_counts(self._store, items)
-        return DoneCountsResponse(projects=projects, unscoped=unscoped, total=len(items))
+    def counts(self, category: str = CATEGORY_NO_AUTOMATION) -> DoneCountsResponse:
+        entries = self._closed_entries()
+        without = [n for n, auto in entries if not auto]
+        projects, unscoped = project_counts(self._store, without)
+        return DoneCountsResponse(
+            projects=projects, unscoped=unscoped,
+            total=len(self._items_in(category)),
+            all_count=len(entries),
+            no_automation_count=len(without),
+            automation_count=len(entries) - len(without),
+        )
 
-    def day_counts(self) -> List[DayCount]:
-        items = self._closed_items()
+    def day_counts(
+        self, project: Optional[str] = None, category: str = CATEGORY_NO_AUTOMATION,
+    ) -> List[DayCount]:
         buckets = {}
-        for t in items:
+        for t in self._items_in(category):
+            if not project_matches(t, project):
+                continue
             parsed = parse_timestamp(t.closed_at)
             if parsed is None:
                 continue
@@ -89,10 +115,14 @@ class DoneUseCase:
             key=lambda dc: dc.day, reverse=True,
         )
 
-    def _closed_items(self):
+    def _items_in(self, category):
+        return [n for n, auto in self._closed_entries() if _category_matches(auto, category)]
+
+    def _closed_entries(self):
         if self._closed_items_cache is None:
             self._closed_items_cache = [
-                n for n in self._store.all_items_including_done()
-                if is_closed_item(n) and not automation.is_automation_item(self._store, n)
+                (n, automation.is_automation_item(self._store, n))
+                for n in self._store.all_items_including_done()
+                if is_closed_item(n)
             ]
         return self._closed_items_cache
