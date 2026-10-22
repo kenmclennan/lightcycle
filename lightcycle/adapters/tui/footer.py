@@ -6,7 +6,7 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import Static
 
 from lightcycle.adapters.tui.design_system import COLOURS, FOOTER_GLYPHS, GLOBAL_SHORTCUTS
-from lightcycle.domain.pool import github_budget_level
+from lightcycle.domain.pool import github_budget_level, tick_age_text
 
 
 class StatusBar(Horizontal):
@@ -38,6 +38,7 @@ class StatusBar(Horizontal):
         github=None,
         doctor_areas=(),
         doctor_failed=False,
+        pool_tick_health=None,
     ):
         if pool_transition_kind == "start":
             glyph_key = "pool-start-timed-out" if pool_transition_expired else "pool-starting"
@@ -48,6 +49,12 @@ class StatusBar(Horizontal):
         elif pool_draining_waiting is not None:
             glyph_key = "pool-draining"
             label = "pool draining (%s)" % pool_draining_waiting
+        elif pool_running and pool_tick_health is not None and pool_tick_health.level == "stalled":
+            glyph_key = "pool-stalled"
+            label = "pool stalled · %s" % tick_age_text(pool_tick_health.age_seconds)
+        elif pool_running and pool_tick_health is not None and pool_tick_health.level == "lagging":
+            glyph_key = "pool-lagging"
+            label = "pool lagging · %ss ticks" % pool_tick_health.median_seconds
         else:
             glyph_key = "pool-running" if pool_running else "pool-stopped"
             label = "pool running" if pool_running else "pool not running"

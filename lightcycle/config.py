@@ -60,6 +60,9 @@ _ENV_OVERRIDE_VARS = {
     "github-poll-seconds": "LC_GITHUB_POLL_SECONDS",
     "github-reserve-calls": "LC_GITHUB_RESERVE_CALLS",
     "github-view-refresh-polls": "LC_GITHUB_VIEW_REFRESH_POLLS",
+    "tick-lag-window-seconds": "LC_TICK_LAG_WINDOW_SECONDS",
+    "tick-lag-share": "LC_TICK_LAG_SHARE",
+    "tick-stall-seconds": "LC_TICK_STALL_SECONDS",
     "worker-history": "LC_WORKER_HISTORY",
     "editor": "EDITOR",
     "tui-autostart-pool": "LC_TUI_AUTOSTART_POOL",
@@ -503,6 +506,21 @@ class Config:
         env = self._env_int("LC_GITHUB_RESERVE_CALLS", None)
         value = env if env is not None else self._required_int("github-reserve-calls")
         return self._check_range("github-reserve-calls", value)
+
+    def tick_lag_window_seconds(self):
+        env = self._env_int("LC_TICK_LAG_WINDOW_SECONDS", None)
+        value = env if env is not None else self._required_int("tick-lag-window-seconds")
+        return self._check_range("tick-lag-window-seconds", value)
+
+    def tick_lag_share(self):
+        env = self._env_int("LC_TICK_LAG_SHARE", None)
+        value = env if env is not None else self._required_int("tick-lag-share")
+        return self._check_range("tick-lag-share", value)
+
+    def tick_stall_seconds(self):
+        env = self._env_int("LC_TICK_STALL_SECONDS", None)
+        value = env if env is not None else self._required_int("tick-stall-seconds")
+        return self._check_range("tick-stall-seconds", value)
 
     def github_view_refresh_polls(self):
         env = self._env_int("LC_GITHUB_VIEW_REFRESH_POLLS", None)

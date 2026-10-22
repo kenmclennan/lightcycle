@@ -1477,3 +1477,42 @@ class TestCiEmptyHeadConfig(unittest.TestCase):
             with self.assertRaises(ConfigError) as ctx:
                 getattr(_cfg(), getter)()
             self.assertIn(key, str(ctx.exception))
+
+
+class TestTickTimingKeys(unittest.TestCase):
+    _CASES = (
+        ("tick-lag-window-seconds", "LC_TICK_LAG_WINDOW_SECONDS", "tick_lag_window_seconds", "300", 1, None),
+        ("tick-lag-share", "LC_TICK_LAG_SHARE", "tick_lag_share", "50", 1, 100),
+        ("tick-stall-seconds", "LC_TICK_STALL_SECONDS", "tick_stall_seconds", "120", 1, None),
+    )
+
+    def test_seeded_values(self):
+        for key, _env, _getter, seed, _lo, _hi in self._CASES:
+            self.assertEqual(dict(_SEED_KEYS)[key], seed, key)
+
+    def test_the_file_value_is_read(self):
+        for key, _env, getter, _seed, _lo, _hi in self._CASES:
+            self.assertEqual(getattr(_cfg(**{key.replace("-", "_"): "42"}), getter)(), 42, key)
+
+    def test_env_override_wins(self):
+        for key, env, getter, _seed, _lo, _hi in self._CASES:
+            c = _cfg({env: "7"}, **{key.replace("-", "_"): "42"})
+            self.assertEqual(getattr(c, getter)(), 7, key)
+
+    def test_bounds_are_accepted_and_beyond_them_refused_naming_the_key(self):
+        for key, _env, getter, _seed, lo, hi in self._CASES:
+            kw = key.replace("-", "_")
+            self.assertEqual(getattr(_cfg(**{kw: str(lo)}), getter)(), lo, key)
+            with self.assertRaises(ConfigError) as ctx:
+                getattr(_cfg(**{kw: str(lo - 1)}), getter)()
+            self.assertIn(key, str(ctx.exception))
+            if hi is not None:
+                self.assertEqual(getattr(_cfg(**{kw: str(hi)}), getter)(), hi, key)
+                with self.assertRaises(ConfigError):
+                    getattr(_cfg(**{kw: str(hi + 1)}), getter)()
+
+    def test_missing_fails_naming_the_key(self):
+        for key, _env, getter, _seed, _lo, _hi in self._CASES:
+            with self.assertRaises(ConfigError) as ctx:
+                getattr(_cfg(spin_cap="3"), getter)()
+            self.assertIn(key, str(ctx.exception))

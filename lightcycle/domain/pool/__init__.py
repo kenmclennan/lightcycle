@@ -18,11 +18,16 @@ from lightcycle.domain.pool.spin_ledger import SpinLedger, StepSpin
 from lightcycle.domain.pool.usage import (
     ModelRates, UsageEvent, UsageResume, price_tokens, resolve_usage, sum_usage_events,
 )
+from lightcycle.domain.pool.tick_timing import (
+    TickHealth, TickTiming, tick_age_text, tick_health, tick_timing_from_state,
+    tick_timing_recorded, tick_timing_started,
+)
 from lightcycle.domain.pool.worker import Worker
 from lightcycle.domain.pool.worker_pool import WorkerPool
 
 __all__ = [
-    "AttributionEvent", "Breaker", "ConfigReloadState", "GithubBudget", "GuidanceSyncState", "MemoryGateState", "MachineHeadroom", "ModelRates", "PoolPlan", "RateLimitEvent",
+    "AttributionEvent", "Breaker", "TickHealth", "TickTiming", "tick_age_text", "tick_health",
+    "tick_timing_from_state", "tick_timing_recorded", "tick_timing_started", "ConfigReloadState", "GithubBudget", "GuidanceSyncState", "MemoryGateState", "MachineHeadroom", "ModelRates", "PoolPlan", "RateLimitEvent",
     "ReadyQueue", "SpinLedger", "StepSpin", "ToolUsage", "UsageEvent", "UsageResume", "Worker",
     "WorkerPool", "admission_cap", "MISSING_STATUS", "ci_outcome",
     "PrWorkflows", "pr_workflows_expected", "failing_check", "is_concluded", "judged_checks", "status_mismatch", "timed_out_check", "github_budget_from_state", "github_budget_level", "github_budget_low", "pr_repo", "price_tokens", "resolve_usage", "sum_attribution_events",

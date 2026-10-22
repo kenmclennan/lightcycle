@@ -15,6 +15,7 @@ from lightcycle.ports.lock import RunLockPort
 from lightcycle.ports.machine import MachinePort
 from lightcycle.ports.memory_gate_status import MemoryGateStatusPort
 from lightcycle.ports.scaffold import ScaffoldPort
+from lightcycle.ports.tick_timing_status import TickTimingStatusPort
 from lightcycle.ports.github_poll_runner import GithubPollRunnerPort
 from lightcycle.ports.run_groups import RunGroupsPort
 from lightcycle.ports.script_runner import ScriptRunnerPort
@@ -33,6 +34,7 @@ __all__ = [
     "BreakerPort",
     "GhShimPort",
     "GithubBudgetStatusPort",
+    "TickTimingStatusPort",
     "ClaudeStreamPort",
     "ConfigReloadStatusPort",
     "FsPort",

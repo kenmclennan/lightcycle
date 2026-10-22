@@ -62,6 +62,9 @@ This table documents every `_SEED_KEYS` entry - `tests/unit/test_docs_reference_
 | `github-poll-seconds` | how often the background github poll reads GitHub, minimum 1 and required (seeded `60`); separate from `poll-seconds` so a tick never waits on GitHub. Takes effect on the next config reload |
 | `github-reserve-calls` | the github budget floor, required (seeded `750`, about an hour of the pool's own poll at one cycle a minute); while the **github budget** shows fewer `remaining` calls than this and the window has not reset, the pool neither spawns for nor claims a **github-heavy** step. `0` turns the hold off; must be `>= 0`; override with `LC_GITHUB_RESERVE_CALLS` |
 | `github-view-refresh-polls` | every watched PR's view is re-read at least once per this many github polls, even when no trigger fired, minimum 1 and required (seeded `10`). Takes effect on the next config reload |
+| `tick-lag-window-seconds` | the rolling window the footer reads for sustained tick lag, required (seeded `300`); must be `>= 1`; override with `LC_TICK_LAG_WINDOW_SECONDS` |
+| `tick-lag-share` | the percentage of ticks finished inside that window that must have taken longer than `poll-seconds` for the footer to show `pool lagging`, required (seeded `50`); must be between `1` and `100`; override with `LC_TICK_LAG_SHARE` |
+| `tick-stall-seconds` | how long the pool may hold its run lock without finishing a tick before the footer shows `pool stalled`, required (seeded `120`); must be `>= 1`; override with `LC_TICK_STALL_SECONDS` |
 | `branch-prefix` | prefix for worktree branches |
 | `max-boot-seconds` / `max-session-seconds` | worker boot and session caps; both must be `>= 0` |
 | `stall-seconds` | how long a claimed worker's log can go without growing before the pool kills it and reclaims its step; must be `>= 0` |

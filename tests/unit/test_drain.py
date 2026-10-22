@@ -1,5 +1,6 @@
 from tests.support.fake_gh_shim import FakeGhShim
 import io
+import os
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
@@ -14,6 +15,7 @@ from lightcycle.application.pool import (
 from lightcycle.application.pool.pool_control import DRAIN_SLOW_SECONDS
 from tests.support.fake_drain import FakeDrain
 from tests.support.fake_store import FakeStore
+from tests.support.fake_tick_timing_status import FakeTickTimingStatus
 from tests.support.fake_workers import FakeWorkers
 from tests.support.tui_harness import FakeLock
 
@@ -213,6 +215,15 @@ class _Config:
     def pool_upgrade_check_seconds(self):
         return 3600
 
+    def tick_lag_window_seconds(self):
+        return 300
+
+    def tick_lag_share(self):
+        return 50
+
+    def tick_stall_seconds(self):
+        return 120
+
 
 class _StartContainer:
     def __init__(self, drain, workers=None, store=None):
@@ -224,6 +235,7 @@ class _StartContainer:
         self.worker_log = None
         self.upgrade = None
         self.gh_shim = FakeGhShim()
+        self.tick_timing_status = FakeTickTimingStatus()
         self.ticked = 0
 
     def tick(self, flow=None):
@@ -277,6 +289,49 @@ class TestCmdStartDrainLoop(unittest.TestCase):
                 "lc start drained - no workers or engine steps running, stopping",
             ],
         )
+
+    def test_tick_timing_is_recorded_at_start_and_after_every_tick_including_the_drain_exit(self):
+        container = _StartContainer(FakeDrain())
+        self._start(container, [5, 0], request_on_first=True)
+        saves = container.tick_timing_status.saves
+        self.assertEqual([len(t.ticks) for t in saves], [0, 1, 2])
+        self.assertEqual({t.pid for t in saves}, {os.getpid()})
+
+    def test_a_tick_that_raises_still_records_its_timing(self):
+        container = _StartContainer(FakeDrain())
+        cli_mod.set_container(container)
+        calls = []
+
+        def failing_tick(tick, worker_log, tick_input, now):
+            calls.append(1)
+            if len(calls) == 1:
+                raise RuntimeError("boom")
+            raise KeyboardInterrupt
+
+        with mock.patch.object(cli_mod, "require_store", lambda: True), \
+                mock.patch.object(cli_mod, "_flow", lambda: None), \
+                mock.patch.object(cli_mod, "_run_tick", failing_tick), \
+                mock.patch.object(cli_mod, "_stop_pool", lambda: []), \
+                mock.patch.object(cli_mod, "_upgrade_notice_lines", lambda r: []), \
+                mock.patch.object(cli_mod, "UpgradeCadenceUseCase"), \
+                mock.patch.object(cli_mod.signal, "signal"), \
+                mock.patch.object(cli_mod.time, "sleep"), \
+                redirect_stdout(io.StringIO()):
+            cli_mod.cmd_start([])
+        self.assertEqual([len(t.ticks) for t in container.tick_timing_status.saves], [0, 1])
+
+    def test_once_records_nothing(self):
+        container = _StartContainer(FakeDrain())
+        cli_mod.set_container(container)
+        with mock.patch.object(cli_mod, "require_store", lambda: True), \
+                mock.patch.object(cli_mod, "_flow", lambda: None), \
+                mock.patch.object(cli_mod, "_run_tick", lambda *a: _tick_result(0, False)), \
+                mock.patch.object(cli_mod, "_format_tick", lambda r, p, n: ([], None)), \
+                mock.patch.object(cli_mod.signal, "signal"), \
+                redirect_stdout(io.StringIO()):
+            container.tick = lambda flow=None: mock.Mock()
+            cli_mod.cmd_start(["--once"])
+        self.assertEqual(container.tick_timing_status.saves, [])
 
     def test_the_gh_shim_is_installed_once_before_the_first_tick_is_built(self):
         events = []
