@@ -193,3 +193,39 @@ class TestTickReleaseGate(unittest.TestCase):
         self.assertEqual(response.released.failed, [("APP-1.p1.code", "boom")])
         self.assertIn(
             "warning: interrupted-run release failed for APP-1.p1.code: boom", err.getvalue())
+
+
+class TestPhaseLessRounds(unittest.TestCase):
+    def setUp(self):
+        self.store = FakeStore()
+        self.item = self.store.create_item("Nightly", "a description")
+        self.store.add_project("acme/app", local_path=TARGET)
+        self.store.add_artifact(self.item, "repo", "app")
+        self.store.create_step(stage="run", role="agent", item=self.item)
+        self.git = FakeGit(repos={TARGET}, base="origin/main")
+        self.worktrees = WorktreeService(
+            self.store, self.git, FakeFs(), _Cfg(PROJECTS), flow=_FakeFlow(),
+            scaffold=_Scaffold())
+        self.first = self.store.get_run(plant_run(self.store, self.item, None, "auto/one"))
+
+    def test_round_one_of_a_phase_less_run_keeps_the_item_only_path(self):
+        self.assertEqual(self.first.round, 1)
+        self.assertEqual(
+            self.worktrees.path_for_run(self.first),
+            os.path.join(TARGET, ".worktrees", self.item))
+
+    def test_a_closed_phase_less_round_is_released_while_a_later_round_is_open(self):
+        self.store.close_run(self.first.id, "merged")
+        pid = self.store.current_pass(self.item).id
+        self.second = self.store.get_run(self.store.open_run(self.item, pid, None))
+        self.store.set_branch(self.second.id, "auto/two")
+        first = self.store.get_run(self.first.id)
+        path = self.worktrees.path_for_run(first)
+        self.git._registered.add(path)
+        self.git._branches.add((TARGET, "auto/one"))
+
+        response = ReleaseInterruptedRunsUseCase(self.store, self.worktrees).execute()
+
+        self.assertEqual(self.second.round, 2)
+        self.assertNotEqual(path, self.worktrees.path_for_run(self.second))
+        self.assertEqual(response.released, [self.first.id])
