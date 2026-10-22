@@ -12,9 +12,10 @@ from lightcycle.application.pool.pr_lookups import (
     skip_unpinned,
 )
 from lightcycle.application.work.close_item import (
-    CloseItemInput, CloseItemUseCase, TeardownRefused,
+    RELEASE_PENDING_LABEL, CloseItemInput, CloseItemUseCase, TeardownRefused,
 )
 from lightcycle.domain.runs import RunState
+from lightcycle.ports.git import GitReadError
 
 
 @dataclass(frozen=True)
@@ -100,12 +101,21 @@ class ResolveMergedPrsUseCase:
     def _close_run_and_complete(self, run, state, step, outcome):
         if self._release_refused(run, step):
             return None
+        item = run.item
+        held = RELEASE_PENDING_LABEL in self._store.labels_of(item)
         with self._store.transaction():
             self._expire_holds(run)
             self._store.close_run(run.id, state)
             resp = self._complete.execute(CompleteInput(step=step.id, outcome=outcome))
+            if self._worktrees is not None:
+                self._store.label_add(item, RELEASE_PENDING_LABEL)
         if self._worktrees is not None:
-            self._worktrees.release_run(run)
+            try:
+                self._worktrees.release_run(run)
+            except GitReadError:
+                return resp
+            if not held:
+                self._store.label_remove(item, RELEASE_PENDING_LABEL)
         return resp
 
     def execute(self) -> ResolveMergedPrsResponse:

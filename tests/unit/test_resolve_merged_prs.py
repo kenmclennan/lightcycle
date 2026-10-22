@@ -2,15 +2,23 @@ import unittest
 
 from lightcycle.application.flow import CompleteStepUseCase
 from lightcycle.application.flow.complete_step import CompleteResponse
+from lightcycle.application.pool.pr_lookups import active_step_any
+from lightcycle.application.pool.release_interrupted_runs import ReleaseInterruptedRunsUseCase
+from lightcycle.application.services.worktree import WorktreeService
 from lightcycle.application.pool.check_content_pin import CheckContentPinUseCase
 from lightcycle.application.pool.pr_lookups import latest_step
 from lightcycle.application.pool.resolve_merged_prs import ResolveMergedPrsUseCase
 from lightcycle.application.services.flow import FlowService
 from lightcycle.domain.work import State
+from lightcycle.application.work.close_item import RELEASE_PENDING_LABEL
+from lightcycle.ports.git import GitReadError
 from tests.support.fake_fs import FakeFs, flow_from_metas
+from tests.support.fake_git import FakeGit
 from tests.support.fake_github import FakeGitHub
 from tests.support.fake_store import FakeStore
 from tests.support.step_factory import create_owned_step
+from tests.unit.test_release_interrupted_runs import _Scaffold
+from tests.unit.test_worktree_service import _Cfg, _FakeFlow
 
 
 def plant_pr(store, item, url, phase=None, branch=None, n=1, state="open"):
@@ -131,11 +139,15 @@ class FakeWorktrees:
         return []
 
     def release_run(self, run, delete_remote=True):
+        if self.release_failures > 0:
+            self.release_failures -= 1
+            raise GitReadError("boom")
         self.released = getattr(self, "released", [])
         self.released.append(run.id)
 
-    def __init__(self):
+    def __init__(self, release_failures=0):
         self.removed = []
+        self.release_failures = release_failures
 
     def remove(self, item):
         self.removed.append(item)
@@ -1263,3 +1275,152 @@ class TestPhaseReleaseGuard(unittest.TestCase):
         result = uc.execute()
 
         self.assertEqual(result.abandoned, [item])
+
+
+class _StubComplete:
+    def __init__(self, store, item, remove_label=False):
+        self._store = store
+        self._item = item
+        self._remove_label = remove_label
+
+    def execute(self, inp):
+        self._store.complete_node(inp.step, inp.outcome)
+        if self._remove_label:
+            self._store.label_remove(self._item, RELEASE_PENDING_LABEL)
+        return CompleteResponse(next_step=None)
+
+
+class TestMonitorPrsMergePathReleasePendingMarker(unittest.TestCase):
+    def _setup(self, release_failures=0, remove_label=False, held=False):
+        store = FakeStore()
+        item = store.create_item("deliver", "a description")
+        url = "https://github.com/x/y/pull/81"
+        plant_pr(store, item, url)
+        step = store.create_step(stage="ready-merge", role="human", item=item)
+        if held:
+            store.label_add(item, RELEASE_PENDING_LABEL)
+        worktrees = FakeWorktrees(release_failures=release_failures)
+        github = FakeGitHub(merged_prs={url})
+        flow = _FlowAdapter(_ROUTES_TO_STAGE_FLOW)
+        uc = ResolveMergedPrsUseCase(
+            store, github, worktrees, flow, _StubComplete(store, item, remove_label),
+            CheckContentPinUseCase(store, github, flow, trusted_authors=lambda: frozenset({"review-code"})),
+        )
+        return store, item, step, worktrees, uc
+
+    def test_marker_is_cleared_after_a_successful_merge_path_release(self):
+        store, item, step, worktrees, uc = self._setup()
+
+        uc.execute()
+
+        self.assertEqual(len(worktrees.released), 1)
+        self.assertNotIn(RELEASE_PENDING_LABEL, store.labels_of(item))
+
+    def test_failed_release_keeps_the_marker_and_the_close_and_returns_normally(self):
+        store, item, step, worktrees, uc = self._setup(release_failures=1)
+
+        result = uc.execute()
+
+        self.assertEqual(result.merged, [item])
+        self.assertEqual(store.get_node(step).state, "done")
+        self.assertEqual(store.open_runs_of(item), [])
+        self.assertIn(RELEASE_PENDING_LABEL, store.labels_of(item))
+
+    def test_failed_release_does_not_stop_other_items_in_the_same_call(self):
+        store, item, step, worktrees, uc = self._setup(release_failures=1)
+        other = store.create_item("other", "a description")
+        plant_pr(store, other, "https://github.com/x/y/pull/81")
+        store.create_step(stage="ready-merge", role="human", item=other)
+
+        result = uc.execute()
+
+        self.assertEqual(sorted(result.merged), sorted([item, other]))
+
+    def test_marker_already_on_the_item_survives_a_successful_release(self):
+        store, item, step, worktrees, uc = self._setup(held=True)
+
+        uc.execute()
+
+        self.assertEqual(len(worktrees.released), 1)
+        self.assertIn(RELEASE_PENDING_LABEL, store.labels_of(item))
+
+    def test_an_inner_marker_removal_during_completion_does_not_clear_the_merge_marker(self):
+        store, item, step, worktrees, uc = self._setup(release_failures=1, remove_label=True)
+
+        uc.execute()
+
+        self.assertIn(RELEASE_PENDING_LABEL, store.labels_of(item))
+
+    def test_marker_is_not_added_without_worktrees(self):
+        store, item, step, worktrees, uc = self._setup()
+        uc._worktrees = None
+
+        uc.execute()
+
+        self.assertNotIn(RELEASE_PENDING_LABEL, store.labels_of(item))
+
+
+class _FlakyDeleteGit(FakeGit):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.delete_failures = 1
+
+    def delete_branch(self, root, branch):
+        if self.delete_failures > 0:
+            self.delete_failures -= 1
+            raise GitReadError("cannot check branch")
+        super().delete_branch(root, branch)
+
+
+class TestMergePathReleaseFinishedByALaterTick(unittest.TestCase):
+    PROJECTS = "/projects"
+    TARGET = "/projects/app"
+    BRANCH = "feat/app-code-login"
+
+    def _setup(self):
+        fs = FakeFs(
+            metas={
+                "coder": {"model": "sonnet", "accepts": {"spec": "required"}},
+                "await-merge": {"step": "await-merge"},
+            },
+            workflow={"spec-driven": _SPEC_DRIVEN},
+        )
+        store = FakeStore()
+        flow_service = FlowService(fs, store)
+        item = store.create_item("Login", "a description", workflow="spec-driven", project="lightcycle")
+        store.add_project("acme/app", local_path=self.TARGET)
+        store.add_artifact(item, "repo", "app")
+        store.add_artifact(item, "spec", "app/LOGIN.md")
+        url = "https://github.com/x/y/pull/301"
+        rid = plant_pr(store, item, url, "spec", branch=self.BRANCH)
+        store.create_step(stage="spec-await-merge", role="human", item=item)
+        git = _FlakyDeleteGit(repos={self.TARGET}, base="origin/main")
+        worktrees = WorktreeService(
+            store, git, FakeFs(), _Cfg(self.PROJECTS), flow=_FakeFlow(), scaffold=_Scaffold())
+        path = worktrees.path_for_run(store.get_run(rid))
+        git._registered.add(path)
+        git._branches.add((self.TARGET, self.BRANCH))
+        github = FakeGitHub(merged_prs={url})
+        uc = ResolveMergedPrsUseCase(
+            store, github, worktrees, flow_service, CompleteStepUseCase(store, flow_service),
+            CheckContentPinUseCase(store, github, flow_service, trusted_authors=lambda: frozenset({"review-code"})),
+        )
+        return store, item, rid, git, worktrees, path, uc
+
+    def test_a_failed_release_is_finished_by_the_next_tick_before_the_next_step_uses_the_workspace(self):
+        store, item, rid, git, worktrees, path, uc = self._setup()
+        gate = ReleaseInterruptedRunsUseCase(store, worktrees)
+
+        uc.execute()
+
+        self.assertIn((self.TARGET, self.BRANCH), git._branches)
+        self.assertIn(RELEASE_PENDING_LABEL, store.labels_of(item))
+
+        response = gate.execute()
+
+        self.assertEqual(response.released, [rid])
+        self.assertNotIn((self.TARGET, self.BRANCH), git._branches)
+        self.assertNotIn(RELEASE_PENDING_LABEL, store.labels_of(item))
+        next_step = active_step_any(store, item)
+        worktrees.ensure(store.get_node(next_step.id))
+        self.assertIn("add_worktree", [c[0] for c in git.calls])
