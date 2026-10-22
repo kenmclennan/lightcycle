@@ -467,7 +467,7 @@ def _painted(colour_name):
 def test_a_healthy_budget_renders_a_short_percentage_without_a_reset_time():
     frame = render("priority-list#github-budget")
 
-    assert "gh 85%" in frame
+    assert "● gh 85%" in frame
     assert "resets" not in frame
     assert "github budget low" not in frame
     assert "/5000" not in frame
@@ -478,7 +478,7 @@ def test_a_low_budget_renders_the_percentage_and_the_reset_time():
 
     frame = render("priority-list#github-budget-low")
 
-    assert re.search(r"gh 6% · \d\d:\d\d", frame)
+    assert re.search(r"⊘ gh 6% · \d\d:\d\d", frame)
     assert "github budget low" not in frame
     assert "/5000" not in frame
 
@@ -486,15 +486,15 @@ def test_a_low_budget_renders_the_percentage_and_the_reset_time():
 def test_a_close_budget_renders_the_percentage_alone():
     frame = render("priority-list#github-budget-close")
 
-    assert "gh 24%" in frame
+    assert "◐ gh 24%" in frame
     assert "gh 24% ·" not in frame
 
 
 def test_the_github_segment_is_painted_in_the_colour_of_its_state():
     for state, text, colour in (
-        ("priority-list#github-budget", "gh 85%", "cyan"),
-        ("priority-list#github-budget-close", "gh 24%", "amber"),
-        ("priority-list#github-budget-low", "gh 6%", "red"),
+        ("priority-list#github-budget", "● gh 85%", "cyan"),
+        ("priority-list#github-budget-close", "◐ gh 24%", "amber"),
+        ("priority-list#github-budget-low", "⊘ gh 6%", "red"),
     ):
         coloured = render(state, colour=True)
 

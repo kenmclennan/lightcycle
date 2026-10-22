@@ -8,8 +8,6 @@ from textual.widgets import Static
 from lightcycle.adapters.tui.design_system import COLOURS, FOOTER_GLYPHS, GLOBAL_SHORTCUTS
 from lightcycle.domain.pool import github_budget_level
 
-GITHUB_LEVEL_COLOURS = {"healthy": "cyan", "close": "amber", "low": "red"}
-
 
 class StatusBar(Horizontal):
     def compose(self) -> ComposeResult:
@@ -81,10 +79,11 @@ class StatusBar(Horizontal):
         github_widget = self.query_one("#status-github", Static)
         if github is not None and github.known:
             level = github_budget_level(github.remaining, github.reserve, github.low)
-            text = "gh %d%%" % (github.remaining * 100 // github.limit)
+            github_glyph, github_colour = FOOTER_GLYPHS["github-" + level]
+            text = "%s gh %d%%" % (github_glyph, github.remaining * 100 // github.limit)
             if level == "low":
                 text += " · " + time.strftime("%H:%M", time.localtime(github.reset))
-            github_widget.update(Text(text, style=COLOURS[GITHUB_LEVEL_COLOURS[level]]))
+            github_widget.update(Text(text, style=COLOURS[github_colour]))
             github_widget.display = True
         else:
             github_widget.update("")
