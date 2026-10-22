@@ -1,3 +1,5 @@
+import contextlib
+import io
 import unittest
 
 from lightcycle.application.flow import CompleteStepUseCase
@@ -1424,3 +1426,14 @@ class TestMergePathReleaseFinishedByALaterTick(unittest.TestCase):
         next_step = active_step_any(store, item)
         worktrees.ensure(store.get_node(next_step.id))
         self.assertIn("add_worktree", [c[0] for c in git.calls])
+
+    def test_a_failed_merge_path_release_warns_on_stderr_and_keeps_the_marker(self):
+        store, item, rid, git, worktrees, path, uc = self._setup()
+        err = io.StringIO()
+
+        with contextlib.redirect_stderr(err):
+            uc.execute()
+
+        self.assertIn("warning: merge-path release failed for %s" % rid, err.getvalue())
+        self.assertIn("release-pending marker kept", err.getvalue())
+        self.assertIn(RELEASE_PENDING_LABEL, store.labels_of(item))

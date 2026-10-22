@@ -1,3 +1,5 @@
+import sys
+
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.setup.project_registry import ProjectRegistry
 from lightcycle.domain.flow.flow import PROJECT_WORKSPACE
@@ -123,7 +125,13 @@ class WorktreeService:
         self._git.remove_worktree(target, path)
         self._git.delete_branch(target, run.branch)
         if delete_remote:
-            self._git.delete_remote_branch(target, run.branch)
+            outcome = self._git.delete_remote_branch(target, run.branch)
+            if outcome is not None and not outcome.ok:
+                print(
+                    "warning: remote branch delete failed for %s: %s"
+                    % (run.branch, outcome.detail),
+                    file=sys.stderr,
+                )
 
     def release_interrupted(self, run):
         if run is None or run.state == RunState.OPEN or run.branch is None:
@@ -311,5 +319,11 @@ class WorktreeService:
         return ["branch %s has %d commit(s) beyond %s that are not merged" % (branch, len(shas), base)]
 
     def remove(self, item):
+        failures = []
         for run in self._releasable_runs(item):
-            self.release_run(run)
+            try:
+                self.release_run(run)
+            except GitReadError as e:
+                failures.append(str(e))
+        if failures:
+            raise GitReadError("; ".join(failures))

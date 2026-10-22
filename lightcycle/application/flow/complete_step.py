@@ -152,10 +152,10 @@ class CompleteStepUseCase:
     def _release(self, item, runs, closed):
         if self._worktrees is None:
             return
-        self._passes.release_runs(runs, self._worktrees)
+        released = self._passes.release_runs(runs, self._worktrees)
         if closed:
             self._closer.release(item)
-        elif runs:
+        elif runs and released:
             self._store.label_remove(item, RELEASE_PENDING_LABEL)
 
     def _close_plan(self, t, creates_next):

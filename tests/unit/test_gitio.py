@@ -106,7 +106,88 @@ class TestDeleteRemoteBranch(unittest.TestCase):
 
     def test_tolerates_push_failure_when_remote_already_gone(self):
         with patch("lightcycle.adapters.gitio.subprocess.run", return_value=_proc(1)):
-            gitio.delete_remote_branch("/repo", "feat/auto-deleted")
+            outcome = gitio.delete_remote_branch("/repo", "feat/auto-deleted")
+        self.assertFalse(outcome.ok)
+
+    def test_ok_for_exit_zero_and_for_a_ref_that_does_not_exist(self):
+        with patch("lightcycle.adapters.gitio.subprocess.run", return_value=_proc(0)):
+            self.assertTrue(gitio.delete_remote_branch("/repo", "b").ok)
+        gone = _proc(1, stderr="error: unable to delete 'b': remote ref does not exist")
+        with patch("lightcycle.adapters.gitio.subprocess.run", return_value=gone):
+            self.assertTrue(gitio.delete_remote_branch("/repo", "b").ok)
+
+    def test_not_ok_carries_the_stderr(self):
+        refused = _proc(128, stderr="fatal: 'origin' does not appear to be a git repository\n")
+        with patch("lightcycle.adapters.gitio.subprocess.run", return_value=refused):
+            outcome = gitio.delete_remote_branch("/repo", "b")
+        self.assertFalse(outcome.ok)
+        self.assertIn("does not appear to be a git repository", outcome.detail)
+
+
+class TestRemoveWorktree(unittest.TestCase):
+    def _run(self, remove_proc):
+        def side_effect(args, **kwargs):
+            if "remove" in args:
+                if isinstance(remove_proc, Exception):
+                    raise remove_proc
+                return remove_proc
+            return _proc(0)
+
+        return patch("lightcycle.adapters.gitio.subprocess.run", side_effect=side_effect)
+
+    def test_raises_with_stderr_on_nonzero_exit(self):
+        with self._run(_proc(128, stderr="fatal: cannot remove a locked working tree")):
+            with self.assertRaises(GitReadError) as ctx:
+                gitio.remove_worktree("/repo", "/repo/.worktrees/x")
+        self.assertIn("cannot remove a locked working tree", str(ctx.exception))
+
+    def test_raises_on_timeout(self):
+        with self._run(subprocess.TimeoutExpired(cmd="git", timeout=30)):
+            with self.assertRaises(GitReadError) as ctx:
+                gitio.remove_worktree("/repo", "/repo/.worktrees/x")
+        self.assertIn("timed out", str(ctx.exception))
+
+    def test_an_absent_unregistered_path_is_success(self):
+        with self._run(_proc(128, stderr="fatal: 'p' is not a working tree")):
+            gitio.remove_worktree("/repo", "/nonexistent/path/for/test")
+
+    def test_an_existing_unregistered_path_raises(self):
+        with tempfile.TemporaryDirectory() as leftover:
+            with self._run(_proc(128, stderr="fatal: 'p' is not a working tree")):
+                with self.assertRaises(GitReadError):
+                    gitio.remove_worktree("/repo", leftover)
+
+    def test_prune_failure_raises(self):
+        def side_effect(args, **kwargs):
+            return _proc(1, stderr="prune boom") if "prune" in args else _proc(0)
+
+        with patch("lightcycle.adapters.gitio.subprocess.run", side_effect=side_effect):
+            with self.assertRaises(GitReadError) as ctx:
+                gitio.remove_worktree("/repo", "/repo/.worktrees/x")
+        self.assertIn("prune boom", str(ctx.exception))
+
+
+class TestDeleteBranch(unittest.TestCase):
+    def _run(self, exists, delete_proc):
+        def side_effect(args, **kwargs):
+            if "rev-parse" in args and "--git-dir" in args:
+                return _proc(0)
+            if "rev-parse" in args:
+                return _proc(0 if exists else 1)
+            return delete_proc
+
+        return patch("lightcycle.adapters.gitio.subprocess.run", side_effect=side_effect)
+
+    def test_raises_when_branch_delete_fails_for_an_existing_branch(self):
+        with self._run(True, _proc(1, stderr="error: cannot delete branch 'b' used by worktree")):
+            with self.assertRaises(GitReadError) as ctx:
+                gitio.delete_branch("/repo", "b")
+        self.assertIn("used by worktree", str(ctx.exception))
+
+    def test_does_not_run_branch_delete_for_a_missing_branch(self):
+        with self._run(False, _proc(1, stderr="should not run")) as mock_run:
+            gitio.delete_branch("/repo", "b")
+        self.assertFalse([c for c in mock_run.call_args_list if "-D" in c.args[0]])
 
 
 class TestCloneIdentity(unittest.TestCase):

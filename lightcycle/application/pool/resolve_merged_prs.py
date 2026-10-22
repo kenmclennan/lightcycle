@@ -1,3 +1,4 @@
+import sys
 from dataclasses import dataclass, field
 from typing import List, Tuple
 
@@ -112,7 +113,12 @@ class ResolveMergedPrsUseCase:
         if self._worktrees is not None:
             try:
                 self._worktrees.release_run(run)
-            except GitReadError:
+            except GitReadError as e:
+                print(
+                    "warning: merge-path release failed for %s, release-pending marker kept: %s"
+                    % (run.id, e),
+                    file=sys.stderr,
+                )
                 return resp
             if not held:
                 self._store.label_remove(item, RELEASE_PENDING_LABEL)

@@ -12,7 +12,8 @@ class FakeGit(GitPort, TeardownLedgerPort):
                  torn_down_branches=(), init_ok=True, commit_ok=True,
                  missing_identity=(), ref=None, ref_files=None, fetch_ok=True,
                  fetch_detail="boom", added=None, changed=None, ref_shas=None,
-                 history=None, approvals=None, uncommitted=None, beyond=None):
+                 history=None, approvals=None, uncommitted=None, beyond=None,
+                 remote_delete_fails=False):
         self._repos = set(repos) if repos is not None else None
         self._is_repo = is_repo
         self._origin = origin
@@ -44,6 +45,7 @@ class FakeGit(GitPort, TeardownLedgerPort):
         self._beyond = {k: list(v) for k, v in (beyond or {}).items()}
         self._fetch_ok = fetch_ok
         self._fetch_detail = fetch_detail
+        self._remote_delete_fails = remote_delete_fails
         self.calls = []
         self.commits = []
         self.remote_deletes = []
@@ -123,15 +125,20 @@ class FakeGit(GitPort, TeardownLedgerPort):
 
     def remove_worktree(self, root, path):
         self.calls.append(("remove_worktree", root, path))
+        self._raise_if("remove_worktree", root)
         self._registered.discard(path)
 
     def delete_branch(self, root, branch):
         self.calls.append(("delete_branch", root, branch))
+        self._raise_if("delete_branch", root)
         self._branches.discard((root, branch))
 
     def delete_remote_branch(self, root, branch):
         self.calls.append(("delete_remote_branch", root, branch))
         self.remote_deletes.append((root, branch))
+        if self._remote_delete_fails:
+            return GitOutcome(ok=False, detail="boom")
+        return GitOutcome(ok=True)
 
     def worktree_registered(self, root, path):
         self.calls.append(("worktree_registered", root, path))

@@ -1,4 +1,7 @@
+import sys
+
 from lightcycle.domain.runs import RunState
+from lightcycle.ports.git import GitReadError
 
 
 class PassBook:
@@ -44,11 +47,24 @@ class PassBook:
 
     def release_runs(self, runs, worktrees=None):
         if worktrees is None:
-            return
+            return True
+        released = True
         for run in runs:
+            released = self._release_one(run, worktrees) and released
+        return released
+
+    def _release_one(self, run, worktrees):
+        try:
             worktrees.release_run(run)
+        except GitReadError as e:
+            print(
+                "warning: release of %s failed, release-pending marker kept: %s" % (run.id, e),
+                file=sys.stderr,
+            )
+            return False
+        return True
 
     def close_run(self, run, state, worktrees=None):
         self._store.close_run(run.id, state)
         if worktrees is not None:
-            worktrees.release_run(run)
+            self._release_one(run, worktrees)

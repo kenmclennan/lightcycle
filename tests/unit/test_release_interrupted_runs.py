@@ -10,7 +10,9 @@ from lightcycle.application.pool.release_interrupted_runs import (
 )
 from lightcycle.application.pool.tick import TickInput
 from lightcycle.application.services.worktree import WorktreeService
+from lightcycle.application.work.close_item import RELEASE_PENDING_LABEL
 from lightcycle.domain.work import State
+from lightcycle.ports.git import GitReadError
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_git import FakeGit
 from tests.support.fake_store import FakeStore
@@ -147,6 +149,55 @@ class TestReleaseInterruptedRuns(unittest.TestCase):
         self.assertEqual(fx.removals(), [])
         git._raises.clear()
         self.assertEqual(fx.use_case.execute().released, [fx.run_id])
+
+    def test_a_failed_removal_keeps_the_marker_and_the_next_scan_retries(self):
+        git = FakeGit(repos={TARGET}, base="origin/main", raises=("remove_worktree",))
+        fx = _Fixture(git=git)
+        fx.store.label_add(fx.item, RELEASE_PENDING_LABEL)
+        fx.use_case._pending = []
+
+        first = fx.use_case.execute()
+
+        self.assertEqual([r for r, _ in first.failed], [fx.run_id])
+        self.assertIn(RELEASE_PENDING_LABEL, fx.store.labels_of(fx.item))
+        self.assertTrue(git.worktree_registered(TARGET, fx.path))
+        git._raises.clear()
+        again = fx.use_case.execute()
+        self.assertEqual(again.released, [fx.run_id])
+        self.assertNotIn(RELEASE_PENDING_LABEL, fx.store.labels_of(fx.item))
+
+    def test_a_successful_removal_clears_the_marker(self):
+        fx = _Fixture()
+        fx.store.label_add(fx.item, RELEASE_PENDING_LABEL)
+        fx.use_case._pending = []
+
+        fx.use_case.execute()
+
+        self.assertNotIn(RELEASE_PENDING_LABEL, fx.store.labels_of(fx.item))
+
+    def test_a_partial_failure_is_finished_by_the_next_scan(self):
+        class FlakyDelete(FakeGit):
+            failures = 1
+
+            def delete_branch(self, root, branch):
+                if self.failures:
+                    self.failures -= 1
+                    raise GitReadError("branch busy")
+                super().delete_branch(root, branch)
+
+        git = FlakyDelete(repos={TARGET}, base="origin/main")
+        fx = _Fixture(git=git)
+        fx.store.label_add(fx.item, RELEASE_PENDING_LABEL)
+        fx.use_case._pending = []
+
+        first = fx.use_case.execute()
+
+        self.assertEqual([r for r, _ in first.failed], [fx.run_id])
+        self.assertIn(RELEASE_PENDING_LABEL, fx.store.labels_of(fx.item))
+        self.assertFalse(git.worktree_registered(TARGET, fx.path))
+        fx.use_case.execute()
+        self.assertFalse(git.branch_exists(TARGET, BRANCH))
+        self.assertNotIn(RELEASE_PENDING_LABEL, fx.store.labels_of(fx.item))
 
 
 class _RecordingGate:
