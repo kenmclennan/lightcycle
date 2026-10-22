@@ -1,6 +1,8 @@
 import os
 import shutil
 import subprocess
+import io
+import contextlib
 import tempfile
 import unittest
 from unittest import mock
@@ -599,3 +601,71 @@ class TestGitAdapterCommitsBeyond(unittest.TestCase):
     def test_unreadable_repo_raises(self):
         with self.assertRaises(GitReadError):
             GitAdapter().commits_beyond(tempfile.mkdtemp(), "main", "feat/x")
+
+
+class TestGitAdapterFailedStaging(unittest.TestCase):
+    def _run_with_failing_add(self, add_result, call):
+        commits = []
+        real = subprocess.run
+
+        def fake(cmd, *a, **kw):
+            if "add" in cmd:
+                if isinstance(add_result, Exception):
+                    raise add_result
+                return subprocess.CompletedProcess(cmd, add_result, "", "index.lock exists")
+            if "commit" in cmd:
+                commits.append(cmd)
+            return real(cmd, *a, **kw)
+
+        err = io.StringIO()
+        with mock.patch("lightcycle.adapters.gitio.subprocess.run", fake):
+            with contextlib.redirect_stderr(err):
+                ok = call()
+        return ok, commits, err.getvalue()
+
+    def test_commit_all_reports_failure_and_never_commits_after_a_failed_add(self):
+        repo = _make_repo()
+        ok, commits, err = self._run_with_failing_add(
+            128, lambda: GitAdapter().commit_all(repo, "m")
+        )
+        self.assertFalse(ok)
+        self.assertEqual(commits, [])
+        self.assertIn("index.lock exists", err)
+
+    def test_commit_tracked_reports_failure_and_never_commits_after_a_failed_add(self):
+        repo = _make_repo()
+        ok, commits, err = self._run_with_failing_add(
+            128, lambda: GitAdapter().commit_tracked(repo, "m")
+        )
+        self.assertFalse(ok)
+        self.assertEqual(commits, [])
+        self.assertIn("index.lock exists", err)
+
+    def test_a_timed_out_add_is_treated_as_a_failure_by_both_helpers(self):
+        timeout = subprocess.TimeoutExpired(["git"], 30)
+        for name in ("commit_all", "commit_tracked"):
+            repo = _make_repo()
+            ok, commits, err = self._run_with_failing_add(
+                timeout, lambda: getattr(GitAdapter(), name)(repo, "m")
+            )
+            self.assertFalse(ok)
+            self.assertEqual(commits, [])
+            self.assertIn("timed out", err)
+
+    def test_a_failed_prune_inside_add_worktree_is_logged(self):
+        repo = _make_repo()
+        path = os.path.join(tempfile.mkdtemp(), "wt")
+        real = subprocess.run
+
+        def fake(cmd, *a, **kw):
+            if "prune" in cmd:
+                return subprocess.CompletedProcess(cmd, 1, "", "prune exploded")
+            return real(cmd, *a, **kw)
+
+        err = io.StringIO()
+        with mock.patch("lightcycle.adapters.gitio.subprocess.run", fake):
+            with contextlib.redirect_stderr(err):
+                outcome = GitAdapter().add_worktree(repo, path, "feat/p", "main", 0, 0)
+
+        self.assertTrue(outcome.ok)
+        self.assertIn("prune exploded", err.getvalue())

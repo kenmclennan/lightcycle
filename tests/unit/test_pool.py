@@ -663,6 +663,25 @@ class TestSweep(unittest.TestCase):
         self.assertEqual(result.capture_failed, [step])
         self.assertEqual(s.get_node(step).state, "queued")
 
+    def test_a_failed_preserve_is_logged_and_the_reclaim_still_proceeds(self):
+        s = FakeStore()
+        item = s.create_item("feature", "a description")
+        step = s.create_step(stage="build", role="agent", item=item)
+        s.update_state(step, "in_progress")
+        workers = FakeWorkers()
+        worktrees = FakeWorktrees(paths={item: "/worktrees/%s" % item})
+        git = FakeCaptureGit(dirty={"/worktrees/%s" % item}, fail={"/worktrees/%s" % item})
+        err = io.StringIO()
+
+        with contextlib.redirect_stderr(err):
+            result = make_sweep(s, workers, worktrees=worktrees, git=git).execute(
+                now=1000, max_boot=120, stall_seconds=1800
+            )
+
+        self.assertIn("could not preserve work on %s" % step, err.getvalue())
+        self.assertEqual(result.preserved, [])
+        self.assertEqual(s.get_node(step).state, "queued")
+
     def test_an_unreadable_worktree_is_reported_as_a_capture_failure_not_a_silent_skip(self):
         s = FakeStore()
         item = s.create_item("feature", "a description")
