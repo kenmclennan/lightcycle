@@ -11,23 +11,18 @@ class TestItemContextReader(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("item", "d")
         ctx = ItemContextReader(s).read(s.get_node(item))
-        self.assertEqual((ctx.repo, ctx.workflow, ctx.goals, ctx.resolves, ctx.note), (None, None, (), (), None))
+        self.assertEqual((ctx.repo, ctx.workflow, ctx.resolves, ctx.note), (None, None, (), None))
 
-    def test_reads_repo_workflow_goal_and_resolves(self):
+    def test_reads_repo_workflow_and_resolves(self):
         s = FakeStore()
         backlog = s.create_item("Fix header", "d")
         item = s.create_item("item", "d", workflow="o/w@abc")
         s.add_artifact(item, "repo", "kenmclennan/lightcycle")
         s.add_artifact(item, "resolves", backlog, internal=True)
         s.add_artifact(item, "resolves", "LC-9999", internal=True)
-        goal = s.create_goal("Ship the thing")
-        s.link_goal_item(goal, item)
-        other = s.create_goal("Unrelated")
-        s.link_goal_item(other, backlog)
         ctx = ItemContextReader(s).read(s.get_node(item))
         self.assertEqual(ctx.repo, "kenmclennan/lightcycle")
         self.assertEqual(ctx.workflow, "o/w@abc")
-        self.assertEqual(ctx.goals, ((goal, "Ship the thing"),))
         self.assertEqual(ctx.resolves, ((backlog, "Fix header"), ("LC-9999", None)))
 
     def test_note_shows_only_once_the_item_is_done(self):

@@ -262,22 +262,6 @@ COMMANDS = {
             Arg("dir", nargs="?", default="."), Arg("--json", action="store_true"),
         )),
     }),
-    "goal": CommandSpec(prog="lc goal", subparsers={
-        "new": CommandSpec(prog="lc goal new", args=(
-            Arg("title"), Arg("--project"),
-            Arg("--description", help="the goal's description; when omitted the engine's goal template is used"),
-        )),
-        "list": CommandSpec(prog="lc goal list", args=(
-            Arg("--all", action="store_true"),
-        )),
-        "show": CommandSpec(prog="lc goal show", args=(Arg("id"),)),
-        "set": CommandSpec(prog="lc goal set", args=(
-            Arg("id"), Arg("--title"), Arg("--description"), Arg("--project"), Arg("--status"),
-        )),
-        "log": CommandSpec(prog="lc goal log", args=(Arg("id"), Arg("title"), Arg("body"))),
-        "link": CommandSpec(prog="lc goal link", args=(Arg("id"), Arg("item"))),
-        "unlink": CommandSpec(prog="lc goal unlink", args=(Arg("id"), Arg("item"))),
-    }),
     "schedule": CommandSpec(prog="lc schedule", subparsers={
         "list": CommandSpec(prog="lc schedule list", args=(
             Arg("--json", action="store_true"),

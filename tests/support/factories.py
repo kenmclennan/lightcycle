@@ -9,7 +9,6 @@ def make_step(**kw):
     kw.pop("artifacts", None)
     kw.pop("description", None)
     kw.pop("project", None)
-    kw.pop("goal", None)
     kw.pop("attention", None)
     kw.pop("since", None)
     kw.pop("branch", None)
@@ -32,7 +31,6 @@ def make_item(**kw):
     kw.pop("role", None)
     kw.pop("step", None)
     kw.pop("parent", None)
-    kw.pop("goal", None)
     kw.pop("attention", None)
     kw.setdefault("id", "i-1")
     if "artifacts" in kw:

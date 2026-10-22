@@ -9,6 +9,5 @@ class ResolveReferencesUseCase:
         try:
             title = self._store.get_node(ref_id).title
         except KeyError:
-            goal = self._store.get_goal(ref_id)
-            title = goal.title if goal is not None else None
+            title = None
         return title or None

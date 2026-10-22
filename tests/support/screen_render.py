@@ -1406,8 +1406,6 @@ def _hub_description_context(size):
     store.edit_node(item, description="Audit the closed items for recurring friction.")
     store.add_artifact(item, "repo", "kenmclennan/lightcycle")
     store.add_artifact(item, "resolves", backlog, internal=True)
-    goal = store.create_goal("Cut review rework")
-    store.link_goal_item(goal, item)
     store.complete_node(item, "merged", disposition="completed", note="Shipped in lightcycle#277.")
     return _open_hub(_launch(store, size=size), item, tab="description")
 
@@ -1517,168 +1515,6 @@ def _hub_cost_item(size):
 
 
 
-GOAL_DESCRIPTION = (
-    "Every project the driver touches has a goal record that states, in plain prose, what done "
-    "looks like for work that spans many items, so the driver can reorient without rereading "
-    "every item's history.\n\n"
-    "## Outcome\n\n"
-    "The record is written by a person and maintained by hand.\n\n"
-    "## Constraints\n\n"
-    "- Out: any generated progress statement and every figure derived from linked items.\n"
-    "- The flow engine never reads a goal.\n"
-    "- Waits on [[LC-861]] and supersedes [[LC-9999]].\n\n"
-    "## Open questions\n\n"
-    "- Should a goal ever close itself once its items are done?\n"
-    "- Who owns the progress statement's wording?"
-)
-
-
-def _goals_store(with_content=True):
-    store = DemoStore(now=lambda: _at(30))
-    gid = store.create_goal(
-        "Ship the goals record", GOAL_DESCRIPTION if with_content else "", "lightcycle"
-    )
-    store.create_goal("Make the driver loop reorient itself")
-    store.create_goal("Retire the legacy report screen")
-    if with_content:
-        store.item("LC-858", "Goals slice 1: the record and the tab")
-        store.item("LC-859", "Goals slice 2: the generated progress statement")
-        store.link_goal_item(gid, "LC-858")
-        store.link_goal_item(gid, "LC-859")
-        gate = store.item("LC-861", "Goals slice 4: the gate a human clears", workflow=WORKFLOW)
-        store.step("LC-861.1", stage="code-await-merge", role="human", item=gate)
-        active = store.item("LC-862", "Goals slice 5: state on the items tab", workflow=WORKFLOW)
-        active_step = store.step("LC-862.1", stage="write-code", role="agent", item=active)
-        store.assign(active_step, "worker-1")
-        store.update_state(active_step, State.RUNNING)
-        queued = store.item("LC-863", "Goals slice 6: a queued item", workflow=WORKFLOW)
-        store.step("LC-863.1", stage="write-code", role="agent", item=queued)
-        held = store.item("LC-864", "Goals slice 7: an item held behind another", workflow=WORKFLOW)
-        store.step("LC-864.1", stage="write-code", role="agent", item=held, deps=[active_step])
-        finished = store.item("LC-857", "Goals slice 0: the design record")
-        store.complete_node(finished, "merged")
-        for linked in (gate, active, queued, held, finished):
-            store.link_goal_item(gid, linked)
-        store.update_goal(
-            gid,
-            description=GOAL_DESCRIPTION
-            + "\n\n## State of play\n\nTwo slices are done.\n\n## Next\n\n"
-            "The gate slice ([[LC-861]]) is waiting on a human.",
-        )
-        store.add_goal_log(
-            gid,
-            "Suspending cannot relieve pressure the pool did not cause",
-            "Suspending a worker frees only the pool's own share of the load. When the machine "
-            "is busy for some other reason, suspending more workers changes nothing and only "
-            "starves the pool.",
-        )
-        store.add_goal_log(
-            gid,
-            "Per-machine thresholds ratcheted the pool to zero",
-            "Tried gating on combined_pressure(pool_share, system_pressure) with thresholds "
-            "tuned to this machine. It suspended the last working worker...",
-        )
-    return store, gid
-
-
-def _goals_normal(size):
-    store, _gid = _goals_store()
-    session = _launch(store, size=size)
-    session.press("[")
-    return session
-
-
-def _goals_two_projects(size):
-    store = DemoStore(now=lambda: _at(30))
-    store.create_goal("Ship the goals record", "", "lightcycle")
-    store.create_goal("Publish the plugin marketplace", "", "lightcycle-plugin")
-    store.create_goal("Make the driver loop reorient itself")
-    session = _launch(store, size=size)
-    session.press("[")
-    return session
-
-
-def _goals_empty(size):
-    session = _launch(DemoStore(), size=size)
-    session.press("[")
-    return session
-
-
-def _open_goal_hub(size, tab, populated=True):
-    from lightcycle.adapters.tui.goal_hub import GoalHubScreen
-    from lightcycle.adapters.tui.hub import HubTabStrip
-
-    store, gid = _goals_store(with_content=populated)
-    session = _launch(store, size=size)
-    screen = GoalHubScreen(session.app._container, gid, lambda: NOW)
-    session.run(lambda: session.app.push_screen(screen))
-    session.pause()
-    session.pause()
-    if tab != "overview":
-        session.run(lambda: setattr(screen, "_active_tab", tab))
-        session.run(lambda: screen.query_one(HubTabStrip).set_active(tab))
-        session.run(screen._apply_tab_visibility)
-        session.pause()
-        session.pause()
-    return session
-
-
-def _goal_hub_overview(size):
-    return _open_goal_hub(size, "overview")
-
-
-def _goal_hub_overview_empty(size):
-    return _open_goal_hub(size, "overview", populated=False)
-
-
-def _goal_hub_log(size):
-    return _open_goal_hub(size, "log")
-
-
-def _goal_hub_log_search(size, term="starves"):
-    session = _open_goal_hub(size, "log")
-    screen = session.app.screen
-    session.press("/")
-    session.pause()
-    session.run(lambda: setattr(screen.query_one("#goal-log-filter-text"), "value", term))
-    session.pause()
-    session.run(screen.on_log_filter_settled)
-    session.pause()
-    return session
-
-
-def _goal_hub_log_search_none(size):
-    return _goal_hub_log_search(size, term="zzzz-no-such-term")
-
-
-def _goal_hub_log_empty(size):
-    return _open_goal_hub(size, "log", populated=False)
-
-
-def _goal_hub_items(size):
-    return _open_goal_hub(size, "items")
-
-
-def _goal_hub_items_search(size, term="slice 5"):
-    session = _open_goal_hub(size, "items")
-    screen = session.app.screen
-    session.press("/")
-    session.pause()
-    session.run(lambda: setattr(screen.query_one("#goal-items-filter-text"), "value", term))
-    session.pause()
-    session.run(screen.on_items_filter_settled)
-    session.pause()
-    return session
-
-
-def _goal_hub_items_search_none(size):
-    return _goal_hub_items_search(size, term="zzzz-no-such-term")
-
-
-def _goal_hub_items_empty(size):
-    return _open_goal_hub(size, "items", populated=False)
-
-
 SCREENS = {
     "priority-list#normal": _priority_normal,
     "priority-list#empty": _priority_empty,
@@ -1692,19 +1528,6 @@ SCREENS = {
     "priority-list#github-budget-low": _priority_github_budget_low,
     "priority-list#config-changed": _priority_config_changed,
     "priority-list#engine-active": _priority_engine_active,
-    "goals#normal": _goals_normal,
-    "goals#two-projects": _goals_two_projects,
-    "goals#empty": _goals_empty,
-    "goal-hub#overview": _goal_hub_overview,
-    "goal-hub#overview-empty": _goal_hub_overview_empty,
-    "goal-hub#log": _goal_hub_log,
-    "goal-hub#log-search": _goal_hub_log_search,
-    "goal-hub#log-search-none": _goal_hub_log_search_none,
-    "goal-hub#log-empty": _goal_hub_log_empty,
-    "goal-hub#items": _goal_hub_items,
-    "goal-hub#items-search": _goal_hub_items_search,
-    "goal-hub#items-search-none": _goal_hub_items_search_none,
-    "goal-hub#items-empty": _goal_hub_items_empty,
     "backlog#normal": _backlog_normal,
     "backlog#empty": _backlog_empty,
     "backlog#empty-filtered": _backlog_empty_filtered,

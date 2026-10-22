@@ -102,19 +102,18 @@ class TestAddProjectReservedShortcode(unittest.TestCase):
         with self.assertRaisesRegex(UseCaseError, "guidance project"):
             self._uc(s).execute(AddProjectInput(identity="acme/gdn"))
 
-    def test_explicit_shortcode_g_is_refused_with_the_reason(self):
-        from lightcycle.application.errors import UseCaseError
+    def test_explicit_shortcode_g_is_accepted(self):
         from lightcycle.application.setup import AddProjectInput
 
         s = FakeStore()
-        with self.assertRaisesRegex(UseCaseError, "reserved.*goal ids"):
-            self._uc(s).execute(AddProjectInput(identity="acme/app", shortcode="g"))
-        self.assertIsNone(s.get_project("acme/app"))
+        r = self._uc(s).execute(AddProjectInput(identity="acme/app", shortcode="g"))
+        self.assertEqual(r.shortcode.upper(), "G")
+        self.assertEqual(s.get_project("acme/app").shortcode.upper(), "G")
 
-    def test_a_repo_whose_default_would_be_g_gets_another_shortcode(self):
+    def test_a_repo_whose_default_is_g_keeps_it(self):
         from lightcycle.application.setup import AddProjectInput
 
         s = FakeStore()
         r = self._uc(s).execute(AddProjectInput(identity="acme/g"))
-        self.assertEqual(r.shortcode, "ACMEG")
-        self.assertEqual(s.get_project("acme/g").shortcode, "ACMEG")
+        self.assertEqual(r.shortcode, "G")
+        self.assertEqual(s.get_project("acme/g").shortcode, "G")

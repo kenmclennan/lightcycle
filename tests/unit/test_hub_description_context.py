@@ -24,24 +24,21 @@ class TestDescriptionContextBlock(unittest.TestCase):
         session.pause()
         return session.app.screen
 
-    def test_full_context_shows_five_lines_above_the_text(self):
+    def test_full_context_shows_four_lines_above_the_text(self):
         s = FakeStore()
         backlog = s.create_item("Fix header", "d")
         item = s.create_item("item", "The description text", workflow="o/w@abc")
         s.add_artifact(item, "repo", "kenmclennan/lightcycle")
         s.add_artifact(item, "resolves", backlog, internal=True)
-        goal = s.create_goal("Ship the thing")
-        s.link_goal_item(goal, item)
         s.complete_node(item, "merged", disposition="completed", note="shipped in #12")
         lines = _pane_lines(self._hub(s, item))
-        self.assertEqual(len(lines), 7)
+        self.assertEqual(len(lines), 6)
         self.assertEqual(lines[0].split(), ["repo", "kenmclennan/lightcycle"])
         self.assertEqual(lines[1].split(), ["workflow", "o/w@abc"])
-        self.assertEqual(lines[2].split(), ["goal", "Ship", "the", "thing", "(%s)" % goal])
-        self.assertEqual(lines[3].split(), ["resolves", "Fix", "header", "(%s)" % backlog])
-        self.assertEqual(lines[4].split(), ["note", "shipped", "in", "#12"])
-        self.assertTrue(set(lines[5]) == {"─"})
-        self.assertEqual(lines[6], "The description text")
+        self.assertEqual(lines[2].split(), ["resolves", "Fix", "header", "(%s)" % backlog])
+        self.assertEqual(lines[3].split(), ["note", "shipped", "in", "#12"])
+        self.assertTrue(set(lines[4]) == {"─"})
+        self.assertEqual(lines[5], "The description text")
 
     def test_item_with_no_context_renders_the_description_alone(self):
         s = FakeStore()

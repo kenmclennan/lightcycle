@@ -324,8 +324,7 @@ def _file_compat(argv):
         i += 2
     title = os.path.splitext(os.path.basename(spec))[0]
     nargs = ["item", title, "--description", "a description"]
-    for k, flag in (("project", "--project"), ("goal", "--goal"),
-                    ("workflow", "--workflow")):
+    for k, flag in (("project", "--project"), ("workflow", "--workflow")):
         if opts.get(k):
             nargs += [flag, opts[k]]
     if not opts.get("project"):
@@ -380,6 +379,10 @@ class TestSkeleton(unittest.TestCase):
     def test_unknown_subcommand_exits_2(self):
         r = run_lc("wibble")
         self.assertEqual(r.returncode, 2)
+
+    def test_goal_is_an_unknown_command(self):
+        r = run_lc("goal", "list")
+        self.assertNotEqual(r.returncode, 0)
 
     def test_help_is_grouped_and_described(self):
         r = run_lc("--help")

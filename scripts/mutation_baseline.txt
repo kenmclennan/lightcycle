@@ -6,7 +6,6 @@ lightcycle/domain/feedback/trust.py: 100.0
 lightcycle/domain/feedback/worklog.py: 84.0
 lightcycle/domain/flow/remaining_stages.py: 95.8
 lightcycle/domain/flow/transition.py: 100.0
-lightcycle/domain/goals/goal.py: 100.0
 lightcycle/domain/health/config_fix.py: 81.8
 lightcycle/domain/health/problem.py: 88.2
 lightcycle/domain/money.py: 94.7
