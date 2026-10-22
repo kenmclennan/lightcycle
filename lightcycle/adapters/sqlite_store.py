@@ -358,7 +358,7 @@ class SqliteStore(
         self._tx_depth += 1
         try:
             yield
-        except Exception:
+        except BaseException:
             self._tx_depth -= 1
             if self._tx_depth == 0:
                 self._conn.rollback()

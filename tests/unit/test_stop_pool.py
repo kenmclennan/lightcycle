@@ -11,6 +11,7 @@ from lightcycle.application.pool.no_op_gates import (
 from lightcycle.cli import _stop_pool_lines
 from lightcycle.domain.pool import Worker
 from lightcycle.domain.work import State
+from tests.support.fake_run_groups import FakeRunGroups
 from tests.support.fake_store import FakeStore
 from tests.support.fake_workers import FakeWorkers
 
@@ -56,7 +57,7 @@ class TestStopPool(unittest.TestCase):
             store, workers, worktrees=_Worktrees(), git=git, worker_log=NoOpFs(),
             spin_port=NoOpSpinPort(), spin_cap=3, stream=NoOpStream(),
         )
-        return store, workers, git, step, StopPoolUseCase(workers, sweep)
+        return store, workers, git, step, StopPoolUseCase(workers, sweep, FakeRunGroups())
 
     def test_a_live_worker_is_stopped(self):
         store, workers, _git, _step, uc = self._pool()
@@ -86,7 +87,7 @@ class TestStopPool(unittest.TestCase):
             store, workers, worktrees=NoOpWorktrees(), git=NoOpGit(), worker_log=NoOpFs(),
             spin_port=NoOpSpinPort(), spin_cap=3, stream=NoOpStream(),
         )
-        resp = StopPoolUseCase(workers, sweep).execute(100.0, 120, 1800)
+        resp = StopPoolUseCase(workers, sweep, FakeRunGroups()).execute(100.0, 120, 1800)
         self.assertEqual((resp.stopped, resp.reclaimed), ([], []))
 
     def test_wait_for_death_deadline_is_computed_from_the_injected_clock(self):
@@ -106,7 +107,7 @@ class TestStopPool(unittest.TestCase):
                 return True
 
         clock = _CountingClock()
-        uc = StopPoolUseCase(_NeverDies(), sweep=None, sleep=lambda s: None, clock=clock)
+        uc = StopPoolUseCase(_NeverDies(), sweep=None, run_groups=FakeRunGroups(), sleep=lambda s: None, clock=clock)
 
         uc._wait_for_death({4242}, shutdown_grace_seconds=5)
 
@@ -127,7 +128,7 @@ class TestStopPool(unittest.TestCase):
             store, workers, worktrees=_Worktrees(), git=_Git(), worker_log=NoOpFs(),
             spin_port=NoOpSpinPort(), spin_cap=3, stream=NoOpStream(),
         )
-        uc = StopPoolUseCase(workers, sweep, sleep=lambda s: None)
+        uc = StopPoolUseCase(workers, sweep, FakeRunGroups(), sleep=lambda s: None)
 
         resp = uc.execute(now=100.0, max_boot=120, stall_seconds=1800)
 
@@ -160,7 +161,7 @@ class TestStopPool(unittest.TestCase):
             spin_port=NoOpSpinPort(), spin_cap=3, stream=NoOpStream(),
         )
         ticks = iter(range(1000))
-        uc = StopPoolUseCase(workers, sweep, sleep=lambda s: None, clock=lambda: next(ticks))
+        uc = StopPoolUseCase(workers, sweep, FakeRunGroups(), sleep=lambda s: None, clock=lambda: next(ticks))
 
         resp = uc.execute(now=100.0, max_boot=120, stall_seconds=1800, shutdown_grace_seconds=5)
 
@@ -176,7 +177,7 @@ class TestStopPool(unittest.TestCase):
                 return pid == 2
 
         ticks = iter(range(1000))
-        uc = StopPoolUseCase(_OneSurvives(), sweep=None, sleep=lambda s: None, clock=lambda: next(ticks))
+        uc = StopPoolUseCase(_OneSurvives(), sweep=None, run_groups=FakeRunGroups(), sleep=lambda s: None, clock=lambda: next(ticks))
 
         self.assertEqual(uc._wait_for_death({1, 2}, shutdown_grace_seconds=3), {2})
 
@@ -217,3 +218,31 @@ class TestNoUserFacingOutputNamesThePreRebrandTool(unittest.TestCase):
                     if re.search(r"\btg\b", text):
                         offenders.append("%s:%d %s" % (path.name, n, text[:60]))
         self.assertEqual(offenders, [])
+
+
+class TestStopPoolRunGroups(unittest.TestCase):
+    def _use_case(self, run_groups):
+        from types import SimpleNamespace
+
+        sweep = SimpleNamespace(execute=lambda *a: SimpleNamespace(
+            swept=[], preserved=[], capture_failed=[]))
+        return StopPoolUseCase(FakeWorkers(), sweep, run_groups, sleep=lambda s: None)
+
+    def test_scripts_are_stopped_with_the_shutdown_grace_and_reported(self):
+        from lightcycle.ports.run_groups import StoppedRuns
+
+        groups = FakeRunGroups(StoppedRuns(terminated=["script-a", "script-b"], killed=["script-b"]))
+
+        resp = self._use_case(groups).execute(100.0, 120, 1800, shutdown_grace_seconds=7)
+
+        self.assertEqual(groups.stop_graces, [7])
+        self.assertEqual((resp.scripts_terminated, resp.scripts_killed), (["script-a", "script-b"], ["script-b"]))
+
+    def test_the_stop_line_counts_each_script_once(self):
+        resp = StopPoolResponse(scripts_terminated=["a", "b"], scripts_killed=["b"])
+        self.assertIn(
+            "  stopped 2 running script(s); their steps re-run on the next pool",
+            _stop_pool_lines(resp, 5))
+
+    def test_no_script_line_when_nothing_was_running(self):
+        self.assertEqual(len(_stop_pool_lines(StopPoolResponse(), 5)), 1)

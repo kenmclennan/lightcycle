@@ -179,7 +179,7 @@ class FakeStore(StorePort):
         self._tx_depth += 1
         try:
             yield
-        except Exception:
+        except BaseException:
             self._tx_depth -= 1
             if self._tx_depth == 0:
                 for a, v in snapshot.items():

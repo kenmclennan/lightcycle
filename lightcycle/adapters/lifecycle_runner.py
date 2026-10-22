@@ -16,15 +16,17 @@ def _tail(text):
 
 
 class LifecycleRunnerAdapter(LifecycleRunnerPort):
-    def __init__(self, config):
+    def __init__(self, config, groups):
         self._config = config
+        self._groups = groups
         self._threads = {}
         self._results = {}
         self._lock = threading.Lock()
 
     def _execute(self, log_path, script_path, cwd, env, timeout, log_label):
         run = run_logged(
-            self._config, log_label, log_path, script_path, cwd, env, None, timeout)
+            self._config, log_label, log_path, script_path, cwd, env, None, timeout,
+            self._groups)
         output = _tail(run.stderr_tail + run.stdout)
         return HookResult(
             exit_code=run.exit_code, output=output, timed_out=run.timed_out,

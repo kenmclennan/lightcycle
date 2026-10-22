@@ -11,6 +11,7 @@ from pathlib import Path
 
 import lightcycle.cli as cli
 from lightcycle.adapters.lifecycle_runner import LifecycleRunnerAdapter
+from lightcycle.adapters.run_groups import RunGroupsAdapter
 from lightcycle.adapters.workflow_bundle import WorkflowBundleAdapter
 from lightcycle.adapters.workflow_source import WorkflowSourceAdapter
 from lightcycle.application.pool.lifecycle_cadence import LifecycleCadenceUseCase
@@ -40,7 +41,7 @@ def _script(directory, name, text):
 class TestRunnerAdapter(unittest.TestCase):
     def setUp(self):
         self.home = tempfile.mkdtemp()
-        self.runner = LifecycleRunnerAdapter(_config(self.home))
+        self.runner = LifecycleRunnerAdapter(_config(self.home), RunGroupsAdapter())
         self.work = tempfile.mkdtemp()
 
     def test_run_reports_exit_code_output_cwd_and_environment(self):
@@ -117,7 +118,7 @@ class TestRunnerAdapter(unittest.TestCase):
         self.assertIsNone(self.runner.last_due("acme/build"))
         self.runner.record_due("acme/build", due)
         self.runner.record_due("acme/ship", due)
-        second = LifecycleRunnerAdapter(_config(self.home))
+        second = LifecycleRunnerAdapter(_config(self.home), RunGroupsAdapter())
         self.assertEqual(second.last_due("acme/build"), due)
         self.assertTrue(os.path.exists(os.path.join(self.home, "lifecycle-state.json")))
 

@@ -13,6 +13,7 @@ class FakeScriptRunner(ScriptRunnerPort):
         self._running = {}
         self._finished = {}
         self._log_paths = {}
+        self._orphans = {}
 
     def program(self, key, result):
         self._programmed[key] = result
@@ -27,7 +28,7 @@ class FakeScriptRunner(ScriptRunnerPort):
         return OK_EMPTY
 
     def start(self, key, script_path, cwd, env, stdin_text, timeout, log_label):
-        if key in self._running:
+        if key in self._running or key in self._orphans:
             raise ValueError("script process %r is already running" % key)
         call = {
             "key": key, "script": script_path, "cwd": cwd, "env": dict(env),
@@ -51,3 +52,12 @@ class FakeScriptRunner(ScriptRunnerPort):
 
     def running(self):
         return sorted(self._running)
+
+    def plant_orphan(self, key, pid):
+        self._orphans[key] = pid
+
+    def kill_orphan(self, key):
+        self._orphans.pop(key, None)
+
+    def orphaned(self):
+        return sorted(k for k in self._orphans if k not in self._running)

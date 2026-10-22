@@ -16,6 +16,7 @@ from lightcycle.ports.machine import MachinePort
 from lightcycle.ports.memory_gate_status import MemoryGateStatusPort
 from lightcycle.ports.scaffold import ScaffoldPort
 from lightcycle.ports.github_poll_runner import GithubPollRunnerPort
+from lightcycle.ports.run_groups import RunGroupsPort
 from lightcycle.ports.script_runner import ScriptRunnerPort
 from lightcycle.ports.spawner import SpawnerPort
 from lightcycle.ports.spin import SpinPort
@@ -46,6 +47,7 @@ __all__ = [
     "RunLockPort",
     "ScaffoldPort",
     "GithubPollRunnerPort",
+    "RunGroupsPort",
     "ScriptRunnerPort",
     "SpawnerPort",
     "SpinPort",
