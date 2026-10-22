@@ -1615,6 +1615,17 @@ class StoreContractBase:
                 raise RuntimeError("boom")
         self.assertIsNone(s.hold("R-1", "inline:1"))
 
+    def test_a_lost_complete_step_atomic_race_inside_a_transaction_keeps_the_earlier_writes(self):
+        s = self.make_store()
+        tid = self._step(s, "t", role="agent")
+        s.complete_step_atomic(tid, "done", "", None)
+        with s.transaction():
+            s.file_hold("R-1", "inline:1", "mallory", "b", None, None, 1.0)
+            won, new = s.complete_step_atomic(tid, "done", "", NodeSpec(stage="review"))
+        self.assertFalse(won)
+        self.assertIsNone(new)
+        self.assertIsNotNone(s.hold("R-1", "inline:1"))
+
     def test_a_keyboard_interrupt_inside_a_transaction_restores_depth_and_rolls_back(self):
         s = self.make_store()
         with self.assertRaises(KeyboardInterrupt):
