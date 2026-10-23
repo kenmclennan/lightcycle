@@ -53,7 +53,7 @@ class Step:
         outs = sorted(sd.routes.keys())
         owner = sd.owner
         if owner is None or owner == "human":
-            return ("blocked" if sd.escalation else "action", outs)
+            return ("blocked" if sd.escalation or self.park else "action", outs)
         return ("blocked", outs + ["unblock"])
 
     def as_dict(self) -> dict:

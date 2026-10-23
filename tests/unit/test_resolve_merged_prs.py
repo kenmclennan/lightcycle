@@ -1243,6 +1243,43 @@ class TestPhaseReleaseGuard(unittest.TestCase):
         self.assertEqual(result.merged, [item])
         self.assertEqual(store.get_node(step).state, "done")
 
+    def test_refused_release_leaves_the_gate_in_the_escalation_bucket(self):
+        from lightcycle.domain.work import row_bucket
+
+        flow = _ROUTES_TO_STAGE_FLOW
+        store, item, step, rid, git, uc, path = self._setup(
+            FakeGitHub(merged_prs={self.URL}), flow=flow
+        )
+        git._registered = {path}
+        git._uncommitted = {path: ["a.py"]}
+
+        uc.execute()
+
+        node = store.get_node(step)
+        self.assertEqual(node.classify_for_human(flow)[0], "blocked")
+        self.assertEqual(row_bucket(node, flow, True), "escalation")
+        self.assertIn("merged-phase release refused", node.park.reason)
+        self.assertIn("a.py", node.park.reason)
+        self.assertNotEqual(node.state, "done")
+        self.assertNotIn("--state ready", node.park.needs)
+        self.assertIn("commit, push or discard the work named", node.park.needs)
+
+    def test_removing_the_named_path_lets_the_next_tick_release_and_clear_the_park(self):
+        store, item, step, rid, git, uc, path = self._setup(
+            FakeGitHub(merged_prs={self.URL}), flow=_ROUTES_TO_STAGE_FLOW
+        )
+        git._registered = {path}
+        git._uncommitted = {path: ["a.py"]}
+        uc.execute()
+        self.assertTrue(store.get_node(step).park)
+
+        git._uncommitted = {}
+        result = uc.execute()
+
+        self.assertEqual(result.merged, [item])
+        self.assertEqual(store.get_node(step).state, "done")
+        self.assertFalse(store.get_node(step).park)
+
     def test_clean_worktree_proceeds_even_with_commits_beyond_the_base(self):
         store, item, step, rid, git, uc, path = self._setup(
             FakeGitHub(merged_prs={self.URL}), beyond={(self.REPO, self.BRANCH): ["a1"]}
