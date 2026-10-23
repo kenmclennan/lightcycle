@@ -270,5 +270,116 @@ class TestUsageResumePlus(unittest.TestCase):
         self.assertEqual(result.posted_input_tokens, 0)
 
 
+class TestUsageMutationGaps(unittest.TestCase):
+    _RECOVERED = (
+        "recovered_input_tokens", "recovered_output_tokens",
+        "recovered_cache_read_tokens", "recovered_cache_creation_tokens")
+
+    def test_cache_read_pricing_divides_by_exactly_one_million(self):
+        cost, _, _ = price_tokens("sonnet", 0, 0, 1_000_000_000, 0, _RATES)
+        self.assertEqual(cost, Cost.from_usd(200.0))
+
+    def test_sum_adds_every_token_field_across_events(self):
+        events = [
+            UsageEvent(1, 10, 100, 1000),
+            UsageEvent(2, 20, 200, 2000),
+        ]
+        summed = sum_usage_events(events)
+        self.assertEqual(
+            (summed.input_tokens, summed.output_tokens,
+             summed.cache_read_tokens, summed.cache_creation_tokens),
+            (3, 30, 300, 3000))
+
+    def test_sum_keeps_the_first_non_null_cost_basis(self):
+        events = [
+            UsageEvent(cost_basis=None), UsageEvent(cost_basis="list"),
+            UsageEvent(cost_basis="derived"),
+        ]
+        self.assertEqual(sum_usage_events(events).cost_basis, "list")
+
+    def test_sum_adds_thinking_tokens_and_leaves_none_when_no_event_has_any(self):
+        events = [UsageEvent(thinking_tokens=5), UsageEvent(), UsageEvent(thinking_tokens=7)]
+        self.assertEqual(sum_usage_events(events).thinking_tokens, 12)
+        self.assertIsNone(sum_usage_events([UsageEvent(), UsageEvent()]).thinking_tokens)
+
+    def test_any_single_recovered_field_makes_resolve_usage_derive_from_attribution(self):
+        usage = UsageEvent(input_tokens=99)
+        for field_name in self._RECOVERED:
+            with self.subTest(field_name):
+                resolved = resolve_usage(
+                    usage, AttributionEvent(**{field_name: 7}), "sonnet", _RATES)
+                self.assertIsNot(resolved, usage)
+                self.assertEqual(resolved.cost_basis, "derived")
+
+    def test_a_derived_usage_event_has_no_thinking_tokens(self):
+        resolved = resolve_usage(
+            UsageEvent(thinking_tokens=4), AttributionEvent(recovered_input_tokens=1),
+            "sonnet", _RATES)
+        self.assertIsNone(resolved.thinking_tokens)
+
+    def test_subtract_attribution_keeps_a_tool_the_resume_has_not_posted_whole(self):
+        result = UsageResume().subtract_attribution_from(
+            AttributionEvent(tool_usage={"Read": ToolUsage(calls=2, bytes=15)}))
+        self.assertEqual(
+            (result.tool_usage["Read"].calls, result.tool_usage["Read"].bytes), (2, 15))
+
+    def test_subtract_attribution_treats_zero_or_missing_posted_counts_as_zero(self):
+        attribution = AttributionEvent(tool_usage={"Read": ToolUsage(calls=2, bytes=15)})
+        for posted in ({"calls": 0, "bytes": 0}, {}):
+            with self.subTest(posted):
+                result = UsageResume(posted_tool_usage={"Read": posted}).subtract_attribution_from(
+                    attribution)
+                self.assertEqual(
+                    (result.tool_usage["Read"].calls, result.tool_usage["Read"].bytes), (2, 15))
+
+    def test_plus_advances_on_any_single_recovered_field(self):
+        for field_name in self._RECOVERED:
+            with self.subTest(field_name):
+                result = UsageResume().plus(
+                    AttributionEvent(**{field_name: 3}), Cost(5), log_file="x", offset=0,
+                    message_ids=[], pending_tool_use={})
+                self.assertEqual(result.posted_cost, Cost(5))
+
+    def test_plus_adds_each_recovered_field_onto_what_was_already_posted(self):
+        resume = UsageResume(
+            posted_input_tokens=10, posted_output_tokens=20, posted_cache_read_tokens=30,
+            posted_cache_creation_tokens=40)
+        result = resume.plus(
+            AttributionEvent(
+                recovered_input_tokens=1, recovered_output_tokens=2,
+                recovered_cache_read_tokens=3, recovered_cache_creation_tokens=4),
+            Cost(), log_file="x", offset=0, message_ids=[], pending_tool_use={})
+        self.assertEqual(
+            (result.posted_input_tokens, result.posted_output_tokens,
+             result.posted_cache_read_tokens, result.posted_cache_creation_tokens),
+            (11, 22, 33, 44))
+
+    def test_plus_records_a_turn_count_alone_and_a_tool_usage_alone(self):
+        turns = UsageResume(posted_turn_count=1).plus(
+            AttributionEvent(turn_count=2), Cost(), log_file="x", offset=0,
+            message_ids=[], pending_tool_use={})
+        tools = UsageResume().plus(
+            AttributionEvent(tool_usage={"Read": ToolUsage(calls=0, bytes=0)}), Cost(),
+            log_file="x", offset=0, message_ids=[], pending_tool_use={})
+        self.assertEqual(turns.posted_turn_count, 3)
+        self.assertEqual(tools.posted_tool_usage, {"Read": {"calls": 0, "bytes": 0}})
+
+    def test_plus_starts_a_new_tool_from_zero_and_accumulates_a_known_one(self):
+        resume = UsageResume(posted_tool_usage={"Read": {"calls": 1, "bytes": 5}})
+        result = resume.plus(
+            AttributionEvent(tool_usage={
+                "Read": ToolUsage(calls=2, bytes=7), "Grep": ToolUsage(calls=3, bytes=4)}),
+            Cost(), log_file="x", offset=0, message_ids=[], pending_tool_use={})
+        self.assertEqual(
+            result.posted_tool_usage,
+            {"Read": {"calls": 3, "bytes": 12}, "Grep": {"calls": 3, "bytes": 4}})
+
+    def test_plus_carries_the_pending_tool_use_it_was_given(self):
+        result = UsageResume().plus(
+            AttributionEvent(), Cost(), log_file="x", offset=0, message_ids=["m"],
+            pending_tool_use={"t1": "Read"})
+        self.assertEqual((result.pending_tool_use, result.message_ids), ({"t1": "Read"}, ["m"]))
+
+
 if __name__ == "__main__":
     unittest.main()
