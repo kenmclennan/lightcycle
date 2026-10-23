@@ -84,13 +84,37 @@ class TestParseResults(unittest.TestCase):
                 "    lightcycle.domain.other.x_b__mutmut_1: killed",
             ]
         )
-        counts, excluded = mr.parse_results(text, PREFIXES)
-        self.assertEqual(counts, {"lightcycle/domain/money.py": (1, 4)})
-        self.assertEqual(excluded, 2)
+        counts, excluded, timeouts = mr.parse_results(text, PREFIXES)
+        self.assertEqual(counts, {"lightcycle/domain/money.py": (1, 3)})
+        self.assertEqual(excluded, 3)
+        self.assertEqual(timeouts, 1)
+
+    def test_timeout_is_a_member_of_excluded(self):
+        self.assertIn("timeout", mr.EXCLUDED)
+
+    def test_module_whose_only_non_killed_mutant_timed_out_scores_100(self):
+        text = "\n".join(
+            [
+                "    lightcycle.domain.money.x_a__mutmut_1: killed",
+                "    lightcycle.domain.money.x_a__mutmut_2: timeout",
+            ]
+        )
+        counts, _, timeouts = mr.parse_results(text, PREFIXES)
+        self.assertEqual(timeouts, 1)
+        self.assertEqual(mr.scores_from_counts(counts), {"lightcycle/domain/money.py": Decimal("100.0")})
+
+    def test_a_killed_to_timeout_flip_still_fails_a_baseline_of_95_8(self):
+        baseline = {"lightcycle/domain/money.py": Decimal("95.8")}
+        self.assertEqual(mr.score(23, 24), Decimal("95.8"))
+        self.assertEqual(mr.score(22, 23), Decimal("95.7"))
+        self.assertEqual(
+            mr.below_baseline({"lightcycle/domain/money.py": mr.score(22, 23)}, baseline),
+            ["lightcycle/domain/money.py"],
+        )
 
     def test_method_mutant_names_resolve_to_their_module(self):
         text = "    lightcycle.domain.money.xǁMoneyǁadd__mutmut_1: killed"
-        counts, _ = mr.parse_results(text, PREFIXES)
+        counts, _, _ = mr.parse_results(text, PREFIXES)
         self.assertEqual(counts, {"lightcycle/domain/money.py": (1, 1)})
 
     def test_module_without_mutants_has_no_score(self):
