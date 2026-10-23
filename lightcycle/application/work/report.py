@@ -2,9 +2,8 @@ import datetime
 from dataclasses import dataclass
 from typing import List, Optional
 
-from lightcycle.application.work.automation import AutomationInput, AutomationUseCase
-from lightcycle.application.work.done import DoneInput, DoneUseCase
-from lightcycle.application.work.item_partition import is_backlogged_item
+from lightcycle.application.work.automation import is_automation_item
+from lightcycle.application.work.item_partition import is_backlogged_item, is_closed_item
 from lightcycle.domain.work import ItemCost, SlowStep, item_cost, parse_timestamp, slow_steps
 
 
@@ -60,8 +59,13 @@ def _local_midnight(day):
     return datetime.datetime.combine(day, datetime.time()).astimezone()
 
 
-def _backlog_start_and_close(store, day, steps=None):
-    items = store.all_items_including_done()
+def _closed_on(item, day):
+    parsed = parse_timestamp(item.closed_at)
+    return parsed is not None and parsed.date() == day
+
+
+def _backlog_start_and_close(store, day, steps=None, items=None):
+    items = store.all_items_including_done() if items is None else items
     earliest = _earliest_step_created_by_item(store.all_steps_including_done() if steps is None else steps)
     start = _backlog_size_asof(store, items, earliest, _local_midnight(day))
     close = _backlog_size_asof(store, items, earliest, _local_midnight(day + datetime.timedelta(days=1)))
@@ -91,23 +95,25 @@ class ReportUseCase:
         self._store = store
 
     def execute(self, input: ReportInput) -> ReportResponse:
-        done_uc = DoneUseCase(self._store)
-        closed_today = done_uc.execute(DoneInput(day=input.day)).rows
-        items = [r.step for r in closed_today]
+        all_items = self._store.all_items_including_done()
+        closed_on_day = [i for i in all_items if is_closed_item(i) and _closed_on(i, input.day)]
+        automation_items = [i for i in closed_on_day if is_automation_item(self._store, i)]
+        automation_ids = {i.id for i in automation_items}
+        items = [i for i in closed_on_day if i.id not in automation_ids]
         completed = sum(1 for i in items if i.disposition == "completed")
         abandoned = sum(1 for i in items if i.disposition in ("abandoned", "aborted"))
-        automation = AutomationUseCase(self._store).execute(AutomationInput(day=input.day))
+        automation_spend = item_cost([s for i in automation_items for s in self._store.children(i.id)])
         all_children = [s for i in items for s in self._store.children(i.id)]
         spend = item_cost(all_children)
         escalations = _escalations_on(self._store, input.day)
         all_steps = self._store.all_steps_including_done()
         slow = _slow_steps_on(all_steps, input.day)
-        backlog_start, backlog_close = _backlog_start_and_close(self._store, input.day, all_steps)
+        backlog_start, backlog_close = _backlog_start_and_close(self._store, input.day, all_steps, all_items)
         row = self._store.day_summary(input.day)
         summary = row.summary if row else None
         return ReportResponse(
             day=input.day, completed=completed, abandoned=abandoned, spend=spend,
-            automation_count=automation.count, automation_spend=automation.spend,
+            automation_count=len(automation_items), automation_spend=automation_spend,
             escalations=escalations, slow_steps=slow,
             backlog_start=backlog_start, backlog_close=backlog_close,
             backlog_delta=backlog_close - backlog_start,

@@ -2,7 +2,7 @@
 from rich.text import Text
 from textual import events
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Static
 
 from lightcycle.adapters.tui.design_system import (
@@ -90,25 +90,48 @@ class ReportView(Vertical):
         )
         yield ReportTable(id="report-table")
         yield Static(id="report-floor")
-        yield Static(id="report-summary")
+        yield Static("Loading report...", id="report-loading")
+        yield VerticalScroll(Static(id="report-summary-text"), id="report-summary")
 
     def on_mount(self) -> None:
         table = self.query_one(ReportTable)
         table.cursor_type = "none"
         table.show_header = False
         table.display = False
-        self.query_one("#report-summary", Static).display = False
+        self.query_one("#report-summary", VerticalScroll).display = False
+        self.query_one("#report-loading", Static).display = False
+
+    @property
+    def shown_day(self):
+        return self._day
+
+    def show_loading(self, day, message="Loading report...") -> None:
+        self._day = None
+        self._rows = ()
+        self.query_one("#report-day-filter-left", Static).update(
+            Text(day.isoformat(), style=COLOURS["text"])
+        )
+        self.query_one(ReportTable).display = False
+        self.query_one("#report-floor", Static).display = False
+        self.query_one("#report-summary", VerticalScroll).display = False
+        loading = self.query_one("#report-loading", Static)
+        loading.update(Text(message, style=COLOURS["dim"]))
+        loading.display = True
 
     def apply_report(self, response) -> None:
         self._day = response.day
+        self.query_one("#report-loading", Static).display = False
         self.query_one("#report-day-filter-left", Static).update(
             Text(response.day.isoformat(), style=COLOURS["text"])
         )
         self.query_one("#report-day-filter-right", Static).display = False
-        summary_widget = self.query_one("#report-summary", Static)
+        summary_widget = self.query_one("#report-summary", VerticalScroll)
         if response.summary:
-            summary_widget.update(Text(response.summary, style=COLOURS["text"]))
+            self.query_one("#report-summary-text", Static).update(
+                Text(response.summary, style=COLOURS["text"])
+            )
             summary_widget.display = True
+            summary_widget.scroll_home(animate=False)
         else:
             summary_widget.display = False
         self._rebuild_table(_report_rows(response))

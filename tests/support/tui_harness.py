@@ -7,6 +7,7 @@ import tempfile
 from lightcycle import __version__
 from lightcycle.application.inspect import DoctorReport
 from lightcycle.application.setup import UpgradeResponse
+from lightcycle.application.work.report import ReportInput, ReportUseCase
 from lightcycle.adapters.backup import SqliteBackupAdapter
 from lightcycle.adapters.breaker import BreakerAdapter
 from lightcycle.adapters.fsio import FsAdapter
@@ -407,9 +408,10 @@ NodeHubScreen.set_interval = _start_background_timers_paused(NodeHubScreen.set_i
 
 class TuiSession:
     def __init__(self, container, now=None, upgrade_check=None, size=None, settle=True,
-                 doctor_check=None):
+                 doctor_check=None, report_compute=None):
         self.app = LightcycleApp(container, now=now, upgrade_check=upgrade_check or _no_upgrade_available,
-                               doctor_check=doctor_check or _healthy_doctor)
+                               doctor_check=doctor_check or _healthy_doctor,
+                               report_compute=report_compute or _report_over(container.store))
         self.store = container.store
         self._loop = asyncio.new_event_loop()
         self._ctx = contextvars.copy_context()
@@ -489,10 +491,15 @@ class TuiSession:
         self._loop.close()
 
 
-def launch(container, now=None, upgrade_check=None, size=None, settle=True, doctor_check=None):
+def _report_over(store):
+    return lambda day: ReportUseCase(store).execute(ReportInput(day))
+
+
+def launch(container, now=None, upgrade_check=None, size=None, settle=True, doctor_check=None,
+           report_compute=None):
     session = TuiSession(
         container, now=now, upgrade_check=upgrade_check, size=size, settle=settle,
-        doctor_check=doctor_check)
+        doctor_check=doctor_check, report_compute=report_compute)
     if settle:
         session.pause()
     return session

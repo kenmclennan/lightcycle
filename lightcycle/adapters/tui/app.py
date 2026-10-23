@@ -77,7 +77,6 @@ from lightcycle.application.work import (
     DoneInput,
     DoneUseCase,
     ReportInput,
-    ReportUseCase,
     StatusUseCase,
 )
 from lightcycle.application.work.priority_rows import select_priority_rows
@@ -406,12 +405,19 @@ class LightcycleApp(App):
         content-align: right middle;
         display: none;
     }}
-    #report-summary {{
-        height: auto;
-        max-height: 30%;
-        overflow-y: auto;
+    #report-loading {{
+        height: 1;
         margin: 1 0;
         display: none;
+    }}
+    #report-summary {{
+        height: 1fr;
+        min-height: 3;
+        margin: 1 0;
+        display: none;
+    }}
+    #report-summary-text {{
+        height: auto;
     }}
     ReportTable {{
         height: auto;
@@ -488,7 +494,7 @@ class LightcycleApp(App):
         Binding("right", "open_done_for_report_day", "Open", show=False),
     ]
 
-    def __init__(self, container, now=None, upgrade_check=None, doctor_check=None):
+    def __init__(self, container, now=None, upgrade_check=None, doctor_check=None, report_compute=None):
         super().__init__()
         self._container = container
         self._now = now or (lambda: datetime.datetime.now().astimezone())
@@ -500,6 +506,10 @@ class LightcycleApp(App):
         self._doctor_check = doctor_check or (
             lambda: self._container.doctor_for_current_thread().execute(DoctorInput())
         )
+        self._report_compute = report_compute or (
+            lambda day: self._container.report_for_current_thread().execute(ReportInput(day))
+        )
+        self._report_inflight_day = None
         self._doctor_areas = ()
         self._doctor_failed = False
         self._upgrade_version = None
@@ -600,6 +610,7 @@ class LightcycleApp(App):
 
     def on_unmount(self) -> None:
         self._health_icon_use_case.release()
+        self._container.close_report_store()
 
     def on_resize(self, event: events.Resize) -> None:
         self.call_after_refresh(self._on_terminal_resized)
@@ -686,6 +697,7 @@ class LightcycleApp(App):
 
         self._refresh_backlog_view()
         self._refresh_done_view()
+        self._poll_report_view()
 
         self._apply_view_visibility()
         self._sync_footer_shortcuts()
@@ -863,15 +875,56 @@ class LightcycleApp(App):
             self._done_day_filter, self._done_category,
         )
 
+    def _selected_report_day(self):
+        return self._report_day or self._now().date()
+
+    def _poll_report_view(self) -> None:
+        if self._view == "report" and self._selected_report_day() == self._now().date():
+            self._refresh_report_view()
+
     def _refresh_report_view(self) -> None:
         if self._view != "report":
             return
-        day = self._report_day or self._now().date()
+        day = self._selected_report_day()
+        view = self.query_one(ReportView)
         cached = self._report_cache.get(day)
-        if cached is None or day == self._now().date():
-            cached = ReportUseCase(self._container.store).execute(ReportInput(day))
-            self._report_cache[day] = cached
-        self.query_one(ReportView).apply_report(cached)
+        if cached is not None:
+            view.apply_report(cached)
+            if day != self._now().date():
+                return
+        elif view.shown_day != day:
+            view.show_loading(day)
+        self._start_report_compute(day)
+
+    def _start_report_compute(self, day) -> None:
+        if self._report_inflight_day == day:
+            return
+        self._report_inflight_day = day
+        self.run_worker(
+            lambda: self._report_worker(day), thread=True,
+            group="report", exclusive=True, exit_on_error=False,
+        )
+
+    def _report_worker(self, day) -> None:
+        response = None
+        try:
+            response = self._report_compute(day)
+        finally:
+            self.call_from_thread(self._apply_report_result, day, response)
+
+    def _apply_report_result(self, day, response) -> None:
+        if self._report_inflight_day == day:
+            self._report_inflight_day = None
+        if response is None:
+            if self._view == "report" and self._selected_report_day() == day:
+                view = self.query_one(ReportView)
+                if view.shown_day != day:
+                    view.show_loading(day, "Report unavailable - retrying on the next refresh")
+            return
+        self._report_cache[day] = response
+        if self._view != "report" or self._selected_report_day() != day:
+            return
+        self.query_one(ReportView).apply_report(response)
 
     def _apply_view_visibility(self) -> None:
         on_priority = self._view == "priority"

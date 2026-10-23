@@ -269,3 +269,17 @@ class TestContainerClockSeam(unittest.TestCase):
         self.assertIs(container.clock, time.time)
         self.assertIs(container.monotonic, time.monotonic)
         self.assertIs(container.sleep, time.sleep)
+
+
+class TestReportStore(unittest.TestCase):
+    def test_report_for_current_thread_returns_the_same_runner_until_closed(self):
+        container = Container(store=object(), config=object())
+
+        first = container.report_for_current_thread()
+        second = container.report_for_current_thread()
+        container.close_report_store()
+        third = container.report_for_current_thread()
+        container.close_report_store()
+
+        self.assertIs(first, second)
+        self.assertIsNot(first, third)
