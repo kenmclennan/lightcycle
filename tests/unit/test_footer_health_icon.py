@@ -1,5 +1,6 @@
 import datetime
 import unittest
+import unicodedata
 
 from lightcycle.adapters.tui.footer import DashboardFooter, HealthIcon
 from lightcycle.adapters.tui.hub import NodeHubScreen, TextArtifactViewerScreen
@@ -91,6 +92,13 @@ class TestFooterHealthIconOn(unittest.TestCase):
         self.assertEqual(_text(status_row).count(PLACEHOLDER), 3)
         self.assertIn("pool running", _text(status_row))
         self.assertEqual(_colour_id(_icon_colour(status_row)), HEALTH_IMAGE_IDS["0"])
+
+    def test_one_blank_cell_separates_the_icon_from_both_rows_text(self):
+        session, icon = self._session()
+        rows = _frame_rows(session)
+        for row, text in ((rows[1], "\u25cf pool running"), (rows[2], "\u2191\u2193 move")):
+            cells = "".join(c for c in _inner(row) if not unicodedata.combining(c))
+            self.assertTrue(cells.startswith(PLACEHOLDER * 3 + " " + text), cells[:30])
 
     def test_stalled_pool_shows_the_four_image(self):
         session, icon = self._session(finished_ago=500)

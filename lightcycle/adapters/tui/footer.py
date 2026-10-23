@@ -168,7 +168,7 @@ class ShortcutBar(Horizontal):
 
 class HealthIcon(Static):
     DEFAULT_CSS = """
-    HealthIcon { dock: left; height: 2; }
+    HealthIcon { dock: left; height: 2; margin-right: 1; }
     """
 
     def show(self, reading):
