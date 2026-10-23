@@ -273,6 +273,27 @@ class TestResolveCiUseCase(unittest.TestCase):
         self.assertEqual(next_step.previous_step, step)
         self.assertEqual(result.ci_resolved, [item])
 
+    def test_a_cancelled_check_parks_with_the_run_url_and_is_not_a_ci_failure(self):
+        run_url = "https://github.com/x/y/actions/runs/9/job/3"
+        gh = FakeGitHub(head_shas={_URL: "sha1"}, check_runs_by_sha={
+            (_URL, "sha1"): (
+                CheckRun(name="build", status="completed", conclusion="cancelled", url=run_url),
+            )
+        })
+        store, item, step, uc = self._setup(gh)
+
+        result = uc.execute()
+
+        node = store.get_node(step)
+        self.assertEqual((node.state, node.role), (State.WAITING, "human"))
+        self.assertIn(run_url, node.park.reason)
+        self.assertIn("build", node.park.reason)
+        self.assertIn("Rerun the cancelled job", node.park.needs)
+        self.assertIsNone(node.outcome)
+        self.assertEqual(result.ci_resolved, [])
+        self.assertFalse([c for c in store.children(item) if c.stage == "watch-ci"])
+        self.assertEqual([a for a in store.item_artifacts(step) if a.type == "ci-judged-sha"], [])
+
     def test_stage_with_no_ci_hooks_declared_is_skipped(self):
         gh = FakeGitHub(head_shas={_URL: "sha1"}, check_runs_by_sha={
             (_URL, "sha1"): (CheckRun(name="build", status="completed", conclusion="success"),)

@@ -1,6 +1,6 @@
 import unittest
 
-from lightcycle.domain.pool import ci_outcome, failing_check, judged_checks, timed_out_check
+from lightcycle.domain.pool import cancelled_check, ci_outcome, failing_check, judged_checks, timed_out_check
 from lightcycle.ports.github import CheckRun
 
 
@@ -48,9 +48,21 @@ class TestCiOutcome(unittest.TestCase):
         checks = (_run(conclusion="success"), _run(name="test", conclusion="failure"))
         self.assertEqual(ci_outcome(checks), "failure")
 
-    def test_cancelled_conclusion_is_failure(self):
+    def test_a_cancelled_check_alone_is_cancelled(self):
         checks = (_run(conclusion="cancelled"),)
+        self.assertEqual(ci_outcome(checks), "cancelled")
+
+    def test_a_cancelled_check_beside_a_real_failure_is_failure(self):
+        checks = (_run(conclusion="cancelled"), _run(name="test", conclusion="failure"))
         self.assertEqual(ci_outcome(checks), "failure")
+
+    def test_a_cancelled_check_beside_passes_is_cancelled_not_success(self):
+        checks = (_run(conclusion="success"), _run(name="lint", conclusion="cancelled"))
+        self.assertEqual(ci_outcome(checks), "cancelled")
+
+    def test_a_cancelled_check_beside_a_running_one_stays_pending(self):
+        checks = (_run(conclusion="cancelled"), _run(name="test", status="in_progress", conclusion=None))
+        self.assertEqual(ci_outcome(checks), "pending")
 
     def test_skipped_and_neutral_are_not_failing(self):
         checks = (
@@ -65,6 +77,17 @@ class TestFailingCheck(unittest.TestCase):
     def test_names_the_first_failing_check(self):
         checks = (_run(conclusion="success"), _run(name="test", conclusion="failure"))
         self.assertEqual(failing_check(checks).name, "test")
+
+    def test_a_cancelled_check_is_not_failing(self):
+        self.assertIsNone(failing_check((_run(conclusion="cancelled"),)))
+
+    def test_a_cancelled_check_beside_a_real_failure_names_the_failure(self):
+        checks = (_run(conclusion="cancelled"), _run(name="test", conclusion="failure"))
+        self.assertEqual(failing_check(checks).name, "test")
+
+    def test_cancelled_check_names_the_cancelled_one(self):
+        checks = (_run(conclusion="success"), _run(name="lint", conclusion="cancelled"))
+        self.assertEqual(cancelled_check(checks).name, "lint")
 
     def test_none_when_nothing_is_failing(self):
         checks = (_run(conclusion="success"), _run(name="lint", conclusion="skipped"))
