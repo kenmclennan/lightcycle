@@ -1,7 +1,8 @@
 import argparse
 import datetime
+import functools
 import os
-from dataclasses import replace
+from dataclasses import dataclass, replace
 import sys
 
 from lightcycle.application.work.step_inputs import StepInputs
@@ -1644,20 +1645,41 @@ def _coloured_row(strip):
 UNRENDERABLE = {}
 
 
-def render(state, size=DEFAULT_SIZE, colour=False):
+@dataclass(frozen=True)
+class Capture:
+    strips: list
+    virtual_height: int
+    viewport_height: int
+
+
+@functools.lru_cache(maxsize=None)
+def _capture(state, size):
+    session = SCREENS[state](size)
+    try:
+        return session.run(
+            lambda: Capture(
+                strips=session.app.screen._compositor.render_strips(),
+                virtual_height=session.app.screen.virtual_size.height,
+                viewport_height=session.app.screen.size.height,
+            )
+        )
+    finally:
+        session.close()
+
+
+def capture(state, size=DEFAULT_SIZE):
     if state in UNRENDERABLE:
         raise KeyError("%s cannot be rendered yet: %s" % (state, UNRENDERABLE[state]))
     if state not in SCREENS:
         raise KeyError(
             "unknown state %r; known states: %s" % (state, ", ".join(sorted(SCREENS)))
         )
-    session = SCREENS[state](size)
+    return _capture(state, tuple(size))
+
+
+def render(state, size=DEFAULT_SIZE, colour=False):
     row = _coloured_row if colour else _plain_row
-    try:
-        strips = session.run(lambda: session.app.screen._compositor.render_strips())
-        return "\n".join(row(strip) for strip in strips)
-    finally:
-        session.close()
+    return "\n".join(row(strip) for strip in capture(state, size).strips)
 
 
 def _parse_size(text):
