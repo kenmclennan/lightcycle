@@ -189,7 +189,7 @@ The periodic retro **audit** and the **daily summary** are scheduled workflows (
 ## Footer health
 
 - **health score** - a number from `0` (best) to `4` (worst): the worst of four signal scores read from what the footer already shows - pool (running and healthy `0`, lagging `1`-`3` by median tick time against `poll-seconds`, starting, stopping or draining `1`, stalled, not running or a timed-out transition `4`), Claude (`0` available, `4` breaker open), GitHub (budget remaining in bands of 20 points, `0` when unknown) and upgrade or config (`1` when an upgrade is available or config changed, never higher). A pure function in `lightcycle/domain/pool/health_score.py`.
-- **health image state** - which operator-supplied image the footer shows: `0`-`4` for the score, or `busy` when the score is `0` and any item is active or queued. Each state maps to a PNG file by a `tui-health-icon-<state>` key.
+- **health image state** - which operator-supplied image the footer shows: `0`-`4` for the score, or `busy` when the score is `0` and any item is in progress. Each state maps to a PNG file by a `tui-health-icon-<state>` key.
 
 ## Identity
 

@@ -108,9 +108,19 @@ class TestFooterHealthIconOn(unittest.TestCase):
         session, icon = self._session(running=False)
         self.assertEqual(_colour_id(_icon_colour(_frame_rows(session)[1])), HEALTH_IMAGE_IDS["4"])
 
-    def test_queued_item_selects_the_busy_image(self):
+    def test_queued_items_including_a_held_one_do_not_select_the_busy_image(self):
         store = FakeStore()
-        create_owned_step(store, "queued", stage="build", role="agent")
+        held = create_owned_step(store, "held", stage="build", role="agent")
+        blocker = create_owned_step(store, "blocker", stage="build", role="human")
+        store.dep_add(held, blocker)
+        create_owned_step(store, "runnable", stage="build", role="agent")
+        session, icon = self._session(store=store)
+        self.assertEqual(_colour_id(_icon_colour(_frame_rows(session)[1])), HEALTH_IMAGE_IDS["0"])
+
+    def test_an_active_item_selects_the_busy_image(self):
+        store = FakeStore()
+        create_owned_step(store, "active", stage="build", role="agent")
+        store.claim_ready("agent", "spawn1")
         session, icon = self._session(store=store)
         self.assertEqual(_colour_id(_icon_colour(_frame_rows(session)[1])), HEALTH_IMAGE_IDS["busy"])
 
