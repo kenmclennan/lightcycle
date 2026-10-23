@@ -93,7 +93,8 @@ class ResolveMergedPrsUseCase:
                 step=step.id,
                 observation="merged-phase release refused: %s" % text,
                 decision=(
-                    "commit, push or discard the work named; the merge is retried on the next tick"
+                    "commit, push or discard the work named; the release is retried on the next "
+                    "tick and clears this on success"
                 ),
             )
         )
@@ -107,6 +108,10 @@ class ResolveMergedPrsUseCase:
         with self._store.transaction():
             self._expire_holds(run)
             self._store.close_run(run.id, state)
+            if self._store.get_node(step.id).park:
+                self._store.update_metadata(
+                    step.id, {"reason": None, "needs": None, "tried": None}
+                )
             resp = self._complete.execute(CompleteInput(step=step.id, outcome=outcome))
             if self._worktrees is not None:
                 self._store.label_add(item, RELEASE_PENDING_LABEL)

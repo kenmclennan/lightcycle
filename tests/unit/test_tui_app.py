@@ -212,6 +212,20 @@ class TestNeedsAttentionGroup(unittest.TestCase):
         order = _row_order(session)
         self.assertLess(order.index(row_key(session, inbox)), order.index(row_key(session, active)))
 
+    def test_parked_human_gate_renders_the_escalation_glyph_not_the_gate_glyph(self):
+        store = FakeStore()
+        gate = create_owned_step(store, "gate item", stage="code-await-merge", role="human")
+        store.update_metadata(
+            gate, {"reason": "merged-phase release refused: worktree /w has uncommitted paths: a.py",
+                   "needs": "commit, push or discard the work named; the release is retried on the next tick and clears this on success"}
+        )
+
+        session = self._launch(store)
+
+        icon = session.app.query_one(DataTable).get_cell(row_key(session, gate), "icon")
+        self.assertEqual(icon.plain, STATE_GLYPHS["escalation"].glyph)
+        self.assertEqual(icon.style, COLOURS["red"])
+
     def test_inbox_row_shows_single_icon_and_current_step_styled_amber(self):
         store = FakeStore()
         inbox = create_owned_step(store, "inbox item", stage="code-await-merge", role="human")
