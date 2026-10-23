@@ -801,6 +801,39 @@ def _report_with_summary(size, width=None):
     return session
 
 
+def _report_by_project(size, width=None):
+    store = _report_store()
+    today = NOW.date()
+    yo7 = store.item("YO-7", "Open a note from the list", project="yori")
+    store.complete_node(yo7, "merged", disposition="completed")
+    store._records[yo7]["closed_at"] = _at(45)
+    yo8 = store.item("YO-8", "Note list sorts by title", project="yori")
+    store.complete_node(yo8, "merged", disposition="completed")
+    store._records[yo8]["closed_at"] = _at(50)
+    with store.transaction():
+        store.mark_day_summary_dirty(today)
+        store.start_day_summary(today, step_id="fake-summary-step", spawn_count=1)
+    store.finish_day_summary(
+        today,
+        summary=(
+            "Delivered\n"
+            "- Row titles stop repeating the step name [LC-273]\n"
+            "- Yori opens a note from the list [YO-7]\n"
+            "- A line the summariser could not attribute\n"
+            "\n"
+            "Fixed\n"
+            "- The note list sorts by title [YO-8]\n"
+        ),
+        summarized_count=3,
+        clear_dirty=True,
+    )
+    session = _launch(store, size=(width or size[0], size[1]))
+    session.press("]")
+    session.press("]")
+    session.press("]")
+    return session
+
+
 def _report_stacked_with_summary(size):
     return _report_with_summary(size, width=40)
 
@@ -1562,6 +1595,7 @@ SCREENS = {
     "report#with-automation": _report_with_automation,
     "report#with-slow-steps": _report_with_slow_steps,
     "report#today": _report_today,
+"report#by-project": _report_by_project,
     "report#day-picker": _report_day_picker,
     "report#historical-day": _report_historical_day,
     "report#stacked": _report_stacked,

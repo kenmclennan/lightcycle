@@ -8,7 +8,11 @@ Feature: The report screen
   midnight) and backlog delta (closing minus starting) - defaulting to
   today. On the current day the closing size is live and keeps moving. Below the table, it shows the day's
   stored prose summary when one has been generated, and no summary widget at
-  all otherwise. It has its own independent day picker, shared with the done
+  all otherwise. After the day's totals it shows one section per project that
+  closed work that day, ordered by items closed then name, each with that
+  project's own figures and its share of the summary's Delivered, Fixed and
+  Improved lists; any summary line that cannot be placed stays in the block
+  below the table. It has its own independent day picker, shared with the done
   tab's own. Pressing Enter opens the done tab filtered to whichever day
   report is currently showing, for the per-item breakdown.
 
