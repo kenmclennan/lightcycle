@@ -158,7 +158,7 @@ class BacklogView(Vertical):
         shape = (tuple(r.id for r in rows), total, project_filter, text_filter)
         self._render_filter_bar(project_filter, len(rows))
         table = self.query_one(BacklogTable)
-        layout = self._layout(table)
+        layout = self._layout(table, rows)
         if (
             shape == self._last_shape
             and not self._backlog_needs_rebuild
@@ -193,10 +193,10 @@ class BacklogView(Vertical):
             return None
         return cell_key.row_key.value
 
-    def _layout(self, table):
+    def _layout(self, table, rows):
         atomic_values = {
-            "id": [row.id for row in self._rows],
-            "project": [row.project for row in self._rows],
+            "id": [row.id for row in rows],
+            "project": [row.project for row in rows],
         }
         row_budget = screen_row_budget_for(table, len(BACKLOG_COLUMNS))
         indent = BACKLOG_CONTINUATION_INDENT
@@ -204,7 +204,7 @@ class BacklogView(Vertical):
 
     def _rebuild_table(self, rows) -> None:
         table = self.query_one(BacklogTable)
-        layout = self._layout(table)
+        layout = self._layout(table, rows)
         self._backlog_stacked = layout.stacked
         self._floor = bool(rows) and layout.floor
         floor_widget = self.query_one("#backlog-floor", Static)
@@ -250,7 +250,7 @@ class BacklogView(Vertical):
 
     def _update_cells(self, rows) -> None:
         table = self.query_one(BacklogTable)
-        layout = self._layout(table)
+        layout = self._layout(table, rows)
         row_budget = render_screen_row_budget(table, layout, len(BACKLOG_COLUMNS))
         selected_id = self._selected_row_id(table)
         for row in rows:
