@@ -114,6 +114,24 @@ class TestWorklog(unittest.TestCase):
         ]
         self.assertEqual(len(entries(items, TODAY, TODAY)), 2)
 
+    def test_a_skipped_story_does_not_stop_later_ones(self):
+        items = [
+            item(id="a", closed_at="2026-06-27T09:00:00Z"),
+            Item(id="open", title="x", outcome=None, closed_at=None),
+            item(id="old", closed_at="2026-06-01T09:00:00Z"),
+            item(id="d", closed_at="2026-06-27T14:00:00Z"),
+        ]
+        self.assertEqual([e.id for e in entries(items, TODAY, TODAY)], ["a", "d"])
+
+    def test_the_closing_date_is_taken_in_the_given_timezone(self):
+        plus_two = datetime.timezone(datetime.timedelta(hours=2))
+        s = item(closed_at="2026-06-27T23:30:00Z")
+        worklog = Worklog([s])
+        self.assertEqual(worklog.entries(Period(TODAY, TODAY), UTC)[0].id, "s-1")
+        self.assertEqual(worklog.entries(Period(TODAY, TODAY), plus_two), [])
+        next_day = datetime.date(2026, 6, 28)
+        self.assertEqual(worklog.entries(Period(next_day, next_day), plus_two)[0].id, "s-1")
+
 
 if __name__ == "__main__":
     unittest.main()

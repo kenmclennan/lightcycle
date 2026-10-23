@@ -75,6 +75,11 @@ class TestBudgetRule(unittest.TestCase):
         self.assertIsNone(github_budget_from_state({}))
         self.assertIsNone(github_budget_from_state(None))
 
+    def test_a_non_numeric_read_at_is_dropped_and_a_numeric_one_kept(self):
+        base = {"limit": 5000, "remaining": 10, "reset": 99.0}
+        self.assertIsNone(github_budget_from_state({**base, "read_at": "soon"}).read_at)
+        self.assertEqual(github_budget_from_state({**base, "read_at": 7.5}).read_at, 7.5)
+
 
 class TestBudgetLevel(unittest.TestCase):
     def test_exactly_twice_the_reserve_is_healthy(self):

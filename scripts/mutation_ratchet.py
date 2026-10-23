@@ -10,7 +10,14 @@ SOURCE_GLOB = "lightcycle/domain/**/*.py"
 RUN_COMMAND = ["uv", "run", "mutmut", "run", "--max-children", "4"]
 RESULTS_COMMAND = ["uv", "run", "mutmut", "results", "--all", "true"]
 KILLED = "killed"
-EXCLUDED = ("skipped", "not checked", "check was interrupted by user", "caught by type check")
+TIMEOUT = "timeout"
+EXCLUDED = (
+    "skipped",
+    "not checked",
+    "check was interrupted by user",
+    "caught by type check",
+    TIMEOUT,
+)
 RUN_TIMEOUT = 7200
 QUERY_TIMEOUT = 120
 
@@ -51,6 +58,7 @@ def parse_baseline(text):
 def parse_results(text, prefixes):
     counts = {}
     excluded = 0
+    timeouts = 0
     for line in text.splitlines():
         name, sep, status = line.strip().rpartition(": ")
         if not sep:
@@ -60,10 +68,11 @@ def parse_results(text, prefixes):
             continue
         if status in EXCLUDED:
             excluded += 1
+            timeouts += status == TIMEOUT
             continue
         killed, total = counts.get(prefixes[module], (0, 0))
         counts[prefixes[module]] = (killed + (status == KILLED), total + 1)
-    return counts, excluded
+    return counts, excluded, timeouts
 
 
 def scores_from_counts(counts):
@@ -97,8 +106,8 @@ def run_mutants(modules):
 
 
 def measure_modules(modules):
-    counts, excluded = run_mutants(modules)
-    print(f"excluded from totals (skipped or not checked): {excluded}")
+    counts, excluded, timeouts = run_mutants(modules)
+    print(f"excluded from totals (skipped, not checked or timeout): {excluded}, of which timeout: {timeouts}")
     for module in modules:
         killed, total = counts.get(module, (0, 0))
         if not total:

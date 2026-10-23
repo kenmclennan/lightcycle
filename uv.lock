@@ -236,6 +236,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "coverage" },
     { name = "mutmut" },
     { name = "pytest" },
     { name = "pytest-bdd" },
@@ -248,6 +249,7 @@ requires-dist = [{ name = "textual" }]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "coverage", specifier = ">=7.3" },
     { name = "mutmut", specifier = ">=3" },
     { name = "pytest", specifier = ">=8" },
     { name = "pytest-bdd", specifier = ">=7" },

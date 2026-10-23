@@ -64,8 +64,33 @@ class TestAsDict(unittest.TestCase):
     def test_as_dict_aliases_pass_id_as_pass(self):
         r = PhaseRun("r", "LC-1", "LC-1.p1", phase="spec")
         d = r.as_dict()
+        self.assertEqual(d["id"], "r")
         self.assertEqual(d["pass"], "LC-1.p1")
         self.assertEqual(d["pass_id"], "LC-1.p1")
+
+    def test_as_dict_carries_every_field_under_its_own_key(self):
+        r = PhaseRun(
+            "r", "LC-1", "LC-1.p1", phase="code", branch="b", pr="u", content_pin="c",
+            comments_dispatched_through="d", comments_handled_through="h",
+            state=RunState.MERGED, opened_at="o", closed_at="x",
+        )
+        self.assertEqual(
+            r.as_dict(),
+            {
+                "id": "r", "item": "LC-1", "pass_id": "LC-1.p1", "pass": "LC-1.p1",
+                "phase": "code", "branch": "b", "pr": "u", "content_pin": "c",
+                "comments_dispatched_through": "d", "comments_handled_through": "h",
+                "state": RunState.MERGED, "opened_at": "o", "closed_at": "x",
+            },
+        )
+
+    def test_pass_as_dict_carries_every_field_under_its_own_key(self):
+        p = Pass("LC-1.p2", "LC-1", 2, state="closed", opened_at="o", closed_at="x")
+        self.assertEqual(
+            p.as_dict(),
+            {"id": "LC-1.p2", "item": "LC-1", "n": 2, "state": "closed",
+             "opened_at": "o", "closed_at": "x"},
+        )
 
 
 if __name__ == "__main__":

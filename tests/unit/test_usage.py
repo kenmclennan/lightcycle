@@ -210,6 +210,16 @@ class TestUsageResumeSubtractAttributionFrom(unittest.TestCase):
         self.assertEqual(result.recovered_cache_creation_tokens, 4)
 
 
+class TestAttributionEventIsImmutable(unittest.TestCase):
+    def test_tool_usage_is_a_read_only_copy_of_the_given_mapping(self):
+        given = {"Read": ToolUsage(calls=1, bytes=5)}
+        event = AttributionEvent(tool_usage=given)
+        given["Grep"] = ToolUsage(calls=1, bytes=1)
+        self.assertEqual(list(event.tool_usage), ["Read"])
+        with self.assertRaises(TypeError):
+            event.tool_usage["Grep"] = ToolUsage()
+
+
 class TestUsageResumePlus(unittest.TestCase):
     def test_an_all_zero_delta_leaves_posted_fields_unchanged(self):
         resume = UsageResume(
