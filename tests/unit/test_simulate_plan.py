@@ -8,6 +8,8 @@ from lightcycle.domain.flow.graph import parse_graph
 from lightcycle.domain.flow.simulate_plan import (
     build_coverage_plan, _walk_from_entry, _feedback_walk, _pass_boundary_walk,
     _edge_transitions, PlannedStep, PlannedWalk,
+    _cap_occurrences, _forced_repeat_walk, _hook_transitions, _targetless_occurrences,
+    _targetless_walk, _outgoing, _bfs_to_terminal, _pass_end_hook,
 )
 
 CONTRACT_METAS = {
@@ -880,3 +882,257 @@ class TestPrConflictCapEarlyBreakDoesNotEscalate(unittest.TestCase):
         self.assertEqual(repeats[0].repeat_index, 1)
         self.assertEqual(repeats[0].repeat_total, 3)
         self.assertNotIn(("edge", "review-conflict", "resolved"), walk.covered())
+
+
+def _e(stage, outcome, **kw):
+    return PlannedStep(stage=stage, kind="edge", outcome=outcome, **kw)
+
+
+def _h(stage, hook, outcome, **kw):
+    return PlannedStep(stage=stage, kind="hook", hook=hook, outcome=outcome, **kw)
+
+
+def _walks(plan):
+    return [(w.steps, w.incomplete, w.stuck_at) for w in plan.walks]
+
+
+class TestPlannedStepKey(unittest.TestCase):
+    def test_an_edge_key_omits_the_hook_and_a_hook_key_carries_it(self):
+        self.assertEqual(_e("s", "o").key(), ("edge", "s", "o"))
+        self.assertEqual(_h("s", "pr_merge", "o").key(), ("hook", "pr_merge", "s", "o"))
+
+
+class TestExactPlans(unittest.TestCase):
+    def test_phase_graph_plan(self):
+        plan, _, _ = _plan(_PHASE_GRAPH, _PHASE_GRAPH_METAS)
+        self.assertEqual(_walks(plan), [
+            ((_e("build", "done"), _e("watch", "done"), _e("await-merge", "merged")), False, None),
+            ((_e("build", "done"), _e("watch", "ci-failed"), _e("build", "done"),
+              _e("watch", "done"), _h("await-merge", "pr_merge", "merged")), False, None),
+            ((_e("build", "done"),
+              _e("watch", "ci-failed", repeat_index=1, repeat_total=3),
+              _e("build", "done"),
+              _e("watch", "ci-failed", repeat_index=2, repeat_total=3),
+              _e("build", "done"),
+              _e("watch", "ci-failed", repeat_index=3, repeat_total=3, expected_phase="code")),
+             False, None),
+            ((_e("build", "done"), _e("watch", "done"),
+              _h("await-merge", "pr_feedback", "handle-feedback", expected_phase="code"),
+              _e("await-merge", "merged")), False, None),
+        ])
+
+    def test_pr_conflict_plan(self):
+        plan, _, _ = _plan(_PR_CONFLICT_GRAPH, _PR_CONFLICT_METAS)
+        self.assertEqual(_walks(plan), [
+            ((_e("build", "done"), _e("open-pr", "done"), _e("await", "conflicted"),
+              _e("resolve", "escalate")), False, None),
+            ((_e("build", "done"), _e("open-pr", "done"), _e("await", "merged")), False, None),
+            ((_e("build", "done"), _e("open-pr", "done"), _h("await", "pr_conflict", "conflicted"),
+              _e("resolve", "resolved"), _e("open-pr", "done"), _e("await", "merged")), False, None),
+            ((_e("build", "done"), _e("open-pr", "done"),
+              _h("await", "pr_conflict", "conflicted", repeat_index=1, repeat_total=3),
+              _e("resolve", "resolved"), _e("open-pr", "done"),
+              _h("await", "pr_conflict", "conflicted", repeat_index=2, repeat_total=3),
+              _e("resolve", "resolved"), _e("open-pr", "done"),
+              _h("await", "pr_conflict", "conflicted", repeat_index=3, repeat_total=3)),
+             False, None),
+        ])
+
+    def test_review_rounds_cap_plan(self):
+        plan, _, _ = _plan(_RR_CAP_GRAPH, _RR_CAP_METAS, review_rounds_cap_n=2)
+        self.assertEqual(_walks(plan), [
+            ((_e("build", "done"), _e("review", "done")), False, None),
+            ((_e("build", "done"), _e("review", "rejected"), _e("build", "done"),
+              _e("review", "done")), False, None),
+            ((_e("build", "done"),
+              _e("review", "rejected", repeat_index=1, repeat_total=3),
+              _e("build", "done"),
+              _e("review", "rejected", repeat_index=2, repeat_total=3),
+              _e("build", "done"),
+              _e("review", "rejected", repeat_index=3, repeat_total=3, expected_phase=None)),
+             False, None),
+        ])
+
+    def test_mixed_pass_end_plan(self):
+        plan = build_coverage_plan(parse_graph(_MIXED_PASS_END_GRAPH), None)
+        tail = (_e("build", "done"), _e("review", "escape"))
+        self.assertEqual(_walks(plan), [
+            ((_e("build", "done"), _e("review", "done"), _e("cleanup", "done"),
+              _e("build", "merge-out"), _e("await-merge", "merged")) + tail, False, None),
+            ((_e("build", "done"), _e("review", "done"), _e("cleanup", "done"),
+              _e("build", "merge-out"), _h("await-merge", "pr_merge", "merged")) + tail,
+             False, None),
+            ((_e("build", "merge-out"),
+              _h("await-merge", "pr_merge", "merged", crosses_pass_end=True),
+              _e("build", "done"), _e("review", "done"), _e("cleanup", "done"),
+              _e("build", "merge-out"), _e("await-merge", "merged")) + tail, False, None),
+            ((_e("build", "done"), _e("review", "done"), _e("cleanup", "done", crosses_pass_end=True),
+              _e("build", "done"), _e("review", "done"), _e("cleanup", "done"),
+              _e("build", "merge-out"), _e("await-merge", "merged")) + tail, False, None),
+        ])
+
+    def test_mixed_terminal_plan_ends_with_the_targetless_walk(self):
+        plan, _, _ = _plan(_MIXED_TERMINAL_GRAPH, _MIXED_TERMINAL_METAS)
+        self.assertEqual(_walks(plan), [
+            ((_e("build", "done"), _e("review", "done")), False, None),
+            ((_e("build", "done"), _e("review", "done")), False, None),
+            ((_e("build", "clean"),), False, None),
+        ])
+
+
+_CAP_INTO_DEAD_END_GRAPH = """
+entry: build
+
+edges:
+  build   done       watch
+  watch   done       review
+  watch   ci-failed  build
+  review  done       merged
+  esc     loop       esc
+
+hooks:
+  ci_failed_cap  watch  ci-failed  2  esc
+"""
+
+
+class TestEscalationThatCannotReachATerminal(unittest.TestCase):
+    def test_the_cap_walk_is_incomplete_and_names_the_escalation_stage(self):
+        graph = parse_graph(_CAP_INTO_DEAD_END_GRAPH)
+        walk = _forced_repeat_walk(graph, "build", "watch", "ci-failed", 3, "edge", escalate_target="esc")
+        self.assertTrue(walk.incomplete)
+        self.assertEqual(walk.stuck_at, "esc")
+        self.assertEqual(len(walk.steps), 6)
+
+    def test_an_unreachable_stage_gives_an_empty_cap_walk(self):
+        graph = parse_graph(_CAP_INTO_DEAD_END_GRAPH)
+        self.assertEqual(_forced_repeat_walk(graph, "build", "esc", "loop", 3, "edge"), PlannedWalk(()))
+
+
+class TestHelpersDirectly(unittest.TestCase):
+    def test_hook_transitions_lists_pr_merge_and_pr_conflict_occurrences_only(self):
+        self.assertEqual(
+            _hook_transitions(parse_graph(_PHASE_GRAPH)),
+            {("hook", "pr_merge", "await-merge", "merged")},
+        )
+        self.assertEqual(
+            _hook_transitions(parse_graph(_PR_CONFLICT_GRAPH)),
+            {("hook", "pr_conflict", "await", "conflicted")},
+        )
+
+    def test_targetless_occurrences_skips_pure_terminal_stages_and_keeps_scanning(self):
+        graph = parse_graph("entry: build\n\nedges:\n  aa     x\n  bb     clean\n  bb     done  build\n  build  done  aa\n")
+        self.assertEqual(_targetless_occurrences(graph), [("bb", "clean")])
+
+    def test_cap_occurrences_omits_a_review_rounds_cap_with_no_supplied_limit(self):
+        graph = parse_graph(
+            "entry: build\n\nedges:\n  build   done      watch\n  watch   done      review\n"
+            "  watch   ci-failed build\n  review  done      merged\n  review  rejected  build\n\n"
+            "hooks:\n  review_rounds_cap  review  rejected  esc\n  ci_failed_cap  watch  ci-failed  2  esc2\n")
+        self.assertEqual(_cap_occurrences(graph, None), [("edge", None, "watch", "ci-failed", 2, "esc2")])
+
+    def test_targetless_and_unreachable_walks(self):
+        graph = parse_graph(_CAP_INTO_DEAD_END_GRAPH)
+        self.assertEqual(_targetless_walk(graph, "build", "esc", "loop"), PlannedWalk(()))
+        self.assertEqual(
+            _targetless_walk(graph, "build", "watch", "ci-failed"),
+            PlannedWalk((_e("build", "done"), _e("watch", "ci-failed"))),
+        )
+
+    def test_feedback_walk_to_an_unreachable_stage_is_empty(self):
+        graph = parse_graph(_CAP_INTO_DEAD_END_GRAPH)
+        self.assertEqual(_feedback_walk(graph, "build", "esc", "x", bound=8), PlannedWalk(()))
+
+    def test_pass_boundary_walk_through_a_targetless_outcome_is_empty(self):
+        graph = parse_graph(_MIXED_TERMINAL_GRAPH)
+        self.assertEqual(_pass_boundary_walk(graph, "build", "build", "clean", bound=8), PlannedWalk(()))
+
+    def test_pass_boundary_walk_propagates_an_incomplete_resume(self):
+        graph = parse_graph(_UNBOUNDED_LOOP_GRAPH)
+        walk = _pass_boundary_walk(graph, "build", "watch", "ci-failed", bound=4)
+        self.assertTrue(walk.incomplete)
+        self.assertEqual(walk.stuck_at, "build")
+        self.assertEqual(walk.steps[0], _e("build", "done"))
+        self.assertEqual(walk.steps[1], _e("watch", "ci-failed", crosses_pass_end=True))
+
+    def test_feedback_walk_carries_the_feedback_step_and_the_gates_phase(self):
+        graph = parse_graph(_PHASE_GRAPH)
+        walk = _feedback_walk(graph, "build", "await-merge", "handle-feedback", bound=8)
+        self.assertEqual(
+            walk.steps[:3],
+            (_e("build", "done"), _e("watch", "done"),
+             _h("await-merge", "pr_feedback", "handle-feedback", expected_phase="code")),
+        )
+
+
+class TestBoundSizing(unittest.TestCase):
+    def test_a_single_transition_loop_is_cut_at_four_steps(self):
+        graph = parse_graph("entry: a\n\nedges:\n  a  loop  a\n")
+        walk = build_coverage_plan(graph, None).walks[0]
+        self.assertEqual(len(walk.steps), 4)
+        self.assertTrue(walk.incomplete)
+        self.assertEqual(walk.stuck_at, "a")
+
+    def test_a_two_transition_loop_is_cut_at_eight_steps(self):
+        plan, _, _ = _plan(_UNBOUNDED_LOOP_GRAPH, _UNBOUNDED_LOOP_METAS)
+        stuck = [w for w in plan.walks if w.incomplete][0]
+        self.assertEqual(len(stuck.steps), 8)
+
+
+_OTHER_STAGE_HOOK_GRAPH = """
+entry: a
+
+edges:
+  a  merged  b
+  b  merged  c
+
+hooks:
+  pr_merge  b  merged
+"""
+
+
+class TestHooksOfOtherStagesAreNotOptions(unittest.TestCase):
+    def test_outgoing_offers_only_the_stages_own_hook_occurrences(self):
+        graph = parse_graph(_OTHER_STAGE_HOOK_GRAPH)
+        self.assertEqual(_outgoing(graph, "a"), [_e("a", "merged")])
+        self.assertEqual(_outgoing(graph, "b"), [_e("b", "merged"), _h("b", "pr_merge", "merged")])
+
+    def test_pass_end_hook_ignores_a_hook_on_another_stage_with_the_same_outcome(self):
+        graph = parse_graph(_OTHER_STAGE_HOOK_GRAPH)
+        self.assertIsNone(_pass_end_hook(graph, "a", "merged"))
+        self.assertEqual(_pass_end_hook(graph, "b", "merged"), "pr_merge")
+
+
+class TestBfsToTerminalFromAStageWithAnExit(unittest.TestCase):
+    def test_a_start_stage_with_a_targetless_outcome_exits_immediately(self):
+        graph = parse_graph(_MIXED_TERMINAL_GRAPH)
+        self.assertEqual(_bfs_to_terminal(graph, "build"), [_e("build", "clean")])
+        self.assertEqual(_bfs_to_terminal(graph, "review"), [_e("review", "done")])
+
+
+_HOOK_ORDER_GRAPH = """
+entry: s
+
+edges:
+  s  aa  x
+  s  bb  y
+  s  zz  z
+
+hooks:
+  pr_merge     s  zz
+  pr_conflict  s  bb
+"""
+
+
+class TestHookOptionsTieBreakByOutcome(unittest.TestCase):
+    def test_equally_ranked_hook_options_are_taken_in_outcome_order(self):
+        plan = build_coverage_plan(parse_graph(_HOOK_ORDER_GRAPH), None)
+        self.assertEqual(
+            [w.steps for w in plan.walks],
+            [
+                (_e("s", "aa"),),
+                (_e("s", "bb"),),
+                (_e("s", "zz"),),
+                (_h("s", "pr_conflict", "bb"),),
+                (_h("s", "pr_merge", "zz"),),
+            ],
+        )

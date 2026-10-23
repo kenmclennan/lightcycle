@@ -12,6 +12,7 @@ from lightcycle.domain.schedule.guards import (
 from lightcycle.domain.workflows.lifecycle import parse_lifecycle, workflow_script_env
 from lightcycle.domain.workflows.script_stage import (
     fixture_path,
+    is_support_file,
     parse_fixture,
     parse_guard_output,
     parse_script_stage,
@@ -20,6 +21,14 @@ from lightcycle.domain.workflows.script_stage import (
 )
 
 OUTCOMES = ("found", "none")
+
+
+def _error(fn, *args, **kwargs):
+    try:
+        fn(*args, **kwargs)
+    except ValueError as e:
+        return str(e)
+    raise AssertionError("no ValueError raised")
 
 
 class TestParseStageOutput(unittest.TestCase):
@@ -35,22 +44,31 @@ class TestParseStageOutput(unittest.TestCase):
 
         self.assertEqual((out.artifacts, out.note), ({}, None))
 
-    def test_rejects_each_violation_on_its_own_input(self):
+    def test_rejects_each_violation_on_its_own_input_with_its_own_message(self):
+        undeclared = "outcome %s is not declared for this stage (declared: found, none)"
         bad = {
-            "not json": "nope",
-            "not an object": "[1]",
-            "no outcome": "{}",
-            "undeclared outcome": '{"outcome": "other"}',
-            "non-string outcome": '{"outcome": 3}',
-            "unknown key": '{"outcome": "none", "outcom": "x"}',
-            "artifact not a string": '{"outcome": "none", "artifacts": {"a": 1}}',
-            "artifacts not an object": '{"outcome": "none", "artifacts": []}',
-            "note not a string": '{"outcome": "none", "note": 4}',
+            "not json": ("nope", "output is not one JSON object"),
+            "not an object": ("[1]", "output is not one JSON object"),
+            "no outcome": ("{}", "output has no outcome"),
+            "undeclared outcome": ('{"outcome": "other"}', undeclared % "'other'"),
+            "non-string outcome": ('{"outcome": 3}', undeclared % "3"),
+            "unknown key": (
+                '{"outcome": "none", "outcom": "x"}', "output has unknown key(s) outcom"),
+            "unknown keys are sorted": (
+                '{"outcome": "none", "zeta": 1, "alpha": 2}',
+                "output has unknown key(s) alpha, zeta"),
+            "artifact not a string": (
+                '{"outcome": "none", "artifacts": {"a": 1}}',
+                "output key artifacts must map artifact types to strings"),
+            "artifacts not an object": (
+                '{"outcome": "none", "artifacts": []}',
+                "output key artifacts must map artifact types to strings"),
+            "note not a string": (
+                '{"outcome": "none", "note": 4}', "output key note must be a string"),
         }
-        for label, text in bad.items():
+        for label, (text, message) in bad.items():
             with self.subTest(label):
-                with self.assertRaises(ValueError):
-                    parse_stage_output(text, OUTCOMES)
+                self.assertEqual(_error(parse_stage_output, text, OUTCOMES), message)
 
 
 class TestParseGuardOutput(unittest.TestCase):
@@ -65,22 +83,23 @@ class TestParseGuardOutput(unittest.TestCase):
     def test_fail_needs_no_title(self):
         self.assertFalse(parse_guard_output('{"outcome": "fail"}').passed)
 
-    def test_pass_without_a_title_is_a_violation(self):
-        for text in ('{"outcome": "pass"}', '{"outcome": "pass", "title": "  "}'):
+    def test_absent_optional_fields_default_to_empty_strings(self):
+        for text in ('{"outcome": "fail"}', '{"outcome": "pass", "title": "T"}'):
             with self.subTest(text):
-                with self.assertRaises(ValueError):
-                    parse_guard_output(text)
+                out = parse_guard_output(text)
+                self.assertEqual((out.description, out.state, out.note), ("", "", ""))
 
-    def test_unknown_outcome_and_unknown_key_are_violations(self):
-        for text in ('{"outcome": "maybe"}', '{"outcome": "fail", "titel": "x"}', "oops"):
+    def test_a_violation_names_its_own_reason(self):
+        cases = {
+            '{"outcome": "pass"}': "a passing guard must return a title",
+            '{"outcome": "pass", "title": "  "}': "a passing guard must return a title",
+            '{"outcome": "maybe"}': "guard outcome must be pass or fail (got 'maybe')",
+            '{"outcome": "fail", "titel": "x"}': "output has unknown key(s) titel",
+            "oops": "output is not one JSON object",
+        }
+        for text, message in cases.items():
             with self.subTest(text):
-                with self.assertRaises(ValueError):
-                    parse_guard_output(text)
-
-    def test_a_valid_and_an_invalid_entry_are_judged_separately(self):
-        self.assertTrue(parse_guard_output('{"outcome": "pass", "title": "T"}').passed)
-        with self.assertRaises(ValueError):
-            parse_guard_output('{"outcome": "pass"}')
+                self.assertEqual(_error(parse_guard_output, text), message)
 
 
 class TestParseFixture(unittest.TestCase):
@@ -98,12 +117,20 @@ class TestParseFixture(unittest.TestCase):
         self.assertEqual(sorted(parsed), ["found", "none"])
 
     def test_a_missing_outcome_is_named(self):
-        with self.assertRaisesRegex(ValueError, "no entry for outcome none"):
-            parse_fixture(self._text(none=None), OUTCOMES)
+        self.assertEqual(
+            _error(parse_fixture, self._text(none=None), OUTCOMES),
+            "fixture has no entry for outcome none")
 
     def test_a_key_that_disagrees_with_its_value_is_rejected(self):
-        with self.assertRaisesRegex(ValueError, "names outcome found"):
-            parse_fixture(self._text(none={"outcome": "found"}), OUTCOMES)
+        self.assertEqual(
+            _error(parse_fixture, self._text(none={"outcome": "found"}), OUTCOMES),
+            "fixture entry none names outcome found")
+
+    def test_an_invalid_entry_is_reported_under_its_outcome(self):
+        self.assertEqual(
+            _error(parse_fixture, self._text(none={"outcome": "x"}), OUTCOMES),
+            "fixture entry none: outcome 'x' is not declared for this stage"
+            " (declared: found, none)")
 
     def test_a_script_serving_two_stages_may_hold_extra_outcomes(self):
         parsed = parse_fixture(self._text(), ("found",))
@@ -114,17 +141,21 @@ class TestParseFixture(unittest.TestCase):
         good = json.dumps({"pass": {"outcome": "pass", "title": "T"}, "fail": {"outcome": "fail"}})
         extra = json.dumps({
             "pass": {"outcome": "pass", "title": "T"}, "fail": {"outcome": "fail"},
-            "other": {"outcome": "fail"}})
+            "zzz": {"outcome": "fail"}, "other": {"outcome": "fail"}})
 
         self.assertEqual(sorted(parse_fixture(good, (), guard=True)), ["fail", "pass"])
-        with self.assertRaises(ValueError):
-            parse_fixture(extra, (), guard=True)
+        self.assertEqual(
+            _error(parse_fixture, extra, (), guard=True),
+            "fixture has unknown outcome(s) other, zzz")
 
     def test_unparseable_fixture_is_rejected(self):
-        for text in ("nope", "[]"):
+        cases = {
+            "nope": "fixture is not valid JSON",
+            "[]": "fixture must be a JSON object keyed by outcome",
+        }
+        for text, message in cases.items():
             with self.subTest(text):
-                with self.assertRaises(ValueError):
-                    parse_fixture(text, OUTCOMES)
+                self.assertEqual(_error(parse_fixture, text, OUTCOMES), message)
 
 
 class TestPaths(unittest.TestCase):
@@ -137,6 +168,18 @@ class TestPaths(unittest.TestCase):
         for path in ("a.sh", "scripts/", "scripts/../a.sh", "/etc/passwd"):
             with self.subTest(path):
                 self.assertIsNotNone(script_path_problem("script", path))
+
+    def test_script_path_problem_names_the_label_it_was_given(self):
+        self.assertEqual(
+            script_path_problem("guard", "a.sh"), "guard 'a.sh' must be a path under scripts/")
+
+    def test_support_files_are_the_fixtures_and_tests_directories(self):
+        for rel in ("fixtures/a.json", "tests/x.py", "tests/a/b.py", "fixtures"):
+            with self.subTest(rel):
+                self.assertTrue(is_support_file(rel))
+        for rel in ("a.sh", "a/fixtures/x", "scripts/a.sh", "other/tests"):
+            with self.subTest(rel):
+                self.assertFalse(is_support_file(rel))
 
     def test_parse_script_stage_reads_the_front_matter(self):
         self.assertEqual(parse_script_stage({"script": " scripts/a.sh "}), "scripts/a.sh")
