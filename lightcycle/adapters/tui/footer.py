@@ -1,5 +1,7 @@
 import time
 
+from rich.color import Color
+from rich.style import Style
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
@@ -164,6 +166,25 @@ class ShortcutBar(Horizontal):
         return self._shortcuts
 
 
+class HealthIcon(Static):
+    DEFAULT_CSS = """
+    HealthIcon { dock: left; height: 2; }
+    """
+
+    def show(self, reading):
+        if reading is None:
+            self.display = False
+            return
+        text = Text(
+            "\n".join(reading.rows),
+            style=Style(color=Color.from_rgb(*reading.rgb)),
+            no_wrap=True,
+        )
+        self.styles.width = reading.columns
+        self.update(text)
+        self.display = True
+
+
 class DashboardFooter(Vertical):
     def __init__(self, *args, shortcuts=GLOBAL_SHORTCUTS, **kwargs):
         super().__init__(*args, **kwargs)
@@ -175,3 +196,14 @@ class DashboardFooter(Vertical):
 
     def on_mount(self) -> None:
         self.query_one(ShortcutBar).set_shortcuts(self._shortcuts)
+
+    def show_health_icon(self, reading):
+        icons = self.query(HealthIcon)
+        if icons:
+            icons.first().show(reading)
+            return
+        if reading is None:
+            return
+        icon = HealthIcon()
+        self.mount(icon, before=0)
+        icon.show(reading)

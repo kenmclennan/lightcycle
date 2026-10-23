@@ -34,6 +34,9 @@ class _Config(DoctorConfig):
     def max_title_length(self):
         return 72
 
+    def tui_health_icons(self):
+        return False
+
     def config_path(self):
         return __file__
 

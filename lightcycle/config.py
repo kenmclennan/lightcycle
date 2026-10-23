@@ -66,6 +66,7 @@ _ENV_OVERRIDE_VARS = {
     "worker-history": "LC_WORKER_HISTORY",
     "editor": "EDITOR",
     "tui-autostart-pool": "LC_TUI_AUTOSTART_POOL",
+    "tui-health-icons": "LC_TUI_HEALTH_ICONS",
     "tui-metrics": "LC_TUI_METRICS",
     "developer-mode": "LC_DEVELOPER_MODE",
     "tui-upgrade-check-seconds": "LC_TUI_UPGRADE_CHECK_SECONDS",
@@ -532,6 +533,47 @@ class Config:
         if env is not None:
             return env
         return self._required_bool("tui-autostart-pool")
+
+    def tui_health_icons(self):
+        env = self._env_bool("LC_TUI_HEALTH_ICONS", None)
+        if env is not None:
+            return env
+        return self._required_bool("tui-health-icons")
+
+    def _health_icon_relative(self, key):
+        value = self._required_str(key)
+        parts = value.replace("\\", "/").split("/")
+        if os.path.isabs(value) or ".." in parts:
+            raise ConfigError("config value %r must stay under the data root (got %r)" % (key, value))
+        return value
+
+    def tui_health_icon_dir(self):
+        return self._health_icon_relative("tui-health-icon-dir")
+
+    def _tui_health_icon(self, state):
+        return self._health_icon_relative("tui-health-icon-%s" % state)
+
+    def tui_health_icon_0(self):
+        return self._tui_health_icon("0")
+
+    def tui_health_icon_1(self):
+        return self._tui_health_icon("1")
+
+    def tui_health_icon_2(self):
+        return self._tui_health_icon("2")
+
+    def tui_health_icon_3(self):
+        return self._tui_health_icon("3")
+
+    def tui_health_icon_4(self):
+        return self._tui_health_icon("4")
+
+    def tui_health_icon_busy(self):
+        return self._tui_health_icon("busy")
+
+    def tui_health_icon_path(self, state):
+        return os.path.join(
+            self.data_root(), self.tui_health_icon_dir(), self._tui_health_icon(state))
 
     def schedules_paused(self):
         return self._required_bool("schedules-paused")

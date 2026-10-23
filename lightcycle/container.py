@@ -11,6 +11,7 @@ from lightcycle.adapters.fsio import FsAdapter
 from lightcycle.adapters.gh_shim import GhShimAdapter
 from lightcycle.adapters.github import GitHubEventsAdapter
 from lightcycle.adapters.github_budget_status import GithubBudgetStatusAdapter
+from lightcycle.adapters.tui.kitty_health_icon import KittyHealthIconAdapter, TuiTerminalWriter
 from lightcycle.adapters.tick_timing_status import TickTimingStatusAdapter
 from lightcycle.adapters.gitio import GitAdapter
 from lightcycle.adapters.launcher import LauncherAdapter
@@ -66,7 +67,7 @@ class Container:
         drain=None, guidance_sync_status=None, config_reload_status=None,
         lifecycle_runner=None, script_runner=None, github_poll_runner=None,
         github_budget_status=None, gh_shim=None, run_groups=None,
-        tick_timing_status=None,
+        tick_timing_status=None, health_icon=None, terminal_writer=None,
         clock=time.time, monotonic=time.monotonic, sleep=time.sleep,
     ):
         self.clock = clock
@@ -121,6 +122,13 @@ class Container:
         self.tick_timing_status = (
             tick_timing_status if tick_timing_status is not None
             else TickTimingStatusAdapter(self.config)
+        )
+        self.terminal_writer = (
+            terminal_writer if terminal_writer is not None else TuiTerminalWriter()
+        )
+        self.health_icon = (
+            health_icon if health_icon is not None
+            else KittyHealthIconAdapter(self.terminal_writer)
         )
         self.gh_shim = gh_shim if gh_shim is not None else GhShimAdapter(self.config)
         self.config_reload_status = (

@@ -9,6 +9,7 @@ from lightcycle.ports.git import GitPort
 from lightcycle.ports.github import GitHubEventsPort
 from lightcycle.ports.github_budget_status import GithubBudgetStatusPort
 from lightcycle.ports.guidance_sync_status import GuidanceSyncStatusPort
+from lightcycle.ports.health_icon import HealthIconPort
 from lightcycle.ports.launcher import LauncherPort
 from lightcycle.ports.lifecycle_runner import LifecycleRunnerPort
 from lightcycle.ports.lock import RunLockPort
@@ -41,6 +42,7 @@ __all__ = [
     "GitHubEventsPort",
     "GitPort",
     "GuidanceSyncStatusPort",
+    "HealthIconPort",
     "LauncherPort",
     "LifecycleRunnerPort",
     "MachinePort",

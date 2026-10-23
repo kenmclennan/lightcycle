@@ -48,6 +48,8 @@ from lightcycle.adapters.tui.hub import NodeHubScreen
 from tests.support.fake_drain import FakeDrain
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_gh_shim import FakeGhShim
+from lightcycle.adapters.tui.kitty_health_icon import KittyHealthIconAdapter
+from tests.support.fake_health_icon import FakeHealthIcon
 from tests.support.fake_github_budget_status import FakeGithubBudgetStatus
 from tests.support.fake_tick_timing_status import FakeTickTimingStatus
 from tests.support.fake_github import FakeGitHub
@@ -223,13 +225,14 @@ def _sweep_temp_roots():
 
 class HermeticTuiConfig(Config):
     def __init__(self, autostart_pool=False, tui_metrics=False, upgrade_check_seconds=3600,
-                 doctor_check_seconds=3600):
+                 doctor_check_seconds=3600, health_icons=False):
         root = _tracked_mkdtemp()
         home = os.path.join(root, "home")
         os.makedirs(home)
         cfg_path = os.path.join(home, "config")
         seeded = dict(_SEED_KEYS)
         seeded["tui-autostart-pool"] = "true" if autostart_pool else "false"
+        seeded["tui-health-icons"] = "on" if health_icons else "off"
         seeded["tui-metrics"] = "true" if tui_metrics else "false"
         seeded["tui-upgrade-check-seconds"] = str(upgrade_check_seconds)
         seeded["tui-doctor-check-seconds"] = str(doctor_check_seconds)
@@ -297,6 +300,7 @@ _LIVE_ADAPTER_TYPES = {
     "memory_gate_status": MemoryGateStatusAdapter,
     "github_budget_status": GithubBudgetStatusAdapter,
     "tick_timing_status": TickTimingStatusAdapter,
+    "health_icon": KittyHealthIconAdapter,
     "gh_shim": GhShimAdapter,
     "config_reload_status": ConfigReloadStatusAdapter,
     "guidance_sync_status": GuidanceSyncStatusAdapter,
@@ -319,11 +323,12 @@ def make_test_container(store=None, lock=None, breaker=None, fs=None, workers=No
                          github_budget_status=None, tick_timing_status=None,
                          tui_metrics=False,
                          upgrade_check_seconds=3600, doctor_check_seconds=3600, drain=None,
-                         config_reload_status=None):
+                         config_reload_status=None, health_icon=None, health_icons=False):
     fs_double = fs or FakeFs()
     config = HermeticTuiConfig(
         autostart_pool=autostart_pool, tui_metrics=tui_metrics,
-        upgrade_check_seconds=upgrade_check_seconds, doctor_check_seconds=doctor_check_seconds)
+        upgrade_check_seconds=upgrade_check_seconds, doctor_check_seconds=doctor_check_seconds,
+        health_icons=health_icons)
     store_double = store
     if store_double is None:
         store_double = FakeStore()
@@ -359,6 +364,7 @@ def make_test_container(store=None, lock=None, breaker=None, fs=None, workers=No
             tick_timing_status if tick_timing_status is not None
             else FakeTickTimingStatus()
         ),
+        health_icon=health_icon if health_icon is not None else FakeHealthIcon(),
         gh_shim=FakeGhShim(),
         guidance_sync_status=(
             guidance_sync_status if guidance_sync_status is not None

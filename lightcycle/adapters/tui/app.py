@@ -57,6 +57,7 @@ from lightcycle.application.pool import (
     BreakerStatusUseCase,
     DrainPoolUseCase,
     GithubBudgetUseCase,
+    HealthIconUseCase,
     LiveWorkerCountUseCase,
     PoolDrainStatusUseCase,
     PoolHoldStatusUseCase,
@@ -508,6 +509,8 @@ class LightcycleApp(App):
         self._pool_running = False
         self._last_attention_ids = None
         self._last_priority_selection = None
+        self._health_icon_use_case = HealthIconUseCase(
+            container.fs, container.config, container.health_icon)
         self._selected_flat_index = 0
         self._view = "priority"
         self._priority_empty = True
@@ -573,6 +576,9 @@ class LightcycleApp(App):
         yield DashboardFooter(id="footer")
 
     def on_mount(self) -> None:
+        driver = self._driver
+        if driver is not None and not driver.is_headless:
+            self._container.terminal_writer.bind(driver.write)
         table = self.query_one(PriorityTable)
         table.cursor_type = "row"
         table.show_header = False
@@ -591,6 +597,9 @@ class LightcycleApp(App):
                 doctor_check_interval, self._start_doctor_check)
         if self._container.config.tui_autostart_pool():
             self._start_pool()
+
+    def on_unmount(self) -> None:
+        self._health_icon_use_case.release()
 
     def on_resize(self, event: events.Resize) -> None:
         self.call_after_refresh(self._on_terminal_resized)
@@ -751,12 +760,38 @@ class LightcycleApp(App):
         tick_health = TickHealthUseCase(
             self._container.tick_timing_status, self._container.config,
         ).reading(running, pool.holder_pid, self._now().timestamp())
+        icon = self._health_icon_use_case.reading(
+            pool_state=self._health_pool_state(running, drain),
+            tick_health=tick_health,
+            poll_seconds=self._container.config.poll_seconds(),
+            breaker_is_open=breaker.is_open,
+            github=github,
+            upgrade_available=self._upgrade_version is not None,
+            config_changed=self._container.config.config_mtime() != self._config_mtime_at_load,
+            busy=self._has_active_or_queued(),
+        )
         for screen in self.screen_stack:
             try:
                 status_bar = screen.query_one(StatusBar)
             except NoMatches:
                 continue
             self._render_status_bar(status_bar, running, breaker, hold, drain, github, tick_health)
+            try:
+                screen.query_one(DashboardFooter).show_health_icon(icon)
+            except NoMatches:
+                continue
+
+    def _health_pool_state(self, running, drain):
+        kind = self._pool_transition_kind
+        if kind in ("start", "stop"):
+            return kind + ("-timed-out" if self._pool_transition_expired else "ing")
+        if drain is not None and drain.draining:
+            return "draining"
+        return "running" if running else "stopped"
+
+    def _has_active_or_queued(self):
+        selection = self._last_priority_selection
+        return selection is not None and bool(selection.active or selection.queued)
 
     def _begin_pool_transition(self, kind) -> None:
         self._pool_transition_kind = kind

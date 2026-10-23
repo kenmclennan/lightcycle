@@ -20,6 +20,7 @@ from lightcycle.application.services.guidance_library import NO_REF_ENTRY, Guida
 from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE, LEGACY_KNOWLEDGE_WORKSPACE
 from lightcycle.config import ConfigError
 from lightcycle.domain.guidance.guidance import ENTRY, classify, fill, matches_project, matches_step_key, order
+from lightcycle.domain.pool import HEALTH_IMAGE_STATES, png_size
 from lightcycle.domain.guidance.conventions import (
     CONVENTIONS_VERSION, SKIPPED_NAMES, check_entries,
 )
@@ -276,6 +277,31 @@ class DoctorUseCase:
             )
             for k in self._config.obsolete_config_keys()
         ]
+        problems += self._health_icon_problems()
+        return problems
+
+    def _health_icon_problems(self):
+        try:
+            if not self._config.tui_health_icons():
+                return []
+        except ConfigError:
+            return []
+        problems = []
+        for state in HEALTH_IMAGE_STATES:
+            key = "tui-health-icon-%s" % state
+            try:
+                path = self._config.tui_health_icon_path(state)
+            except ConfigError:
+                continue
+            if not self._fs.exists(path):
+                problems.append(Problem("config", "%s: %s is missing" % (key, path)))
+                continue
+            try:
+                png = self._fs.read_bytes(path)
+            except OSError:
+                png = None
+            if png_size(png) is None:
+                problems.append(Problem("config", "%s: %s is not a readable PNG" % (key, path)))
         return problems
 
     def _reload_problems(self):

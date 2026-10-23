@@ -6,6 +6,13 @@ from lightcycle.domain.pool.config_reload_state import ConfigReloadState
 from lightcycle.domain.pool.github_budget import (
     GithubBudget, github_budget_from_state, github_budget_level, github_budget_low,
 )
+from lightcycle.domain.pool.health_icon import (
+    HEALTH_IMAGE_IDS, HEALTH_IMAGE_STATES, icon_columns, placeholder_rows, png_size,
+)
+from lightcycle.domain.pool.health_score import (
+    claude_health_score, github_health_score, health_image_state, health_score,
+    pool_health_score, upgrade_config_health_score,
+)
 from lightcycle.domain.pool.guidance_sync_state import GuidanceSyncState
 from lightcycle.domain.pool.machine_headroom import MachineHeadroom
 from lightcycle.domain.pool.memory_admission import admission_cap
@@ -26,6 +33,9 @@ from lightcycle.domain.pool.worker import Worker
 from lightcycle.domain.pool.worker_pool import WorkerPool
 
 __all__ = [
+    "HEALTH_IMAGE_IDS", "HEALTH_IMAGE_STATES", "icon_columns", "placeholder_rows", "png_size",
+    "claude_health_score", "github_health_score", "health_image_state", "health_score",
+    "pool_health_score", "upgrade_config_health_score",
     "AttributionEvent", "Breaker", "TickHealth", "TickTiming", "tick_age_text", "tick_health",
     "tick_timing_from_state", "tick_timing_recorded", "tick_timing_started", "ConfigReloadState", "GithubBudget", "GuidanceSyncState", "MemoryGateState", "MachineHeadroom", "ModelRates", "PoolPlan", "RateLimitEvent",
     "ReadyQueue", "SpinLedger", "StepSpin", "ToolUsage", "UsageEvent", "UsageResume", "Worker",
