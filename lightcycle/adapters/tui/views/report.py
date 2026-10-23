@@ -32,7 +32,7 @@ def _report_rows(response):
         (slow.step.id, "%s - %s active - %s" % (slow.step.stage, format_elapsed(slow.active_seconds), slow.kind))
         for slow in response.slow_steps
     )
-    return (
+    base = (
         ("Items Completed", str(response.completed)),
         ("Items Closed", str(response.completed + response.abandoned)),
         ("Spend", _format_item_cost(response.spend)),
@@ -45,6 +45,26 @@ def _report_rows(response):
         ("Closing Backlog Size", str(response.backlog_close)),
         ("Backlog Delta", delta_text),
     )
+    return base + _project_section_rows(response)
+
+
+def _project_section_rows(response):
+    rows = ()
+    for project in response.projects:
+        closed = project.completed + project.abandoned
+        rows += (
+            (project.project if project.project is not None else "No project", "%d closed" % closed),
+            ("  Items Completed", str(project.completed)),
+            ("  Items Closed", str(closed)),
+            ("  Spend", _format_item_cost(project.spend)),
+            ("  Escalations", str(project.escalations)),
+        )
+        for label, bullets in (
+            ("Delivered", project.delivered), ("Fixed", project.fixed), ("Improved", project.improved),
+        ):
+            if bullets:
+                rows += (("  " + label, "\n".join(bullets)),)
+    return rows
 
 
 def _report_row_cells(field, layout, row_budget):
@@ -126,9 +146,9 @@ class ReportView(Vertical):
         )
         self.query_one("#report-day-filter-right", Static).display = False
         summary_widget = self.query_one("#report-summary", VerticalScroll)
-        if response.summary:
+        if response.summary_unmatched:
             self.query_one("#report-summary-text", Static).update(
-                Text(response.summary, style=COLOURS["text"])
+                Text(response.summary_unmatched, style=COLOURS["text"])
             )
             summary_widget.display = True
             summary_widget.scroll_home(animate=False)
@@ -170,7 +190,10 @@ class ReportView(Vertical):
             for key in REPORT_COLUMNS:
                 table.add_column(key, width=widths[key], key=key)
 
-        for field in rows:
-            table.add_row(*_report_row_cells(field, layout, row_budget), height=None, key=field[0])
+        seen = set()
+        for position, field in enumerate(rows):
+            key = field[0] if field[0] not in seen else "%d:%s" % (position, field[0])
+            seen.add(field[0])
+            table.add_row(*_report_row_cells(field, layout, row_budget), height=None, key=key)
 
 

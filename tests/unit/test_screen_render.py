@@ -529,3 +529,19 @@ def test_capture_refuses_unknown_and_unrenderable_states_like_render():
     for state, reason in UNRENDERABLE.items():
         with pytest.raises(KeyError, match=reason):
             capture(state)
+
+
+@pytest.mark.parametrize("width", [100, 140])
+def test_report_by_project_paints_totals_then_sections_in_order_then_the_unmatched_block(width):
+    rows = render("report#by-project", size=(width, 40)).split("\n")
+    text = "\n".join(rows)
+
+    totals_at = text.index("Backlog Delta")
+    yori_at = text.index("yori")
+    lightcycle_at = text.index("lightcycle")
+    unmatched_at = text.index("A line the summariser could not attribute")
+
+    assert totals_at < yori_at < lightcycle_at < unmatched_at
+    assert "2 closed" in text and "1 closed" in text
+    assert "Automation Items       1" in text
+    assert "Yori opens a note from the list [YO-7]" in text

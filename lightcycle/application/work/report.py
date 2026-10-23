@@ -1,15 +1,30 @@
 import datetime
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from lightcycle.application.work.automation import is_automation_item
 from lightcycle.application.work.item_partition import is_backlogged_item, is_closed_item
-from lightcycle.domain.work import ItemCost, SlowStep, item_cost, parse_timestamp, slow_steps
+from lightcycle.application.work.project_of import project_of
+from lightcycle.domain.work import ItemCost, ProjectIdentity, SlowStep, item_cost, parse_timestamp, slow_steps
+from lightcycle.domain.work.summary_split import split_summary
+from lightcycle.ports.store import NodeNotFoundError
 
 
 @dataclass(frozen=True)
 class ReportInput:
     day: datetime.date
+
+
+@dataclass(frozen=True)
+class ProjectReport:
+    project: Optional[str]
+    completed: int
+    abandoned: int
+    spend: ItemCost
+    escalations: int
+    delivered: Tuple[str, ...]
+    fixed: Tuple[str, ...]
+    improved: Tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -26,6 +41,8 @@ class ReportResponse:
     backlog_close: int
     backlog_delta: int
     summary: Optional[str]
+    projects: Tuple[ProjectReport, ...]
+    summary_unmatched: Optional[str]
 
 
 def _earliest_step_created_by_item(steps):
@@ -81,6 +98,52 @@ def _escalations_on(store, day):
     return count
 
 
+def _project_key(store, item):
+    raw = project_of(store, item)
+    return ProjectIdentity.short_name(raw) if raw else None
+
+
+def _escalations_by_item(store, day):
+    counts: Dict[str, int] = {}
+    for node_id, ts in store.waiting_history():
+        parsed = parse_timestamp(ts)
+        if parsed is None or parsed.date() != day:
+            continue
+        try:
+            node = store.get_node(node_id)
+        except NodeNotFoundError:
+            continue
+        owner = getattr(node, "item", None) or node.id
+        counts[owner] = counts.get(owner, 0) + 1
+    return counts
+
+
+def _project_label(project):
+    return project if project is not None else "No project"
+
+
+def _project_reports(store, items, day, sections):
+    groups: Dict[Optional[str], list] = {}
+    for item in items:
+        groups.setdefault(_project_key(store, item), []).append(item)
+    escalations = _escalations_by_item(store, day)
+    reports = []
+    for project, group in groups.items():
+        lists = sections.get(project, {})
+        reports.append(ProjectReport(
+            project=project,
+            completed=sum(1 for i in group if i.disposition == "completed"),
+            abandoned=sum(1 for i in group if i.disposition in ("abandoned", "aborted")),
+            spend=item_cost([s for i in group for s in store.children(i.id)]),
+            escalations=sum(escalations.get(i.id, 0) for i in group),
+            delivered=tuple(lists.get("Delivered", ())),
+            fixed=tuple(lists.get("Fixed", ())),
+            improved=tuple(lists.get("Improved", ())),
+        ))
+    reports.sort(key=lambda r: (-(r.completed + r.abandoned), _project_label(r.project)))
+    return tuple(reports)
+
+
 def _slow_steps_on(steps, day):
     found = []
     for slow in slow_steps(steps):
@@ -111,11 +174,17 @@ class ReportUseCase:
         backlog_start, backlog_close = _backlog_start_and_close(self._store, input.day, all_steps, all_items)
         row = self._store.day_summary(input.day)
         summary = row.summary if row else None
+        project_by_item_id = {i.id: _project_key(self._store, i) for i in items}
+        if summary:
+            sections, unmatched = split_summary(summary, project_by_item_id)
+        else:
+            sections, unmatched = {}, None
+        projects = _project_reports(self._store, items, input.day, sections)
         return ReportResponse(
             day=input.day, completed=completed, abandoned=abandoned, spend=spend,
             automation_count=len(automation_items), automation_spend=automation_spend,
             escalations=escalations, slow_steps=slow,
             backlog_start=backlog_start, backlog_close=backlog_close,
             backlog_delta=backlog_close - backlog_start,
-            summary=summary,
+            summary=summary, projects=projects, summary_unmatched=unmatched,
         )

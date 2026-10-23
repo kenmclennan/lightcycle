@@ -5,6 +5,7 @@ from lightcycle.application.flow.engine_steps import RETRO_ORIGIN_LABEL, SUMMARY
 from lightcycle.application.flow.route_step import RouteStepService
 from lightcycle.application.work.backlog import BacklogInput, BacklogUseCase
 from lightcycle.application.work.report import ReportInput, ReportUseCase, _backlog_start_and_close
+from lightcycle.domain.money import Cost
 from lightcycle.domain.work import item_cost
 from tests.support.fake_store import FakeStore
 
@@ -339,3 +340,126 @@ class TestReportUseCaseSlowSteps(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _project_item(store, project, *, disposition="completed", closed_at="2026-01-01T10:00:00+00:00",
+                  cost=None, label=None):
+    item = store.create_item("item", "a description", project=project)
+    step = store.create_step(stage="write-code", role="agent", item=item)
+    if cost is not None:
+        store.claim_ready("agent")
+        store.record_usage(step, 100, 10, 5, 2, cost, "list", None)
+    store.complete_node(step, "done")
+    store.complete_node(item, "merged", disposition=disposition)
+    store._records[item]["closed_at"] = closed_at
+    if label:
+        store.label_add(item, label)
+    return item
+
+
+def _store_summary(store, day, text):
+    with store.transaction():
+        store.mark_day_summary_dirty(day)
+        store.start_day_summary(day, step_id="s", spawn_count=1)
+    store.finish_day_summary(day, summary=text, summarized_count=1, clear_dirty=True)
+
+
+DAY = datetime.date(2026, 1, 1)
+
+
+class TestReportProjectSections(unittest.TestCase):
+    def _store(self):
+        s = FakeStore()
+        _project_item(s, "kenmclennan/lightcycle", cost=1.0)
+        _project_item(s, "kenmclennan/lightcycle", disposition="abandoned", cost=0.5)
+        _project_item(s, "kenmclennan/lightcycle", cost=0.25)
+        _project_item(s, "kenmclennan/yori", cost=2.0)
+        _project_item(s, None, cost=0.75)
+        _project_item(s, "kenmclennan/lightcycle", cost=9.0, label=RETRO_ORIGIN_LABEL)
+        return s
+
+    def test_sections_are_ordered_by_closed_count_then_label_and_exclude_automation(self):
+        resp = ReportUseCase(self._store()).execute(ReportInput(day=DAY))
+
+        self.assertEqual([p.project for p in resp.projects], ["lightcycle", None, "yori"])
+        self.assertEqual(resp.automation_count, 1)
+        self.assertEqual(resp.projects[0].completed + resp.projects[0].abandoned, 3)
+
+    def test_ties_on_closed_count_sort_by_displayed_label(self):
+        s = FakeStore()
+        _project_item(s, "kenmclennan/yori")
+        _project_item(s, "kenmclennan/alpha")
+        _project_item(s, None)
+
+        resp = ReportUseCase(s).execute(ReportInput(day=DAY))
+
+        self.assertEqual([p.project for p in resp.projects], [None, "alpha", "yori"])
+
+    def test_sections_sum_to_the_day_totals(self):
+        resp = ReportUseCase(self._store()).execute(ReportInput(day=DAY))
+        sections = resp.projects
+
+        self.assertEqual(sum(p.completed for p in sections), resp.completed)
+        self.assertEqual(sum(p.abandoned for p in sections), resp.abandoned)
+        self.assertEqual(
+            sum(p.completed + p.abandoned for p in sections), resp.completed + resp.abandoned
+        )
+        for attr in (
+            "turn_count", "input_tokens", "output_tokens", "cache_read_tokens", "cache_creation_tokens",
+        ):
+            self.assertEqual(sum(getattr(p.spend, attr) for p in sections), getattr(resp.spend, attr), attr)
+        self.assertEqual(sum((p.spend.cost_usd for p in sections), Cost.from_usd(0)), resp.spend.cost_usd)
+
+    def test_escalations_on_section_items_sum_to_the_total_and_others_fall_short(self):
+        s = FakeStore()
+        a = _project_item(s, "kenmclennan/lightcycle")
+        b = _project_item(s, "kenmclennan/yori")
+        now = datetime.datetime(2026, 1, 1, 12, tzinfo=datetime.timezone.utc).astimezone().isoformat()
+        s._history.setdefault(a, []).append(("waiting", now))
+        s._history.setdefault(b, []).append(("waiting", now))
+
+        resp = ReportUseCase(s).execute(ReportInput(day=DAY))
+        self.assertEqual(resp.escalations, 2)
+        self.assertEqual(sum(p.escalations for p in resp.projects), 2)
+
+        open_item = s.create_item("open", "d")
+        s._history.setdefault(open_item, []).append(("waiting", now))
+
+        resp = ReportUseCase(s).execute(ReportInput(day=DAY))
+        self.assertEqual(resp.escalations, 3)
+        self.assertLess(sum(p.escalations for p in resp.projects), resp.escalations)
+
+    def test_summary_bullets_land_in_their_project_and_the_rest_is_unmatched(self):
+        s = FakeStore()
+        a = _project_item(s, "kenmclennan/lightcycle")
+        b = _project_item(s, "kenmclennan/yori")
+        text = "Delivered\n- One [%s]\n- Two [%s]\n- Stray [ZZ-1]\n\nFixed\n- Three [%s]" % (a, b, a)
+        _store_summary(s, DAY, text)
+
+        resp = ReportUseCase(s).execute(ReportInput(day=DAY))
+        by_project = {p.project: p for p in resp.projects}
+
+        self.assertEqual(by_project["lightcycle"].delivered, ("- One [%s]" % a,))
+        self.assertEqual(by_project["lightcycle"].fixed, ("- Three [%s]" % a,))
+        self.assertEqual(by_project["yori"].delivered, ("- Two [%s]" % b,))
+        self.assertEqual(resp.summary_unmatched, "Delivered\n- Stray [ZZ-1]")
+        self.assertEqual(resp.summary, text)
+
+    def test_an_id_free_summary_is_wholly_unmatched(self):
+        s = FakeStore()
+        _project_item(s, "kenmclennan/lightcycle")
+        text = "A themed prose summary of the day with no ids."
+        _store_summary(s, DAY, text)
+
+        resp = ReportUseCase(s).execute(ReportInput(day=DAY))
+
+        self.assertEqual(resp.summary_unmatched, text)
+        self.assertEqual(resp.projects[0].delivered, ())
+
+    def test_no_stored_summary_leaves_unmatched_none(self):
+        s = FakeStore()
+        _project_item(s, "kenmclennan/lightcycle")
+
+        resp = ReportUseCase(s).execute(ReportInput(day=DAY))
+
+        self.assertIsNone(resp.summary_unmatched)

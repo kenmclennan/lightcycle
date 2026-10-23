@@ -39,7 +39,7 @@ from lightcycle.application.work.queue import QueueInput, QueueUseCase
 from lightcycle.application.work.remove_node import RemoveNodeInput, RemoveNodeResponse, RemoveNodeUseCase
 from lightcycle.application.work.search import SearchInput, SearchMatch, SearchResponse, SearchUseCase
 from lightcycle.application.work.show_node import ShowNodeInput, ShowNodeUseCase
-from lightcycle.application.work.report import ReportInput, ReportResponse, ReportUseCase
+from lightcycle.application.work.report import ProjectReport, ReportInput, ReportResponse, ReportUseCase
 from lightcycle.application.work.status import StatusUseCase
 from lightcycle.application.work.step_run import StepRunInput, StepRunResponse, StepRunUseCase
 from lightcycle.application.work.trace import TraceInput, TraceUseCase
@@ -99,6 +99,7 @@ __all__ = [
     "ShowNodeInput",
     "ShowNodeUseCase",
     "ReportInput",
+    "ProjectReport",
     "ReportResponse",
     "ReportUseCase",
     "StatusUseCase",

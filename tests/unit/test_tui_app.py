@@ -3388,7 +3388,7 @@ class TestReportFigures(unittest.TestCase):
         self.addCleanup(session.close)
 
         self.assertEqual(
-            _report_rows_shown(session),
+            _report_rows_shown(session)[:10],
             [
                 ("Items Completed", "1"),
                 ("Items Closed", "1"),
