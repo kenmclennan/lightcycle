@@ -191,7 +191,7 @@ def _done_tab_filtered_to_earlier_day(ctx):
 def _report_summary_shown(ctx):
     widget = ctx["session"].app.query_one("#report-summary")
     assert widget.display
-    assert _rendered_text(widget).strip() == _SUMMARY_TEXT
+    assert _rendered_text(ctx["session"].app.query_one("#report-summary-text")).strip() == _SUMMARY_TEXT
 
 
 @then("the report summary sits below the table")

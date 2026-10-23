@@ -27,6 +27,7 @@ from lightcycle.application.pool.github_budget import GithubBudgetUseCase
 from lightcycle.application.pool.github_poll import GithubPollUseCase
 from lightcycle.application.pool.note_release_holds import NoteReleaseHoldsUseCase
 from lightcycle.application.work.release_holds import ReleaseHolds
+from lightcycle.application.work.report import ReportUseCase
 from lightcycle.application.pool.pr_snapshot import PrSnapshot
 from lightcycle.application.pool.pr_writes import PrWrites
 from lightcycle.adapters.github_poll_runner import GithubPollRunnerAdapter
@@ -42,6 +43,7 @@ from lightcycle.adapters.scaffold import ScaffoldAdapter
 from lightcycle.adapters.spawner import SpawnerAdapter
 from lightcycle.adapters.spin import SpinAdapter
 from lightcycle.adapters.simulate import ScriptedGitHub
+from lightcycle.adapters.report_runner import ReportRunner
 from lightcycle.adapters.sqlite_store import SqliteStore
 from lightcycle.adapters.upgrade import UpgradeAdapter
 from lightcycle.adapters.worker_log import WorkerLogAdapter
@@ -75,6 +77,7 @@ class Container:
         self.sleep = sleep
         self.config = config if config is not None else Config()
         self.store = store if store is not None else SqliteStore(self.config, now=now)
+        self._report_runner = None
         self.git = git if git is not None else GitAdapter()
         self.spawner = spawner if spawner is not None else SpawnerAdapter(self.config)
         self.workers = workers if workers is not None else WorkersAdapter(self.config)
@@ -160,6 +163,16 @@ class Container:
 
     def doctor_for_current_thread(self):
         return Container(config=self.config, clock=self.clock, monotonic=self.monotonic).doctor()
+
+    def report_for_current_thread(self):
+        if self._report_runner is None:
+            self._report_runner = ReportRunner(lambda: SqliteStore(self.config), ReportUseCase)
+        return self._report_runner
+
+    def close_report_store(self):
+        if self._report_runner is not None:
+            self._report_runner.close()
+            self._report_runner = None
 
     def github_budget(self, flow=None):
         return GithubBudgetUseCase(

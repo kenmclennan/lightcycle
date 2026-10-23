@@ -338,6 +338,9 @@ class SqliteStore(
             self._conn.execute("PRAGMA user_version = %d" % _SCHEMA_VERSION)
         self._commit()
 
+    def close(self):
+        self._conn.close()
+
     def _enable_wal(self):
         deadline = time.monotonic() + BUSY_TIMEOUT_MS / 1000
         while True:

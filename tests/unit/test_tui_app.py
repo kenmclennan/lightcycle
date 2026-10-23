@@ -35,7 +35,6 @@ from lightcycle.adapters.tui.app import (
     StatusBar,
     _tui_metric_line,
 )
-from lightcycle.adapters.tui import app as tui_app_module
 from lightcycle.application.flow.engine_steps import RETRO_ORIGIN_LABEL, SUMMARY_ORIGIN_LABEL
 from lightcycle.adapters.tui.design_system import (
     BACKLOG_EMPTY_SHORTCUTS,
@@ -63,6 +62,7 @@ from lightcycle.adapters.tui.row_grid import (
 )
 from lightcycle.application.inspect import DoctorReport
 from lightcycle.application.setup import UpgradeResponse
+from lightcycle.application.work.report import ReportInput, ReportUseCase
 from lightcycle.domain.health import Problem
 from lightcycle.domain.work import State
 from tests.support.fake_machine import FakeMachine
@@ -3321,14 +3321,14 @@ class _CountingReportUseCase:
         self.calls = 0
 
     def patcher(self):
-        real_execute = tui_app_module.ReportUseCase.execute
+        real_execute = ReportUseCase.execute
         counts = self
 
         def counted(self_uc, input):
             counts.calls += 1
             return real_execute(self_uc, input)
 
-        return patch.object(tui_app_module.ReportUseCase, "execute", counted)
+        return patch.object(ReportUseCase, "execute", counted)
 
 
 class TestReportTabSwitch(unittest.TestCase):
@@ -3474,7 +3474,7 @@ class TestReportGatedOffThePoll(unittest.TestCase):
 
         self.assertEqual(counter.calls, 1)
 
-    def test_poll_ticks_while_on_report_today_do_not_recompute(self):
+    def test_poll_ticks_while_on_report_today_recompute_once_each(self):
         store = FakeStore()
         session = _launch_report(store)
         self.addCleanup(session.close)
@@ -3483,6 +3483,38 @@ class TestReportGatedOffThePoll(unittest.TestCase):
         with counter.patcher():
             session.poll_tick()
             session.poll_tick()
+            session.poll_tick()
+
+        self.assertEqual(counter.calls, 3)
+
+    def test_a_poll_while_the_previous_run_is_unfinished_does_not_start_another(self):
+        store = FakeStore()
+        session = _launch_report(store)
+        self.addCleanup(session.close)
+        session.app._report_inflight_day = session.app._now().date()
+        counter = _CountingReportUseCase()
+
+        with counter.patcher():
+            session.poll_tick()
+
+        self.assertEqual(counter.calls, 0)
+
+    def test_a_poll_on_a_past_day_does_not_recompute(self):
+        store = FakeStore()
+        session = launch(
+            make_test_container(store=store),
+            now=lambda: datetime.datetime(2026, 1, 2, 9, 0, 0),
+        )
+        self.addCleanup(session.close)
+        session.press("]")
+        session.press("]")
+        session.press("]")
+        session.app._report_day = datetime.date(2026, 1, 1)
+        session.run(session.app._refresh_report_view)
+        session.pause()
+        counter = _CountingReportUseCase()
+
+        with counter.patcher():
             session.poll_tick()
 
         self.assertEqual(counter.calls, 0)
@@ -3524,6 +3556,167 @@ class TestReportGatedOffThePoll(unittest.TestCase):
             session.run(app._refresh_report_view)
             session.pause()
         self.assertEqual(counter.calls, 2, "today should always be recomputed on every trigger")
+
+
+def _store_summary(store, text):
+    today = datetime.date.today()
+    with store.transaction():
+        store.mark_day_summary_dirty(today)
+        store.start_day_summary(today, step_id="fake-summary-step", spawn_count=1)
+    store.finish_day_summary(today, summary=text, summarized_count=1, clear_dirty=True)
+
+
+class TestReportOffTheUiThread(unittest.TestCase):
+    def test_leaving_the_app_closes_the_report_store_once(self):
+        container = make_test_container(store=FakeStore())
+        closed = []
+        container.close_report_store = lambda: closed.append(1)
+        session = launch(container)
+
+        session.close()
+
+        self.assertEqual(closed, [1])
+
+    def _blocked_report(self, store):
+        release = threading.Event()
+        started = threading.Event()
+
+        def compute(day):
+            started.set()
+            release.wait(10)
+            return ReportUseCase(store).execute(ReportInput(day))
+
+        self.addCleanup(release.set)
+        return compute, started, release
+
+    def test_switching_to_report_returns_before_the_use_case_finishes_and_shows_loading(self):
+        store = FakeStore()
+        item = store.create_item("done item", "a description")
+        store.complete_node(item, "merged", disposition="completed")
+        _store_summary(store, "Closed one item.")
+        compute, started, release = self._blocked_report(store)
+        session = launch(make_test_container(store=store), report_compute=compute)
+        self.addCleanup(session.close)
+
+        for _ in range(3):
+            session._run(session.pilot.press("]"))
+
+        self.assertTrue(started.wait(5))
+        self.assertEqual(session.app._view, "report")
+        loading = session.app.query_one("#report-loading", Static)
+        self.assertTrue(loading.display)
+        self.assertEqual(_rendered_text(loading).strip(), "Loading report...")
+        self.assertFalse(session.app.query_one(ReportTable).display)
+        self.assertFalse(session.app.query_one("#report-summary").display)
+
+        release.set()
+        session.pause()
+
+        self.assertFalse(session.app.query_one("#report-loading", Static).display)
+        self.assertEqual(_report_rows_shown(session)[0], ("Items Completed", "1"))
+        self.assertTrue(session.app.query_one("#report-summary").display)
+        self.assertEqual(
+            _rendered_text(session.app.query_one("#report-summary-text", Static)).strip(),
+            "Closed one item.",
+        )
+
+    def test_a_result_for_a_day_no_longer_selected_is_discarded(self):
+        store = FakeStore()
+        older = store.create_item("older item", "a description")
+        store.complete_node(older, "merged", disposition="completed")
+        store._records[older]["closed_at"] = "2026-01-01T10:00:00+00:00"
+        session = launch(
+            make_test_container(store=store),
+            now=lambda: datetime.datetime(2026, 1, 2, 9, 0, 0),
+        )
+        self.addCleanup(session.close)
+        session.press("]")
+        session.press("]")
+        session.press("]")
+        stale = ReportUseCase(store).execute(ReportInput(datetime.date(2026, 1, 1)))
+        self.assertEqual(_report_rows_shown(session)[0], ("Items Completed", "0"))
+
+        session.run(lambda: session.app._apply_report_result(datetime.date(2026, 1, 1), stale))
+        session.pause()
+
+        self.assertEqual(_report_rows_shown(session)[0], ("Items Completed", "0"))
+        left = session.app.query_one("#report-day-filter-left", Static)
+        self.assertEqual(_rendered_text(left).strip(), "2026-01-02")
+
+    def test_a_result_that_lands_after_leaving_the_tab_is_not_applied(self):
+        store = FakeStore()
+        compute, started, release = self._blocked_report(store)
+        session = launch(make_test_container(store=store), report_compute=compute)
+        self.addCleanup(session.close)
+        for _ in range(3):
+            session._run(session.pilot.press("]"))
+        self.assertTrue(started.wait(5))
+        session._run(session.pilot.press("]"))
+
+        release.set()
+        session.pause()
+
+        self.assertFalse(session.app.query_one(ReportView).display)
+        self.assertFalse(session.app.query_one(ReportTable).display)
+
+    def test_a_poll_while_on_today_refreshes_the_stats(self):
+        store = FakeStore()
+        session = _launch_report(store)
+        self.addCleanup(session.close)
+        self.assertEqual(_report_rows_shown(session)[0], ("Items Completed", "0"))
+        item = store.create_item("done item", "a description")
+        store.complete_node(item, "merged", disposition="completed")
+
+        session.poll_tick()
+
+        self.assertEqual(_report_rows_shown(session)[0], ("Items Completed", "1"))
+
+    def test_a_failed_computation_clears_the_loading_line_and_is_retried_by_the_next_poll(self):
+        store = FakeStore()
+        outcomes = iter([RuntimeError("boom"), None])
+
+        def compute(day):
+            outcome = next(outcomes)
+            if outcome is not None:
+                raise outcome
+            return ReportUseCase(store).execute(ReportInput(day))
+
+        session = launch(make_test_container(store=store), report_compute=compute)
+        self.addCleanup(session.close)
+        for _ in range(3):
+            session.press("]")
+        loading = session.app.query_one("#report-loading", Static)
+        self.assertIn("unavailable", _rendered_text(loading))
+        self.assertIsNone(session.app._report_inflight_day)
+
+        session.poll_tick()
+
+        self.assertFalse(loading.display)
+        self.assertEqual(_report_rows_shown(session)[0], ("Items Completed", "0"))
+
+
+class TestReportSummaryIsNeverClipped(unittest.TestCase):
+    def test_a_tall_summary_is_scrollable_to_its_last_line_below_the_table(self):
+        store = FakeStore()
+        lines = ["summary line %02d" % n for n in range(40)]
+        _store_summary(store, "\n".join(lines))
+        session = launch(make_test_container(store=store), size=(100, 40))
+        self.addCleanup(session.close)
+        for _ in range(3):
+            session.press("]")
+        summary = session.app.query_one("#report-summary")
+        table = session.app.query_one(ReportTable)
+        screen_height = session.app.screen.region.height
+
+        self.assertGreater(summary.region.height, int(screen_height * 0.3))
+        self.assertGreaterEqual(summary.region.y, table.region.y + table.region.height)
+
+        session.run(lambda: summary.scroll_end(animate=False))
+        session.pause()
+        strips = session.run(lambda: session.app.screen._compositor.render_strips())
+        frame = "\n".join("".join(segment.text for segment in strip) for strip in strips)
+
+        self.assertIn("summary line 39", frame)
 
 
 class TestReportDayPicker(unittest.TestCase):
