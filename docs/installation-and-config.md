@@ -115,7 +115,7 @@ This table documents every `_SEED_KEYS` entry - `tests/unit/test_docs_reference_
 | `pool-upgrade-check-seconds` | how often `lc start`'s pool loop rechecks for a new engine version while running; `0` disables the periodic recheck (the check still runs once at startup); must be `>= 0` |
 | `price-<model>-<kind>-per-mtok` | per-million-token USD pricing used for usage cost reporting, one key per `<model>` (`sonnet`/`opus`/`haiku`) x `<kind>` (`input`/`output`/`cache-write`/`cache-read`) - twelve keys total, defaults in `config.py`'s `_SEED_KEYS`; each must be `>= 0` |
 
-The footer health image maps the health score (`0` best to `4` worst, the worst of the pool, Claude, GitHub and upgrade or config signals) to one of six states: `0`-`4`, or `busy` when the score is `0` and any item is active or queued. Put one PNG per state in the folder named by `tui-health-icon-dir`; a state whose file is missing or unreadable shows no image and the footer keeps its usual layout. `lc doctor` names each configured file that is missing or not a readable PNG while `tui-health-icons` is `on`.
+The footer health image maps the health score (`0` best to `4` worst, the worst of the pool, Claude, GitHub and upgrade or config signals) to one of six states: `0`-`4`, or `busy` when the score is `0` and any item is in progress. Put one PNG per state in the folder named by `tui-health-icon-dir`; a state whose file is missing or unreadable shows no image and the footer keeps its usual layout. `lc doctor` names each configured file that is missing or not a readable PNG while `tui-health-icons` is `on`.
 
 Example schedule block (kept in the config file, shown here for reference):
 

@@ -768,7 +768,7 @@ class LightcycleApp(App):
             github=github,
             upgrade_available=self._upgrade_version is not None,
             config_changed=self._container.config.config_mtime() != self._config_mtime_at_load,
-            busy=self._has_active_or_queued(),
+            busy=self._has_active(),
         )
         for screen in self.screen_stack:
             try:
@@ -789,9 +789,9 @@ class LightcycleApp(App):
             return "draining"
         return "running" if running else "stopped"
 
-    def _has_active_or_queued(self):
+    def _has_active(self):
         selection = self._last_priority_selection
-        return selection is not None and bool(selection.active or selection.queued)
+        return selection is not None and bool(selection.active)
 
     def _begin_pool_transition(self, kind) -> None:
         self._pool_transition_kind = kind
