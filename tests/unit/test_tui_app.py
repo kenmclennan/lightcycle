@@ -1648,7 +1648,7 @@ class TestBacklogTableColumnWidth(unittest.TestCase):
 
         self.assertEqual(table.size.width, 0)
         self.assertEqual(len(table.columns), len(BACKLOG_COLUMNS))
-        layout = view._layout(table)
+        layout = view._layout(table, view._rows)
         self.assertEqual(table.columns.get("title").width, layout.flexible_width)
 
 
