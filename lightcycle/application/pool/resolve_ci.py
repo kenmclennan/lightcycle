@@ -6,7 +6,7 @@ from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.application.pool.pr_lookups import flow_for, run_of, skip_unpinned
 from lightcycle.application.pool.skip_idle_ci_watch import SkipIdleCiWatchUseCase
 from lightcycle.domain.pool import (
-    MISSING_STATUS, ci_outcome, failing_check, judged_checks, pr_workflows_expected, status_mismatch,
+    MISSING_STATUS, cancelled_check, ci_outcome, failing_check, judged_checks, pr_workflows_expected, status_mismatch,
     timed_out_check,
 )
 from lightcycle.domain.work import State
@@ -144,6 +144,21 @@ class ResolveCiUseCase:
             tried="Listed workflow runs for the head on every poll for %ds." % elapsed,
         ))
 
+    def _park_cancelled(self, step, pr_value, sha, check):
+        url = " (%s)" % check.url if check.url else ""
+        ParkStepUseCase(self._store).execute(ParkInput(
+            step=step.id,
+            observation=(
+                "Check '%s'%s was cancelled on %s, PR %s, and no other check failed; no test "
+                "failed, so no code change is called for."
+            ) % (check.name, url, sha, pr_value),
+            decision=(
+                "Rerun the cancelled job, then unblock this step; unblocking restarts the wait "
+                "for a fresh result."
+            ),
+            tried="Judged every check on the head; none failed and the cancelled one is not a failure.",
+        ))
+
     def execute(self) -> ResolveCiResponse:
         ci_resolved = []
         ci_unread = []
@@ -222,6 +237,13 @@ class ResolveCiUseCase:
                 )
                 self._first_judged.pop(step.id, None)
                 self._expected.pop(step.id, None)
+                continue
+            if outcome == "cancelled":
+                if self._github.head_sha(pr_value) != sha:
+                    continue
+                self._park_cancelled(
+                    step, pr_value, sha, cancelled_check(judged_checks(checks, required, since)))
+                self._first_judged.pop(step.id, None)
                 continue
             if outcome == "success" and sd.ci_success:
                 self._store.add_artifact(step.id, "ci-judged-sha", sha, internal=True)

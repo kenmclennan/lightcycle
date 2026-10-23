@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 _PASSING_CONCLUSIONS = ("success", "skipped", "neutral")
+_CANCELLED = "cancelled"
 
 
 MISSING_STATUS = "missing"
@@ -74,8 +75,17 @@ def ci_outcome(
         return "timeout"
     if any(not is_concluded(c) for c in judged):
         return "pending"
-    return "failure" if failing_check(judged) else "success"
+    if failing_check(judged):
+        return "failure"
+    return "cancelled" if cancelled_check(judged) else "success"
 
 
 def failing_check(checks):
-    return next((c for c in checks if c.conclusion not in _PASSING_CONCLUSIONS), None)
+    return next(
+        (c for c in checks if c.conclusion not in _PASSING_CONCLUSIONS and c.conclusion != _CANCELLED),
+        None,
+    )
+
+
+def cancelled_check(checks):
+    return next((c for c in checks if c.conclusion == _CANCELLED), None)
