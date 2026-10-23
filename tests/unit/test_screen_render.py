@@ -12,11 +12,13 @@ from lightcycle.adapters.tui.hub import (
 from tests.support.screen_render import (
     CONTEXT_REFLECTION, CONTEXT_SPEC_REPORT, DEFAULT_SIZE, GATE_DESCRIPTION,
     GATE_FINDINGS_LINES, MERGE_PR, MERGE_REPORT, SCREENS, UNRENDERABLE, _LOG_EXCERPT,
-    _hub_gate_merge, _plain_row, render,
+    _hub_gate_merge, _plain_row, capture, render,
 )
 
 
-@pytest.mark.parametrize("state", sorted(SCREENS))
+@pytest.mark.parametrize(
+    "state", [pytest.param(s, marks=pytest.mark.xdist_group(s)) for s in sorted(SCREENS)]
+)
 def test_every_registered_state_renders_a_full_frame(state):
     frame = render(state, size=(100, 30))
     rows = frame.split("\n")
@@ -27,15 +29,13 @@ def test_every_registered_state_renders_a_full_frame(state):
     assert any(row.strip("│ ") for row in rows[1:-1])
 
 
-@pytest.mark.parametrize("state", sorted(SCREENS))
+@pytest.mark.parametrize(
+    "state", [pytest.param(s, marks=pytest.mark.xdist_group(s)) for s in sorted(SCREENS)]
+)
 def test_every_registered_screen_fits_the_viewport_without_scrolling(state):
-    session = SCREENS[state](DEFAULT_SIZE)
-    try:
-        virtual_height = session.run(lambda: session.app.screen.virtual_size.height)
-        viewport_height = session.run(lambda: session.app.screen.size.height)
-        assert virtual_height <= viewport_height
-    finally:
-        session.close()
+    frame = capture(state)
+
+    assert frame.virtual_height <= frame.viewport_height
 
 
 @pytest.mark.parametrize("width", [100, 140])
@@ -443,7 +443,14 @@ def test_a_narrow_terminal_stacks_the_context_table():
     assert any("report (p1)" in row for row in rows)
 
 
-@pytest.mark.parametrize("state", sorted(name for name in SCREENS if name.startswith("hub#")))
+@pytest.mark.parametrize(
+    "state",
+    [
+        pytest.param(name, marks=pytest.mark.xdist_group(name))
+        for name in sorted(SCREENS)
+        if name.startswith("hub#")
+    ],
+)
 def test_no_step_tab_is_blank_on_first_open(state):
     rows = render(state, size=(100, 30)).split("\n")
     separators = [i for i, row in enumerate(rows) if row.startswith("│─")]
@@ -507,3 +514,18 @@ def test_no_reading_hides_the_github_segment():
 
     assert "github " not in frame.split("\n")[-3]
 
+
+
+def test_capture_returns_the_same_frame_for_the_same_state_and_size():
+    assert capture("priority-list#normal") is capture("priority-list#normal")
+    assert capture("priority-list#normal") is not capture("priority-list#normal", (120, 30))
+
+
+def test_capture_refuses_unknown_and_unrenderable_states_like_render():
+    with pytest.raises(KeyError) as excinfo:
+        capture("hub#not-a-state")
+
+    assert "hub#workflow" in str(excinfo.value)
+    for state, reason in UNRENDERABLE.items():
+        with pytest.raises(KeyError, match=reason):
+            capture(state)
