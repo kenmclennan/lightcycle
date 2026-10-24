@@ -38,17 +38,6 @@ def test_every_registered_screen_fits_the_viewport_without_scrolling(state):
     assert frame.virtual_height <= frame.viewport_height
 
 
-@pytest.mark.parametrize("width", [100, 140])
-def test_report_with_slow_steps_paints_the_count_and_the_keyed_step_row_at_each_width(width):
-    rows = render("report#with-slow-steps", size=(width, 30)).split("\n")
-    count_at = next(i for i, row in enumerate(rows) if "Slow Steps" in row and "1" in row)
-
-    assert "Escalations" in rows[count_at - 1]
-    assert "LC-730.12" in rows[count_at + 1]
-    assert "review-code - 52m active - waiting" in rows[count_at + 1]
-    assert "Starting Backlog Size" in rows[count_at + 2]
-
-
 def test_a_state_the_codebase_cannot_render_names_the_ones_it_can():
     with pytest.raises(KeyError) as excinfo:
         render("hub#not-a-state")
@@ -531,17 +520,38 @@ def test_capture_refuses_unknown_and_unrenderable_states_like_render():
             capture(state)
 
 
-@pytest.mark.parametrize("width", [100, 140])
-def test_report_by_project_paints_totals_then_sections_in_order_then_the_unmatched_block(width):
-    rows = render("report#by-project", size=(width, 40)).split("\n")
+@pytest.mark.parametrize("width", [40, 100, 140])
+def test_report_by_project_paints_title_and_top_line_then_sections_in_order_then_the_unmatched_block(width):
+    rows = render("report#by-project", size=(width, 80)).split("\n")
     text = "\n".join(rows)
 
-    totals_at = text.index("Backlog Delta")
+    top_at = text.index("closed")
     yori_at = text.index("yori")
     lightcycle_at = text.index("lightcycle")
-    unmatched_at = text.index("A line the summariser could not attribute")
+    unmatched_at = text.index("Not matched to a project")
 
-    assert totals_at < yori_at < lightcycle_at < unmatched_at
-    assert "2 closed" in text and "1 closed" in text
-    assert "Automation Items       1" in text
-    assert "Yori opens a note from the list [YO-7]" in text
+    assert top_at < yori_at < lightcycle_at < unmatched_at
+    assert "Items Completed" not in text
+    assert "Backlog Delta" not in text
+    assert all(len(row.rstrip()) <= width for row in rows)
+
+
+def test_report_by_project_separates_headings_from_bullets_with_blank_lines():
+    rows = render("report#by-project", size=(100, 80)).split("\n")
+    heading_at = next(i for i, row in enumerate(rows) if "yori" in row)
+
+    assert rows[heading_at + 1].strip("│ ") == ""
+
+
+def test_report_by_project_wraps_with_the_terminal_width():
+    narrow = render("report#by-project", size=(40, 80)).split("\n")
+    wide = render("report#by-project", size=(140, 80)).split("\n")
+
+    assert sum(1 for r in narrow if r.strip("│ ")) > sum(1 for r in wide if r.strip("│ "))
+
+
+def test_report_for_a_historical_day_paints_the_title_and_the_singular_top_line():
+    text = render("report#historical-day", size=(100, 30))
+
+    assert "Wednesday 31 December 2025" in text
+    assert "1 item closed" in text

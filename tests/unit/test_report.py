@@ -1,10 +1,11 @@
+import dataclasses
 import datetime
 import unittest
 
 from lightcycle.application.flow.engine_steps import RETRO_ORIGIN_LABEL, SUMMARY_ORIGIN_LABEL
 from lightcycle.application.flow.route_step import RouteStepService
 from lightcycle.application.work.backlog import BacklogInput, BacklogUseCase
-from lightcycle.application.work.report import ReportInput, ReportUseCase, _backlog_start_and_close
+from lightcycle.application.work.report import ReportInput, ReportResponse, ReportUseCase, _backlog_start_and_close
 from lightcycle.domain.money import Cost
 from lightcycle.domain.work import item_cost
 from tests.support.fake_store import FakeStore
@@ -260,70 +261,13 @@ class TestReportUseCaseSummary(unittest.TestCase):
         self.assertIsNone(resp.summary)
 
 
-def _seed_step(store, item, stage, seconds, *, turns=0, closed_at=None, finish=True):
-    step = store.create_step(stage=stage, role="agent", item=item)
-    store.claim_ready("agent")
-    store.accrue_active_seconds([step], seconds)
-    if turns:
-        store.record_attribution(step, turns, {})
-    if finish:
-        store.complete_node(step, "done")
-        store._records[step]["closed_at"] = closed_at
-    return step
-
-
-def _seed_history(store, item, stage, count, closed_at):
-    for n in range(count):
-        _seed_step(store, item, stage, 60 * (n + 1), turns=6 * (n + 1), closed_at=closed_at)
-
-
-class TestReportUseCaseSlowSteps(unittest.TestCase):
+class TestReportUseCaseReads(unittest.TestCase):
     DAY = datetime.date(2026, 1, 1)
-    ON_DAY = "2026-01-01T10:00:00+00:00"
-    OTHER_DAY = "2026-01-02T10:00:00+00:00"
-
-    def _store_with_history(self, count=20, stage="review-code"):
-        s = FakeStore()
-        item = s.create_item("item", "a description")
-        _seed_history(s, item, stage, count, "2025-12-20T10:00:00+00:00")
-        return s, item
-
-    def test_a_slow_step_closed_on_the_day_is_listed(self):
-        s, item = self._store_with_history()
-        slow = _seed_step(s, item, "review-code", 3167.5, turns=87, closed_at=self.ON_DAY)
-
-        resp = ReportUseCase(s).execute(ReportInput(day=self.DAY))
-
-        self.assertEqual([r.step.id for r in resp.slow_steps], [slow])
-
-    def test_the_same_step_closed_on_another_day_is_not_listed(self):
-        s, item = self._store_with_history()
-        _seed_step(s, item, "review-code", 3167.5, turns=87, closed_at=self.OTHER_DAY)
-
-        resp = ReportUseCase(s).execute(ReportInput(day=self.DAY))
-
-        self.assertEqual(resp.slow_steps, [])
-
-    def test_a_running_step_is_not_listed(self):
-        s, item = self._store_with_history()
-        _seed_step(s, item, "review-code", 3167.5, turns=87, finish=False)
-
-        resp = ReportUseCase(s).execute(ReportInput(day=self.DAY))
-
-        self.assertEqual(resp.slow_steps, [])
-
-    def test_a_day_with_two_slow_steps_lists_only_the_one_in_a_measured_stage(self):
-        s, item = self._store_with_history(count=20, stage="review-code")
-        _seed_history(s, item, "spec-writer", 19, "2025-12-20T10:00:00+00:00")
-        measured = _seed_step(s, item, "review-code", 3000, turns=30, closed_at=self.ON_DAY)
-        _seed_step(s, item, "spec-writer", 9000, turns=30, closed_at=self.ON_DAY)
-
-        resp = ReportUseCase(s).execute(ReportInput(day=self.DAY))
-
-        self.assertEqual([r.step.id for r in resp.slow_steps], [measured])
 
     def test_execute_reads_all_steps_exactly_once(self):
-        s, item = self._store_with_history()
+        s = FakeStore()
+        item = s.create_item("item", "a description")
+        s.create_step(stage="review-code", role="agent", item=item)
         calls = {"n": 0}
         original = s.all_steps_including_done
 
@@ -336,6 +280,9 @@ class TestReportUseCaseSlowSteps(unittest.TestCase):
         ReportUseCase(s).execute(ReportInput(day=self.DAY))
 
         self.assertEqual(calls["n"], 1)
+
+    def test_the_response_has_no_slow_steps_field(self):
+        self.assertNotIn("slow_steps", [f.name for f in dataclasses.fields(ReportResponse)])
 
 
 if __name__ == "__main__":

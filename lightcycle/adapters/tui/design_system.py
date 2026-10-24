@@ -75,7 +75,6 @@ COLUMN_GRIDS = {
     "outputs": ("name", "value", "step", "pass"),
     "detail": ("key", "value"),
     "context": ("key", "value"),
-    "report": ("key", "value"),
 }
 
 GLOBAL_SHORTCUTS = (

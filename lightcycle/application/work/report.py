@@ -1,11 +1,11 @@
 import datetime
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 from lightcycle.application.work.automation import is_automation_item
 from lightcycle.application.work.item_partition import is_backlogged_item, is_closed_item
 from lightcycle.application.work.project_of import project_of
-from lightcycle.domain.work import ItemCost, ProjectIdentity, SlowStep, item_cost, parse_timestamp, slow_steps
+from lightcycle.domain.work import ItemCost, ProjectIdentity, item_cost, parse_timestamp
 from lightcycle.domain.work.summary_split import split_summary
 from lightcycle.ports.store import NodeNotFoundError
 
@@ -36,7 +36,6 @@ class ReportResponse:
     automation_count: int
     automation_spend: ItemCost
     escalations: int
-    slow_steps: List[SlowStep]
     backlog_start: int
     backlog_close: int
     backlog_delta: int
@@ -144,15 +143,6 @@ def _project_reports(store, items, day, sections):
     return tuple(reports)
 
 
-def _slow_steps_on(steps, day):
-    found = []
-    for slow in slow_steps(steps):
-        closed = parse_timestamp(slow.step.closed_at)
-        if closed is not None and closed.date() == day:
-            found.append(slow)
-    return found
-
-
 class ReportUseCase:
     def __init__(self, store):
         self._store = store
@@ -170,7 +160,6 @@ class ReportUseCase:
         spend = item_cost(all_children)
         escalations = _escalations_on(self._store, input.day)
         all_steps = self._store.all_steps_including_done()
-        slow = _slow_steps_on(all_steps, input.day)
         backlog_start, backlog_close = _backlog_start_and_close(self._store, input.day, all_steps, all_items)
         row = self._store.day_summary(input.day)
         summary = row.summary if row else None
@@ -183,7 +172,7 @@ class ReportUseCase:
         return ReportResponse(
             day=input.day, completed=completed, abandoned=abandoned, spend=spend,
             automation_count=len(automation_items), automation_spend=automation_spend,
-            escalations=escalations, slow_steps=slow,
+            escalations=escalations,
             backlog_start=backlog_start, backlog_close=backlog_close,
             backlog_delta=backlog_close - backlog_start,
             summary=summary, projects=projects, summary_unmatched=unmatched,

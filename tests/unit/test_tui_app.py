@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from textual.css.query import NoMatches
-from textual.widgets import DataTable, Input, Static
+from textual.widgets import DataTable, Input, Markdown, Static
 
 from lightcycle import __version__
 from lightcycle.container import Container
@@ -30,7 +30,6 @@ from lightcycle.adapters.tui.app import (
     ProjectFilterPicker,
     ShortcutBar,
     TabStrip,
-    ReportTable,
     ReportView,
     StatusBar,
     _tui_metric_line,
@@ -3310,12 +3309,8 @@ def _launch_report(store, **kwargs):
     return session
 
 
-def _report_rows_shown(session):
-    table = session.app.query_one(ReportTable)
-    return [
-        (table.get_cell(row.key.value, "key").plain, table.get_cell(row.key.value, "value").plain)
-        for row in table.ordered_rows
-    ]
+def _report_source(session):
+    return session.app.query_one("#report-markdown", Markdown).source
 
 
 def _spy_waiting_history_calls(store):
@@ -3375,7 +3370,7 @@ class TestReportTabSwitch(unittest.TestCase):
 
 
 class TestReportFigures(unittest.TestCase):
-    def test_shows_ten_rows_for_today_by_default(self):
+    def test_shows_the_top_line_for_today_by_default(self):
         store = FakeStore()
         item = store.create_item("done item", "a description")
         step = store.create_step(stage="build", role="agent", item=item)
@@ -3387,66 +3382,24 @@ class TestReportFigures(unittest.TestCase):
         session = _launch_report(store)
         self.addCleanup(session.close)
 
-        self.assertEqual(
-            _report_rows_shown(session)[:10],
-            [
-                ("Items Completed", "1"),
-                ("Items Closed", "1"),
-                ("Spend", "$2.50"),
-                ("Automation Items", "0"),
-                ("Automation Spend", "not recorded"),
-                ("Escalations", "0"),
-                ("Slow Steps", "0"),
-                ("Starting Backlog Size", "0"),
-                ("Closing Backlog Size", "0"),
-                ("Backlog Delta", "+0"),
-            ],
+        source = _report_source(session)
+        self.assertTrue(source.startswith("# "))
+        self.assertIn(
+            "1 item closed · $2.50 spent · 0 automation items (not recorded) · 0 escalations"
+            " · backlog 0 → 0 (+0)",
+            source,
         )
 
-    def test_a_slow_step_adds_the_count_and_a_keyed_row_with_stage_elapsed_and_kind(self):
-        store = FakeStore()
-        item = store.create_item("done item", "a description")
-        for n in range(20):
-            step = store.create_step(stage="review-code", role="agent", item=item)
-            store.claim_ready("agent")
-            store.accrue_active_seconds([step], 60 * (n + 1))
-            store.record_attribution(step, 7 * (n + 1), {})
-            store.complete_node(step, "done")
-        slow = store.create_step(stage="review-code", role="agent", item=item)
-        store.claim_ready("agent")
-        store.accrue_active_seconds([slow], 3167.5)
-        store.record_attribution(slow, 87, {})
-        store.complete_node(slow, "done")
-
-        session = _launch_report(store)
-        self.addCleanup(session.close)
-
-        rows = _report_rows_shown(session)
-        self.assertEqual(rows[5:8], [
-            ("Escalations", "0"),
-            ("Slow Steps", "1"),
-            (slow, "review-code - 52m active - waiting"),
-        ])
-        self.assertEqual(rows[8][0], "Starting Backlog Size")
-
-    def test_zero_activity_day_still_renders_all_ten_rows(self):
+    def test_zero_activity_day_still_renders_the_title_and_top_line(self):
         session = _launch_report(FakeStore())
         self.addCleanup(session.close)
 
+        lines = _report_source(session).strip().split("\n")
+        self.assertEqual(len(lines), 3)
         self.assertEqual(
-            _report_rows_shown(session),
-            [
-                ("Items Completed", "0"),
-                ("Items Closed", "0"),
-                ("Spend", "not recorded"),
-                ("Automation Items", "0"),
-                ("Automation Spend", "not recorded"),
-                ("Escalations", "0"),
-                ("Slow Steps", "0"),
-                ("Starting Backlog Size", "0"),
-                ("Closing Backlog Size", "0"),
-                ("Backlog Delta", "+0"),
-            ],
+            lines[2],
+            "0 items closed · not recorded spent · 0 automation items (not recorded) · 0 escalations"
+            " · backlog 0 → 0 (+0)",
         )
 
 
@@ -3620,19 +3573,15 @@ class TestReportOffTheUiThread(unittest.TestCase):
         loading = session.app.query_one("#report-loading", Static)
         self.assertTrue(loading.display)
         self.assertEqual(_rendered_text(loading).strip(), "Loading report...")
-        self.assertFalse(session.app.query_one(ReportTable).display)
-        self.assertFalse(session.app.query_one("#report-summary").display)
+        self.assertFalse(session.app.query_one("#report-body").display)
 
         release.set()
         session.pause()
 
         self.assertFalse(session.app.query_one("#report-loading", Static).display)
-        self.assertEqual(_report_rows_shown(session)[0], ("Items Completed", "1"))
-        self.assertTrue(session.app.query_one("#report-summary").display)
-        self.assertEqual(
-            _rendered_text(session.app.query_one("#report-summary-text", Static)).strip(),
-            "Closed one item.",
-        )
+        self.assertIn("1 item closed", _report_source(session))
+        self.assertTrue(session.app.query_one("#report-body").display)
+        self.assertTrue(_report_source(session).endswith("## Not matched to a project\n\nClosed one item.\n"))
 
     def test_a_result_for_a_day_no_longer_selected_is_discarded(self):
         store = FakeStore()
@@ -3648,12 +3597,12 @@ class TestReportOffTheUiThread(unittest.TestCase):
         session.press("]")
         session.press("]")
         stale = ReportUseCase(store).execute(ReportInput(datetime.date(2026, 1, 1)))
-        self.assertEqual(_report_rows_shown(session)[0], ("Items Completed", "0"))
+        self.assertIn("0 items closed", _report_source(session))
 
         session.run(lambda: session.app._apply_report_result(datetime.date(2026, 1, 1), stale))
         session.pause()
 
-        self.assertEqual(_report_rows_shown(session)[0], ("Items Completed", "0"))
+        self.assertIn("0 items closed", _report_source(session))
         left = session.app.query_one("#report-day-filter-left", Static)
         self.assertEqual(_rendered_text(left).strip(), "2026-01-02")
 
@@ -3671,19 +3620,19 @@ class TestReportOffTheUiThread(unittest.TestCase):
         session.pause()
 
         self.assertFalse(session.app.query_one(ReportView).display)
-        self.assertFalse(session.app.query_one(ReportTable).display)
+        self.assertFalse(session.app.query_one("#report-body").display)
 
     def test_a_poll_while_on_today_refreshes_the_stats(self):
         store = FakeStore()
         session = _launch_report(store)
         self.addCleanup(session.close)
-        self.assertEqual(_report_rows_shown(session)[0], ("Items Completed", "0"))
+        self.assertIn("0 items closed", _report_source(session))
         item = store.create_item("done item", "a description")
         store.complete_node(item, "merged", disposition="completed")
 
         session.poll_tick()
 
-        self.assertEqual(_report_rows_shown(session)[0], ("Items Completed", "1"))
+        self.assertIn("1 item closed", _report_source(session))
 
     def test_a_failed_computation_clears_the_loading_line_and_is_retried_by_the_next_poll(self):
         store = FakeStore()
@@ -3706,31 +3655,45 @@ class TestReportOffTheUiThread(unittest.TestCase):
         session.poll_tick()
 
         self.assertFalse(loading.display)
-        self.assertEqual(_report_rows_shown(session)[0], ("Items Completed", "0"))
+        self.assertIn("0 items closed", _report_source(session))
 
 
-class TestReportSummaryIsNeverClipped(unittest.TestCase):
-    def test_a_tall_summary_is_scrollable_to_its_last_line_below_the_table(self):
+class TestReportDocumentScrolls(unittest.TestCase):
+    def test_a_tall_document_is_scrollable_to_its_last_line(self):
         store = FakeStore()
         lines = ["summary line %02d" % n for n in range(40)]
-        _store_summary(store, "\n".join(lines))
+        _store_summary(store, "\n\n".join(lines))
         session = launch(make_test_container(store=store), size=(100, 40))
         self.addCleanup(session.close)
         for _ in range(3):
             session.press("]")
-        summary = session.app.query_one("#report-summary")
-        table = session.app.query_one(ReportTable)
-        screen_height = session.app.screen.region.height
+        body = session.app.query_one("#report-body")
 
-        self.assertGreater(summary.region.height, int(screen_height * 0.3))
-        self.assertGreaterEqual(summary.region.y, table.region.y + table.region.height)
-
-        session.run(lambda: summary.scroll_end(animate=False))
+        session.run(lambda: body.scroll_end(animate=False))
         session.pause()
         strips = session.run(lambda: session.app.screen._compositor.render_strips())
         frame = "\n".join("".join(segment.text for segment in strip) for strip in strips)
 
         self.assertIn("summary line 39", frame)
+
+    def test_an_unchanged_poll_does_not_reset_the_scroll_position(self):
+        store = FakeStore()
+        lines = ["summary line %02d" % n for n in range(40)]
+        _store_summary(store, "\n\n".join(lines))
+        session = launch(make_test_container(store=store), size=(100, 40))
+        self.addCleanup(session.close)
+        for _ in range(3):
+            session.press("]")
+        body = session.app.query_one("#report-body")
+        session.run(lambda: body.scroll_end(animate=False))
+        session.pause()
+        offset = body.scroll_y
+        self.assertGreater(offset, 0)
+
+        session.poll_tick()
+        session.pause()
+
+        self.assertEqual(body.scroll_y, offset)
 
 
 class TestReportDayPicker(unittest.TestCase):
@@ -3775,8 +3738,7 @@ class TestReportDayPicker(unittest.TestCase):
         self.assertEqual(session.app._report_day, datetime.date(2026, 1, 1))
         left = session.app.query_one("#report-day-filter-left", Static)
         self.assertEqual(_rendered_text(left).strip(), "2026-01-01")
-        self.assertEqual(_report_rows_shown(session)[0], ("Items Completed", "1"))
-        self.assertEqual(_report_rows_shown(session)[1], ("Items Closed", "1"))
+        self.assertIn("1 item closed", _report_source(session))
 
 
 class TestReportOpensDoneForDay(unittest.TestCase):
