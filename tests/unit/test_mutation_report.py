@@ -230,3 +230,52 @@ class TestCmdRun(unittest.TestCase):
         rc, _, written = self.run_with([sys.executable, "-c", "pass"])
         self.assertEqual(rc, 0)
         self.assertTrue(written)
+
+
+class TestCmdRunSelection(unittest.TestCase):
+    NAMES = [("pkg.m.x_f__mutmut_1", "not checked"), ("pkg.m.x_f__mutmut_2", "not checked")]
+
+    def run_with(self, statuses_by_call):
+        calls = []
+        statuses = iter(statuses_by_call)
+
+        def fake_run(command, **kwargs):
+            calls.append(command)
+            return mock.Mock(returncode=0, stderr="")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "results.txt"
+            argv = ["run", "--modules", "pkg/m.py", "--results-out", str(out)]
+            err = io.StringIO()
+            with (
+                mock.patch.object(rp, "RUN_COMMAND", ["mutmut-run"]),
+                mock.patch.object(rp, "GENERATE_COMMAND", ["mutmut-generate"]),
+                mock.patch.object(rp, "read_statuses", side_effect=lambda: next(statuses)),
+                mock.patch.object(rp.subprocess, "run", side_effect=fake_run),
+                contextlib.redirect_stdout(io.StringIO()),
+                contextlib.redirect_stderr(err),
+            ):
+                rc = rp.main(argv)
+        return rc, err.getvalue(), calls
+
+    def test_generate_runs_before_selection_when_no_statuses_exist(self):
+        rc, _, calls = self.run_with([[], self.NAMES, self.NAMES])
+        self.assertEqual(rc, 0)
+        self.assertEqual(calls[0], ["mutmut-generate"])
+        self.assertEqual(calls[1][0], "mutmut-run")
+
+    def test_generate_is_skipped_when_statuses_already_exist(self):
+        rc, _, calls = self.run_with([self.NAMES, self.NAMES])
+        self.assertEqual(rc, 0)
+        self.assertEqual([c[0] for c in calls], ["mutmut-run"])
+
+    def test_empty_selection_after_generate_exits_nonzero_without_running(self):
+        rc, err, calls = self.run_with([[], []])
+        self.assertEqual(rc, 1)
+        self.assertIn("pkg/m.py", err)
+        self.assertEqual(calls, [["mutmut-generate"]])
+
+    def test_run_receives_exactly_the_selected_names(self):
+        _, _, calls = self.run_with([self.NAMES, self.NAMES])
+        self.assertEqual(calls[0][-2:], [n for n, _ in self.NAMES])
+        self.assertEqual(calls[0][:1], ["mutmut-run"])

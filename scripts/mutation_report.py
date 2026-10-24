@@ -27,6 +27,8 @@ STATS_FILE = ROOT / "mutants" / "mutmut-stats.json"
 MUTMUT = [sys.executable, "-m", "mutmut"]
 RESULTS_COMMAND = MUTMUT + ["results", "--all", "true"]
 RUN_COMMAND = MUTMUT + ["run"]
+GENERATE_SENTINEL = "lightcycle-generate-only-no-such-mutant"
+GENERATE_COMMAND = RUN_COMMAND + [GENERATE_SENTINEL]
 STDERR_TAIL_LINES = 20
 RUN_TIMEOUT = 7200
 SHOW_TIMEOUT = 120
@@ -436,14 +438,33 @@ def cmd_prune(args):
     return 0
 
 
-def cmd_run(args):
-    statuses = read_statuses()
-    prefixes = {mutant_prefix(m): m for m in args.modules}
-    wanted = [
+def select_wanted(prefixes):
+    return [
         (n, s)
-        for n, s in statuses
+        for n, s in read_statuses()
         if split_mutant_name(n)[0] in prefixes
     ]
+
+
+def generate_mutants():
+    subprocess.run(
+        GENERATE_COMMAND,
+        cwd=ROOT,
+        timeout=RUN_TIMEOUT,
+        capture_output=True,
+        text=True,
+    )
+
+
+def cmd_run(args):
+    prefixes = {mutant_prefix(m): m for m in args.modules}
+    wanted = select_wanted(prefixes)
+    if not wanted:
+        generate_mutants()
+        wanted = select_wanted(prefixes)
+    if not wanted:
+        print(f"no mutants found for: {' '.join(args.modules)}", file=sys.stderr)
+        return 1
     kept, dropped = prune_names(wanted, args.prune)
     print(f"mutants: {len(wanted)}, pruned: {len(dropped)}, running: {len(kept)}")
     started = time.monotonic()
