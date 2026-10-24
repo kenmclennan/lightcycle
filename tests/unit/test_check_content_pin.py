@@ -689,3 +689,45 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         self.assertIn("b.py", node.notes)
 
 
+
+    def _round_decision(self, author, sha, with_decision=True):
+        body = LC_MARKER + "<!-- lc:sha=%s -->" % sha
+        if with_decision:
+            body += "<!-- lc:decision=rework -->"
+        comment = Comment(author=author, body=body, is_top_level=True, created_at=100.0)
+        gh = FakeGitHub(
+            head_shas={self._URL: "sha1"},
+            files_by_sha={(self._URL, "sha1"): frozenset({"a.py", "b.py"})},
+            timed_comments=[(100.0, comment)],
+        )
+        store, item, step, uc = self._setup(gh)
+        uc.execute()
+        gh._head_shas[self._URL] = "sha2"
+        gh._files_by_sha[(self._URL, "sha2")] = frozenset({"a.py"})
+        uc.execute()
+        return store.get_node(step)
+
+    def test_top_level_rework_decision_at_the_pinned_head_orders_the_drop_and_notes_it(self):
+        node = self._round_decision("review-code", "sha1")
+
+        self.assertEqual(node.role, "agent")
+        self.assertIn("b.py", node.notes)
+        self.assertIn("rework", node.notes)
+
+    def test_top_level_rework_decision_naming_an_older_head_still_parks(self):
+        node = self._round_decision("review-code", "sha0")
+
+        self.assertEqual(node.role, "human")
+        self.assertIn("b.py", node.notes)
+
+    def test_top_level_rework_decision_from_an_untrusted_author_still_parks(self):
+        node = self._round_decision("colleague", "sha1")
+
+        self.assertEqual(node.role, "human")
+        self.assertIn("b.py", node.notes)
+
+    def test_no_decision_at_the_pinned_head_still_parks(self):
+        node = self._round_decision("review-code", "sha1", with_decision=False)
+
+        self.assertEqual(node.role, "human")
+        self.assertIn("b.py", node.notes)
