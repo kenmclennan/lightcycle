@@ -117,3 +117,22 @@ def test_sibling_checkouts_is_empty_when_no_workflows_checkout_exists(monkeypatc
     monkeypatch.setattr(hermetic_env, "_REPO_ROOT", str(repo))
 
     assert hermetic_env._sibling_checkouts() == []
+
+
+def test_guard_allows_worktree_and_mutants_paths_under_the_real_home(monkeypatch, tmp_path):
+    home = tmp_path / "home"
+    worktree = home / "ws" / "lightcycle" / ".worktrees" / "LC-1-change"
+    mutants = worktree / "mutants"
+    (mutants / "tests").mkdir(parents=True)
+    live = home / ".lightcycle"
+    live.mkdir()
+    monkeypatch.setattr(hermetic_env, "REAL_HOME", os.path.realpath(home))
+    monkeypatch.setattr(hermetic_env, "_REPO_ROOT", os.path.realpath(mutants))
+    monkeypatch.setattr(hermetic_env, "_allowed_roots", lambda: [os.path.realpath(mutants)])
+
+    with expect_real_home_access() as absorbed:
+        os.listdir(mutants / "tests")
+        with pytest.raises(RealHomeAccessError):
+            os.listdir(live)
+
+    assert [path for _, path in absorbed] == [os.path.realpath(live)]
