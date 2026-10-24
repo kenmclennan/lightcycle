@@ -348,13 +348,13 @@ def _row_text(table, index):
 @given("an item with a spec, a spec-phase PR, a code-phase PR and a spec reworked in a second pass")
 def _item_with_spec_prs_and_rework(ctx):
     store = FakeStore()
-    item = store.create_item("Item", "a description", workflow="o/w@abc")
+    item = store.create_item("Item", "a description", workflow="o/w@f00d")
     first_pass = store.open_pass(item)
     spec_1 = store.create_step(stage="spec", role="agent", item=item)
     store.set_step_pass(spec_1, first_pass)
     store.add_artifact(spec_1, "spec", "specs/v1.md")
     store.add_artifact(spec_1, "reflection", "private note", internal=True)
-    store.add_artifact(spec_1, "session-id", "abc")
+    store.add_artifact(spec_1, "session-id", "sess-hidden")
     spec_run = store.open_run(item, first_pass, "spec")
     store.set_pr(spec_run, "https://gh/pr/10")
     second_pass = store.open_pass(item)
@@ -372,7 +372,7 @@ def _item_with_spec_prs_and_rework(ctx):
 @given("a scheduled item with a findings output on its step")
 def _scheduled_item_with_findings(ctx):
     store = FakeStore()
-    item = store.create_item("Audit", "a description", workflow="o/w@abc")
+    item = store.create_item("Audit", "a description", workflow="o/w@f00d")
     pid = store.open_pass(item)
     step = store.create_step(stage="audit", role="agent", item=item)
     store.set_step_pass(step, pid)
@@ -399,7 +399,7 @@ def _rows_are_spec_and_prs(ctx):
 def _no_bookkeeping_rows(ctx):
     table = ctx["session"].app.screen.query_one(OutputsTable)
     text = " ".join(_row_text(table, i) for i in range(table.row_count))
-    for banned in ("reflection", "session", "guidance", "abc", "private note"):
+    for banned in ("reflection", "session", "guidance", "sess-hidden", "private note"):
         assert banned not in text
 
 
