@@ -460,3 +460,77 @@ class TestWorklog(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _closed_step(store, item, stage, seconds, log=None):
+    sid = store.create_step(stage=stage, role="agent", item=item)
+    store.accrue_active_seconds([sid], seconds)
+    store.complete_node(sid, "done")
+    if log:
+        store.set_log(sid, log)
+    return sid
+
+
+class TestRetroSlowSteps(unittest.TestCase):
+    def _history(self, store, item, count=20):
+        for n in range(count):
+            _closed_step(store, item, "review-code", 60 * (n + 1))
+
+    def test_item_with_a_slow_step_lists_its_details(self):
+        s = FakeStore()
+        other = s.create_item("history", "d")
+        self._history(s, other)
+        item = s.create_item("slow one", "d")
+        slow = _closed_step(s, item, "review-code", 2160, log="/logs/w.log")
+        row = RetroUseCase(s, _flow(s)).execute(RetroInput(subject=item)).item_signals[0]
+        self.assertEqual([x.step.id for x in row.slow_steps], [slow])
+        found = row.slow_steps[0]
+        self.assertEqual((found.step.stage, found.active_seconds, found.threshold_seconds),
+                         ("review-code", 2160, 2160))
+        self.assertEqual(found.step.log_path, "/logs/w.log")
+
+    def test_item_without_a_slow_step_lists_none(self):
+        s = FakeStore()
+        other = s.create_item("history", "d")
+        self._history(s, other)
+        item = s.create_item("quick", "d")
+        _closed_step(s, item, "review-code", 120)
+        row = RetroUseCase(s, _flow(s)).execute(RetroInput(subject=item)).item_signals[0]
+        self.assertEqual(row.slow_steps, [])
+
+    def test_baseline_comes_from_other_items_steps(self):
+        s = FakeStore()
+        self._history(s, s.create_item("history", "d"))
+        item = s.create_item("only one", "d")
+        _closed_step(s, item, "review-code", 5000)
+        resp = RetroUseCase(s, _flow(s)).execute(RetroInput(subject=item))
+        self.assertEqual(len(resp.item_signals[0].slow_steps), 1)
+
+    def _printed(self, store, item):
+        import contextlib
+        import io
+
+        from lightcycle.commands.feedback import _print_retro
+
+        resp = RetroUseCase(store, _flow(store)).execute(RetroInput(subject=item))
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            _print_retro(resp)
+        return out.getvalue()
+
+    def test_print_shows_a_slow_line_with_every_detail(self):
+        s = FakeStore()
+        self._history(s, s.create_item("history", "d"))
+        item = s.create_item("slow one", "d")
+        slow = _closed_step(s, item, "review-code", 2160, log="/logs/w.log")
+        line = next(x for x in self._printed(s, item).splitlines() if "slow " in x)
+        for part in (slow, "review-code", "active=36m", "threshold=36m", "[unknown]",
+                     "log:/logs/w.log"):
+            self.assertIn(part, line)
+
+    def test_print_shows_no_slow_line_when_none_flagged(self):
+        s = FakeStore()
+        self._history(s, s.create_item("history", "d"))
+        item = s.create_item("quick", "d")
+        _closed_step(s, item, "review-code", 120)
+        self.assertNotIn("slow ", self._printed(s, item))

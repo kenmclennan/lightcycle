@@ -211,6 +211,13 @@ def _print_retro(resp):
             "  %-20s  %s  (N=%d)  duration=%s"
             % (row.item.id, sig_str, row.reflections, duration_str)
         )
+        for slow in row.slow_steps:
+            print(
+                "    slow %s  %s  active=%s  threshold=%s  [%s]  log:%s"
+                % (slow.step.id, slow.step.stage, format_elapsed(slow.active_seconds),
+                   format_elapsed(slow.threshold_seconds), slow.kind.value,
+                   slow.step.log_path or "-")
+            )
 
 
 def _fmt_signal(name, by_model):
