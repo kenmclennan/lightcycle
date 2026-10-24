@@ -1,3 +1,5 @@
+from lightcycle.domain.workflows.engine_requirement import parse_version
+
 POOL_STATES = (
     "running", "starting", "stopping", "draining", "start-timed-out", "stop-timed-out", "stopped",
 )
@@ -41,12 +43,32 @@ def github_health_score(remaining, limit):
     return 4
 
 
-def upgrade_config_health_score(upgrade_available, config_changed):
-    return 1 if upgrade_available or config_changed else 0
+_STALE_RELEASES = 3
+_MAINTENANCE_CAP = 3
 
 
-def health_score(pool, claude, github, upgrade_config):
-    return max(pool, claude, github, upgrade_config)
+def releases_behind(installed, available):
+    try:
+        have = parse_version(installed)
+        want = parse_version(available)
+    except ValueError:
+        return None
+    if want <= have:
+        return 0
+    if want[:2] != have[:2]:
+        return _STALE_RELEASES
+    return want[2] - have[2]
+
+
+def maintenance_health_score(upgrade_available, behind, config_changed, doctor_findings, orphans):
+    score = sum(1 for pending in (upgrade_available, config_changed, doctor_findings, orphans) if pending)
+    if upgrade_available and behind is not None and behind >= _STALE_RELEASES:
+        score += 1
+    return min(score, _MAINTENANCE_CAP)
+
+
+def health_score(pool, claude, github, maintenance):
+    return max(pool, claude, github, maintenance)
 
 
 def health_image_state(score, busy):

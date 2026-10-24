@@ -787,6 +787,9 @@ class LightcycleApp(App):
             upgrade_available=self._upgrade_version is not None,
             config_changed=self._container.config.config_mtime() != self._config_mtime_at_load,
             busy=self._has_active(),
+            installed_version=self._container.config.version(),
+            available_version=self._upgrade_version,
+            doctor_areas=() if self._doctor_failed else self._doctor_areas,
         )
         for screen in self.screen_stack:
             try:
