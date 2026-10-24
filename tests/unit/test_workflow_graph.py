@@ -126,6 +126,20 @@ class TestWorkflowGraphParsing(unittest.TestCase):
             (scalar.workspace_declared, block.workspace_declared, absent.workspace_declared),
             (True, False, False))
 
+    def test_an_edges_head_with_a_value_on_its_line_raises_naming_the_line(self):
+        with self.assertRaisesRegex(ValueError, r"line 3: edges .*'a done b'"):
+            parse_graph("entry: a\n\nedges: a done b\n")
+
+    def test_every_other_section_head_with_a_value_raises(self):
+        for head in ("nodes", "hooks", "signals", "display", "pass-end", "disposition", "phase"):
+            with self.subTest(head=head):
+                with self.assertRaisesRegex(ValueError, "line 2: %s " % head):
+                    parse_graph("entry: a\n%s: build x\n" % head)
+
+    def test_a_workspace_head_with_two_stage_pairs_on_its_line_raises(self):
+        with self.assertRaisesRegex(ValueError, "line 3: workspace .*build specs"):
+            parse_graph("entry: build\n\nworkspace: build specs\n")
+
     def test_an_undeclared_stage_still_resolves_to_project(self):
         graph = parse_graph("entry: build\n\nedges:\n  build  done  review\n")
         self.assertEqual(graph.workspace_for("build"), "project")
