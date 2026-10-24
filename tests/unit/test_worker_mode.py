@@ -123,13 +123,16 @@ class _GateCfg:
     def is_live_home(self):
         return self._is_live_home
 
-    def reconcile_config(self):
+    def reconcile_config(self, registered=None):
         pass
 
 
 class _GateContainer:
     def __init__(self, is_live_home):
         self.config = _GateCfg(is_live_home)
+
+    def registered_seed_paths(self):
+        return {}
 
 
 class TestMainWorkerGateKeysOnLiveHome(unittest.TestCase):

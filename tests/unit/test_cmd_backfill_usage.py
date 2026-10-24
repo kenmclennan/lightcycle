@@ -40,7 +40,7 @@ class FakeConfig:
     def is_live_home(self):
         return self._is_live_home
 
-    def reconcile_config(self):
+    def reconcile_config(self, registered=None):
         pass
 
     def usage_pricing(self):
@@ -55,6 +55,9 @@ class FakeContainer:
         self.config = config or FakeConfig()
         self.worker_log = worker_log if worker_log is not None else self.fs
         self.claude_stream = ClaudeStreamAdapter()
+
+    def registered_seed_paths(self):
+        return {}
 
 
 class TestCmdBackfillUsage(unittest.TestCase):

@@ -57,7 +57,8 @@ from lightcycle.application.pool.schedule_cadence import ScheduleCadenceUseCase
 from lightcycle.application.pool.script_stages import ScriptStageUseCase
 from lightcycle.application.work.activate_item import ActivateItemUseCase
 from lightcycle.application.workflows.lifecycle import WorkflowLifecycleService
-from lightcycle.config import Config
+from lightcycle.config import Config, ConfigError
+from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE
 
 
 class Container:
@@ -142,6 +143,19 @@ class Container:
             guidance_sync_status if guidance_sync_status is not None
             else GuidanceSyncStatusAdapter(self.config)
         )
+
+    def registered_seed_paths(self):
+        paths = {}
+        guidance = self.store.get_project(GUIDANCE_WORKSPACE)
+        if guidance is not None:
+            paths["guidance-path"] = guidance.local_path
+        try:
+            specs = self.store.get_project(self.config.context_artifact_project())
+        except ConfigError:
+            specs = None
+        if specs is not None:
+            paths["specs-path"] = specs.local_path
+        return paths
 
     def workflow_lifecycle(self):
         return WorkflowLifecycleService(

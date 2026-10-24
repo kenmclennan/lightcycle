@@ -8,7 +8,7 @@ from tests.support.fake_store import FakeStore
 
 
 class _Cfg:
-    def reconcile_config(self):
+    def reconcile_config(self, registered=None):
         pass
 
     def is_worker(self):
@@ -23,6 +23,9 @@ class _Container:
         self.git = None
         self.workflow_source = None
         self.workflow_bundle = None
+
+    def registered_seed_paths(self):
+        return {}
 
 
 class TestMainRefusesUnknownNodeId(unittest.TestCase):

@@ -16,9 +16,6 @@ from lightcycle.domain.guidance.skeleton import (
     INDEX_TEXT,
 )
 
-_DEFAULT_SPECS_PATH = "~/workspace/specs"
-_DEFAULT_GUIDANCE_PATH = "~/workspace/agent-guidance"
-
 
 @dataclass(frozen=True)
 class InitGridResponse:
@@ -47,12 +44,13 @@ class InitGridUseCase:
         self._fs.ensure_logs_dir()
         created = self._config.ensure_config()
         seeded, unset_reason = self._seed_trusted_authors()
+        self._refuse_paths_outside_scratch_home(guidance_path)
         self._ensure_specs_project()
         remote_updates = self._refresh_remotes()
         refusal = self._identity_refusal_if_creating(guidance_path)
         if refusal:
             outcome = "not created"
-            path = self._config.expand_path(guidance_path or _DEFAULT_GUIDANCE_PATH)
+            path = self._config.expand_path(guidance_path or self._config.guidance_path())
         else:
             outcome, path = self._ensure_guidance_project(guidance_path)
         return InitGridResponse(
@@ -66,6 +64,24 @@ class InitGridUseCase:
             trusted_authors_unset_reason=unset_reason,
             remote_updates=remote_updates,
         )
+
+    def _refuse_paths_outside_scratch_home(self, explicit_guidance):
+        if self._config.is_live_home():
+            return
+        root = self._config.data_root()
+        if self._store.get_project(GUIDANCE_WORKSPACE) is None and not explicit_guidance:
+            self._refuse_outside(root, self._config.guidance_path(), "--guidance-path")
+        if self._store.get_project(self._config.context_artifact_project()) is None:
+            if not self._config.load_config().get("specs"):
+                self._refuse_outside(root, self._config.specs_path(), "the specs-path config key")
+
+    def _refuse_outside(self, root, configured, flag):
+        path = self._config.expand_path(configured)
+        if os.path.commonpath([os.path.abspath(root), os.path.abspath(path)]) != os.path.abspath(root):
+            raise UseCaseError(
+                "refusing to create %s outside LC_HOME %s - pass %s explicitly to allow it"
+                % (path, root, flag)
+            )
 
     def _refresh_remotes(self):
         updates = []
@@ -106,7 +122,7 @@ class InitGridUseCase:
         return login, ""
 
     def _identity_refusal_if_creating(self, requested):
-        wanted = self._config.expand_path(requested or _DEFAULT_GUIDANCE_PATH)
+        wanted = self._config.expand_path(requested or self._config.guidance_path())
         if self._store.get_project(GUIDANCE_WORKSPACE) is None and not self._fs.exists(wanted):
             try:
                 require_git_identity(self._git, wanted)
@@ -115,7 +131,7 @@ class InitGridUseCase:
         return ""
 
     def _ensure_guidance_project(self, requested):
-        wanted = self._config.expand_path(requested or _DEFAULT_GUIDANCE_PATH)
+        wanted = self._config.expand_path(requested or self._config.guidance_path())
         registered = self._store.get_project(GUIDANCE_WORKSPACE)
         if registered is not None:
             if requested and wanted != registered.local_path:
@@ -178,6 +194,6 @@ class InitGridUseCase:
             path = self._config.expand_path(legacy_path)
             remote = legacy.get("specs-remote") or None
         else:
-            path = self._config.expand_path(_DEFAULT_SPECS_PATH)
+            path = self._config.expand_path(self._config.specs_path())
             remote = None
         self._store.add_project(identity, local_path=path, remote=remote)

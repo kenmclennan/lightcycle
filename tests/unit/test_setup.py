@@ -11,7 +11,10 @@ from tests.support.fake_store import FakeStore
 
 
 class FakeConfig:
-    def __init__(self, created=True, legacy=None, trusted=None):
+    def __init__(self, created=True, legacy=None, trusted=None, root=None, guidance="~/workspace/agent-guidance", specs="~/workspace/specs"):
+        self._root = root
+        self._guidance = guidance
+        self._specs = specs
         self._created = created
         self._legacy = legacy or {}
         self.trusted = trusted
@@ -26,6 +29,18 @@ class FakeConfig:
 
     def ensure_config(self):
         return self._created
+
+    def is_live_home(self):
+        return self._root is None
+
+    def data_root(self):
+        return self._root or "/home/u/.lightcycle"
+
+    def guidance_path(self):
+        return self._guidance
+
+    def specs_path(self):
+        return self._specs
 
     def config_path(self):
         return "/cfg/lightcycle/config"
@@ -319,6 +334,73 @@ class TestInitGuidanceRepo(unittest.TestCase):
         r, store, fs, git = self._run(path="/elsewhere/kb")
         self.assertEqual(store.get_project(GUIDANCE_WORKSPACE).local_path, "/elsewhere/kb")
         self.assertEqual(fs.writes[0], "/elsewhere/kb/index.md")
+
+
+class TestInitScratchHome(unittest.TestCase):
+    def test_a_scratch_home_creates_everything_under_it(self):
+        config = FakeConfig(root="/scratch", guidance="/scratch/agent-guidance", specs="/scratch/specs")
+        store, fs = FakeStore(), FakeFs()
+        r = _init_grid(store, fs, config, FakeGit()).execute()
+        self.assertEqual(r.guidance_path, "/scratch/agent-guidance")
+        self.assertEqual(store.get_project("specs").local_path, "/scratch/specs")
+        self.assertTrue(all(w.startswith("/scratch/") for w in fs.writes))
+
+    def test_an_explicit_guidance_path_outside_a_scratch_home_is_honoured(self):
+        config = FakeConfig(root="/scratch", guidance="/scratch/agent-guidance", specs="/scratch/specs")
+        store, fs = FakeStore(), FakeFs()
+        r = _init_grid(store, fs, config, FakeGit()).execute("/elsewhere/kb")
+        self.assertEqual(r.guidance_path, "/elsewhere/kb")
+        self.assertEqual(fs.writes[0], "/elsewhere/kb/index.md")
+
+    def test_a_seeded_guidance_path_outside_a_scratch_home_is_refused_naming_path_and_flag(self):
+        config = FakeConfig(root="/scratch", guidance="/real/agent-guidance", specs="/scratch/specs")
+        store, fs, git = FakeStore(), FakeFs(), FakeGit()
+        with self.assertRaises(UseCaseError) as caught:
+            _init_grid(store, fs, config, git).execute()
+        self.assertIn("/real/agent-guidance", str(caught.exception))
+        self.assertIn("--guidance-path", str(caught.exception))
+        self.assertEqual(fs.writes, [])
+        self.assertNotIn("init_repo", [c[0] for c in git.calls])
+        self.assertIsNone(store.get_project(GUIDANCE_WORKSPACE))
+
+    def test_a_seeded_specs_path_outside_a_scratch_home_is_refused(self):
+        config = FakeConfig(root="/scratch", guidance="/scratch/agent-guidance", specs="/real/specs")
+        with self.assertRaisesRegex(UseCaseError, "/real/specs"):
+            _init_grid(FakeStore(), FakeFs(), config, FakeGit()).execute()
+
+    def test_a_registered_guidance_project_outside_a_scratch_home_is_not_refused(self):
+        config = FakeConfig(root="/scratch", guidance="/real/agent-guidance", specs="/scratch/specs")
+        store = FakeStore()
+        store.add_project(GUIDANCE_WORKSPACE, local_path="/kb", remote=None)
+        r = _init_grid(store, FakeFs(), config, FakeGit()).execute()
+        self.assertEqual(r.guidance_outcome, "unchanged")
+
+    def test_the_default_home_keeps_the_seeded_paths_and_never_guards(self):
+        store = FakeStore()
+        r = _init_grid(store, FakeFs(), FakeConfig(), FakeGit()).execute()
+        self.assertEqual(r.guidance_path, "~/workspace/agent-guidance")
+        self.assertEqual(store.get_project("specs").local_path, "~/workspace/specs")
+
+
+class TestSeededPathsInTheWrittenConfig(unittest.TestCase):
+    def test_the_default_home_writes_the_workspace_paths_visibly(self):
+        from lightcycle.config_seeds import default_config_text
+
+        text = default_config_text()
+        self.assertIn("guidance-path: ~/workspace/agent-guidance\n", text)
+        self.assertIn("specs-path: ~/workspace/specs\n", text)
+
+    def test_a_scratch_home_seeds_both_paths_under_it(self):
+        import os
+        import tempfile
+
+        from lightcycle.config import Config
+
+        with tempfile.TemporaryDirectory() as d:
+            c = Config({"LC_HOME": d, "HOME": d})
+            c.ensure_config()
+            self.assertEqual(c.guidance_path(), os.path.join(d, "agent-guidance"))
+            self.assertEqual(c.specs_path(), os.path.join(d, "specs"))
 
 
 if __name__ == "__main__":

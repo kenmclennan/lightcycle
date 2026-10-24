@@ -272,17 +272,26 @@ class Config:
         return restart_required(
             candidate, start_values, lambda k: self._env(_ENV_OVERRIDE_VARS[k]) is not None)
 
+    def _seed_overrides(self, registered=None):
+        overrides = {}
+        if not self.is_live_home():
+            root = self.data_root()
+            overrides["guidance-path"] = os.path.join(root, "agent-guidance")
+            overrides["specs-path"] = os.path.join(root, "specs")
+        overrides.update({k: v for k, v in (registered or {}).items() if v})
+        return overrides
+
     def _default_config_text(self):
-        return default_config_text()
+        return default_config_text(self._seed_overrides())
 
-    def _missing_seed_keys(self, existing):
-        return missing_seed_keys(existing)
+    def _missing_seed_keys(self, existing, registered=None):
+        return missing_seed_keys(existing, self._seed_overrides(registered))
 
-    def reconcile_config(self):
+    def reconcile_config(self, registered=None):
         p = self.config_path()
         if not os.path.exists(p):
             return ()
-        missing = self._missing_seed_keys(self.load_config())
+        missing = self._missing_seed_keys(self.load_config(), registered)
         if not missing:
             return ()
         with open(p, "a") as f:
@@ -713,6 +722,12 @@ class Config:
         if raw:
             return raw
         return self._required_str("editor")
+
+    def guidance_path(self):
+        return self._required_path("guidance-path")
+
+    def specs_path(self):
+        return self._required_path("specs-path")
 
     def backups_dir(self):
         return self._required_path("backups-dir")
