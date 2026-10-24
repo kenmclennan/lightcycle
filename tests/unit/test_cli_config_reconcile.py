@@ -8,7 +8,7 @@ class _Cfg:
     def __init__(self):
         self.reconciled = 0
 
-    def reconcile_config(self):
+    def reconcile_config(self, registered=None):
         self.reconciled += 1
 
     def is_worker(self):
@@ -18,6 +18,9 @@ class _Cfg:
 class _Container:
     def __init__(self):
         self.config = _Cfg()
+
+    def registered_seed_paths(self):
+        return {}
 
 
 class TestMainReconcilesConfig(unittest.TestCase):

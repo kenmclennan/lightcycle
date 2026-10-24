@@ -9,7 +9,7 @@ from tests.support.fake_store import FakeStore
 
 
 class _Cfg:
-    def reconcile_config(self):
+    def reconcile_config(self, registered=None):
         pass
 
     def is_worker(self):
@@ -20,6 +20,9 @@ class _Container:
     def __init__(self):
         self.config = _Cfg()
         self.store = FakeStore()
+
+    def registered_seed_paths(self):
+        return {}
 
 
 class TestMainRendersConfigErrorAsOneLine(unittest.TestCase):

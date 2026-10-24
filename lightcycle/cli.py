@@ -333,7 +333,7 @@ def main(argv=None):
     except (LiveStoreRefused, SchemaVersionRefused) as e:
         sys.stderr.write("%s\n" % e)
         return 1
-    _container.config.reconcile_config()
+    _container.config.reconcile_config(_container.registered_seed_paths())
     if not argv or argv[0] in ("-h", "--help"):
         print_help()
         return 0

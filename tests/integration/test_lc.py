@@ -2764,7 +2764,7 @@ class TestInitPullsWorkflows(unittest.TestCase):
         from lightcycle.frontmatter import split_frontmatter
         rc, out, err = call(_cli_mod.cmd_init)
         self.assertEqual(rc, 0, err)
-        kb = os.path.join(self.home, "workspace", "agent-guidance")
+        kb = os.path.join(self.root, "agent-guidance")
         self.assertIn(kb, out)
         self.assertEqual(self._git(kb, "rev-list", "--count", "HEAD"), "1")
         self.assertEqual(
@@ -2778,7 +2778,7 @@ class TestInitPullsWorkflows(unittest.TestCase):
 
     def test_second_init_leaves_the_guidance_repo_head_unchanged(self):
         call(_cli_mod.cmd_init)
-        kb = os.path.join(self.home, "workspace", "agent-guidance")
+        kb = os.path.join(self.root, "agent-guidance")
         head = self._git(kb, "rev-parse", "HEAD")
         rc, out, err = call(_cli_mod.cmd_init)
         self.assertEqual(rc, 0, err)

@@ -66,6 +66,8 @@ _SEED_KEYS = [
     ("audit-shortcode", "AUD"),
     ("held-comment-shortcode", "HLD"),
     ("guidance-shortcode", "GDN"),
+    ("guidance-path", "~/workspace/agent-guidance"),
+    ("specs-path", "~/workspace/specs"),
     ("trusted-authors", ""),
     ("memory-reserve-fraction", "0.65"),
     ("guidance-budget-bytes", "6144"),
@@ -110,12 +112,14 @@ schedule-ratchet-sweep:
 """
 
 
-def default_config_text():
-    return "".join("%s: %s\n" % (k, v) for k, v in _SEED_KEYS) + _SEED_SCHEDULES
+def default_config_text(overrides=None):
+    overrides = overrides or {}
+    return "".join("%s: %s\n" % (k, overrides.get(k, v)) for k, v in _SEED_KEYS) + _SEED_SCHEDULES
 
 
-def missing_seed_keys(existing):
-    return [(k, v) for k, v in _SEED_KEYS if k not in existing]
+def missing_seed_keys(existing, overrides=None):
+    overrides = overrides or {}
+    return [(k, overrides.get(k, v)) for k, v in _SEED_KEYS if k not in existing]
 
 
 def seed_key_names():

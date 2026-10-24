@@ -397,6 +397,24 @@ class TestReconcileConfig(unittest.TestCase):
         self.assertIn("max-agents: 5", text)
         self.assertIn("max-title-length: 72", text)
 
+    def test_seeds_missing_path_keys_from_registered_projects(self):
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "config")
+        Path(p).write_text("projects: /p\n")
+        c = Config(environ={"LC_CONFIG": p})
+        c.reconcile_config({"guidance-path": "/elsewhere/guidance", "specs-path": "/elsewhere/specs"})
+        self.assertEqual(c.load_config()["guidance-path"], "/elsewhere/guidance")
+        self.assertEqual(c.load_config()["specs-path"], "/elsewhere/specs")
+
+    def test_registered_path_beats_scratch_home_seed(self):
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "config")
+        Path(p).write_text("projects: /p\n")
+        c = Config(environ={"LC_CONFIG": p, "LC_HOME": d})
+        c.reconcile_config({"guidance-path": "/elsewhere/guidance"})
+        self.assertEqual(c.load_config()["guidance-path"], "/elsewhere/guidance")
+        self.assertEqual(c.load_config()["specs-path"], os.path.join(d, "specs"))
+
     def test_does_not_create_config_when_absent(self):
         d = tempfile.mkdtemp()
         p = os.path.join(d, "config")
