@@ -339,6 +339,21 @@ class StoreContractBase:
         self.assertEqual(node.blocked_by, [])
         self.assertEqual(node.deps, 0)
 
+    def test_delete_removes_the_items_passes_and_runs_and_leaves_another_items_alone(self):
+        s = self.make_store()
+        gone = s.create_item("gone", "a description", shortcode="GRID")
+        kept = s.create_item("kept", "a description", shortcode="GRID")
+        s.open_run(gone, s.open_pass(gone), "amend")
+        kept_pass = s.open_pass(kept)
+        kept_run = s.open_run(kept, kept_pass, "amend")
+
+        s.delete(gone)
+
+        self.assertEqual(s.passes_of(gone), [])
+        self.assertEqual(s.runs_of(gone), [])
+        self.assertEqual([p.id for p in s.passes_of(kept)], [kept_pass])
+        self.assertEqual([r.id for r in s.runs_of(kept)], [kept_run])
+
     def test_blocked_by_empty_when_no_dependencies(self):
         s = self.make_store()
         tid = self._step(s, "t", role="agent")

@@ -230,4 +230,6 @@ class ItemsAggregate:
         self._conn.execute("DELETE FROM artifacts WHERE item_id = ?", (tid,))
         self._conn.execute("DELETE FROM labels WHERE node_id = ?", (tid,))
         self._conn.execute("DELETE FROM history WHERE node_id = ?", (tid,))
+        self._conn.execute("DELETE FROM phase_runs WHERE item = ?", (tid,))
+        self._conn.execute("DELETE FROM passes WHERE item = ?", (tid,))
         self._commit()

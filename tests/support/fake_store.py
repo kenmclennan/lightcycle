@@ -1078,6 +1078,8 @@ class FakeStore(StorePort):
         self._records.pop(tid, None)
         self._deps.pop(tid, None)
         self._history.pop(tid, None)
+        self._passes = [p for p in self._passes if p.item != tid]
+        self._runs = [r for r in self._runs if r.item != tid]
 
     def add_project(
         self, identity, *, shortcode=None, local_path=None, remote=None, facets=None
