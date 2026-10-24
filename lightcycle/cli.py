@@ -78,6 +78,7 @@ from lightcycle.commands.feedback import cmd_guidance as cmd_guidance
 from lightcycle.commands.feedback import cmd_guidance_dir as cmd_guidance_dir
 from lightcycle.commands.feedback import cmd_guidance_check as cmd_guidance_check
 from lightcycle.commands.feedback import cmd_guidance_conventions as cmd_guidance_conventions
+from lightcycle.commands.feedback import cmd_review_yield as cmd_review_yield
 from lightcycle.commands.feedback import cmd_audit_criteria as cmd_audit_criteria
 from lightcycle.commands.feedback import cmd_worklog as cmd_worklog
 from lightcycle.commands.feedback import cmd_retro as cmd_retro
@@ -206,6 +207,8 @@ COMMAND_GROUPS = [
          "--check validates it against specs-remote"),
         ("guidance", "[--json]", "report each guidance entry's deliveries and citations and "
          "flag retirement candidates (read-only; counts cover steps still in the store)"),
+        ("review-yield", "[--since YYYY-MM-DD] [--json]", "report each review stage's verdicts, "
+         "findings, escapes after a pass and cost (read-only)"),
         ("guidance-dir", "[--check]", "print the resolved guidance repo directory (absolute "
          "path); --check validates it against the registered guidance remote"),
         ("guidance-check", "[--dir PATH] [--mode draft|final] [--base REF]", "check changed "

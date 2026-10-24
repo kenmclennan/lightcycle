@@ -21,6 +21,7 @@ from lightcycle.application.workflows.lifecycle import (
     directory_lifecycle,
     directory_lifecycle_problems,
 )
+from lightcycle.domain.flow.graph import parse_graph
 from lightcycle.domain.workflows.contract import ENGINE_CONTRACT, contract_compatible
 from lightcycle.domain.workflows.source import parse_source_manifest
 from lightcycle.ports.workflow_source import FetchedBundle, WorkflowSourceError
@@ -80,6 +81,46 @@ class CheckWorkflowDirUseCase:
             manifest=manifest, sha=DIR_SHA, steps=steps, workflows=workflows,
             fragments=fragments)
 
+    @staticmethod
+    def _bound_outcomes(bundle, role):
+        outcomes = set()
+        for text in bundle.workflows.values():
+            try:
+                graph = parse_graph(text or "")
+            except ValueError:
+                continue
+            for stage, routes in graph.edges.items():
+                if graph.file_for(stage) == role:
+                    outcomes.update(routes)
+        return outcomes
+
+    def _outcome_marker_problems(self, bundle, manifest):
+        problems = []
+        for role in sorted(bundle.steps):
+            step_meta, _ = split_frontmatter(bundle.steps[role] or "")
+            for key in ("review", "sends-back"):
+                if key not in step_meta:
+                    continue
+                declared = [
+                    o.strip() for o in str(step_meta[key] or "").split(",") if o.strip()]
+                if not declared:
+                    problems.append("step %s declares an empty %s:" % (role, key))
+                if key == "review" and len(declared) > 1:
+                    problems.append(
+                        "step %s declares review: %r; it takes one pass outcome"
+                        % (role, step_meta[key]))
+                known = self._bound_outcomes(bundle, role)
+                for outcome in declared:
+                    if outcome not in known:
+                        problems.append(
+                            "step %s declares %s: %s, which is not an outcome in an edges: "
+                            "line of any stage bound to it" % (role, key, outcome))
+                if manifest.requires_engine is None:
+                    problems.append(
+                        "step %s declares %s: but source.toml has no requires-engine; "
+                        "older engines would ignore it" % (role, key))
+        return problems
+
     def execute(self, directory, name) -> DirCheckResponse:
         if name is not None and ("/" in name or "@" in name):
             raise WorkflowSourceError(
@@ -129,6 +170,7 @@ class CheckWorkflowDirUseCase:
                     problems.append(
                         "step %s declares always-run: but source.toml has no requires-engine; "
                         "older engines would ignore it" % role)
+        problems.extend(self._outcome_marker_problems(bundle, manifest))
         lifecycle_found = {}
         scripts = WorkflowScripts(self._bundle, self._fs, self._config)
         for wf_name in names:

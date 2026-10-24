@@ -1,3 +1,4 @@
+from lightcycle.domain.feedback import ReviewEscape
 from lightcycle.domain.runs import Pass, PhaseRun, RunState, run_id
 from lightcycle.adapters.sqlite.shared import _RUN_SELECT
 
@@ -136,3 +137,24 @@ class RunsAggregate:
     def set_step_pass(self, tid, pid):
         self._conn.execute("UPDATE steps SET pass_id = ? WHERE id = ?", (pid, tid))
         self._commit()
+
+    _ESCAPE_COLUMNS = (
+        "trigger_step, item, run_id, verdict_step, via, at, note, source, authors"
+    )
+
+    def record_escape(self, escape):
+        self._conn.execute(
+            "INSERT OR IGNORE INTO review_escapes (%s) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            % self._ESCAPE_COLUMNS,
+            (escape.trigger_step, escape.item, escape.run_id, escape.verdict_step, escape.via,
+             escape.at, escape.note, escape.source, escape.authors),
+        )
+        self._commit()
+
+    def escapes_since(self, since_date):
+        rows = self._conn.execute(
+            "SELECT %s FROM review_escapes WHERE substr(at, 1, 10) >= ? ORDER BY at, trigger_step"
+            % self._ESCAPE_COLUMNS,
+            (since_date,),
+        ).fetchall()
+        return [ReviewEscape(*r) for r in rows]

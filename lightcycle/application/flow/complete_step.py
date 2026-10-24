@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from lightcycle.application.errors import UseCaseError
+from lightcycle.application.flow.escapes import EscapeRecorder
 from lightcycle.application.flow.engine_steps import (
     AUDIT_STEP, DAILY_SUMMARY_STEP, FINDINGS_STEP, HELD_COMMENT_ORIGIN_LABEL, HELD_COMMENT_STEP,
     LIFECYCLE_FAILURE_STEP, LIFECYCLE_ORIGIN_LABEL, MATERIAL_AUDIT_STEP, RETRO_ORIGIN_LABEL,
@@ -67,6 +68,7 @@ class CompleteStepUseCase:
         self._inputs = StepInputs(store, flow)
         self._outputs = ItemOutputs(store, flow)
         self._closer = CloseItemUseCase(store, worktrees)
+        self._escapes = EscapeRecorder(store)
 
     def _expected_assignee(self):
         return self._config.spawn_id() if self._config else None
@@ -233,15 +235,19 @@ class CompleteStepUseCase:
         fired = transition.escalation if transition else None
         response = self._complete(
             t, input, spec=spec, ends_pass=ends_pass, enrol=enrol,
-            writes=self._workflow_writes(t, input, transition),
+            writes=self._workflow_writes(t, input, transition, name=name),
         )
         if fired is not None and response.next_step:
             self._store.note_condition(response.next_step, _cap_note(fired, t.stage))
         return response
 
-    def _workflow_writes(self, t, input: CompleteInput, transition, repair=False):
+    def _workflow_writes(self, t, input: CompleteInput, transition, repair=False, name=None):
         def writes(new):
             ScheduleCompletion(self._store, self._flow).execute(t, input.outcome)
+            if not repair:
+                flow = self._flow.load_flow(name)
+                if input.outcome in flow.step_def(t.stage).sends_back:
+                    self._escapes.record_change_request(flow, t, input.note)
             if repair:
                 target = self._human_successor(t)
             elif new and transition and transition.to_role == "human":

@@ -27,11 +27,12 @@ from lightcycle.domain.feedback.trust import (
     hold_key,
     standing,
 )
+from lightcycle.domain.feedback.review_yield import ReviewEscape
 from lightcycle.domain.feedback.signal import UNLABELED_MODEL, SignalSpec, Signals
 from lightcycle.domain.feedback.worklog import Worklog, WorklogEntry
 
 __all__ = [
-    "ADMIT", "APPROVED", "DISPATCHED", "HELD", "HELD_COMMENT_ORIGIN_LABEL", "HOLD", "HeldComment",
+    "ReviewEscape", "ADMIT", "APPROVED", "DISPATCHED", "HELD", "HELD_COMMENT_ORIGIN_LABEL", "HOLD", "HeldComment",
     "KIND_INLINE", "KIND_MENTION", "KIND_REVIEW", "REJECTED", "can_transition", "hold_key",
     "standing",
     "Duration", "LC_MARKER", "Period", "RETRO_ORIGIN_LABEL", "RETROED_LABEL", "Reflection", "Retro", "SignalSpec", "Signals",

@@ -140,7 +140,7 @@ _TX_ATTRS = (
     "_history", "_projects", "_tool_usage", "_backfill_log", "_usage_accrual_state",
     "_counters", "_daily_summaries", "_holds",
     "_schedule_run_requests", "_step_inputs", "_artifact_seq", "_feedback_cutoffs",
-    "_pool_updates",
+    "_pool_updates", "_escapes",
 )
 
 
@@ -150,6 +150,7 @@ class FakeStore(StorePort):
         self._labels = {}
         self._passes = []
         self._runs = []
+        self._escapes = {}
         self._deps = {}
         self._history = {}
         self._projects = {}
@@ -294,6 +295,23 @@ class FakeStore(StorePort):
             a for a in (meta.get("artifacts") or []) if a.get("type") != atype
         ]
         b["metadata"] = meta
+
+    def artifacts_of_type(self, atype):
+        found = []
+        for item_id, b in self._records.items():
+            for a in ((b.get("metadata") or {}).get("artifacts") or []):
+                if a.get("type") == atype:
+                    found.append((a.get("seq", 0), item_id, Artifact.from_dict(a)))
+        return [(item_id, artifact) for _seq, item_id, artifact in sorted(
+            found, key=lambda f: f[0])]
+
+    def record_escape(self, escape):
+        self._escapes.setdefault(escape.trigger_step, escape)
+
+    def escapes_since(self, since_date):
+        return sorted(
+            (e for e in self._escapes.values() if e.at[:10] >= since_date),
+            key=lambda e: (e.at, e.trigger_step))
 
     def all_nodes(self):
         return self.all_steps() + self.all_items()
@@ -1076,6 +1094,7 @@ class FakeStore(StorePort):
                 if other and other.get("state") != "done":
                     other["dep_count"] = max(0, (other.get("dep_count") or 0) - 1)
         self._records.pop(tid, None)
+        self._escapes = {k: e for k, e in self._escapes.items() if e.item != tid}
         self._deps.pop(tid, None)
         self._history.pop(tid, None)
         self._passes = [p for p in self._passes if p.item != tid]

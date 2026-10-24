@@ -4,6 +4,12 @@ from typing import Optional
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.setup.project_registry import ProjectRegistry
 from lightcycle.application.work.resolve_project_ref import resolve_project_ref
+from lightcycle.domain.feedback.review_yield import (
+    CAUSED_BY,
+    FOUND_BY,
+    REVIEW_FINDINGS,
+    parse_findings,
+)
 from lightcycle.domain.guidance.guidance import parse_citation
 from lightcycle.domain.runs import RUN_FIELDS
 from lightcycle.domain.work import State
@@ -44,6 +50,14 @@ class LinkArtifactUseCase:
             return
         if input.atype == GUIDANCE_CITED:
             self._record_citation(input)
+            return
+        if input.atype in (CAUSED_BY, FOUND_BY):
+            raise UseCaseError(
+                "'%s' is set when creating or editing an item: use `lc new item --%s` or "
+                "`lc set <item> --%s`" % (input.atype, input.atype, input.atype)
+            )
+        if input.atype == REVIEW_FINDINGS:
+            self._record_findings(input)
             return
         if input.replace:
             self._store.replace_artifact(
@@ -104,6 +118,34 @@ class LinkArtifactUseCase:
             step_id, GUIDANCE_CITED, "\n".join(ids), input.label,
             internal=True, kind=input.kind,
         )
+
+    def _record_findings(self, input):
+        step_id = input.item
+        try:
+            node = self._store.get_node(step_id)
+        except (KeyError, NodeNotFoundError):
+            node = None
+        if node is None or node.type != "step":
+            raise UseCaseError(
+                "'%s' is not a step - review-findings attaches to the review step" % step_id
+            )
+        if self._flow is None or self._flow.flow_for(node).step_def(node.stage).review is None:
+            raise UseCaseError(
+                "step '%s' (%s) is not a review step - its step file declares no review: key"
+                % (step_id, node.stage)
+            )
+        try:
+            parse_findings(input.value)
+        except ValueError as e:
+            raise UseCaseError("%s" % e)
+        exists = any(a.type == REVIEW_FINDINGS for a in self._store.item_artifacts(step_id))
+        if exists and not input.replace:
+            raise UseCaseError(
+                "step '%s' already has review-findings - pass --replace to overwrite them"
+                % step_id
+            )
+        write = self._store.replace_artifact if exists else self._store.add_artifact
+        write(step_id, REVIEW_FINDINGS, input.value, input.label, internal=True, kind=input.kind)
 
     def _derive_project_if_unset(self, item, repo):
         try:

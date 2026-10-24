@@ -49,6 +49,18 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def artifacts_of_type(self, atype):
+        pass
+
+    @abstractmethod
+    def record_escape(self, escape):
+        pass
+
+    @abstractmethod
+    def escapes_since(self, since_date):
+        pass
+
+    @abstractmethod
     def all_nodes(self):
         pass
 

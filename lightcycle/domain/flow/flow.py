@@ -84,6 +84,8 @@ class Flow:
         escalation = {}
         github_heavy = {}
         always_run = {}
+        review = {}
+        sends_back = {}
         scripts = {}
         presents = {}
         details = {}
@@ -94,6 +96,9 @@ class Flow:
             escalation[stage] = bool(meta.get("escalation"))
             github_heavy[stage] = str(meta.get("github") or "").strip() == "heavy"
             always_run[stage] = str(meta.get("always-run") or "").strip().lower() == "true"
+            review[stage] = str(meta.get("review") or "").strip() or None
+            sends_back[stage] = tuple(
+                o.strip() for o in str(meta.get("sends-back") or "").split(",") if o.strip())
             declared = meta.get("presents")
             if declared:
                 presents[stage] = str(declared).strip()
@@ -118,6 +123,8 @@ class Flow:
                 escalation=escalation.get(stage, False),
                 github_heavy=github_heavy.get(stage, False),
                 always_run=always_run.get(stage, False),
+                review=review.get(stage),
+                sends_back=sends_back.get(stage, ()),
                 script=scripts.get(stage),
                 presents=presents.get(stage),
                 detail=details.get(stage),
