@@ -12,6 +12,7 @@ from lightcycle.domain.work import (
 )
 from lightcycle.domain.work.state import ALIASES
 from lightcycle.application.work.activate_item import ActivateItemInput, ActivateItemUseCase
+from lightcycle.application.work.link_source import LinkSourceUseCase
 from lightcycle.application.work.resolve_backlog import link_resolves
 from lightcycle.application.work.return_to_backlog import (
     ReturnToBacklogInput, ReturnToBacklogUseCase,
@@ -62,17 +63,25 @@ def cmd_new(argv):
     if a.type == "item" and a.note:
         sys.stderr.write("--note belongs to a step, not an item; use --description\n")
         return 2
+    if a.type == "step" and (a.caused_by or a.found_by):
+        named = ", ".join(
+            f for f, v in (("--caused-by", a.caused_by), ("--found-by", a.found_by)) if v)
+        sys.stderr.write("%s belong to an item, not a step\n" % named)
+        return 2
     if a.type == "item":
         if a.parent:
             sys.stderr.write("items are top-level; --parent applies to 'lc new step'\n")
             return 2
+        sources = LinkSourceUseCase(container().store)
         try:
+            sources.check(a.caused_by, a.found_by)
             resp = CreateItemUseCase(container().store, container().config).execute(
                 CreateItemInput(
                     title=a.title, description=a.description, project=a.project,
                     workflow=a.workflow, repo=a.repo, backlog=a.backlog,
                 )
             )
+            sources.execute(resp.id, a.caused_by, a.found_by)
         except FieldRefusalError as e:
             sys.stderr.write("%s\n" % render_field_refusal(e.refusal))
             return 1
@@ -125,7 +134,8 @@ def _reject_flags_ineffective_for_state(a):
         return None
     offending = [
         f for f in ALLOWED_STATES_BY_FLAG
-        if getattr(a, f) is not None and a.state not in ALLOWED_STATES_BY_FLAG[f]
+        if getattr(a, f.replace("-", "_")) is not None
+        and a.state not in ALLOWED_STATES_BY_FLAG[f]
     ]
     if not offending:
         return None
@@ -221,7 +231,8 @@ def cmd_set(argv):
         sys.stderr.write("unknown node '%s'\n" % a.id)
         return 1
     settable = FIELDS_BY_TYPE["item"] | FIELDS_BY_TYPE["step"]
-    given_values = {f for f in settable if getattr(a, f, None) is not None}
+    given_values = {
+        f for f in settable if getattr(a, f.replace("-", "_"), None) is not None}
     unset_fields = set(a.unset or [])
     msg = (
         _reject_blank_values(a)
@@ -271,7 +282,7 @@ def cmd_set(argv):
             ReturnToBacklogUseCase(container().store).execute(ReturnToBacklogInput(item=a.id))
             return 0
         if a.state == State.WAITING.value:
-            truthy_given = {f for f in given_values if getattr(a, f)}
+            truthy_given = {f for f in given_values if getattr(a, f.replace("-", "_"))}
             missing = missing_for_state(State.WAITING.value, truthy_given)
             if missing:
                 field = missing[0]
@@ -325,6 +336,18 @@ def cmd_set(argv):
         resolved_project = a.project
     effective_project = "" if "project" in unset_fields else resolved_project
     effective_notes = "" if "notes" in unset_fields else a.notes
+    source_unset = tuple(f for f in ("caused-by", "found-by") if f in unset_fields)
+    if a.caused_by or a.found_by or source_unset:
+        try:
+            LinkSourceUseCase(container().store).execute(
+                a.id, a.caused_by, a.found_by, source_unset)
+        except UseCaseError as e:
+            sys.stderr.write("%s\n" % e)
+            return 1
+        edit_fields = ("title", "description", "project", "workflow", "label", "notes", "backlog")
+        if not any(getattr(a, f) is not None for f in edit_fields) and not (
+                unset_fields - set(source_unset)):
+            return 0
     try:
         tid = EditNodeUseCase(container().store, container().config).execute(
             EditNodeInput(step=a.id, title=a.title, description=effective_description,

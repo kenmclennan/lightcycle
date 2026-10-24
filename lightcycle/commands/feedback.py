@@ -16,6 +16,7 @@ from lightcycle.application.feedback import (
 from lightcycle.application.work.resolve_project_ref import resolve_project_ref
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.inspect.check_guidance import CheckGuidanceUseCase
+from lightcycle.application.feedback.review_yield import ReviewYieldUseCase
 from lightcycle.application.inspect.show_audit_criteria import ShowAuditCriteriaUseCase
 from lightcycle.domain.work.audit_criteria import UnknownMaterial
 from lightcycle.application.inspect.report_guidance import ReportGuidanceUseCase, parse_since
@@ -77,6 +78,27 @@ def _guidance_approval_text(row):
     if row.verified:
         text = "%s verified: %s" % (text, row.verified) if text != "-" else "verified: %s" % row.verified
     return text
+
+
+def cmd_review_yield(argv):
+    a = build_parser(COMMANDS["review-yield"]).parse_args(argv)
+    c = container()
+    try:
+        report = ReviewYieldUseCase(c.store, _flow()).execute(parse_since(a.since))
+    except UseCaseError as e:
+        sys.stderr.write("%s\n" % e)
+        return 1
+    if a.json:
+        print(json.dumps(report, indent=2))
+        return 0
+    print("window: since %s" % report["since"] if report["since"] else "window: all steps in the store")
+    for g in report["stages"]:
+        print("%s %s: %d verdicts (%d pass, %d reject), %d findings, %d escapes, $%.2f" % (
+            g["workflow"] or "-", g["stage"], g["verdicts"], g["passes"], g["rejections"],
+            g["findings"]["count"], g["escapes"]["count"], g["cost_usd"]))
+    print("unattributed escapes: %d" % len(report["unattributed_escapes"]))
+    print("undeclared steps: %d" % report["undeclared_steps"])
+    return 0
 
 
 def cmd_guidance(argv):

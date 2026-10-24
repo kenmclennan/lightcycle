@@ -84,6 +84,21 @@ class TestHeldCommentsSchema(unittest.TestCase):
         self.assertTrue(reopened.file_hold("R-1", "inline:1", "m", "b", None, None, 1.0))
 
 
+class TestReviewEscapesSchema(unittest.TestCase):
+    def test_the_table_has_its_key_and_two_indexes_and_no_foreign_key(self):
+        conn = make_sqlite_store()._conn
+        columns = [r[1] for r in conn.execute("PRAGMA table_info(review_escapes)")]
+        self.assertEqual(columns, [
+            "trigger_step", "item", "run_id", "verdict_step", "via", "at", "note",
+            "source", "authors"])
+        indexes = {r[1] for r in conn.execute("PRAGMA index_list(review_escapes)")
+                   if not r[1].startswith("sqlite_autoindex")}
+        self.assertEqual(indexes, {"idx_review_escapes_item", "idx_review_escapes_verdict"})
+        self.assertEqual(list(conn.execute("PRAGMA foreign_key_list(review_escapes)")), [])
+        self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], _SCHEMA_VERSION)
+        self.assertEqual(_SCHEMA_VERSION, 3)
+
+
 class TestPrFeedbackSchema(unittest.TestCase):
     def test_the_tables_have_the_designed_columns_and_only_autoindexes(self):
         s = make_sqlite_store()

@@ -146,6 +146,10 @@ COMMANDS = {
         Arg("--base", default="origin/main", metavar="REF"),
     )),
     "guidance-conventions": CommandSpec(prog="lc guidance-conventions"),
+    "review-yield": CommandSpec(prog="lc review-yield", args=(
+        Arg("--json", action="store_true"),
+        Arg("--since", metavar="YYYY-MM-DD", help="count verdicts and escapes on/after date"),
+    )),
     "audit-criteria": CommandSpec(prog="lc audit-criteria", args=(
         Arg("material"),
     )),
@@ -211,6 +215,8 @@ COMMANDS = {
         Arg("--workflow"), Arg("--project"), Arg("--repo"), Arg("--description"),
         Arg("--note", nargs="+", help="an observation for whoever picks the step up"),
         Arg("--backlog", action="append"), Arg("--step"),
+        Arg("--caused-by", action="append", help="item id of the work this item fixes"),
+        Arg("--found-by", help="how the defect was found, one token"),
     )),
     "set": CommandSpec(prog="lc set", args=(
         *(Arg("--%s" % opt) for opt in (
@@ -223,6 +229,8 @@ COMMANDS = {
         )),
         Arg("--backlog", action="append"),
         Arg("--depends", action="append", help="item id to gate activation on, not a step"),
+        Arg("--caused-by", action="append", help="item id of the work this item fixes"),
+        Arg("--found-by", help="how the defect was found, one token"),
         Arg("--unset", action="append"), Arg("id"),
     )),
     "attach": CommandSpec(prog="lc attach", args=(

@@ -42,6 +42,8 @@ class StepDef:
     detail: Optional[Tuple[str, ...]] = None
     github_heavy: bool = False
     always_run: bool = False
+    review: Optional[str] = None
+    sends_back: Tuple[str, ...] = ()
 
     def __post_init__(self):
         object.__setattr__(self, "routes", MappingProxyType(dict(self.routes)))

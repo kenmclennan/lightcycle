@@ -215,6 +215,20 @@ CREATE TABLE IF NOT EXISTS phase_runs (
 
 CREATE INDEX IF NOT EXISTS idx_phase_runs_item ON phase_runs(item);
 
+CREATE TABLE IF NOT EXISTS review_escapes (
+    trigger_step TEXT PRIMARY KEY,
+    item         TEXT NOT NULL,
+    run_id       TEXT NOT NULL,
+    verdict_step TEXT NOT NULL,
+    via          TEXT NOT NULL,
+    at           TEXT NOT NULL,
+    note         TEXT,
+    source       TEXT NOT NULL,
+    authors      TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_review_escapes_item ON review_escapes(item);
+CREATE INDEX IF NOT EXISTS idx_review_escapes_verdict ON review_escapes(verdict_step);
+
 CREATE TABLE IF NOT EXISTS projects (
     identity   TEXT PRIMARY KEY,
     shortcode  TEXT,

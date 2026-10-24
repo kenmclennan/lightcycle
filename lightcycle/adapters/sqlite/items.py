@@ -17,6 +17,17 @@ class ItemsAggregate:
             for r in rows
         ]
 
+    def artifacts_of_type(self, atype):
+        rows = self._conn.execute(
+            "SELECT item_id, value, label, internal, kind FROM artifacts "
+            "WHERE atype = ? ORDER BY rowid",
+            (atype,),
+        ).fetchall()
+        return [
+            (r[0], Artifact(type=atype, value=r[1], label=r[2], internal=bool(r[3]), kind=r[4]))
+            for r in rows
+        ]
+
     def default_kind_for(self, atype):
         return default_kind_for(atype, context_types=self._config.context_artifact_types())
 
@@ -230,6 +241,7 @@ class ItemsAggregate:
         self._conn.execute("DELETE FROM artifacts WHERE item_id = ?", (tid,))
         self._conn.execute("DELETE FROM labels WHERE node_id = ?", (tid,))
         self._conn.execute("DELETE FROM history WHERE node_id = ?", (tid,))
+        self._conn.execute("DELETE FROM review_escapes WHERE item = ?", (tid,))
         self._conn.execute("DELETE FROM phase_runs WHERE item = ?", (tid,))
         self._conn.execute("DELETE FROM passes WHERE item = ?", (tid,))
         self._commit()

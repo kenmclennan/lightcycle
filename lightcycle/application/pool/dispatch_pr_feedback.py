@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import List
 
 from lightcycle.application.flow.complete_step import CompleteInput
+from lightcycle.application.flow.escapes import EscapeRecorder
 from lightcycle.application.pool.pr_lookups import (
     _MIN_TIMESTAMP,
     flow_for,
@@ -70,6 +71,7 @@ class DispatchPrFeedbackUseCase:
         self._complete = complete
         self._trusted_authors = trusted_authors
         self._hold = HoldCommentUseCase(store, held_shortcode)
+        self._escapes = EscapeRecorder(store)
 
     def _note_gh_read_failure(self, step_id, failure):
         if isinstance(failure, NotYetRead):
@@ -152,17 +154,23 @@ class DispatchPrFeedbackUseCase:
             admitted=admitted, approved=self._store.approved_holds(run.id), cutoff=since)
 
     def _open_feedback_step(self, step, flow, feedback_step, run, outstanding):
-        role = flow.step_def(feedback_step).owner
-        tid = self._store.create_step(stage=feedback_step, role=role, item=step.item)
-        self._store.set_watched_step(tid, step.id)
-        keys = [h.key for h in outstanding.admitted + outstanding.approved]
-        self._store.add_artifact(tid, "admitted-comments", "\n".join(keys), internal=True)
-        self._store.add_artifact(tid, "feedback-cutoff", str(outstanding.cutoff), internal=True)
-        for held in outstanding.approved:
-            self._store.mark_hold_dispatched(run.id, held.key)
-        if outstanding.admitted:
-            newest = max(h.created_at for h in outstanding.admitted)
-            self._store.set_comments_dispatched_through(run.id, str(newest))
+        with self._store.transaction():
+            role = flow.step_def(feedback_step).owner
+            tid = self._store.create_step(stage=feedback_step, role=role, item=step.item)
+            self._store.set_watched_step(tid, step.id)
+            comments = outstanding.admitted + outstanding.approved
+            keys = [h.key for h in comments]
+            self._store.add_artifact(tid, "admitted-comments", "\n".join(keys), internal=True)
+            self._store.add_artifact(
+                tid, "feedback-cutoff", str(outstanding.cutoff), internal=True)
+            for held in outstanding.approved:
+                self._store.mark_hold_dispatched(run.id, held.key)
+            if outstanding.admitted:
+                newest = max(h.created_at for h in outstanding.admitted)
+                self._store.set_comments_dispatched_through(run.id, str(newest))
+            self._escapes.record_pr_comment(
+                flow, tid, step.item, run, keys, [h.author for h in comments],
+                self._trusted_authors())
 
     def _recorded_tip(self, step_id):
         found = None

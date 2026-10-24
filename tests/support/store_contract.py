@@ -29,6 +29,51 @@ class StoreContractBase:
         self.assertIsNone(s.item_workflow("nope"))
         self.assertIsNone(s.item_workflow(step))
 
+    def _escape(self, trigger, item, at, **kw):
+        from lightcycle.domain.feedback import ReviewEscape
+
+        fields = dict(
+            trigger_step=trigger, item=item, run_id="r", verdict_step="v", via="change-request",
+            at=at, note="n", source="unknown", authors=None)
+        fields.update(kw)
+        return ReviewEscape(**fields)
+
+    def test_record_escape_is_idempotent_on_the_trigger_step(self):
+        s = self.make_store()
+        s.record_escape(self._escape("t1", "i1", "2026-10-02T10:00:00+01:00", note="first"))
+        s.record_escape(self._escape("t1", "i1", "2026-10-02T11:00:00+01:00", note="second"))
+        rows = s.escapes_since("2026-10-01")
+        self.assertEqual([(e.trigger_step, e.note) for e in rows], [("t1", "first")])
+
+    def test_escapes_since_filters_on_the_date_prefix_of_at(self):
+        s = self.make_store()
+        s.record_escape(self._escape("t1", "i1", "2026-09-30T23:59:59+01:00"))
+        s.record_escape(self._escape("t2", "i1", "2026-10-01T00:00:01+01:00"))
+        s.record_escape(self._escape("t3", "i1", "2026-10-05T08:00:00+01:00"))
+        self.assertEqual(
+            [e.trigger_step for e in s.escapes_since("2026-10-01")], ["t2", "t3"])
+
+    def test_deleting_an_item_removes_its_escape_rows(self):
+        s = self.make_store()
+        keep = s.create_item("k", "d", shortcode="LC")
+        gone = s.create_item("g", "d", shortcode="LC")
+        s.record_escape(self._escape("t1", keep, "2026-10-02T10:00:00+01:00"))
+        s.record_escape(self._escape("t2", gone, "2026-10-02T10:00:00+01:00"))
+        s.delete(gone)
+        self.assertEqual([e.trigger_step for e in s.escapes_since("")], ["t1"])
+
+    def test_artifacts_of_type_returns_internal_ones_across_nodes_in_insertion_order(self):
+        s = self.make_store()
+        a = s.create_item("a", "d", shortcode="LC")
+        b = s.create_item("b", "d", shortcode="LC")
+        s.add_artifact(a, "caused-by", "x", internal=True)
+        s.add_artifact(b, "caused-by", "y")
+        s.add_artifact(a, "other", "z")
+        s.add_artifact(a, "caused-by", "w", internal=True)
+        found = s.artifacts_of_type("caused-by")
+        self.assertEqual([(i, art.value) for i, art in found], [(a, "x"), (b, "y"), (a, "w")])
+        self.assertTrue(found[0][1].internal)
+
     def test_schedule_run_request_is_recorded_idempotently_and_cleared(self):
         s = self.make_store()
         self.assertFalse(s.schedule_run_requested("weekly"))

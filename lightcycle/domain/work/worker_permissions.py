@@ -1,9 +1,10 @@
 WORKER_VERBS = ("claim", "done", "show", "attach", "retro", "backlog", "search", "peek",
                 "guidance", "guidance-dir", "guidance-check",
-                "guidance-conventions")
+                "guidance-conventions", "review-yield")
 
 _SET_FORBIDDEN_FIELDS = (
     "title", "description", "project", "workflow", "backlog", "label", "step", "unset",
+    "caused_by", "found_by",
 )
 
 ATTACH_FORBIDDEN_TYPES = ("repo", "resolves", "resolved-by")

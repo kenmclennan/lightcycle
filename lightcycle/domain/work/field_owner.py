@@ -5,7 +5,8 @@ from lightcycle.domain.work.state import ALIASES, State
 
 FIELDS_BY_TYPE = {
     "item": frozenset(
-        {"title", "description", "project", "workflow", "label", "backlog", "step", "depends"}
+        {"title", "description", "project", "workflow", "label", "backlog", "step", "depends",
+         "caused-by", "found-by"}
     ),
     "step": frozenset({"notes", "needs", "reason", "tried", "label"}),
 }
@@ -32,10 +33,11 @@ ALLOWED_STATES_BY_FLAG = {
     "depends": ("active",),
     "needs": (State.WAITING.value,), "reason": (State.WAITING.value,),
     "tried": (State.WAITING.value,),
+    "caused-by": (None,), "found-by": (None,),
     "unset": (None,),
 }
 
-UNSETTABLE_FIELDS = ("description", "project", "workflow", "notes")
+UNSETTABLE_FIELDS = ("description", "project", "workflow", "notes", "caused-by", "found-by")
 
 UNSET_REFUSAL_REASONS = {
     "title": "title-not-clearable",

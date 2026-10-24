@@ -13,6 +13,7 @@ class TestWorkerPermitted(unittest.TestCase):
     def test_every_forbidden_set_field_individually_forbids_set(self):
         for field in (
             "title", "description", "project", "workflow", "backlog", "label", "step", "unset",
+            "caused_by", "found_by",
         ):
             flags = {"state": "waiting", field: "x"}
             self.assertFalse(worker_permitted("set", flags), field)
@@ -77,7 +78,7 @@ class TestWorkerPermittedAttach(unittest.TestCase):
 class TestWorkerRefusalMessage(unittest.TestCase):
     def test_message_lists_all_eight_verbs(self):
         self.assertIn(
-            "claim, done, show, attach, retro, backlog, search, peek, guidance, guidance-dir, guidance-check, guidance-conventions, set --state waiting",
+            "claim, done, show, attach, retro, backlog, search, peek, guidance, guidance-dir, guidance-check, guidance-conventions, review-yield, set --state waiting",
             worker_refusal_message("rm"),
         )
 

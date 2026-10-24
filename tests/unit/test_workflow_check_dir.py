@@ -421,6 +421,74 @@ class TestAlwaysRunKeyChecks(unittest.TestCase):
         self.assertIn("declares always-run: but source.toml has no requires-engine", err)
 
 
+class TestOutcomeMarkerKeyChecks(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self._count = iter(range(100))
+        cli.set_container(_Container())
+
+    def _build(self, step_file, line, requires=True):
+        root = _bundle(os.path.join(self.tmp, str(next(self._count))))
+        step = os.path.join(root, "steps", step_file + ".md")
+        with open(step) as f:
+            text = f.read()
+        if text.startswith("---\n"):
+            text = text.replace("---\n", "---\n%s\n" % line, 1)
+        else:
+            text = "---\n%s\n---\n%s" % (line, text)
+        with open(step, "w") as f:
+            f.write(text)
+        if requires:
+            with open(os.path.join(root, "source.toml"), "a") as f:
+                f.write('requires-engine = ">=0.6.0"\n')
+        return root
+
+    def test_a_review_outcome_the_stage_can_emit_reports_nothing(self):
+        rc, _out, err = run_check(
+            "--dir", self._build("review-code", "review: done"), "spec-driven")
+        self.assertEqual(rc, 0, err)
+
+    def test_a_terminal_outcome_written_without_a_target_counts(self):
+        rc, _out, err = run_check(
+            "--dir", self._build("await-merge", "sends-back: changes, merged"), "spec-driven")
+        self.assertEqual(rc, 0, err)
+
+    def test_an_empty_review_value_is_reported(self):
+        rc, _out, err = run_check("--dir", self._build("review-code", "review:"), "spec-driven")
+        self.assertEqual(rc, 1)
+        self.assertIn("step review-code declares an empty review:", err)
+
+    def test_an_empty_sends_back_value_is_reported(self):
+        rc, _out, err = run_check(
+            "--dir", self._build("await-merge", "sends-back:"), "spec-driven")
+        self.assertEqual(rc, 1)
+        self.assertIn("step await-merge declares an empty sends-back:", err)
+
+    def test_a_review_outcome_no_bound_stage_emits_is_reported(self):
+        rc, _out, err = run_check(
+            "--dir", self._build("review-code", "review: approved"), "spec-driven")
+        self.assertEqual(rc, 1)
+        self.assertIn("declares review: approved, which is not an outcome", err)
+
+    def test_a_sends_back_outcome_no_bound_stage_emits_is_reported(self):
+        rc, _out, err = run_check(
+            "--dir", self._build("await-merge", "sends-back: changes, nope"), "spec-driven")
+        self.assertEqual(rc, 1)
+        self.assertIn("declares sends-back: nope, which is not an outcome", err)
+
+    def test_either_key_without_requires_engine_is_reported(self):
+        rc, _out, err = run_check(
+            "--dir", self._build("review-code", "review: done", requires=False), "spec-driven")
+        self.assertEqual(rc, 1)
+        self.assertIn("declares review: but source.toml has no requires-engine", err)
+        rc, _out, err = run_check(
+            "--dir", self._build("await-merge", "sends-back: changes", requires=False),
+            "spec-driven")
+        self.assertEqual(rc, 1)
+        self.assertIn("declares sends-back: but source.toml has no requires-engine", err)
+
+
 class TestWorkflowCheckDirScriptStages(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
