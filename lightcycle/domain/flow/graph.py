@@ -109,10 +109,20 @@ def parse_graph(text):
             elif head == "provides":
                 provides = frozenset(value.split())
             elif head == "workspace" and value:
+                if len(value.split()) > 1:
+                    raise ValueError(
+                        "line %d: workspace expected a single workspace name or a section "
+                        "head, got %r" % (line_no, value)
+                    )
                 workspace = value
                 workspace_declared = True
             elif head == "workspace":
                 section = "workspace"
+            elif head in ("phase",) + _SECTIONS and value:
+                raise ValueError(
+                    "line %d: %s is a section head and takes no value on its line, got %r"
+                    % (line_no, head, value)
+                )
             elif head == "phase":
                 section = "phase"
             elif head in _SECTIONS and line.rstrip().endswith(":"):
