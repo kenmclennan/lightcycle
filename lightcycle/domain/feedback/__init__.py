@@ -7,6 +7,7 @@ from lightcycle.domain.feedback.review import (
     outstanding_reviews,
     outstanding_threads,
     parse_decision,
+    parse_decision_sha,
     review_has_signal,
     thread_key,
 )
@@ -35,6 +36,6 @@ __all__ = [
     "standing",
     "Duration", "LC_MARKER", "Period", "RETRO_ORIGIN_LABEL", "RETROED_LABEL", "Reflection", "Retro", "SignalSpec", "Signals",
     "UNLABELED_MODEL", "Worklog", "WorklogEntry", "outstanding_reviews",
-    "outstanding_threads", "parse_decision", "parse_reflections", "reflections_of",
+    "outstanding_threads", "parse_decision", "parse_decision_sha", "parse_reflections", "reflections_of",
     "review_has_signal", "thread_key",
 ]

@@ -3,6 +3,7 @@ import re
 LC_MARKER = "<!-- lc -->"
 
 _DECISION_RE = re.compile(r"<!-- lc:decision=(\w+) -->")
+_SHA_RE = re.compile(r"<!-- lc:sha=(\w+) -->")
 
 
 def thread_key(comment):
@@ -43,4 +44,9 @@ def outstanding_reviews(reviews, inline_comments, mention_token):
 
 def parse_decision(body):
     m = _DECISION_RE.search(body)
+    return m.group(1) if m else None
+
+
+def parse_decision_sha(body):
+    m = _SHA_RE.search(body)
     return m.group(1) if m else None

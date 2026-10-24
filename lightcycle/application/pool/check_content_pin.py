@@ -5,7 +5,7 @@ from lightcycle.application.pool.pr_lookups import (
     latest_step,
 )
 from lightcycle.config import ConfigError
-from lightcycle.domain.feedback import LC_MARKER, parse_decision
+from lightcycle.domain.feedback import LC_MARKER, parse_decision, parse_decision_sha
 from lightcycle.domain.work import State
 from lightcycle.ports.github import ReadFailure
 
@@ -21,7 +21,7 @@ class CheckContentPinUseCase:
         step = active_step_in_phase(self._store, self._flow_service, item_id, phase)
         return step or active_step_any(self._store, item_id)
 
-    def _unauthorized_drops(self, pr_value, dropped):
+    def _unauthorized_drops(self, pr_value, dropped, pin):
         top_level = self._github.comments_since(pr_value, 0.0)
         inline = self._github.pull_comments(pr_value, 0.0)
         reviews = self._github.reviews(pr_value, 0.0)
@@ -29,20 +29,27 @@ class CheckContentPinUseCase:
             (r for r in (top_level, inline, reviews) if isinstance(r, ReadFailure)), None
         )
         if failure is not None:
-            return dropped, True
+            return dropped, True, False
         try:
             trusted = {t.casefold() for t in self._trusted_authors()}
         except ConfigError:
-            return dropped, True
+            return dropped, True, False
         authorized = set()
+        round_ordered = False
         for c in list(top_level) + list(inline):
             if c.author.casefold() not in trusted or LC_MARKER not in c.body:
                 continue
-            if parse_decision(c.body) == "rework" and c.path:
+            if parse_decision(c.body) != "rework":
+                continue
+            if c.path:
                 authorized.add(c.path)
+            elif parse_decision_sha(c.body) == pin:
+                round_ordered = True
 
+        if round_ordered:
+            return set(), False, True
         unauthorized = {f for f in dropped if f not in authorized}
-        return unauthorized, False
+        return unauthorized, False, False
 
     def execute(self, item, pr_value, phase):
         run = self._store.current_run(item.id, phase)
@@ -63,7 +70,20 @@ class CheckContentPinUseCase:
             return
         dropped = old_files - new_files
         if dropped:
-            unauthorized, lookup_failed = self._unauthorized_drops(pr_value, dropped)
+            unauthorized, lookup_failed, round_ordered = self._unauthorized_drops(
+                pr_value, dropped, pin
+            )
+            if round_ordered:
+                target = self._step_for_phase(item.id, phase) or latest_step(
+                    self._store, item.id
+                )
+                if target is not None:
+                    self._store.note_condition(
+                        target.id,
+                        "PR head moved from %s to %s and dropped: %s - ordered by the rework "
+                        "decision recorded against %s."
+                        % (pin, head, ", ".join(sorted(dropped)), pin),
+                    )
             if lookup_failed:
                 reported = dropped
                 thread_note = (
