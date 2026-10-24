@@ -11,7 +11,7 @@ from lightcycle.domain.work.detail import (
     legacy_presents_key,
     parse_detail,
     resolve_detail,
-    with_park,
+    without_park_rows,
 )
 
 
@@ -36,23 +36,18 @@ class TestDefaultAndResolution(unittest.TestCase):
         self.assertEqual(default_detail(False), ("outcome", "report"))
         self.assertEqual(default_detail(True), ("outcome", "report", "pr"))
 
-    def test_a_parked_step_leads_with_reason_and_needs_after_the_declared_names(self):
+    def test_a_parked_step_drops_reason_and_needs_from_the_declared_names(self):
         self.assertEqual(
-            with_park(("outcome", "out:check-report"), True),
-            ("reason", "needs", "outcome", "out:check-report"))
-
-    def test_park_entries_declared_already_are_not_duplicated(self):
-        self.assertEqual(
-            with_park(("outcome", "needs", "reason"), True), ("reason", "needs", "outcome"))
+            without_park_rows(("outcome", "needs", "reason", "out:check-report"), True),
+            ("outcome", "out:check-report"))
 
     def test_a_step_not_parked_keeps_its_declared_names(self):
         self.assertEqual(
-            with_park(("outcome", "needs"), False), ("outcome", "needs"))
+            without_park_rows(("outcome", "needs"), False), ("outcome", "needs"))
 
-    def test_the_default_list_on_a_parked_step_yields_reason_and_needs_once(self):
+    def test_the_default_list_on_a_parked_step_has_no_park_rows(self):
         self.assertEqual(
-            with_park(default_detail(True), True),
-            ("reason", "needs", "outcome", "report", "pr"))
+            without_park_rows(default_detail(True), True), ("outcome", "report", "pr"))
 
     def test_a_legacy_presents_becomes_the_leading_default_entry(self):
         self.assertEqual(default_detail(False, "pr"), ("pr", "outcome", "report"))
@@ -183,3 +178,31 @@ class TestDetailValueIsUrl(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestParkPanelDisplayRules(unittest.TestCase):
+    def test_a_path_under_home_shows_with_a_tilde(self):
+        from lightcycle.adapters.tui.hub_render import shorten_home
+        self.assertEqual(
+            shorten_home("worktree /Users/ken/ws/x has work", "/Users/ken"),
+            "worktree ~/ws/x has work")
+        self.assertEqual(shorten_home("/Users/ken/ws", "/Users/ken"), "~/ws")
+
+    def test_a_path_outside_home_or_sharing_its_prefix_is_untouched(self):
+        from lightcycle.adapters.tui.hub_render import shorten_home
+        self.assertEqual(shorten_home("/opt/ws", "/Users/ken"), "/opt/ws")
+        self.assertEqual(shorten_home("/Users/kenneth/ws", "/Users/ken"), "/Users/kenneth/ws")
+
+    def test_a_value_with_no_path_is_untouched(self):
+        from lightcycle.adapters.tui.hub_render import shorten_home
+        self.assertEqual(shorten_home("Resolve the conflict", "/Users/ken"), "Resolve the conflict")
+        self.assertEqual(shorten_home(None, "/Users/ken"), None)
+
+    def test_empty_valued_rows_are_not_shown(self):
+        from lightcycle.adapters.tui.hub_render import detail_fields
+        entries = [
+            DetailEntry("outcome", "field", "done"),
+            DetailEntry("report", "field", None),
+            DetailEntry("pr", "field", ""),
+        ]
+        self.assertEqual(detail_fields(entries), [("outcome", "done")])

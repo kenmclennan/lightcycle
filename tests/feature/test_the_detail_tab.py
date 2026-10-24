@@ -291,9 +291,9 @@ def _outcome_report_first(ctx):
     assert _field_value(ctx, "report") == "reviewed and merged"
 
 
-@then("the run rows lead, followed by the outcome and the report")
+@then("the run rows lead and no row without a value is shown")
 def _run_rows_then_outcome_report(ctx):
-    assert _field_keys(ctx) == ["pr", "branch", "worktree", "outcome", "report"]
+    assert _field_keys(ctx) == ["pr", "branch"]
 
 
 @then("its Detail entries are pr, branch and worktree, in that order")
@@ -301,10 +301,9 @@ def _declared_entries_in_order(ctx):
     assert _field_keys(ctx) == ["pr", "branch", "worktree"]
 
 
-@then("the worktree entry is shown blank")
+@then("the worktree entry is not shown")
 def _worktree_entry_blank(ctx):
-    assert _field_keys(ctx) == ["pr", "branch", "worktree"]
-    assert _field_value(ctx, "worktree") == ""
+    assert _field_keys(ctx) == ["branch"]
 
 
 @then('neither the words "phase run" nor "pass" appear anywhere on the tab')
@@ -362,10 +361,12 @@ def _worktree_opens_in_editor(ctx):
     assert ctx["launcher"].edited_detached == (editor, ctx["worktree_path"])
 
 
-@then("the park's needs and its reason are shown")
+@then("the park's reason and needs are shown in the Blocked panel, not as table rows")
 def _park_fields_shown(ctx):
-    assert _field_value(ctx, "needs") == "decide the approach"
-    assert _field_value(ctx, "reason") == "hit an ambiguity"
+    panel = ctx["session"].app.screen._detail_park.plain
+    assert panel.index("hit an ambiguity") < panel.index("decide the approach")
+    assert not _field_present(ctx, "needs")
+    assert not _field_present(ctx, "reason")
 
 
 @then("no needs field is shown")

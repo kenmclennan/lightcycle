@@ -413,6 +413,13 @@ class NodeHubScreen(HubScreenMarker, LogTabMixin, HierarchyTabMixin, OutputsTabM
         height: auto;
         display: none;
     }}
+    #hub-detail-park {{
+        height: auto;
+        display: none;
+        border: solid {COLOURS["red"]};
+        border-title-color: {COLOURS["red"]};
+        padding: 0 1;
+    }}
     #hub-log-empty, #hub-outputs-empty, #hub-description-empty, #hub-cost-empty,
     #hub-detail-empty, #hub-context-empty {{
         content-align: center middle;
@@ -496,6 +503,7 @@ class NodeHubScreen(HubScreenMarker, LogTabMixin, HierarchyTabMixin, OutputsTabM
         self._detail_stacked = False
         self._detail_needs_rebuild = False
         self._detail_empty = False
+        self._detail_park = None
         self._last_context_shape = None
         self._last_context_rows = []
         self._context_floor = False
@@ -541,6 +549,7 @@ class NodeHubScreen(HubScreenMarker, LogTabMixin, HierarchyTabMixin, OutputsTabM
         yield Static(id="outputs-floor")
         yield Static(OUTPUTS_EMPTY_MESSAGE, id="hub-outputs-empty")
         yield Static(id="hub-outputs-toast")
+        yield Static(id="hub-detail-park")
         detail_table = DetailTable(id="hub-detail-table")
         detail_table.display = self._active_tab == "detail"
         yield detail_table
@@ -744,8 +753,14 @@ class NodeHubScreen(HubScreenMarker, LogTabMixin, HierarchyTabMixin, OutputsTabM
             detail_active and not showing_detail_toast and not showing_detail_floor
             and not showing_detail_empty
         )
+        self.query_one("#hub-detail-park", Static).display = (
+            detail_active and self._detail_park is not None and not showing_detail_toast
+            and not showing_detail_floor
+        )
         self.query_one("#detail-floor", Static).display = showing_detail_floor
-        self.query_one("#hub-detail-empty", Static).display = showing_detail_empty
+        self.query_one("#hub-detail-empty", Static).display = (
+            showing_detail_empty and self._detail_park is None
+        )
         self.query_one("#hub-detail-toast", Static).display = showing_detail_toast
         context_active = self._active_tab == "context"
         showing_context_toast = context_active and self._toast_active and self._toast_tab == "context"

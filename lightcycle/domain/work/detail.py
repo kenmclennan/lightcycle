@@ -90,10 +90,10 @@ def legacy_presents_key(presents):
 PARK_FIELDS = ("reason", "needs")
 
 
-def with_park(names, parked):
+def without_park_rows(names, parked):
     if not parked:
         return tuple(names)
-    return PARK_FIELDS + tuple(n for n in names if n not in PARK_FIELDS)
+    return tuple(n for n in names if n not in PARK_FIELDS)
 
 
 def default_detail(has_run, presents=None):

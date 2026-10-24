@@ -225,12 +225,12 @@ class TestDetail(unittest.TestCase):
         surface = rig.show(build)
         self.assertEqual([e["key"] for e in surface["detail"]], ["outcome", "report"])
 
-    def test_a_parked_step_leads_with_reason_and_needs(self):
+    def test_a_parked_step_leaves_reason_and_needs_out_of_the_detail_rows(self):
         rig = Rig()
         build = rig.first_step()
         rig.store.update_metadata(build, {"needs": "n", "reason": "r"})
         keys = [e["key"] for e in rig.show(build)["detail"]]
-        self.assertEqual(keys, ["reason", "needs", "outcome", "report"])
+        self.assertEqual(keys, ["outcome", "report"])
 
 
 class TestLog(unittest.TestCase):

@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass
 from lightcycle.adapters.tui.design_system import (
     COLOURS,
@@ -362,7 +363,29 @@ def _hierarchy_default_row_id(store, node):
 
 
 def detail_fields(entries):
-    return [(e.key, e.value if e.value is not None else "") for e in entries]
+    return [(e.key, e.value) for e in entries if e.value]
+
+
+def shorten_home(value, home):
+    if not value or not home or home == "/":
+        return value
+    return re.sub(r"(?<![\w/.~-])" + re.escape(home.rstrip("/")) + r"(?![\w.-])", "~", value)
+
+
+PARK_PANEL_TITLE = "\u25b2 Blocked"
+
+
+def park_panel_text(park, home):
+    parts = []
+    if park.reason:
+        parts.append(Text(shorten_home(park.reason, home), style=COLOURS["text"]))
+    if park.needs:
+        parts.append(Text(shorten_home(park.needs, home), style="bold " + COLOURS["text"]))
+    if park.tried:
+        parts.append(Text("Already tried: " + shorten_home(park.tried, home), style=COLOURS["dim"]))
+    if not parts:
+        return None
+    return Text("\n\n").join(parts)
 
 
 def log_tab_mode(node):

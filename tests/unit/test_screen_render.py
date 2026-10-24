@@ -13,6 +13,7 @@ from tests.support.screen_render import (
     CONTEXT_REFLECTION, CONTEXT_SPEC_REPORT, DEFAULT_SIZE, GATE_DESCRIPTION,
     GATE_FINDINGS_LINES, MERGE_PR, MERGE_REPORT, SCREENS, UNRENDERABLE, _LOG_EXCERPT,
     _hub_gate_merge, _plain_row, capture, render,
+    PARK_PANEL_NEEDS, PARK_PANEL_TRIED, park_panel_agent_reason,
 )
 
 
@@ -330,13 +331,12 @@ def test_a_merge_gate_detail_shows_the_pr_and_the_reviews_report():
     assert "IN:REPORT" in frame
 
 
-def test_a_merge_gate_listing_an_input_it_lacks_shows_it_blank_beside_the_valued_ones():
+def test_a_merge_gate_listing_an_input_it_lacks_leaves_that_row_out_beside_the_valued_ones():
     rows = render("hub#gate-merge-missing-input", size=(100, 30)).split("\n")
 
     assert any("PR" in r and MERGE_PR in r for r in rows)
     assert any("IN:REPORT" in r and MERGE_REPORT in r for r in rows)
-    findings = next(r for r in rows if "IN:FINDINGS" in r)
-    assert findings.strip("│ ") == "IN:FINDINGS"
+    assert not any("IN:FINDINGS" in r for r in rows)
 
 
 def test_a_parked_script_stage_with_declared_detail_shows_its_reason_not_the_empty_message():
@@ -555,3 +555,64 @@ def test_report_for_a_historical_day_paints_the_title_and_the_singular_top_line(
 
     assert "Wednesday 31 December 2025" in text
     assert "1 item closed" in text
+
+
+PANEL_WIDTHS = [(100, 30), (140, 30)]
+
+
+def _park_frame(state, size):
+    return render(state, size=size).split("\n")
+
+
+@pytest.mark.parametrize("size", PANEL_WIDTHS)
+@pytest.mark.parametrize("state", ["hub#park-panel-agent", "hub#park-panel-gate"])
+def test_a_parked_step_shows_its_park_in_a_framed_blocked_panel(state, size):
+    frame = "\n".join(_park_frame(state, size))
+
+    assert "\u25b2 Blocked" in frame
+    assert "\u250c \u25b2 Blocked" in frame or "\u2500 \u25b2 Blocked" in frame
+    assert "REASON" not in frame
+    assert "NEEDS" not in frame
+    assert "REPORT" not in frame
+
+
+@pytest.mark.parametrize("size", PANEL_WIDTHS)
+@pytest.mark.parametrize("state", ["hub#park-panel-agent", "hub#park-panel-gate"])
+def test_the_park_panel_puts_the_reason_before_the_needs_and_shortens_home(state, size):
+    frame = " ".join(" ".join(row.split()) for row in _park_frame(state, size))
+    flat = frame.replace("\u2502", "")
+    flat = " ".join(flat.split())
+    home = park_panel_agent_reason().split("/workspace")[0].split()[-1]
+
+    assert flat.index("Merged-phase release refused") < flat.index(PARK_PANEL_NEEDS)
+    assert "~/workspace/projects/specs" in flat
+    assert home + "/" not in flat
+
+
+def test_only_the_gate_panel_shows_what_was_already_tried():
+    gate = "\n".join(_park_frame("hub#park-panel-gate", (100, 30)))
+    agent = "\n".join(_park_frame("hub#park-panel-agent", (100, 30)))
+
+    assert "Already tried: " + PARK_PANEL_TRIED in gate
+    assert "Already tried" not in agent
+
+
+@pytest.mark.parametrize("size", PANEL_WIDTHS)
+def test_the_park_panel_border_is_red_and_the_needs_is_bold(size):
+    strips = capture("hub#park-panel-agent", size).strips
+    segments = [seg for strip in strips for seg in strip]
+    title = next(seg for seg in segments if "Blocked" in seg.text)
+    needs = next(seg for seg in segments if PARK_PANEL_NEEDS in seg.text)
+    reason = next(seg for seg in segments if "Merged-phase" in seg.text)
+
+    assert title.style.color.get_truecolor().hex.lower() == "#e05f6b"
+    assert needs.style.bold
+    assert not reason.style.bold
+
+
+@pytest.mark.parametrize("size", PANEL_WIDTHS)
+def test_an_unparked_step_has_no_park_panel(size):
+    frame = "\n".join(_park_frame("hub#detail", size))
+
+    assert "Blocked" not in frame
+    assert "REASON" not in frame
