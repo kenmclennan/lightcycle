@@ -8,6 +8,7 @@ from lightcycle.application.flow.engine_steps import (
     SUMMARY_ORIGIN_LABEL, engine_outcomes_for_node,
 )
 from lightcycle.domain.feedback import RETROED_LABEL
+from lightcycle.domain.flow.hooks import CI_FAILED_CAP
 from lightcycle.application.flow.next_step import NextStepResolver
 from lightcycle.application.flow.passes import PassBook
 from lightcycle.application.flow.schedule_completion import ScheduleCompletion
@@ -25,6 +26,15 @@ from lightcycle.domain.work import NodeSpec
 from lightcycle.domain.work.state import State
 
 _AUTO_CLOSE_REASON = "auto-closed: all children done"
+
+
+def _cap_note(fired, stage):
+    cap = fired.cap
+    rounds = fired.count + 1
+    if cap.hook == CI_FAILED_CAP:
+        return "%s reached: CI failed %d times at %s (cap %d)" % (cap.hook, rounds, stage, fired.limit)
+    return "%s reached: %d review-rework rounds at %s (cap %d)" % (
+        cap.hook, rounds, stage, fired.limit)
 
 
 @dataclass(frozen=True)
@@ -220,10 +230,14 @@ class CompleteStepUseCase:
             if transition:
                 self._passes.enrol(t.item, new, transition.to_stage, name)
 
-        return self._complete(
+        fired = transition.escalation if transition else None
+        response = self._complete(
             t, input, spec=spec, ends_pass=ends_pass, enrol=enrol,
             writes=self._workflow_writes(t, input, transition),
         )
+        if fired is not None and response.next_step:
+            self._store.note_condition(response.next_step, _cap_note(fired, t.stage))
+        return response
 
     def _workflow_writes(self, t, input: CompleteInput, transition, repair=False):
         def writes(new):
