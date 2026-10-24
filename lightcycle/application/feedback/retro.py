@@ -1,9 +1,9 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Dict, List, Optional
 
 from lightcycle.application.feedback.retro_scope import RetroScope
 from lightcycle.domain import feedback as cfeedback
-from lightcycle.domain.work import Item
+from lightcycle.domain.work import Item, SlowStep, slow_steps
 
 
 @dataclass(frozen=True)
@@ -27,6 +27,7 @@ class ItemSignals:
     signals: Dict[str, Dict[str, int]]
     reflections: int
     durations: Dict[str, Optional[float]] = field(default_factory=dict)
+    slow_steps: List[SlowStep] = field(default_factory=list)
 
     def total_duration(self) -> Optional[float]:
         known = [v for v in self.durations.values() if v is not None]
@@ -64,6 +65,11 @@ class RetroUseCase:
         scope = RetroScope.from_input(input)
         rows, all_refs, all_unreadable = scope.items_and_refs(self._store, signals_for)
         label = scope.label
+
+        slow_by_item = {}
+        for slow in slow_steps(self._store.all_steps_including_done()):
+            slow_by_item.setdefault(slow.step.item, []).append(slow)
+        rows = [replace(r, slow_steps=slow_by_item.get(r.item.id, [])) for r in rows]
 
         reflection_count = len(all_refs)
         feedback = [
