@@ -2,7 +2,7 @@ import unittest
 
 from lightcycle.domain.pool import (
     claude_health_score, github_health_score, health_image_state, health_score,
-    pool_health_score, upgrade_config_health_score,
+    maintenance_health_score, pool_health_score, releases_behind,
 )
 
 
@@ -39,11 +39,39 @@ class TestClaudeAndUpgradeScores(unittest.TestCase):
         self.assertEqual(claude_health_score(False), 0)
         self.assertEqual(claude_health_score(True), 4)
 
-    def test_upgrade_config_is_capped_at_one(self):
-        self.assertEqual(upgrade_config_health_score(False, False), 0)
-        self.assertEqual(upgrade_config_health_score(True, False), 1)
-        self.assertEqual(upgrade_config_health_score(False, True), 1)
-        self.assertEqual(upgrade_config_health_score(True, True), 1)
+    def test_nothing_pending_is_zero(self):
+        self.assertEqual(maintenance_health_score(False, None, False, False, False), 0)
+
+    def test_each_single_signal_is_one(self):
+        self.assertEqual(maintenance_health_score(True, 1, False, False, False), 1)
+        self.assertEqual(maintenance_health_score(False, None, True, False, False), 1)
+        self.assertEqual(maintenance_health_score(False, None, False, True, False), 1)
+        self.assertEqual(maintenance_health_score(False, None, False, False, True), 1)
+
+    def test_all_four_signals_give_three(self):
+        self.assertEqual(maintenance_health_score(True, 1, True, True, True), 3)
+
+    def test_three_releases_behind_adds_one(self):
+        self.assertEqual(maintenance_health_score(True, 3, False, False, False), 2)
+
+    def test_four_signals_plus_staleness_stay_at_three(self):
+        self.assertEqual(maintenance_health_score(True, 4, True, True, True), 3)
+
+    def test_unknown_staleness_adds_nothing(self):
+        self.assertEqual(maintenance_health_score(True, None, False, False, False), 1)
+
+    def test_releases_behind_counts_patch_distance(self):
+        self.assertEqual(releases_behind("0.7.98", "0.7.102"), 4)
+        self.assertEqual(releases_behind("0.7.102", "0.7.102"), 0)
+        self.assertEqual(releases_behind("0.7.103", "0.7.102"), 0)
+
+    def test_releases_behind_across_minor_counts_as_stale(self):
+        self.assertEqual(releases_behind("0.7.99", "0.8.0"), 3)
+
+    def test_releases_behind_unknown_when_either_version_missing_or_malformed(self):
+        self.assertIsNone(releases_behind(None, "0.7.102"))
+        self.assertIsNone(releases_behind("0.7.98", None))
+        self.assertIsNone(releases_behind("dev", "0.7.102"))
 
 
 class TestGithubHealthScore(unittest.TestCase):
@@ -71,6 +99,12 @@ class TestWorstWins(unittest.TestCase):
         self.assertEqual(health_score(0, 4, 2, 1), 4)
         self.assertEqual(health_score(0, 0, 0, 0), 0)
         self.assertEqual(health_score(0, 0, 3, 1), 3)
+
+    def test_maintenance_alone_reaches_three(self):
+        self.assertEqual(health_score(0, 0, 0, 3), 3)
+
+    def test_stalled_pool_still_gives_four_over_maintenance(self):
+        self.assertEqual(health_score(pool_health_score("running", "stalled", None, 5), 0, 0, 3), 4)
 
 
 class TestHealthImageState(unittest.TestCase):

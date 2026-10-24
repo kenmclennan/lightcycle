@@ -4,7 +4,8 @@ from typing import Optional
 from lightcycle.config import ConfigError
 from lightcycle.domain.pool import (
     HEALTH_IMAGE_IDS, claude_health_score, github_health_score, health_image_state, health_score,
-    icon_columns, placeholder_rows, png_size, pool_health_score, upgrade_config_health_score,
+    icon_columns, maintenance_health_score, placeholder_rows, png_size, pool_health_score,
+    releases_behind,
 )
 
 
@@ -25,7 +26,8 @@ class HealthIconUseCase:
         self._columns = {}
 
     def reading(self, *, pool_state, tick_health, poll_seconds, breaker_is_open, github,
-                upgrade_available, config_changed, busy) -> Optional[HealthIconReading]:
+                upgrade_available, config_changed, busy, installed_version=None,
+                available_version=None, doctor_areas=()) -> Optional[HealthIconReading]:
         try:
             if not self._config.tui_health_icons():
                 return None
@@ -41,7 +43,13 @@ class HealthIconUseCase:
                     github.remaining if github is not None and github.known else None,
                     github.limit if github is not None and github.known else None,
                 ),
-                upgrade_config_health_score(upgrade_available, config_changed),
+                maintenance_health_score(
+                    upgrade_available,
+                    releases_behind(installed_version, available_version),
+                    config_changed,
+                    any(area != "orphans" for area in doctor_areas),
+                    "orphans" in doctor_areas,
+                ),
             )
             state = health_image_state(score, busy)
             path = self._config.tui_health_icon_path(state)

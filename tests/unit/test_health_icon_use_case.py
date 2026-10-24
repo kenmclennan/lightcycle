@@ -78,6 +78,27 @@ class TestHealthIconUseCase(unittest.TestCase):
             self.assertEqual(icon.transmitted[0][0], HEALTH_IMAGE_IDS[state])
             self.assertEqual(reading.columns, 3)
 
+    def test_doctor_findings_and_orphans_reach_the_score(self):
+        cases = {
+            "0": dict(doctor_areas=()),
+            "1": dict(doctor_areas=("store",)),
+            "2": dict(doctor_areas=("store", "orphans")),
+            "3": dict(doctor_areas=("store", "orphans"), config_changed=True),
+        }
+        for state, change in cases.items():
+            config = _config()
+            use_case, _, _ = _use_case(config, _files(config))
+            self.assertEqual(use_case.reading(**{**BASE, **change}).state, state)
+        config = _config()
+        use_case, _, _ = _use_case(config, _files(config))
+        self.assertEqual(use_case.reading(**{**BASE, "doctor_areas": ("orphans",)}).state, "1")
+
+    def test_stale_upgrade_adds_to_maintenance(self):
+        config = _config()
+        use_case, _, _ = _use_case(config, _files(config))
+        stale = dict(upgrade_available=True, installed_version="0.7.98", available_version="0.7.102")
+        self.assertEqual(use_case.reading(**{**BASE, **stale}).state, "2")
+
     def test_busy_does_not_override_a_nonzero_score(self):
         config = _config()
         use_case, _, _ = _use_case(config, _files(config))
