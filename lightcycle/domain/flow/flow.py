@@ -51,9 +51,11 @@ def _limit_of(cap, limit_for):
 
 
 class Flow:
-    def __init__(self, steps, workspace_default="project", disposition=None):
+    def __init__(self, steps, workspace_default="project", disposition=None,
+                 workspace_declared=False):
         self._steps = steps
         self._workspace_default = workspace_default
+        self._workspace_declared = workspace_declared
         self._disposition = disposition or {}
 
     @classmethod
@@ -122,7 +124,7 @@ class Flow:
             )
             for stage in step_stages
         }
-        return cls(steps, graph.workspace, dict(graph.disposition))
+        return cls(steps, graph.workspace, dict(graph.disposition), graph.workspace_declared)
 
     def step_def(self, stage) -> StepDef:
         return self._steps.get(stage) or StepDef()
@@ -142,6 +144,12 @@ class Flow:
     def workspace_of(self, stage):
         sd = self.step_def(stage)
         return sd.workspace if sd.workspace is not None else self._workspace_default
+
+    def declared_workspace_of(self, stage):
+        sd = self.step_def(stage)
+        if sd.workspace is not None:
+            return sd.workspace
+        return self._workspace_default if self._workspace_declared else None
 
     def _firing_escalation(self, step, outcome, history, limit_for):
         fired = None

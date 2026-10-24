@@ -161,11 +161,12 @@ class ScriptStageUseCase:
             return None, "missing required config key(s) %s in %s" % (
                 ", ".join(missing), self._config.workflow_config_block_name(origin, name))
         cwd = self._lifecycle.ensure_data_dir(origin, name)
-        if sd.workspace is not None:
+        workspace = self._flow_service.flow_for(step).declared_workspace_of(step.stage)
+        if workspace is not None:
             cwd = self._worktrees.ensure(step)
             if not cwd:
                 return None, "the stage declares workspace %s but the item has no worktree" % (
-                    sd.workspace)
+                    workspace)
         stdin = stdin_for_stage(
             step.item, step.id, step.stage,
             ItemOutputs(self._store, self._flow_service).reader_artifacts(step),

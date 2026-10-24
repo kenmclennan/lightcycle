@@ -1,5 +1,6 @@
 import unittest
 
+from lightcycle.domain.flow.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
 
 
@@ -116,6 +117,19 @@ class TestWorkflowGraphParsing(unittest.TestCase):
             "  build  done  review\n"
         )
         self.assertEqual(graph.workspace, "specs")
+
+    def test_workspace_declared_is_true_only_for_the_scalar_form(self):
+        scalar = parse_graph("entry: build\n\nworkspace: project\n\nedges:\n  build  done  review\n")
+        block = parse_graph("entry: build\n\nworkspace:\n  build  specs\n\nedges:\n  build  done  review\n")
+        absent = parse_graph("entry: build\n\nedges:\n  build  done  review\n")
+        self.assertEqual(
+            (scalar.workspace_declared, block.workspace_declared, absent.workspace_declared),
+            (True, False, False))
+
+    def test_an_undeclared_stage_still_resolves_to_project(self):
+        graph = parse_graph("entry: build\n\nedges:\n  build  done  review\n")
+        self.assertEqual(graph.workspace_for("build"), "project")
+        self.assertEqual(Flow.from_graph(graph, {}).workspace_of("build"), "project")
 
     def test_workspace_defaults_to_project_when_absent(self):
         graph = parse_graph("entry: build\n\nedges:\n  build  done  review\n")
