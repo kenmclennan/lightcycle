@@ -20,6 +20,7 @@ class WorkflowGraph:
     requires: frozenset = field(default_factory=frozenset)
     provides: frozenset = field(default_factory=frozenset)
     workspace: str = "project"
+    workspace_declared: bool = False
     nodes: dict = field(default_factory=dict)
     edges: dict = field(default_factory=dict)
     hooks: dict = field(default_factory=dict)
@@ -88,6 +89,7 @@ def parse_graph(text):
     requires = frozenset()
     provides = frozenset()
     workspace = "project"
+    workspace_declared = False
     nodes, edges, hooks, signals, workspaces, phases = {}, {}, {}, {}, {}, {}
     primary = {}
     display = {}
@@ -108,6 +110,7 @@ def parse_graph(text):
                 provides = frozenset(value.split())
             elif head == "workspace" and value:
                 workspace = value
+                workspace_declared = True
             elif head == "workspace":
                 section = "workspace"
             elif head == "phase":
@@ -161,6 +164,7 @@ def parse_graph(text):
             disposition[outcome] = value
     return WorkflowGraph(
         entry=entry, requires=requires, provides=provides, workspace=workspace,
+        workspace_declared=workspace_declared,
         nodes=nodes, edges=edges, hooks=hooks, signals=signals,
         workspaces=workspaces, phases=phases, primary=primary, display=display,
         pass_ends=frozenset(pass_ends), disposition=disposition,

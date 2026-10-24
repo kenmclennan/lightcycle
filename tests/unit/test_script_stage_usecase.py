@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.park_step import ParkStepUseCase
 from lightcycle.application.pool.script_stages import ScriptStageUseCase
+from lightcycle.domain.flow.flow import Flow
 from lightcycle.domain.flow.step_def import StepDef
 from lightcycle.domain.work import State, is_engine_step
 from lightcycle.ports.script_runner import ScriptResult
@@ -31,11 +32,12 @@ class StubConfig:
 
 
 class StubFlowService:
-    def __init__(self, defs):
+    def __init__(self, defs, workspace_declared=False):
         self._defs = defs
+        self._workspace_declared = workspace_declared
 
     def flow_for(self, node):
-        return SimpleNamespace(step_def=lambda stage: self._defs.get(stage, StepDef()))
+        return Flow(self._defs, workspace_declared=self._workspace_declared)
 
     def workflow_for(self, node):
         return PIN
@@ -64,7 +66,7 @@ class RecordingComplete:
 
 class Rig:
     def __init__(self, stages=None, cap=4, lifecycle=None, complete_fail=None, worktree=None,
-                 ensure_error=None, refusal=None):
+                 ensure_error=None, refusal=None, workspace_declared=False):
         self.store = FakeStore()
         self.runner = FakeScriptRunner()
         defs = stages or {
@@ -80,7 +82,7 @@ class Rig:
 
         worktrees = SimpleNamespace(ensure=ensure)
         self.gate = ScriptStageUseCase(
-            self.store, StubFlowService(defs), StubConfig(cap=cap),
+            self.store, StubFlowService(defs, workspace_declared), StubConfig(cap=cap),
             StubWorkflowSource(shas={"acme": "sha1"}), lifecycle or StubScriptLifecycle(),
             self.runner, ParkStepUseCase(self.store), self.complete, worktrees)
 
@@ -291,6 +293,33 @@ class TestEnvironment(unittest.TestCase):
 
         self.assertEqual([s.id for s in rig.ensured], [step])
         self.assertEqual(rig.runner.started[0]["cwd"], "/wt/item")
+
+    def test_a_workflow_level_workspace_runs_an_undeclared_stage_in_the_item_worktree(self):
+        rig = Rig(workspace_declared=True, worktree="/wt/item")
+        step = rig.step()
+
+        rig.gate.execute(0)
+
+        self.assertEqual([s.id for s in rig.ensured], [step])
+        self.assertEqual(rig.runner.started[0]["cwd"], "/wt/item")
+
+    def test_a_workflow_level_workspace_with_no_worktree_names_it_in_the_refusal(self):
+        rig = Rig(workspace_declared=True, worktree=None)
+        step = rig.step()
+
+        rig.gate.execute(0)
+
+        self.assertEqual(rig.runner.started, [])
+        self.assertIn("declares workspace project", rig.store.get_node(step).park.reason)
+
+    def test_nothing_declared_keeps_the_data_dir(self):
+        rig = Rig(worktree="/wt/item")
+        rig.step()
+
+        rig.gate.execute(0)
+
+        self.assertEqual(rig.ensured, [])
+        self.assertNotEqual(rig.runner.started[0]["cwd"], "/wt/item")
 
     def _workspace_stage(self):
         return {"poll": StepDef(
