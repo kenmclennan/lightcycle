@@ -1,6 +1,11 @@
 import ast
+import contextlib
+import io
+import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from scripts import mutation_ratchet as mr
 from scripts import mutation_report as rp
@@ -196,3 +201,32 @@ class TestRealDomainContent(unittest.TestCase):
             seen += 1
         self.assertEqual(seen, len(modules))
         self.assertGreater(seen, 100)
+
+
+class TestCmdRun(unittest.TestCase):
+    def run_with(self, command):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "results.txt"
+            argv = ["run", "--modules", "pkg/m.py", "--results-out", str(out)]
+            err = io.StringIO()
+            with (
+                mock.patch.object(rp, "RUN_COMMAND", command),
+                mock.patch.object(rp, "read_statuses", return_value=[("pkg.m.x_f__mutmut_1", "killed")]),
+                contextlib.redirect_stdout(io.StringIO()),
+                contextlib.redirect_stderr(err),
+            ):
+                rc = rp.main(argv)
+            return rc, err.getvalue(), out.exists()
+
+    def test_failing_mutmut_run_exits_nonzero_and_writes_no_results(self):
+        command = [sys.executable, "-c", "import sys; sys.stderr.write('setup aborted'); sys.exit(1)"]
+        rc, err, written = self.run_with(command)
+        self.assertEqual(rc, 1)
+        self.assertIn("mutmut run failed with exit code 1", err)
+        self.assertIn("setup aborted", err)
+        self.assertFalse(written)
+
+    def test_successful_mutmut_run_writes_results(self):
+        rc, _, written = self.run_with([sys.executable, "-c", "pass"])
+        self.assertEqual(rc, 0)
+        self.assertTrue(written)

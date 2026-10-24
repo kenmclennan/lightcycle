@@ -27,6 +27,7 @@ STATS_FILE = ROOT / "mutants" / "mutmut-stats.json"
 MUTMUT = [sys.executable, "-m", "mutmut"]
 RESULTS_COMMAND = MUTMUT + ["results", "--all", "true"]
 RUN_COMMAND = MUTMUT + ["run"]
+STDERR_TAIL_LINES = 20
 RUN_TIMEOUT = 7200
 SHOW_TIMEOUT = 120
 COVERAGE_TIMEOUT = 3600
@@ -446,7 +447,17 @@ def cmd_run(args):
     kept, dropped = prune_names(wanted, args.prune)
     print(f"mutants: {len(wanted)}, pruned: {len(dropped)}, running: {len(kept)}")
     started = time.monotonic()
-    subprocess.run(RUN_COMMAND + ["--max-children", str(args.max_children)] + kept, cwd=ROOT, timeout=RUN_TIMEOUT)
+    done = subprocess.run(
+        RUN_COMMAND + ["--max-children", str(args.max_children)] + kept,
+        cwd=ROOT,
+        timeout=RUN_TIMEOUT,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if done.returncode != 0:
+        tail = "\n".join(done.stderr.strip().splitlines()[-STDERR_TAIL_LINES:])
+        print(f"mutmut run failed with exit code {done.returncode}: {tail}", file=sys.stderr)
+        return 1
     print(f"mutmut run wall seconds: {time.monotonic() - started:.0f}")
     ran = set(kept)
     results = "\n".join(f"{n}: {st}" for n, st in read_statuses() if n in ran)
