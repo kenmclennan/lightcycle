@@ -533,7 +533,7 @@ class TestHandoffSatisfactionViolation(SimulateTestCase):
         self.assertIn("widget", output)
         self.assertRegex(
             output,
-            r"walk \d+: could not claim stage 'gate': "
+            r"walk \d+: could not claim stage 'gate': (?:[^\n]*\n)?"
             r"BLOCKED: missing required input\(s\): widget",
         )
 

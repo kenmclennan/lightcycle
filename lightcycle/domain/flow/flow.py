@@ -9,7 +9,7 @@ from lightcycle.domain.flow.hooks import (
     graph_caps,
 )
 from lightcycle.domain.flow.step_def import StepDef
-from lightcycle.domain.flow.transition import Transition
+from lightcycle.domain.flow.transition import Escalation, Transition
 from lightcycle.domain.work.detail import parse_detail
 
 GUIDANCE_WORKSPACE = "guidance"
@@ -143,25 +143,36 @@ class Flow:
         sd = self.step_def(stage)
         return sd.workspace if sd.workspace is not None else self._workspace_default
 
-    def escalated_transition(self, transition, outcome, history, limit_for):
-        if transition is None:
-            return None
-        step = transition.from_stage
+    def _firing_escalation(self, step, outcome, history, limit_for):
+        fired = None
         for cap in self.step_def(step).caps.values():
             if cap.escalate_stage is None or outcome != cap.outcome:
                 continue
             limit = _limit_of(cap, limit_for)
-            if limit is None or outcome_counts(history(), outcome)[cap.counting] < limit:
+            if limit is None:
                 continue
-            target = self.step_def(cap.escalate_stage)
-            transition = Transition(
-                from_stage=step,
-                outcome=outcome,
-                to_stage=cap.escalate_stage,
-                to_role=target.owner or "human",
-                to_terminal=target.owner is None,
-            )
-        return transition
+            count = outcome_counts(history(), outcome)[cap.counting]
+            if count < limit:
+                continue
+            fired = Escalation(cap, count, limit)
+        return fired
+
+    def escalated_transition(self, transition, outcome, history, limit_for):
+        if transition is None:
+            return None
+        step = transition.from_stage
+        fired = self._firing_escalation(step, outcome, history, limit_for)
+        if fired is None:
+            return transition
+        target = self.step_def(fired.cap.escalate_stage)
+        return Transition(
+            from_stage=step,
+            outcome=outcome,
+            to_stage=fired.cap.escalate_stage,
+            to_role=target.owner or "human",
+            to_terminal=target.owner is None,
+            escalation=fired,
+        )
 
     def fired_cap(self, stage, outcome, counts):
         for cap in self.step_def(stage).caps.values():
