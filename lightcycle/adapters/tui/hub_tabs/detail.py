@@ -27,6 +27,9 @@ from lightcycle.adapters.tui.hub_render import (
     detail_fields,
     detail_row_cells,
     detail_value_is_block,
+    PARK_PANEL_TITLE,
+    park_panel_text,
+    shorten_home,
 )
 from lightcycle.adapters.tui.hub_widgets import DetailTable
 
@@ -63,8 +66,15 @@ class DetailTabMixin:
 
     def _render_detail(self, store, step, initial) -> None:
         fields = self._fields_for(store, step, self._flow_service)
-        self._detail_empty = not any(value for _key, value in fields)
+        self._detail_empty = not fields
+        self._detail_park = park_panel_text(step.park, self._home_dir())
+        panel = self.query_one("#hub-detail-park", Static)
+        panel.border_title = PARK_PANEL_TITLE
+        panel.update(self._detail_park or "")
         self._render_detail_fields(fields, initial)
+
+    def _home_dir(self):
+        return self._container.config.expand_path("~")
 
     def _worktree_path_for(self, run, flow_service):
         if not run.branch:
@@ -77,8 +87,10 @@ class DetailTabMixin:
     def _detail_rows(self, fields, layout, row_budget):
         blocks = "\n".join(value for _key, value in fields if detail_value_is_block(value))
         titles = resolve_titles(self._container.store, blocks)
+        home = self._home_dir()
         rows = []
-        for field in fields:
+        for key, value in fields:
+            field = (key, shorten_home(value, home) if key == "worktree" else value)
             rows.extend(detail_row_cells(field, layout, row_budget, titles))
         return rows
 

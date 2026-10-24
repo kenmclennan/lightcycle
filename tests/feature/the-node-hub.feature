@@ -31,12 +31,12 @@ Feature: The node hub
       | Enter |
       | →     |
 
-  Scenario: Confirming a needs-attention row opens the step's Detail tab with the reason entry selected, not the item
+  Scenario: Confirming a needs-attention row opens the step's Detail tab with the Blocked panel showing the reason, not the item
     Given the priority list is showing with a needs-attention step
     When I select that step's row
     And Enter is pressed
     Then the step's own hub opens, landing on the "Detail" tab
-    And the "reason" entry is selected
+    And the Blocked panel shows the park's reason
 
   Scenario: Confirming a queued row opens the step's Context tab, not the item
     Given the priority list is showing with a queued step

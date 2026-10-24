@@ -1251,6 +1251,46 @@ def _hub_script_parked(size):
     return _open_hub(session, step)
 
 
+def park_panel_agent_reason():
+    return (
+        "Merged-phase release refused: the worktree %s/workspace/projects/specs/.worktrees/REC-6-spec "
+        "has uncommitted paths: .vscode/settings.json" % os.path.expanduser("~")
+    )
+
+
+PARK_PANEL_NEEDS = "Commit, push or discard the work named."
+
+
+PARK_PANEL_TRIED = "git stash, git clean"
+
+
+def _hub_park_panel_agent(size):
+    store = DemoStore(now=lambda: _at(6))
+    item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
+    step = store.step("LC-143.3.7", stage="write-code", role="agent", item=item)
+    store.update_metadata(
+        step, {"needs": PARK_PANEL_NEEDS, "reason": park_panel_agent_reason()})
+    route_to_human(store, step, "BLOCKED: " + PARK_PANEL_NEEDS)
+    session = _launch(store, size=size)
+    container = session.app._container
+    flow = _PresentsFlowService(
+        container.flow_service(), "write-code", None, detail=("outcome", "report"), owner="agent")
+    container.flow_service = lambda: flow
+    return _open_hub(session, step)
+
+
+def _hub_park_panel_gate(size):
+    store = DemoStore(now=lambda: _at(6))
+    item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
+    step = store.step("LC-143.3.6", stage="code-await-merge", role="human", item=item)
+    store.update_metadata(
+        step,
+        {"needs": PARK_PANEL_NEEDS, "reason": park_panel_agent_reason(),
+         "tried": PARK_PANEL_TRIED},
+    )
+    return _open_hub(_launch(store, size=size), step)
+
+
 def _hub_escalated_long_reason(size):
     store, item = _long_reason_store()
     return _open_hub(_launch(store, size=size), item)
@@ -1605,6 +1645,8 @@ SCREENS = {
     "hub#escalation": _hub_escalation,
     "hub#script-parked": _hub_script_parked,
     "hub#write-code-parked-with-pr": _hub_write_code_parked_with_pr,
+    "hub#park-panel-agent": _hub_park_panel_agent,
+    "hub#park-panel-gate": _hub_park_panel_gate,
     "hub#escalated-long-reason": _hub_escalated_long_reason,
     "hub#step-node": _hub_step_node,
     "hub#step-composite-title": _hub_step_composite_title,

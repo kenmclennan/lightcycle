@@ -12,7 +12,7 @@ from lightcycle.domain.work.detail import (
     leading_run_names,
     resolve_detail,
     with_leading,
-    with_park,
+    without_park_rows,
 )
 
 
@@ -40,7 +40,7 @@ class StepDetail:
         if has_run:
             leading = leading_run_names(spec_run is not None, bool(spec), bool(ci_sha))
             names = with_leading(leading, names)
-        names = with_park(names, parked)
+        names = without_park_rows(names, parked)
         session = self._latest_artifact(step.id, "session-id")
         fields = {
             "pr": pr,

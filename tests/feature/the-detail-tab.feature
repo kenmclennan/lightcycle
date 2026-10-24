@@ -21,7 +21,7 @@ Feature: The Detail tab
   Scenario: A step whose phase run has a PR leads with the run rows before the outcome and report
     Given a step whose phase run has a branch and a PR
     When I open its Detail tab
-    Then the run rows lead, followed by the outcome and the report
+    Then the run rows lead and no row without a value is shown
     And neither the words "phase run" nor "pass" appear anywhere on the tab
 
   Scenario Outline: Confirming a step's PR opens it, the same keypress the Artifacts list uses for a URL
@@ -63,10 +63,10 @@ Feature: The Detail tab
     Then its Detail entries are pr, branch and worktree, in that order
     And the worktree is shown
 
-  Scenario: The worktree entry is blank when its repo cannot be resolved
+  Scenario: The worktree entry is left out when its repo cannot be resolved
     Given a step declaring the detail list branch and worktree, whose phase run has a branch, in an unresolvable repo
     When I open its Detail tab
-    Then the worktree entry is shown blank
+    Then the worktree entry is not shown
 
   Scenario Outline: Confirming a declared worktree entry opens it in the configured editor
     Given a step declaring the detail list branch, worktree and pr, whose phase run has a branch and a PR, in a resolvable repo, its Detail tab open, the worktree field selected
@@ -78,10 +78,10 @@ Feature: The Detail tab
       | Enter |
       | →     |
 
-  Scenario: A parked step shows its needs and reason by default
+  Scenario: A parked step shows its reason and needs in a Blocked panel above the table
     Given a step parked with a needs and a reason recorded
     When I open its Detail tab
-    Then the park's needs and its reason are shown
+    Then the park's reason and needs are shown in the Blocked panel, not as table rows
 
   Scenario: A step that is not parked shows neither needs nor reason
     Given a step with no park recorded, its hub open

@@ -7,7 +7,7 @@ from textual.widgets import Static
 from lightcycle.adapters.tui.app import BacklogTable, PriorityTable
 from lightcycle.adapters.tui.design_system import COLOURS, STATE_GLYPHS
 from lightcycle.adapters.tui.hub import (
-    DescriptionPane, DetailTable, EscalationPanel, HierarchyPagingTable, HubTabStrip, NodeHubScreen,
+    DescriptionPane, EscalationPanel, HierarchyPagingTable, HubTabStrip, NodeHubScreen,
 )
 from lightcycle.domain.work import State
 from tests.support.fake_fs import FakeFs
@@ -704,11 +704,11 @@ def _step_hub_opens_landing_on_tab(ctx, tab):
     _assert_tab_strip_rendered(ctx["session"], tab_id)
 
 
-@then(parsers.parse('the "{entry}" entry is selected'))
-def _entry_is_selected(ctx, entry):
+@then("the Blocked panel shows the park's reason")
+def _blocked_panel_shows_reason(ctx):
     screen = ctx["session"].app.screen
-    table = screen.query_one(DetailTable)
-    assert screen._selected_detail_key(table) == entry
+    assert screen._detail_park is not None
+    assert screen.query_one("#hub-detail-park").display
 
 
 @then("the header's identity line shows its id, its project, and its title")
