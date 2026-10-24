@@ -83,7 +83,7 @@ from lightcycle.application.work.priority_rows import select_priority_rows
 from lightcycle.adapters.tui.views.tables import STACKED_COLUMN_KEY, FilterLineRest, FilterBlock, _update_cell_if_changed, PagingTable, CursorGlyphTable, _repaint_stacked_cursor
 from lightcycle.adapters.tui.views.backlog import BACKLOG_COLUMNS, BACKLOG_CONTINUATION_INDENT, BacklogTable, _backlog_stacked_first_line, _backlog_title_prose, _backlog_title_cell, _backlog_row_cells, _backlog_stacked_cell_builder, BacklogFilterInput, BacklogView
 from lightcycle.adapters.tui.views.done import DONE_COLUMNS, DONE_CONTINUATION_INDENT, DoneTable, _done_stacked_first_line, _done_row_cells, _done_stacked_cell_builder, DoneFilterInput, DoneView
-from lightcycle.adapters.tui.views.report import REPORT_COLUMNS, REPORT_CONTINUATION_INDENT, _report_rows, _report_row_cells, ReportTable, ReportView
+from lightcycle.adapters.tui.views.report import ReportView
 from lightcycle.adapters.tui.modals import PICKER_CANCELLED, POOL_PROMPT_CANCELLED, POOL_PROMPT_STOP, POOL_PROMPT_DRAIN, POOL_PROMPT_QUIT_LEAVE, POOL_PROMPT_QUIT_STOP, POOL_PROMPT_MIN_WIDTH, PICKER_MIN_WIDTH, PICKER_BORDER_WIDTH, PICKER_PADDING_WIDTH, PICKER_CURSOR_PREFIX_WIDTH, PICKER_COLUMN_GAP, ProjectFilterPicker, PoolPromptScreen, pool_prompt_body, PickerOption
 
 __all__ = [
@@ -112,11 +112,6 @@ __all__ = [
     "_done_stacked_cell_builder",
     "DoneFilterInput",
     "DoneView",
-    "REPORT_COLUMNS",
-    "REPORT_CONTINUATION_INDENT",
-    "_report_rows",
-    "_report_row_cells",
-    "ReportTable",
     "ReportView",
     "PICKER_CANCELLED",
     "POOL_PROMPT_CANCELLED",
@@ -410,24 +405,35 @@ class LightcycleApp(App):
         margin: 1 0;
         display: none;
     }}
-    #report-summary {{
+    #report-body {{
         height: 1fr;
-        min-height: 3;
         margin: 1 0;
-        display: none;
+        scrollbar-background: {COLOURS["bg"]};
+        scrollbar-background-hover: {COLOURS["bg"]};
+        scrollbar-background-active: {COLOURS["bg"]};
+        scrollbar-color: {COLOURS["dim"]};
+        scrollbar-color-hover: {COLOURS["dim"]};
+        scrollbar-color-active: {COLOURS["dim"]};
+        scrollbar-corner-color: {COLOURS["bg"]};
     }}
-    #report-summary-text {{
-        height: auto;
+    #report-markdown {{
+        background: {COLOURS["bg"]};
+        color: {COLOURS["text"]};
+        padding: 0 2;
     }}
-    ReportTable {{
-        height: auto;
-        max-height: 70%;
+    #report-markdown MarkdownH1,
+    #report-markdown MarkdownH2,
+    #report-markdown MarkdownH3 {{
+        background: {COLOURS["bg"]};
+        color: {COLOURS["cyan"]};
+        text-style: bold;
     }}
-    #report-floor {{
-        color: {COLOURS["dim"]};
-        content-align: center middle;
-        height: 1fr;
-        display: none;
+    #report-markdown MarkdownBullet,
+    #report-markdown MarkdownParagraph,
+    #report-markdown MarkdownBulletList,
+    #report-markdown MarkdownListItem {{
+        background: {COLOURS["bg"]};
+        color: {COLOURS["text"]};
     }}
 
     DashboardFooter {{
@@ -1012,7 +1018,7 @@ class LightcycleApp(App):
         elif self._view == "backlog":
             self.set_focus(self.query_one(BacklogTable))
         elif self._view == "report":
-            self.set_focus(self.query_one(ReportView))
+            self.set_focus(self.query_one("#report-body"))
         else:
             self.set_focus(self.query_one(DoneTable))
 
@@ -1157,7 +1163,7 @@ class LightcycleApp(App):
             return
         self._report_day = result
         self._refresh_report_view()
-        self.set_focus(self.query_one(ReportView))
+        self.set_focus(self.query_one("#report-body"))
 
     def action_open_done_for_report_day(self) -> None:
         if self._view != "report":

@@ -3,7 +3,9 @@ import datetime
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
-from lightcycle.adapters.tui.app import DoneTable, PickerOption, ReportTable, ReportView
+from lightcycle.adapters.tui.app import DoneTable, PickerOption, ReportView
+from textual.widgets import Markdown
+
 from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import launch, make_test_container
 
@@ -27,9 +29,8 @@ def _rendered_text(widget):
     return "".join(segment.text for segment in strip)
 
 
-def _report_cell(session, key, column):
-    table = session.app.query_one(ReportTable)
-    return table.get_cell(key, column).plain
+def _report_source(session):
+    return session.app.query_one("#report-markdown", Markdown).source
 
 
 def _picker_option_by_label(screen, label):
@@ -129,18 +130,14 @@ def _report_tab_shown(ctx):
     assert "tab-active" in session.app.query_one("#tab-report").classes
 
 
-@then(parsers.parse(
-    "the report table shows {completed:d} items completed and {closed:d} items closed"
-))
-def _report_table_closed(ctx, completed, closed):
-    session = ctx["session"]
-    assert _report_cell(session, "Items Completed", "value") == str(completed)
-    assert _report_cell(session, "Items Closed", "value") == str(closed)
+@then(parsers.parse("the report document shows {closed:d} item closed"))
+def _report_document_closed(ctx, closed):
+    assert "%d item closed" % closed in _report_source(ctx["session"])
 
 
-@then("the report table shows a recorded cost")
-def _report_table_cost(ctx):
-    assert _report_cell(ctx["session"], "Spend", "value") == "$2.50"
+@then("the report document shows a recorded cost")
+def _report_document_cost(ctx):
+    assert "$2.50 spent" in _report_source(ctx["session"])
 
 
 @then(parsers.parse('the picker\'s header reads "{text}"'))
@@ -187,24 +184,12 @@ def _done_tab_filtered_to_earlier_day(ctx):
     assert table.ordered_rows[0].key.value == ctx["earlier_item"]
 
 
-@then("the report summary is shown, reading the stored text")
+@then("the report document ends with the stored text under its own heading")
 def _report_summary_shown(ctx):
-    widget = ctx["session"].app.query_one("#report-summary")
-    assert widget.display
-    assert _rendered_text(ctx["session"].app.query_one("#report-summary-text")).strip() == _SUMMARY_TEXT
+    source = _report_source(ctx["session"])
+    assert source.endswith("## Not matched to a project\n\n%s\n" % _SUMMARY_TEXT)
 
 
-@then("the report summary sits below the table")
-def _report_summary_below_table(ctx):
-    app = ctx["session"].app
-    table = app.query_one(ReportTable)
-    widget = app.query_one("#report-summary")
-    screen = app.screen.region
-    assert widget.region.y >= table.region.y + table.region.height
-    assert widget.region.y + widget.region.height <= screen.y + screen.height
-
-
-@then("no report summary is shown")
+@then("the report document has no unmatched section")
 def _no_report_summary_shown(ctx):
-    widget = ctx["session"].app.query_one("#report-summary")
-    assert not widget.display
+    assert "Not matched to a project" not in _report_source(ctx["session"])

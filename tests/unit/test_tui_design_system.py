@@ -43,5 +43,3 @@ class TestColumnGridOrder(unittest.TestCase):
     def test_outputs_grid_order(self):
         self.assertEqual(COLUMN_GRIDS["outputs"], ("name", "value", "step", "pass"))
 
-    def test_report_grid_order(self):
-        self.assertEqual(COLUMN_GRIDS["report"], ("key", "value"))
