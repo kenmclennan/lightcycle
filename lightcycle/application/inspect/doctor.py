@@ -229,11 +229,13 @@ class DoctorUseCase:
                     Problem("origin", "default-origin %r is set but has no pulled bundle" % origin))
         for name in self._workflow_source.list_origins():
             registry = self._workflow_source.read_registry(name)
-            probe = self._workflow_source.probe_remote(
-                registry.url if registry else None, registry.ref if registry else None)
+            if registry is None:
+                problems.append(Problem("origin", "%s: origin has no registry" % name))
+                continue
+            probe = self._workflow_source.probe_remote(registry.url, registry.ref)
             if probe.reason:
                 problems.append(Problem("origin", "%s: %s" % (name, probe.reason)))
-            elif (registry and registry.ref and registry.current and probe.sha
+            elif (registry.ref and registry.current and probe.sha
                     and probe.sha != registry.current):
                 problems.append(Problem(
                     "origin",
