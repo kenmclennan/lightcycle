@@ -1141,8 +1141,12 @@ class TestRun(unittest.TestCase):
                 raise RuntimeError("boom")
             return orig_run_tick(tick, fs, tick_input, now)
 
+        def sleep_until_second_tick(seconds):
+            if calls["n"] >= 2:
+                raise KeyboardInterrupt
+
         with patch.object(_cli_mod, "_run_tick", side_effect=flaky_run_tick), \
-                patch("time.sleep", side_effect=[None, KeyboardInterrupt]):
+                patch("time.sleep", side_effect=sleep_until_second_tick):
             rc, out, err = call(_cli_mod.cmd_start)
 
         self.assertEqual(rc, 0, err)
