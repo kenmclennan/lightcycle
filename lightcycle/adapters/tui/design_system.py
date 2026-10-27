@@ -133,13 +133,14 @@ DONE_FILTERED_EMPTY_SHORTCUTS = (
 
 BACKLOG_SEARCH_SHORTCUTS = (
     ("↑↓", "move"),
-    ("enter", "explore in tree"),
+    ("enter", "apply"),
     ("esc/tab", "back"),
     ("[/]", "switch tab"),
     ("q", "quit"),
 )
 
 BACKLOG_SEARCH_EMPTY_SHORTCUTS = (
+    ("enter", "apply"),
     ("esc/tab", "back"),
     ("[/]", "switch tab"),
     ("q", "quit"),
@@ -147,13 +148,14 @@ BACKLOG_SEARCH_EMPTY_SHORTCUTS = (
 
 DONE_SEARCH_SHORTCUTS = (
     ("↑↓", "move"),
-    ("enter", "open"),
+    ("enter", "apply"),
     ("esc/tab", "back"),
     ("[/]", "switch tab"),
     ("q", "quit"),
 )
 
 DONE_SEARCH_EMPTY_SHORTCUTS = (
+    ("enter", "apply"),
     ("esc/tab", "back"),
     ("[/]", "switch tab"),
     ("q", "quit"),

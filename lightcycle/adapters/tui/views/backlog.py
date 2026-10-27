@@ -110,7 +110,7 @@ class BacklogFilterInput(Input):
         Binding("tab", "leave_filter", "Back", show=False),
         Binding("down", "leave_filter", "Results", show=False),
         Binding("up", "leave_filter", "Results", show=False),
-        Binding("enter", "open_result", "Open", show=False),
+        Binding("enter", "leave_filter", "Apply", show=False),
     ]
 
     def action_leave_filter(self) -> None:
@@ -120,9 +120,6 @@ class BacklogFilterInput(Input):
         self.app.set_focus(self.app.query_one(BacklogTable))
         self.app.stylesheet.update(self.app.screen, animate=False)
         self.app._sync_footer_shortcuts()
-
-    def action_open_result(self) -> None:
-        self.app.query_one(BacklogTable).action_select_cursor()
 
 
 class BacklogView(Vertical):

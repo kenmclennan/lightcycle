@@ -2228,7 +2228,7 @@ class TestBacklogSearchInput(unittest.TestCase):
         self.assertEqual(search.value, "widget")
         self.assertEqual(app.query_one(BacklogTable).row_count, 1)
 
-    def test_enter_opens_the_narrowed_result_and_restores_focus_to_the_search_box_after_closing(self):
+    def test_enter_leaves_the_search_box_with_the_term_and_results_unchanged_then_a_second_enter_opens_the_hub(self):
         from lightcycle.adapters.tui.hub import NodeHubScreen
 
         store = FakeStore()
@@ -2244,16 +2244,16 @@ class TestBacklogSearchInput(unittest.TestCase):
 
         session.press("enter")
 
+        self.assertIs(app.focused, app.query_one(BacklogTable))
+        self.assertEqual(search.value, "widget")
+        self.assertEqual(app.query_one(BacklogTable).row_count, 1)
+
+        session.press("enter")
+
         self.assertIsInstance(app.screen, NodeHubScreen)
         self.assertEqual(app.screen._node_id, item)
 
-        session.run(app.pop_screen)
-        session.pause()
-
-        self.assertIs(app.focused, search)
-        self.assertEqual(search.value, "widget")
-
-    def test_enter_with_zero_filtered_rows_does_nothing(self):
+    def test_enter_with_zero_filtered_rows_leaves_the_search_box(self):
         store = FakeStore()
         store.create_item("widget one", "a description")
         session = self._launch(store)
@@ -2268,6 +2268,7 @@ class TestBacklogSearchInput(unittest.TestCase):
         session.press("enter")
 
         self.assertIs(app.screen, default_screen)
+        self.assertIs(app.focused, app.query_one(BacklogTable))
 
     def test_tab_leaves_the_search_input_without_discarding_the_term_or_changing_the_view(self):
         store = FakeStore()
@@ -2834,7 +2835,7 @@ class TestDoneSearchInput(unittest.TestCase):
         self.assertEqual(search.value, "term")
         self.assertIs(app.focused, app.query_one(DoneTable))
 
-    def test_enter_opens_the_narrowed_result_and_restores_focus_to_the_search_box_after_closing(self):
+    def test_enter_leaves_the_search_box_with_the_term_and_results_unchanged_then_a_second_enter_opens_the_hub(self):
         from lightcycle.adapters.tui.hub import NodeHubScreen
 
         store = FakeStore()
@@ -2852,16 +2853,16 @@ class TestDoneSearchInput(unittest.TestCase):
 
         session.press("enter")
 
+        self.assertIs(app.focused, app.query_one(DoneTable))
+        self.assertEqual(search.value, "widget")
+        self.assertEqual(app.query_one(DoneTable).row_count, 1)
+
+        session.press("enter")
+
         self.assertIsInstance(app.screen, NodeHubScreen)
         self.assertEqual(app.screen._node_id, widget_item)
 
-        session.run(app.pop_screen)
-        session.pause()
-
-        self.assertIs(app.focused, search)
-        self.assertEqual(search.value, "widget")
-
-    def test_enter_with_zero_filtered_rows_does_nothing(self):
+    def test_enter_with_zero_filtered_rows_leaves_the_search_box(self):
         store = FakeStore()
         item = store.create_item("widget one", "a description")
         store.complete_node(item, "merged")
@@ -2877,6 +2878,7 @@ class TestDoneSearchInput(unittest.TestCase):
         session.press("enter")
 
         self.assertIs(app.screen, default_screen)
+        self.assertIs(app.focused, app.query_one(DoneTable))
 
     def test_on_priority_slash_does_not_focus_the_done_search_box(self):
         session = launch(make_test_container(store=FakeStore()))
