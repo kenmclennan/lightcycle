@@ -1,6 +1,7 @@
 import sys
 
 from lightcycle.cli_commands import COMMANDS, build_parser
+from lightcycle.commands.shared import named, refuse_over_cap, render_field_refusal
 
 from lightcycle.application.feedback import (
     ReflectInput,
@@ -8,7 +9,7 @@ from lightcycle.application.feedback import (
 )
 from lightcycle.domain.work import (
     ALLOWED_STATES_BY_FLAG, FIELDS_BY_TYPE, FieldRefusal, State,
-    UNSETTABLE_FIELDS, UNSET_REFUSAL_REASONS, all_states, missing_for_state, refuse_fields, refuse_state, render_cap_refusal,
+    UNSETTABLE_FIELDS, UNSET_REFUSAL_REASONS, all_states, missing_for_state, refuse_fields, refuse_state,
 )
 from lightcycle.domain.work.state import ALIASES
 from lightcycle.application.work.activate_item import ActivateItemInput, ActivateItemUseCase
@@ -100,7 +101,7 @@ def cmd_new(argv):
                 "--parent <item> is required for 'lc new step'; it names the owning item\n"
             )
             return 2
-        rc = _refuse_over_cap([("--note", " ".join(a.note) if a.note else None)])
+        rc = refuse_over_cap([("--note", " ".join(a.note) if a.note else None)])
         if rc is not None:
             return rc
         try:
@@ -115,14 +116,6 @@ def cmd_new(argv):
             return 1
         print(resp.id)
     return 0
-
-
-def _refuse_over_cap(fields):
-    refusal = render_cap_refusal(fields)
-    if not refusal:
-        return None
-    sys.stderr.write("%s\n" % refusal)
-    return 2
 
 
 def _set_state_label(state):
@@ -192,24 +185,10 @@ def _reject_unset_targets(unset_fields):
     return "; ".join(parts) + "\n"
 
 
-def _named(node_type):
-    return "an item" if node_type == "item" else "a step"
-
-
 def _render_refusal(refusal):
     if isinstance(refusal, FieldRefusal):
         return render_field_refusal(refusal)
     return _render_state_refusal(refusal)
-
-
-def render_field_refusal(refusal):
-    named = ", ".join("--%s" % f for f in refusal.fields)
-    verb = "belong" if len(refusal.fields) > 1 else "belongs"
-    if refusal.owner is None:
-        return "%s %s to no structure" % (named, verb)
-    return "%s %s to %s, not %s" % (
-        named, verb, _named(refusal.owner), _named(refusal.requested_type),
-    )
 
 
 def _render_state_refusal(r):
@@ -220,7 +199,7 @@ def _render_state_refusal(r):
         ) % (r.state, ", ".join(r.allowed))
     takes = ", ".join("--state %s" % s for s in r.allowed)
     return "--state %s applies to %s, not %s; %s takes %s" % (
-        r.state, _named(r.owner), _named(r.requested_type), _named(r.requested_type), takes,
+        r.state, named(r.owner), named(r.requested_type), named(r.requested_type), takes,
     )
 
 
@@ -291,7 +270,7 @@ def cmd_set(argv):
                     % (field, _WAITING_FIELD_HINTS[field])
                 )
                 return 2
-            rc = _refuse_over_cap(
+            rc = refuse_over_cap(
                 [("--needs", a.needs), ("--reason", a.reason), ("--tried", a.tried)]
             )
             if rc is not None:
