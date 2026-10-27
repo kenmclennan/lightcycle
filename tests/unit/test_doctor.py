@@ -424,6 +424,14 @@ class TestDoctorUseCase(unittest.TestCase):
         self.assertEqual([p.message for p in report.problems["origin"]], ["acme: acme is not reachable right now"])
         self.assertIsNone(report.problems["origin"][0].kind)
 
+    def test_origin_without_a_registry_reports_a_problem_and_is_not_probed(self):
+        source = FakeWorkflowSource()
+        source.add_bundle("acme", "sha1", 1, current=True)
+        source.registries["bare"] = None
+        report = _uc(FakeStore(), source, _cfg(**_ALL_KEYS), FakeWorkflowBundle()).execute(DoctorInput())
+        self.assertEqual([p.message for p in report.problems["origin"]], ["bare: origin has no registry"])
+        self.assertEqual(source.probe_calls, [])
+
     def test_registered_origin_with_deleted_ref_reports_origin_problem(self):
         store = FakeStore()
         source = FakeWorkflowSource()
