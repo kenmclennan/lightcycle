@@ -7,7 +7,6 @@ from lightcycle.application.work.item_partition import is_backlogged_item, is_cl
 from lightcycle.application.work.project_of import project_of
 from lightcycle.domain.work import ItemCost, ProjectIdentity, item_cost, parse_timestamp
 from lightcycle.domain.work.summary_split import split_summary
-from lightcycle.ports.store import NodeNotFoundError
 
 
 @dataclass(frozen=True)
@@ -21,7 +20,6 @@ class ProjectReport:
     completed: int
     abandoned: int
     spend: ItemCost
-    escalations: int
     delivered: Tuple[str, ...]
     fixed: Tuple[str, ...]
     improved: Tuple[str, ...]
@@ -35,7 +33,7 @@ class ReportResponse:
     spend: ItemCost
     automation_count: int
     automation_spend: ItemCost
-    escalations: int
+    cache_hit_rate: Optional[float]
     backlog_start: int
     backlog_close: int
     backlog_delta: int
@@ -88,33 +86,9 @@ def _backlog_start_and_close(store, day, steps=None, items=None):
     return start, close
 
 
-def _escalations_on(store, day):
-    count = 0
-    for node_id, ts in store.waiting_history():
-        parsed = parse_timestamp(ts)
-        if parsed is not None and parsed.date() == day:
-            count += 1
-    return count
-
-
 def _project_key(store, item):
     raw = project_of(store, item)
     return ProjectIdentity.short_name(raw) if raw else None
-
-
-def _escalations_by_item(store, day):
-    counts: Dict[str, int] = {}
-    for node_id, ts in store.waiting_history():
-        parsed = parse_timestamp(ts)
-        if parsed is None or parsed.date() != day:
-            continue
-        try:
-            node = store.get_node(node_id)
-        except NodeNotFoundError:
-            continue
-        owner = getattr(node, "item", None) or node.id
-        counts[owner] = counts.get(owner, 0) + 1
-    return counts
 
 
 def _project_label(project):
@@ -125,7 +99,6 @@ def _project_reports(store, items, day, sections):
     groups: Dict[Optional[str], list] = {}
     for item in items:
         groups.setdefault(_project_key(store, item), []).append(item)
-    escalations = _escalations_by_item(store, day)
     reports = []
     for project, group in groups.items():
         lists = sections.get(project, {})
@@ -134,7 +107,6 @@ def _project_reports(store, items, day, sections):
             completed=sum(1 for i in group if i.disposition == "completed"),
             abandoned=sum(1 for i in group if i.disposition in ("abandoned", "aborted")),
             spend=item_cost([s for i in group for s in store.children(i.id)]),
-            escalations=sum(escalations.get(i.id, 0) for i in group),
             delivered=tuple(lists.get("Delivered", ())),
             fixed=tuple(lists.get("Fixed", ())),
             improved=tuple(lists.get("Improved", ())),
@@ -155,10 +127,11 @@ class ReportUseCase:
         items = [i for i in closed_on_day if i.id not in automation_ids]
         completed = sum(1 for i in items if i.disposition == "completed")
         abandoned = sum(1 for i in items if i.disposition in ("abandoned", "aborted"))
-        automation_spend = item_cost([s for i in automation_items for s in self._store.children(i.id)])
+        automation_steps = [s for i in automation_items for s in self._store.children(i.id)]
+        automation_spend = item_cost(automation_steps)
         all_children = [s for i in items for s in self._store.children(i.id)]
         spend = item_cost(all_children)
-        escalations = _escalations_on(self._store, input.day)
+        day_cache_hit_rate = item_cost(all_children + automation_steps).cache_hit_rate
         all_steps = self._store.all_steps_including_done()
         backlog_start, backlog_close = _backlog_start_and_close(self._store, input.day, all_steps, all_items)
         row = self._store.day_summary(input.day)
@@ -172,7 +145,7 @@ class ReportUseCase:
         return ReportResponse(
             day=input.day, completed=completed, abandoned=abandoned, spend=spend,
             automation_count=len(automation_items), automation_spend=automation_spend,
-            escalations=escalations,
+            cache_hit_rate=day_cache_hit_rate,
             backlog_start=backlog_start, backlog_close=backlog_close,
             backlog_delta=backlog_close - backlog_start,
             summary=summary, projects=projects, summary_unmatched=unmatched,

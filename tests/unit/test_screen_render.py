@@ -540,7 +540,8 @@ def test_report_by_project_separates_headings_from_bullets_with_blank_lines():
     rows = render("report#by-project", size=(100, 80)).split("\n")
     heading_at = next(i for i, row in enumerate(rows) if "yori" in row)
 
-    assert rows[heading_at + 1].strip("│ ") == ""
+    assert rows[heading_at + 1].strip("│ ").strip("─") == ""
+    assert rows[heading_at + 2].strip("│ ") == ""
 
 
 def test_report_by_project_wraps_with_the_terminal_width():

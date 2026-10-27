@@ -447,10 +447,6 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def waiting_history(self):
-        pass
-
-    @abstractmethod
     def day_summary(self, day):
         pass
 

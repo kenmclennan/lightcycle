@@ -407,7 +407,7 @@ class LightcycleApp(App):
     }}
     #report-body {{
         height: 1fr;
-        margin: 1 0;
+        margin: 0 0 1 0;
         scrollbar-background: {COLOURS["bg"]};
         scrollbar-background-hover: {COLOURS["bg"]};
         scrollbar-background-active: {COLOURS["bg"]};
@@ -421,12 +421,25 @@ class LightcycleApp(App):
         color: {COLOURS["text"]};
         padding: 0 2;
     }}
-    #report-markdown MarkdownH1,
-    #report-markdown MarkdownH2,
-    #report-markdown MarkdownH3 {{
+    #report-markdown MarkdownH1 {{
         background: {COLOURS["bg"]};
         color: {COLOURS["cyan"]};
         text-style: bold;
+        margin: 0;
+        padding: 0;
+    }}
+    #report-markdown MarkdownH2 {{
+        background: {COLOURS["bg"]};
+        color: {COLOURS["cyan"]};
+        text-style: bold;
+        text-align: center;
+        border-bottom: solid {COLOURS["border"]};
+    }}
+    #report-markdown MarkdownH3 {{
+        background: {COLOURS["bg"]};
+        color: {COLOURS["text"]};
+        text-style: bold;
+        text-align: left;
     }}
     #report-markdown MarkdownBullet,
     #report-markdown MarkdownParagraph,

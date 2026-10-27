@@ -2,6 +2,7 @@ import re
 
 from lightcycle.adapters.tui.hub_render import _format_item_cost
 from lightcycle.domain.work.summary_split import _BRACKET_AT_END
+from lightcycle.render import format_rate
 
 
 def _plural(count, singular, plural):
@@ -19,11 +20,11 @@ def _top_line(response):
     return " · ".join((
         _plural(closed, "item closed", "items closed"),
         "%s spent" % _format_item_cost(response.spend),
+        "%s cache hit" % format_rate(response.cache_hit_rate),
         "%s (%s)" % (
             _plural(response.automation_count, "automation item", "automation items"),
             _format_item_cost(response.automation_spend),
         ),
-        _plural(response.escalations, "escalation", "escalations"),
         "backlog %d → %d (%s)" % (response.backlog_start, response.backlog_close, delta_text),
     ))
 
@@ -42,7 +43,7 @@ def _project_section(project):
     name = project.project if project.project is not None else "No project"
     blocks = [
         "## %s" % name,
-        "%d closed · %s · %d escalations" % (closed, _format_item_cost(project.spend), project.escalations),
+        "%d closed · %s" % (closed, _format_item_cost(project.spend)),
     ]
     for label, bullets in (
         ("Delivered", project.delivered), ("Fixed", project.fixed), ("Improved", project.improved),
