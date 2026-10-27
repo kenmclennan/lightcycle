@@ -13,7 +13,6 @@ from lightcycle.application.errors import UseCaseError
 from lightcycle.application.pool import (
     BackfillUsageUseCase,
     ListWorkersUseCase,
-    PoolDrainStatusUseCase,
 )
 from lightcycle.ports.workers import RegistryUnreadable
 
@@ -117,9 +116,3 @@ def cmd_backfill_usage(argv):
             % (resp.repair_corrected, resp.repair_examined, resp.repair_missing_logs)
         )
     return 0
-
-
-def _drain_status(now, pool_running=True):
-    return PoolDrainStatusUseCase(
-        container().drain, container().workers, container().store
-    ).execute(pool_running, now)

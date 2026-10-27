@@ -27,7 +27,7 @@ from lightcycle.ports.workers import RegistryUnreadable
 
 
 from lightcycle.commands.context import container, flow as _flow, worktrees as _worktrees
-from lightcycle.commands.intake import _refuse_over_cap, render_field_refusal
+from lightcycle.commands.shared import refuse_over_cap, render_field_refusal
 
 
 def cmd_claim(argv):
@@ -91,7 +91,7 @@ def cmd_done(argv):
     if refusal is not None:
         sys.stderr.write("%s\n" % render_field_refusal(refusal))
         return 2
-    rc = _refuse_over_cap([("--note", note)])
+    rc = refuse_over_cap([("--note", note)])
     if rc is not None:
         return rc
     try:
@@ -139,7 +139,7 @@ def cmd_close(argv):
         )
         return 2
     note = " ".join(a.note) if a.note else None
-    rc = _refuse_over_cap([("--note", note)])
+    rc = refuse_over_cap([("--note", note)])
     if rc is not None:
         return rc
     try:

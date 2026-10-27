@@ -92,7 +92,7 @@ from lightcycle.commands.workflow import _workflow_simulate as _workflow_simulat
 
 
 from lightcycle.commands import context
-from lightcycle.commands.pool import _drain_status as _drain_status
+from lightcycle.commands.shared import drain_status as _drain_status
 from lightcycle.commands.workflow import _repin_lines as _repin_lines
 from lightcycle.commands.workflow import _workflow_check as _workflow_check
 from lightcycle.commands.workflow import _workflow_check_dir as _workflow_check_dir

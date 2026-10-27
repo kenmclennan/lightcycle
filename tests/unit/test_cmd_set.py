@@ -3,7 +3,7 @@ import unittest
 from contextlib import redirect_stdout, redirect_stderr
 
 from lightcycle import cli
-from lightcycle.commands import intake as intake_cmds
+from lightcycle.commands.shared import render_field_refusal
 from lightcycle.application.flow import BlockInput, BlockStepUseCase
 from lightcycle.domain.work import FieldRefusal
 from tests.support.fake_store import FakeStore
@@ -165,7 +165,7 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
 class TestRenderFieldRefusalOfNoStructure(unittest.TestCase):
     def test_a_field_owned_by_neither_structure_says_so(self):
         refusal = FieldRefusal(fields=("goal",), requested_type="item", owner=None)
-        self.assertEqual(intake_cmds.render_field_refusal(refusal), "--goal belongs to no structure")
+        self.assertEqual(render_field_refusal(refusal), "--goal belongs to no structure")
 
 
 class TestCmdSetEmptyStringIsNeverAValue(unittest.TestCase):

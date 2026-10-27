@@ -38,7 +38,7 @@ from lightcycle.ports.store import NodeNotFoundError
 from lightcycle.ports.workers import RegistryUnreadable
 
 
-from lightcycle.commands.pool import _drain_status
+from lightcycle.commands.shared import drain_status as shared_drain_status
 from lightcycle.commands.context import container, flow as _flow
 
 
@@ -134,7 +134,7 @@ def cmd_status(argv):
     if a.json:
         print(json.dumps({k: [t.as_dict() for t in v] for k, v in lanes.items()}, indent=2))
     else:
-        drain_status = _drain_status(time.time(), PoolRunningUseCase(container().lock).execute().running)
+        drain_status = shared_drain_status(time.time(), PoolRunningUseCase(container().lock).execute().running)
         if drain_status.draining:
             print("pool draining (%s)" % drain_status.waiting_text())
         flow_service = _flow()
