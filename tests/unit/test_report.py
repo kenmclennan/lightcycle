@@ -3,7 +3,6 @@ import datetime
 import unittest
 
 from lightcycle.application.flow.engine_steps import RETRO_ORIGIN_LABEL, SUMMARY_ORIGIN_LABEL
-from lightcycle.application.flow.route_step import RouteStepService
 from lightcycle.application.work.backlog import BacklogInput, BacklogUseCase
 from lightcycle.application.work.report import ReportInput, ReportResponse, ReportUseCase, _backlog_start_and_close
 from lightcycle.domain.money import Cost
@@ -85,7 +84,6 @@ class TestReportUseCase(unittest.TestCase):
         self.assertEqual(resp.completed, 0)
         self.assertEqual(resp.abandoned, 0)
         self.assertEqual(resp.automation_count, 0)
-        self.assertEqual(resp.escalations, 0)
         self.assertEqual(resp.backlog_start, 0)
         self.assertEqual(resp.backlog_close, 0)
         self.assertEqual(resp.backlog_delta, 0)
@@ -106,6 +104,34 @@ class TestReportUseCase(unittest.TestCase):
         expected = item_cost(s.children(item))
         self.assertEqual(resp.spend.cost_usd, expected.cost_usd)
         self.assertEqual(resp.spend.unpriced_count, expected.unpriced_count)
+
+
+class TestReportUseCaseCacheHitRate(unittest.TestCase):
+    def _closed_with_tokens(self, s, id, cache_read, input_tokens, label=None):
+        item = s.create_item("item", "a description", id=id)
+        step = s.create_step(stage="build", role="agent", item=item)
+        s.claim_ready("agent")
+        s.record_usage(step, input_tokens, 0, cache_read, 0, 1.0, "list", None)
+        s.complete_node(step, "done")
+        s.complete_node(item, "merged", disposition="completed")
+        s._records[item]["closed_at"] = "2026-01-01T10:00:00+00:00"
+        if label:
+            s.label_add(item, label)
+
+    def test_the_rate_counts_automation_items_tokens(self):
+        s = FakeStore()
+        self._closed_with_tokens(s, "LC-1", cache_read=90, input_tokens=10)
+        self._closed_with_tokens(s, "SUM-1", cache_read=0, input_tokens=100, label=SUMMARY_ORIGIN_LABEL)
+
+        resp = ReportUseCase(s).execute(ReportInput(day=datetime.date(2026, 1, 1)))
+
+        self.assertAlmostEqual(resp.cache_hit_rate, 90 / 200)
+        self.assertAlmostEqual(resp.spend.cache_hit_rate, 0.9)
+
+    def test_a_day_with_no_tokens_has_no_rate(self):
+        resp = ReportUseCase(FakeStore()).execute(ReportInput(day=datetime.date(2026, 1, 1)))
+
+        self.assertIsNone(resp.cache_hit_rate)
 
 
 class TestReportUseCaseBacklog(unittest.TestCase):
@@ -183,52 +209,6 @@ class TestReportUseCaseBacklog(unittest.TestCase):
 
         self.assertEqual(len(listed), 1)
         self.assertEqual(resp.backlog_close, len(listed))
-
-
-class TestReportUseCaseEscalations(unittest.TestCase):
-    def test_a_step_still_parked_with_a_waiting_entry_on_the_day_counts(self):
-        s = FakeStore(now=lambda: "2026-01-01T10:00:00+00:00")
-        item = s.create_item("item", "a description")
-        step = s.create_step(stage="build", role="agent", item=item)
-        RouteStepService(s).route(step, "human")
-
-        resp = ReportUseCase(s).execute(ReportInput(day=datetime.date(2026, 1, 1)))
-
-        self.assertEqual(resp.escalations, 1)
-
-    def test_a_resolved_park_still_counts_even_though_its_current_role_is_agent_again(self):
-        s = FakeStore(now=lambda: "2026-01-01T10:00:00+00:00")
-        item = s.create_item("item", "a description")
-        step = s.create_step(stage="build", role="agent", item=item)
-        RouteStepService(s).route(step, "human")
-        RouteStepService(s).route(step, "agent")
-
-        self.assertEqual(s.get_node(step).role, "agent")
-        resp = ReportUseCase(s).execute(ReportInput(day=datetime.date(2026, 1, 1)))
-
-        self.assertEqual(resp.escalations, 1)
-
-    def test_a_waiting_entry_on_a_different_day_does_not_count(self):
-        s = FakeStore(now=lambda: "2026-01-02T10:00:00+00:00")
-        item = s.create_item("item", "a description")
-        step = s.create_step(stage="build", role="agent", item=item)
-        RouteStepService(s).route(step, "human")
-
-        resp = ReportUseCase(s).execute(ReportInput(day=datetime.date(2026, 1, 1)))
-
-        self.assertEqual(resp.escalations, 0)
-
-    def test_counting_is_unaffected_by_park_reason_already_being_cleared(self):
-        s = FakeStore(now=lambda: "2026-01-01T10:00:00+00:00")
-        item = s.create_item("item", "a description")
-        step = s.create_step(stage="build", role="agent", item=item)
-        RouteStepService(s).route(step, "human")
-        s.update_metadata(step, {"reason": None, "needs": None, "tried": None})
-        RouteStepService(s).route(step, "agent")
-
-        resp = ReportUseCase(s).execute(ReportInput(day=datetime.date(2026, 1, 1)))
-
-        self.assertEqual(resp.escalations, 1)
 
 
 class TestReportUseCaseSummary(unittest.TestCase):
@@ -356,25 +336,6 @@ class TestReportProjectSections(unittest.TestCase):
         ):
             self.assertEqual(sum(getattr(p.spend, attr) for p in sections), getattr(resp.spend, attr), attr)
         self.assertEqual(sum((p.spend.cost_usd for p in sections), Cost.from_usd(0)), resp.spend.cost_usd)
-
-    def test_escalations_on_section_items_sum_to_the_total_and_others_fall_short(self):
-        s = FakeStore()
-        a = _project_item(s, "kenmclennan/lightcycle")
-        b = _project_item(s, "kenmclennan/yori")
-        now = datetime.datetime(2026, 1, 1, 12, tzinfo=datetime.timezone.utc).astimezone().isoformat()
-        s._history.setdefault(a, []).append(("waiting", now))
-        s._history.setdefault(b, []).append(("waiting", now))
-
-        resp = ReportUseCase(s).execute(ReportInput(day=DAY))
-        self.assertEqual(resp.escalations, 2)
-        self.assertEqual(sum(p.escalations for p in resp.projects), 2)
-
-        open_item = s.create_item("open", "d")
-        s._history.setdefault(open_item, []).append(("waiting", now))
-
-        resp = ReportUseCase(s).execute(ReportInput(day=DAY))
-        self.assertEqual(resp.escalations, 3)
-        self.assertLess(sum(p.escalations for p in resp.projects), resp.escalations)
 
     def test_summary_bullets_land_in_their_project_and_the_rest_is_unmatched(self):
         s = FakeStore()

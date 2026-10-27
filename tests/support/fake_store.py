@@ -722,12 +722,6 @@ class FakeStore(StorePort):
     def history(self, tid):
         return list(self._history.get(tid, []))
 
-    def waiting_history(self):
-        return [
-            (node_id, ts) for node_id, entries in self._history.items()
-            for state, ts in entries if state == str(State.WAITING)
-        ]
-
     def _daily_summary_row(self, day):
         b = self._daily_summaries.get(day)
         if b is None:

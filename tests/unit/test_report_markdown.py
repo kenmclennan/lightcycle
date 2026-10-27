@@ -12,17 +12,17 @@ def _cost(usd):
     return types.SimpleNamespace(cost_usd=Cost.from_usd(usd), unpriced_count=0)
 
 
-def _project(name, *, completed=1, abandoned=0, usd=1.0, escalations=0, delivered=(), fixed=(), improved=()):
+def _project(name, *, completed=1, abandoned=0, usd=1.0, delivered=(), fixed=(), improved=()):
     return ProjectReport(
         project=name, completed=completed, abandoned=abandoned, spend=_cost(usd),
-        escalations=escalations, delivered=tuple(delivered), fixed=tuple(fixed), improved=tuple(improved),
+        delivered=tuple(delivered), fixed=tuple(fixed), improved=tuple(improved),
     )
 
 
 def _response(**overrides):
     fields = dict(
         day=datetime.date(2026, 10, 24), completed=0, abandoned=0, spend=_cost(0),
-        automation_count=0, automation_spend=_cost(0), escalations=0,
+        automation_count=0, automation_spend=_cost(0), cache_hit_rate=None,
         backlog_start=0, backlog_close=0, backlog_delta=0,
         summary=None, projects=(), summary_unmatched=None,
     )
@@ -30,13 +30,13 @@ def _response(**overrides):
     return ReportResponse(**fields)
 
 
-EMPTY_TOP = "0 items closed · not recorded spent · 0 automation items (not recorded) · 0 escalations · backlog 0 → 0 (+0)"
+EMPTY_TOP = "0 items closed · not recorded spent · n/a cache hit · 0 automation items (not recorded) · backlog 0 → 0 (+0)"
 
 
 class TestReportMarkdown(unittest.TestCase):
     def test_the_agreed_example_renders_whole(self):
         response = _response(
-            completed=8, abandoned=1, spend=_cost(3.92), automation_count=4, automation_spend=_cost(0.61),
+            completed=8, abandoned=1, spend=_cost(3.92), automation_count=4, automation_spend=_cost(0.61), cache_hit_rate=0.921,
             backlog_start=42, backlog_close=37, backlog_delta=-5,
             projects=(
                 _project(
@@ -52,15 +52,15 @@ class TestReportMarkdown(unittest.TestCase):
         self.assertEqual(
             report_markdown(response),
             "# Saturday 24 October 2026\n\n"
-            "9 items closed · $3.92 spent · 4 automation items ($0.61) · 0 escalations · backlog 42 → 37 (-5)\n\n"
+            "9 items closed · $3.92 spent · 92.1% cache hit · 4 automation items ($0.61) · backlog 42 → 37 (-5)\n\n"
             "## lightcycle\n\n"
-            "5 closed · $2.12 · 0 escalations\n\n"
+            "5 closed · $2.12\n\n"
             "### Fixed\n\n"
             "- The mutation report now refuses stale results (LC-1339)\n\n"
             "### Improved\n\n"
             "- A review-ci step carries a reason (LC-1337, LC-1338)\n\n"
             "## flynns-workflows\n\n"
-            "3 closed · $1.80 · 0 escalations\n\n"
+            "3 closed · $1.80\n\n"
             "### Fixed\n\n"
             "- kb-check reads angle links (FW-28)\n\n"
             "## Not matched to a project\n\n"
@@ -76,7 +76,7 @@ class TestReportMarkdown(unittest.TestCase):
     def test_a_project_with_no_bullets_is_its_heading_and_stats_only(self):
         text = report_markdown(_response(projects=(_project("yori"),)))
 
-        self.assertTrue(text.endswith("## yori\n\n1 closed · $1.00 · 0 escalations\n"))
+        self.assertTrue(text.endswith("## yori\n\n1 closed · $1.00\n"))
 
     def test_the_categories_come_in_delivered_fixed_improved_order(self):
         text = report_markdown(_response(projects=(
@@ -114,11 +114,13 @@ class TestReportMarkdown(unittest.TestCase):
         )
 
     def test_singular_forms(self):
-        response = _response(completed=1, automation_count=1, escalations=1)
+        response = _response(completed=1, automation_count=1)
 
         self.assertIn("1 item closed · ", report_markdown(response))
         self.assertIn(" · 1 automation item (", report_markdown(response))
-        self.assertIn(" · 1 escalation · ", report_markdown(response))
+
+    def test_no_tokens_reads_na_cache_hit(self):
+        self.assertIn(" · n/a cache hit · ", report_markdown(_response()))
 
     def test_a_positive_delta_carries_a_plus_sign(self):
         text = report_markdown(_response(backlog_start=1, backlog_close=4, backlog_delta=3))

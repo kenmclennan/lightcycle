@@ -3313,15 +3313,15 @@ def _report_source(session):
     return session.app.query_one("#report-markdown", Markdown).source
 
 
-def _spy_waiting_history_calls(store):
+def _spy_report_calls(store):
     calls = {"n": 0}
-    original = store.waiting_history
+    original = store.day_summary
 
-    def counted():
+    def counted(*args, **kwargs):
         calls["n"] += 1
-        return original()
+        return original(*args, **kwargs)
 
-    store.waiting_history = counted
+    store.day_summary = counted
     return calls
 
 
@@ -3385,7 +3385,7 @@ class TestReportFigures(unittest.TestCase):
         source = _report_source(session)
         self.assertTrue(source.startswith("# "))
         self.assertIn(
-            "1 item closed · $2.50 spent · 0 automation items (not recorded) · 0 escalations"
+            "1 item closed · $2.50 spent · 0.0% cache hit · 0 automation items (not recorded)"
             " · backlog 0 → 0 (+0)",
             source,
         )
@@ -3398,7 +3398,7 @@ class TestReportFigures(unittest.TestCase):
         self.assertEqual(len(lines), 3)
         self.assertEqual(
             lines[2],
-            "0 items closed · not recorded spent · 0 automation items (not recorded) · 0 escalations"
+            "0 items closed · not recorded spent · n/a cache hit · 0 automation items (not recorded)"
             " · backlog 0 → 0 (+0)",
         )
 
@@ -3410,7 +3410,7 @@ class TestReportGatedOffThePoll(unittest.TestCase):
         self.addCleanup(session.close)
         self.assertEqual(session.app._view, "priority")
 
-        calls = _spy_waiting_history_calls(store)
+        calls = _spy_report_calls(store)
         session.run(session.app._refresh)
         session.pause()
 
@@ -3422,7 +3422,7 @@ class TestReportGatedOffThePoll(unittest.TestCase):
         self.addCleanup(session.close)
         self.assertEqual(session.app._view, "done")
 
-        calls = _spy_waiting_history_calls(store)
+        calls = _spy_report_calls(store)
         session.run(session.app._refresh)
         session.pause()
 

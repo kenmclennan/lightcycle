@@ -1202,19 +1202,6 @@ class StoreContractBase:
         tid = self._step(s, "t", role="agent")
         self.assertEqual(s.history(tid), [])
 
-    def test_waiting_history_returns_only_waiting_state_rows_across_all_nodes(self):
-        s = self.make_store()
-        parked = self._step(s, "parked", role="agent")
-        RouteStepService(s).route(parked, "human")
-        completed = self._step(s, "completed", role="agent")
-        s.claim_ready("agent")
-        s.complete_node(completed, "done")
-
-        rows = s.waiting_history()
-
-        self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[0][0], parked)
-
     def test_open_run_after_a_merged_close_opens_the_next_round(self):
         s = self.make_store()
         item = s.create_item("t", "a description", shortcode="GRID")

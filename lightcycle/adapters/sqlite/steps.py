@@ -301,11 +301,5 @@ class StepsAggregate:
         ).fetchall()
         return [(r[0], r[1]) for r in rows]
 
-    def waiting_history(self):
-        rows = self._conn.execute(
-            "SELECT node_id, ts FROM history WHERE state = 'waiting'"
-        ).fetchall()
-        return [(r[0], r[1]) for r in rows]
-
     def steps_at_step(self, step):
         return self._select_steps("stage = ?", (step,))

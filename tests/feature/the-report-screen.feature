@@ -4,7 +4,7 @@ Feature: The report screen
   Tab or the tab strip (priority list -> backlog -> done -> report -> priority
   list). It shows one markdown document for one day, defaulting to today: a title
   with the day, then a top line with items closed, cost, automation items and
-  their cost, escalations and the backlog from the day's starting midnight to
+  their cost, the day's cache hit rate and the backlog from the day's starting midnight to
   the next one with its delta. On the current day the closing size is live and
   keeps moving. After the top line it shows one section per project that
   closed work that day, ordered by items closed then name, each with a one
