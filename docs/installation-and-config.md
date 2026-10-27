@@ -165,6 +165,7 @@ Schema changes are handled separately: when a new engine opens a store it stamps
 `lc doctor` reports what an upgrade left for you to bring up to date. Each of these findings carries a stable `kind` and a `fix` line (text and `lc doctor --json`), and is only reported, never fixed:
 
 - `config-key-blank` - a required config key is set but blank, with what it does and how to set it.
+- `origin-behind` - a registered origin that tracks a ref has a remote sha different from the pulled bundle; the fix is `lc workflow upgrade <origin>`. An origin registered without a ref is never reported behind, and an unreachable origin keeps its own message instead.
 - `config-key-obsolete` - a config key is set that this version no longer reads; the fix is to delete its line with `lc config --edit`.
 - `guidance-conventions-outdated` - the guidance repo records an older conventions version than the engine ships; the update lands by PR.
 - `schedule-not-enabled` - a workflow whose job the engine no longer runs itself has no `schedule-<id>` block in the config; the fix is to add one with `lc config --edit`, naming the workflow and one of your registered projects (`lc schedule list` shows the suggested cron and guard).

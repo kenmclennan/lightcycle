@@ -7,7 +7,7 @@ from contextlib import redirect_stdout, redirect_stderr
 
 from lightcycle import cli
 from lightcycle.config import ResolvedSetting
-from lightcycle.ports.workflow_source import OriginRegistration
+from lightcycle.ports.workflow_source import OriginRegistration, RemoteProbe
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_git import FakeGit
 from tests.support.fake_machine import FakeMachine
@@ -29,6 +29,8 @@ class FakeWorkflowSource:
     def __init__(self):
         self.registries = {}
         self.failures = {}
+        self.remotes = {}
+        self.probe_calls = []
 
     def has_version(self, origin, sha):
         return True
@@ -42,6 +44,9 @@ class FakeWorkflowSource:
     def current_sha(self, origin):
         return "sha1"
 
+    def workflow_names(self, origin, sha):
+        return []
+
     def list_origins(self):
         return sorted(self.registries)
 
@@ -54,8 +59,11 @@ class FakeWorkflowSource:
     def fail_resolve(self, name, reason):
         self.failures[self.registries[name].url] = reason
 
-    def unresolvable_reason(self, url, ref):
-        return self.failures.get(url)
+    def probe_remote(self, url, ref):
+        self.probe_calls.append(url)
+        if url in self.failures:
+            return RemoteProbe(reason=self.failures[url])
+        return RemoteProbe(sha=self.remotes.get(url))
 
 
 class FakeConfig:
@@ -206,6 +214,25 @@ class TestCmdDoctor(unittest.TestCase):
         self.assertEqual(rc, 1)
         data = json.loads(out)
         self.assertTrue(any("acme2" in p["message"] for p in data["origin"]))
+
+    def _behind_source(self):
+        source = FakeWorkflowSource()
+        source.registries["acme2"] = OriginRegistration(url="acme2", ref="main", current="a" * 40)
+        source.remotes["acme2"] = "b" * 40
+        return source
+
+    def test_json_behind_origin_carries_kind_and_fix(self):
+        cli.set_container(FakeContainer(FakeStore(), workflow_source=self._behind_source()))
+        rc, out, err = call(cli.cmd_doctor, "--json")
+        self.assertEqual(rc, 1)
+        (finding,) = json.loads(out)["origin"]
+        self.assertEqual(finding["kind"], "origin-behind")
+        self.assertEqual(finding["fix"], "lc workflow upgrade acme2")
+
+    def test_text_behind_origin_prints_the_fix_line(self):
+        cli.set_container(FakeContainer(FakeStore(), workflow_source=self._behind_source()))
+        rc, out, err = call(cli.cmd_doctor)
+        self.assertIn("    fix: lc workflow upgrade acme2", out)
 
     def test_obsolete_config_key_reports_in_config_category(self):
         class ObsoleteFakeConfig(FakeConfig):

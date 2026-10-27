@@ -9,7 +9,7 @@ from lightcycle.application.inspect import DoctorInput, DoctorUseCase
 from lightcycle.config import _SEED_KEYS, Config
 from lightcycle.domain.pool import ConfigReloadState
 from lightcycle.ports.workflow_bundle import StepPrompt
-from lightcycle.ports.workflow_source import OriginRegistration
+from lightcycle.ports.workflow_source import OriginRegistration, RemoteProbe
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_git import FakeGit
 from tests.support.fake_machine import FakeMachine
@@ -40,6 +40,8 @@ class FakeWorkflowSource:
         self.currents = {}
         self.registries = {}
         self.failures = {}
+        self.remotes = {}
+        self.probe_calls = []
 
     def add_bundle(self, origin, sha, contract, current=False, requires=None):
         self.materialized.setdefault(origin, []).append(sha)
@@ -75,8 +77,11 @@ class FakeWorkflowSource:
     def read_registry(self, name):
         return self.registries.get(name)
 
-    def unresolvable_reason(self, url, ref):
-        return self.failures.get(url)
+    def probe_remote(self, url, ref):
+        self.probe_calls.append(url)
+        if url in self.failures:
+            return RemoteProbe(reason=self.failures[url])
+        return RemoteProbe(sha=self.remotes.get(url))
 
 
 class FakeWorkflowBundle:
@@ -378,6 +383,46 @@ class TestDoctorUseCase(unittest.TestCase):
         config = _cfg(**_ALL_KEYS)
         report = _uc(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
         self.assertEqual(report.problems["origin"], [])
+
+    def _behind_report(self, ref, current, remote):
+        source = FakeWorkflowSource()
+        source.add_bundle("acme", "sha1", 1, current=True)
+        source.register_origin("acme", ref=ref, current=current)
+        if remote is not None:
+            source.remotes["acme"] = remote
+        report = _uc(FakeStore(), source, _cfg(**_ALL_KEYS), FakeWorkflowBundle()).execute(DoctorInput())
+        return source, report.problems["origin"]
+
+    def test_origin_behind_its_ref_reports_one_problem_with_upgrade_fix(self):
+        source, problems = self._behind_report("main", "a" * 40, "b" * 40)
+        self.assertEqual(len(problems), 1)
+        self.assertEqual(problems[0].kind, "origin-behind")
+        self.assertEqual(problems[0].fix, "lc workflow upgrade acme")
+        self.assertIn("a" * 12, problems[0].message)
+        self.assertIn("b" * 12, problems[0].message)
+        self.assertEqual(source.probe_calls, ["acme"])
+
+    def test_origin_at_remote_sha_reports_no_problem(self):
+        source, problems = self._behind_report("main", "a" * 40, "a" * 40)
+        self.assertEqual(problems, [])
+
+    def test_origin_without_ref_is_never_behind(self):
+        source, problems = self._behind_report("", "a" * 40, "b" * 40)
+        self.assertEqual(problems, [])
+
+    def test_probe_with_no_sha_and_no_reason_is_not_behind(self):
+        source, problems = self._behind_report("main", "a" * 40, None)
+        self.assertEqual(problems, [])
+
+    def test_unreachable_origin_is_not_also_reported_behind(self):
+        source = FakeWorkflowSource()
+        source.add_bundle("acme", "sha1", 1, current=True)
+        source.register_origin("acme", ref="main", current="a" * 40)
+        source.remotes["acme"] = "b" * 40
+        source.fail_resolve("acme", "acme is not reachable right now")
+        report = _uc(FakeStore(), source, _cfg(**_ALL_KEYS), FakeWorkflowBundle()).execute(DoctorInput())
+        self.assertEqual([p.message for p in report.problems["origin"]], ["acme: acme is not reachable right now"])
+        self.assertIsNone(report.problems["origin"][0].kind)
 
     def test_registered_origin_with_deleted_ref_reports_origin_problem(self):
         store = FakeStore()

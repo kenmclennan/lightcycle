@@ -7,6 +7,7 @@ import tempfile
 from lightcycle import __version__
 from lightcycle.application.inspect import DoctorReport
 from lightcycle.application.setup import UpgradeResponse
+from lightcycle.ports.workflow_source import RemoteProbe
 from lightcycle.application.work.report import ReportInput, ReportUseCase
 from lightcycle.adapters.backup import SqliteBackupAdapter
 from lightcycle.adapters.breaker import BreakerAdapter
@@ -182,8 +183,8 @@ class FakeWorkflowSource(WorkflowSourcePort):
     def current_sha(self, origin):
         return None
 
-    def unresolvable_reason(self, url, ref):
-        return None
+    def probe_remote(self, url, ref):
+        return RemoteProbe()
 
     def workflow_names(self, origin, sha):
         return []
