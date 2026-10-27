@@ -99,11 +99,14 @@ Feature: The done screen
     Then the done table has focus
     And only the done row matching "widget" is still shown
 
-  Scenario: Enter from the done search box opens the narrowed result's own hub
+  Scenario: Enter from the done search box leaves it with the term and results unchanged, then a second Enter opens the narrowed result's own hub
     Given the done tab is shown with the closed items "widget one" and "gadget two"
     When / is pressed
     And "widget" is typed into the done search box
     And Enter is pressed
+    Then the done table has focus
+    And only the done row matching "widget" is still shown
+    When Enter is pressed
     Then its hub opens for the done item matching "widget"
 
   Scenario Outline: Each shortcut for the done tab with the search box focused and rows present appears in the footer, in order
@@ -116,7 +119,7 @@ Feature: The done screen
     Examples:
       | position | key     | action     |
       | 1        | ↑↓      | move       |
-      | 2        | enter   | open       |
+      | 2        | enter   | apply      |
       | 3        | esc/tab | back       |
       | 4        | [/]     | switch tab |
       | 5        | q       | quit       |
@@ -131,9 +134,10 @@ Feature: The done screen
 
     Examples:
       | position | key     | action     |
-      | 1        | esc/tab | back       |
-      | 2        | [/]     | switch tab |
-      | 3        | q       | quit       |
+      | 1        | enter   | apply      |
+      | 2        | esc/tab | back       |
+      | 3        | [/]     | switch tab |
+      | 4        | q       | quit       |
 
   Scenario: The focused-search shortcut strip is actually painted in the footer
     Given the done tab is shown with a closed item

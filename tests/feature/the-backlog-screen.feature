@@ -230,7 +230,7 @@ Feature: The backlog screen
     Examples:
       | position | key     | action          |
       | 1        | ↑↓      | move            |
-      | 2        | enter   | explore in tree |
+      | 2        | enter   | apply           |
       | 3        | esc/tab | back            |
       | 4        | [/]     | switch tab      |
       | 5        | q       | quit            |
@@ -245,9 +245,10 @@ Feature: The backlog screen
 
     Examples:
       | position | key     | action     |
-      | 1        | esc/tab | back       |
-      | 2        | [/]     | switch tab |
-      | 3        | q       | quit       |
+      | 1        | enter   | apply      |
+      | 2        | esc/tab | back       |
+      | 3        | [/]     | switch tab |
+      | 4        | q       | quit       |
 
   Scenario: The focused-search shortcut strip is actually painted in the footer
     Given the backlog is shown with a todo item
@@ -315,11 +316,14 @@ Feature: The backlog screen
     Then the table has focus
     And only the row matching "widget" is still shown
 
-  Scenario: Enter from the search box opens the narrowed result's own hub
+  Scenario: Enter from the search box leaves it with the term and results unchanged, then a second Enter opens the narrowed result's own hub
     Given the backlog is shown with the todo items "widget one" and "gadget two"
     When / is pressed
     And "widget" is typed into the search box
     And Enter is pressed
+    Then the table has focus
+    And only the row matching "widget" is still shown
+    When Enter is pressed
     Then its hub opens for the item matching "widget"
 
   Scenario: The search term survives switching to Current work and back
