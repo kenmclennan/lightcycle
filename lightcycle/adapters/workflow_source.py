@@ -8,6 +8,7 @@ from lightcycle.domain.workflows.identity import parse_pin
 from lightcycle.ports.workflow_source import (
     FetchedBundle,
     OriginRegistration,
+    RemoteProbe,
     WorkflowSourceError,
     WorkflowSourcePort,
 )
@@ -18,6 +19,20 @@ _REGISTRY = "origin.toml"
 
 def _toml_str(value):
     return '"%s"' % value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _pick_remote_sha(stdout, ref):
+    lines = [ln.split("\t", 1) for ln in stdout.splitlines() if "\t" in ln]
+    if not lines:
+        return None
+    if not ref:
+        named = {name: sha for sha, name in lines}
+        return named.get("HEAD", lines[0][0])
+    for name in ("refs/tags/%s^{}" % ref, "refs/heads/%s" % ref, "refs/tags/%s" % ref, ref):
+        for sha, found in lines:
+            if found == name:
+                return sha
+    return lines[0][0]
 
 
 class WorkflowSourceAdapter(WorkflowSourcePort):
@@ -135,19 +150,24 @@ class WorkflowSourceAdapter(WorkflowSourcePort):
         registry = self.read_registry(origin)
         return registry.current if registry else None
 
-    def unresolvable_reason(self, url, ref):
+    def probe_remote(self, url, ref):
+        unreachable = RemoteProbe(reason="%s is not reachable right now" % url)
+        patterns = [ref, ref + "^{}"] if ref else ["HEAD"]
         try:
             result = subprocess.run(
-                ["git", "ls-remote", "--exit-code", url, ref or "HEAD"],
+                ["git", "ls-remote", "--exit-code", url] + patterns,
                 capture_output=True, text=True, timeout=10,
             )
         except (OSError, subprocess.SubprocessError):
-            return "%s is not reachable right now" % url
-        if result.returncode == 0:
-            return None
+            return unreachable
         if result.returncode == 2:
-            return "ref %r no longer resolves against %s" % (ref, url)
-        return "%s is not reachable right now" % url
+            return RemoteProbe(reason="ref %r no longer resolves against %s" % (ref, url))
+        if result.returncode != 0:
+            return unreachable
+        sha = _pick_remote_sha(result.stdout, ref)
+        if sha is None:
+            return unreachable
+        return RemoteProbe(sha=sha)
 
     def workflow_names(self, origin, sha):
         d = os.path.join(self._bundle_dir(origin, sha), "workflows")

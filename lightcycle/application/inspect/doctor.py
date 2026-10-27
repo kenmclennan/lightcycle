@@ -229,10 +229,17 @@ class DoctorUseCase:
                     Problem("origin", "default-origin %r is set but has no pulled bundle" % origin))
         for name in self._workflow_source.list_origins():
             registry = self._workflow_source.read_registry(name)
-            reason = self._workflow_source.unresolvable_reason(
+            probe = self._workflow_source.probe_remote(
                 registry.url if registry else None, registry.ref if registry else None)
-            if reason:
-                problems.append(Problem("origin", "%s: %s" % (name, reason)))
+            if probe.reason:
+                problems.append(Problem("origin", "%s: %s" % (name, probe.reason)))
+            elif (registry and registry.ref and registry.current and probe.sha
+                    and probe.sha != registry.current):
+                problems.append(Problem(
+                    "origin",
+                    "%s: behind %s - pulled %s, remote %s"
+                    % (name, registry.ref, registry.current[:12], probe.sha[:12]),
+                    kind="origin-behind", fix="lc workflow upgrade %s" % name))
         return problems
 
     def _hook_failure_problems(self):

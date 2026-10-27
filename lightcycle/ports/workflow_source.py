@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from typing import Optional
 
 
 class WorkflowSourceError(Exception):
@@ -22,6 +23,12 @@ class OriginRegistration:
     ref: str
     current: str
     writable: bool = False
+
+
+@dataclass(frozen=True)
+class RemoteProbe:
+    reason: Optional[str] = None
+    sha: Optional[str] = None
 
 
 class WorkflowSourcePort(ABC):
@@ -50,7 +57,7 @@ class WorkflowSourcePort(ABC):
         pass
 
     @abstractmethod
-    def unresolvable_reason(self, url, ref):
+    def probe_remote(self, url, ref):
         pass
 
     @abstractmethod

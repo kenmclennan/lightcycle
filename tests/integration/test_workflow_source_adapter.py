@@ -10,7 +10,7 @@ from lightcycle.adapters.workflow_bundle import WorkflowBundleAdapter
 from lightcycle.adapters.workflow_source import WorkflowSourceAdapter
 from lightcycle.application.workflows.add import AddWorkflowSourceUseCase
 from lightcycle.application.workflows.upgrade import UpgradeWorkflowSourceUseCase
-from lightcycle.ports.workflow_source import OriginRegistration, WorkflowSourceError
+from lightcycle.ports.workflow_source import OriginRegistration, RemoteProbe, WorkflowSourceError
 from tests.support.fake_store import FakeStore
 from tests.support.lifecycle_fakes import lifecycle_for
 
@@ -253,11 +253,52 @@ class TestRegistry(unittest.TestCase):
         )
 
 
-class TestUnresolvableReason(unittest.TestCase):
-    def test_resolvable_ref_returns_none(self):
+def _head(repo, rev="HEAD"):
+    return subprocess.run(
+        ["git", "-C", repo, "rev-parse", rev], capture_output=True, text=True
+    ).stdout.strip()
+
+
+def _commit_file(repo, name, message):
+    with open(os.path.join(repo, name), "w") as f:
+        f.write(message)
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", message)
+
+
+class TestProbeRemote(unittest.TestCase):
+    def test_resolvable_ref_returns_its_head_sha(self):
         repo, head = _make_source_repo()
         adapter = _adapter()
-        self.assertIsNone(adapter.unresolvable_reason(repo, "main"))
+        self.assertEqual(adapter.probe_remote(repo, "main"), RemoteProbe(sha=head))
+
+    def test_commit_past_the_registered_sha_is_reported(self):
+        repo, head = _make_source_repo()
+        _commit_file(repo, "later.txt", "later")
+        adapter = _adapter()
+        probe = adapter.probe_remote(repo, "main")
+        self.assertEqual(probe, RemoteProbe(sha=_head(repo)))
+        self.assertNotEqual(probe.sha, head)
+
+    def test_annotated_tag_returns_the_peeled_commit_sha(self):
+        repo, head = _make_source_repo()
+        _git(repo, "tag", "-a", "-m", "v1", "v1")
+        adapter = _adapter()
+        probe = adapter.probe_remote(repo, "v1")
+        self.assertEqual(probe.sha, _head(repo, "v1^{}"))
+        self.assertNotEqual(probe.sha, _head(repo, "v1"))
+
+    def test_branch_wins_over_a_remote_tracking_ref_of_the_same_name(self):
+        repo, head = _make_source_repo()
+        _git(repo, "update-ref", "refs/remotes/origin/main", head)
+        _commit_file(repo, "later.txt", "later")
+        adapter = _adapter()
+        self.assertEqual(adapter.probe_remote(repo, "main"), RemoteProbe(sha=_head(repo)))
+
+    def test_empty_ref_probes_head(self):
+        repo, head = _make_source_repo()
+        adapter = _adapter()
+        self.assertEqual(adapter.probe_remote(repo, ""), RemoteProbe(sha=head))
 
     def test_deleted_ref_returns_ref_not_found_reason(self):
         repo, head = _make_source_repo()
@@ -265,15 +306,15 @@ class TestUnresolvableReason(unittest.TestCase):
         _git(repo, "checkout", "-q", "main")
         _git(repo, "branch", "-q", "-D", "throwaway")
         adapter = _adapter()
-        reason = adapter.unresolvable_reason(repo, "throwaway")
-        self.assertIsNotNone(reason)
-        self.assertIn("throwaway", reason)
+        probe = adapter.probe_remote(repo, "throwaway")
+        self.assertIsNone(probe.sha)
+        self.assertIn("throwaway", probe.reason)
 
     def test_unreachable_path_returns_not_reachable_reason(self):
         adapter = _adapter()
-        reason = adapter.unresolvable_reason("/no/such/repo/anywhere", "main")
-        self.assertIsNotNone(reason)
-        self.assertIn("not reachable", reason)
+        probe = adapter.probe_remote("/no/such/repo/anywhere", "main")
+        self.assertIsNone(probe.sha)
+        self.assertIn("not reachable", probe.reason)
 
     def test_ref_not_currently_checked_out_still_resolves(self):
         repo, head = _make_source_repo()
@@ -282,9 +323,10 @@ class TestUnresolvableReason(unittest.TestCase):
             f.write('name = "acme"\ncontract = 1\ndescription = "acme flows (other)"\n')
         _git(repo, "add", "-A")
         _git(repo, "commit", "-q", "-m", "other branch commit")
+        other = _head(repo)
         _git(repo, "checkout", "-q", "main")
         adapter = _adapter()
-        self.assertIsNone(adapter.unresolvable_reason(repo, "other"))
+        self.assertEqual(adapter.probe_remote(repo, "other"), RemoteProbe(sha=other))
 
 
 class TestListingAndRemoval(unittest.TestCase):
