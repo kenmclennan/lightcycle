@@ -12,6 +12,10 @@ class TestDoctorSummary(unittest.TestCase):
         self.assertEqual(doctor_summary({category: _findings(category, 1)}), "1 " + singular)
         self.assertEqual(doctor_summary({category: _findings(category, 2)}), "2 " + plural)
 
+    def test_unknown_category_falls_back(self):
+        self.assertEqual(doctor_summary({"newcat": _findings("newcat", 1)}), "1 newcat problem")
+        self.assertEqual(doctor_summary({"newcat": _findings("newcat", 2)}), "2 newcat problems")
+
     def test_store(self):
         self._singular_and_plural("store", "store problem", "store problems")
 

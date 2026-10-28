@@ -4125,6 +4125,28 @@ class TestDoctorReportView(unittest.TestCase):
         header = session.app.screen.query_one("#doctor-report-header")
         self.assertIn("doctor · 2 workflows out of date", str(header.render()))
 
+    def test_the_header_shows_when_the_report_was_checked(self):
+        import datetime
+        import time
+
+        checked = datetime.datetime(2026, 1, 1, 9, 5, 0)
+        session = launch(
+            make_test_container(), now=lambda: checked, doctor_check=lambda: _behind_report(2))
+        self.addCleanup(session.close)
+        session.press("D")
+        expected = time.strftime("%H:%M", time.localtime(checked.timestamp()))
+        strips = session.run(lambda: session.app.screen._compositor.render_strips())
+        rendered = "\n".join(strip.text for strip in strips)
+        self.assertIn("checked " + expected, rendered)
+
+    def test_github_only_findings_neither_open_the_report_nor_hint_it(self):
+        from lightcycle.adapters.tui.doctor_report import DoctorReportScreen
+
+        session = self._launch(lambda: _doctor_report("github"))
+        session.press("D")
+        self.assertNotIsInstance(session.app.screen, DoctorReportScreen)
+        self.assertNotIn("D", self._shortcut_keys(session))
+
     def test_escape_returns_to_the_main_screen(self):
         from lightcycle.adapters.tui.doctor_report import DoctorReportScreen
 

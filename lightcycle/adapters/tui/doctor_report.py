@@ -1,3 +1,5 @@
+import time
+
 from lightcycle.adapters.tui.artifact_viewer import ArtifactTextBody
 from lightcycle.adapters.tui.design_system import COLOURS, DOCTOR_REPORT_SHORTCUTS
 from lightcycle.adapters.tui.footer import DashboardFooter
@@ -26,10 +28,11 @@ class DoctorReportScreen(Screen, inherit_bindings=False):
     }}
     """
 
-    def __init__(self, report, summary):
+    def __init__(self, report, summary, checked_at):
         super().__init__()
         self._report = report
         self._summary = summary
+        self._checked_at = checked_at
 
     def compose(self) -> ComposeResult:
         yield Static(id="doctor-report-header")
@@ -42,6 +45,10 @@ class DoctorReportScreen(Screen, inherit_bindings=False):
         header.append("doctor", style=COLOURS["cyan"])
         if self._summary:
             header.append(" · %s" % self._summary, style=COLOURS["dim"])
+        header.append(
+            " · checked %s" % time.strftime("%H:%M", time.localtime(self._checked_at)),
+            style=COLOURS["dim"],
+        )
         self.query_one("#doctor-report-header", Static).update(header)
         body = self.query_one(ArtifactTextBody)
         for category, problems in self._report.problems.items():

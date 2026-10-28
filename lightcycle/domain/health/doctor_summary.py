@@ -29,7 +29,10 @@ def doctor_summary(problems) -> str:
             if other:
                 parts.append(_part(other, _WORKFLOW_OTHER))
         else:
-            parts.append(_part(len(findings), _PHRASES[category]))
+            parts.append(_part(
+                len(findings),
+                _PHRASES.get(category, ("%s problem" % category, "%s problems" % category)),
+            ))
         total += len(findings)
     if len(parts) >= 3:
         return "%d problems" % total
