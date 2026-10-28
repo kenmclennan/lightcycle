@@ -39,6 +39,7 @@ class StatusBar(Horizontal):
         config_changed=False,
         github=None,
         doctor_areas=(),
+        doctor_summary="",
         doctor_failed=False,
         pool_tick_health=None,
     ):
@@ -109,9 +110,8 @@ class StatusBar(Horizontal):
             doctor_glyph, doctor_colour = FOOTER_GLYPHS[
                 "doctor-store" if "store" in doctor_areas else "doctor-problems"
             ]
-            areas = ", ".join(doctor_areas) if len(doctor_areas) < 3 else "%d areas" % len(doctor_areas)
             doctor_widget.update(
-                Text("%s doctor · %s" % (doctor_glyph, areas), style=COLOURS[doctor_colour])
+                Text("%s doctor · %s" % (doctor_glyph, doctor_summary), style=COLOURS[doctor_colour])
             )
             doctor_widget.display = True
         else:

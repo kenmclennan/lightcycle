@@ -6,6 +6,7 @@ from lightcycle.cli_commands import COMMANDS, build_parser
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.inspect import DoctorInput
+from lightcycle.domain.health import problem_lines
 from lightcycle.application.workflows.add import AddWorkflowSourceUseCase
 from lightcycle.application.setup import (
     AddProjectInput,
@@ -58,11 +59,8 @@ def cmd_doctor(argv):
             print("%s: %s" % (cat, report.notes.get(cat, "ok")))
             continue
         print("%s:" % cat)
-        for p in probs:
-            suffix = " (%s)" % p.node_id if p.node_id else ""
-            print("  %s%s" % (p.message, suffix))
-            if p.fix:
-                print("    fix: %s" % p.fix)
+        for line in problem_lines(probs):
+            print(line)
     print("healthy" if report.healthy() else "unhealthy")
     return 0 if report.healthy() else 1
 

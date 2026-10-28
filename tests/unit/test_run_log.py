@@ -143,7 +143,7 @@ class TestDoctorHookFailures(unittest.TestCase):
 
         report = _uc(store, source, _cfg(**_ALL_KEYS), FakeWorkflowBundle()).execute(DoctorInput())
 
-        messages = [p.message for p in report.problems["origin"]]
+        messages = [p.message for p in report.problems["workflows"]]
         self.assertEqual(len(messages), 2)
         self.assertTrue(any(items["with-log"][0] in m and "/logs/hook-a.log" in m for m in messages))
         self.assertTrue(any(items["no-log"][0] in m and "no log recorded" in m for m in messages))

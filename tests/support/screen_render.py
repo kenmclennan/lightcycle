@@ -273,7 +273,7 @@ def _long_hierarchy_store(passes=4):
 
 def _launch(store, *, lock_running=True, breaker_open=False, size=DEFAULT_SIZE, fs=None, workers=None,
             launcher=None, machine=None, memory_gate_status=None, drain=None,
-            github_budget_status=None, tick_timing_status=None):
+            github_budget_status=None, tick_timing_status=None, doctor_check=None):
     container = make_test_container(
         store=store,
         lock=FakeLock(running=lock_running),
@@ -290,7 +290,7 @@ def _launch(store, *, lock_running=True, breaker_open=False, size=DEFAULT_SIZE, 
         github_budget_status=github_budget_status,
         tick_timing_status=tick_timing_status,
     )
-    return launch(container, now=lambda: NOW, size=size)
+    return launch(container, now=lambda: NOW, size=size, doctor_check=doctor_check)
 
 
 def _open_hub(session, node_id, tab=None):
@@ -1001,6 +1001,22 @@ def _open_artifact_at(session, item, tab_row):
     return session
 
 
+def _doctor_report_view(size):
+    from lightcycle.application.inspect import DoctorReport
+    from lightcycle.domain.health import Problem
+
+    report = DoctorReport(problems={"workflows": [Problem(
+        "workflows",
+        "flynns-workflows: behind main - pulled 1cf796873241, remote ba40bbe64130",
+        kind="origin-behind",
+        fix="lc workflow upgrade flynns-workflows",
+    )]})
+    session = _launch(FakeStore(), size=size, doctor_check=lambda: report)
+    session.press("D")
+    session.pause()
+    return session
+
+
 def _artifact_viewer_text(size):
     store, item = _artifact_viewer_store()
     return _open_artifact_at(_launch(store, size=size), item, 0)
@@ -1625,6 +1641,7 @@ SCREENS = {
     "hub#outputs-stacked": _hub_outputs_stacked,
     "hub#outputs-history": _hub_outputs_history,
     "hub#description-context": _hub_description_context,
+    "doctor-report": _doctor_report_view,
     "artifact-viewer#text": _artifact_viewer_text,
     "artifact-viewer#list": _artifact_viewer_list,
     "artifact-viewer#url-toast": _artifact_viewer_url_toast,

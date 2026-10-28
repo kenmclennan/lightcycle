@@ -67,6 +67,8 @@ from lightcycle.application.pool import (
     TickHealthUseCase,
 )
 from lightcycle.application.inspect import DoctorInput
+from lightcycle.adapters.tui.doctor_report import DoctorReportScreen
+from lightcycle.domain.health import doctor_summary
 from lightcycle.application.setup import UpgradeNoticeUseCase, upgrade
 from lightcycle.application.work import (
     BacklogInput,
@@ -507,6 +509,7 @@ class LightcycleApp(App):
         Binding("]", "next_strip", "Next tab", show=False),
         Binding("f", "open_picker", "Filter", show=False),
         Binding("d", "open_day_picker", "Day", show=False),
+        Binding("D", "open_doctor", "Doctor", show=False),
         Binding("/", "focus_search", "Search", show=False),
         Binding("p", "toggle_pool", "Pool", show=False),
         Binding("enter", "open_done_for_report_day", "Open", show=False),
@@ -530,6 +533,8 @@ class LightcycleApp(App):
         )
         self._report_inflight_day = None
         self._doctor_areas = ()
+        self._doctor_report = None
+        self._doctor_summary = ""
         self._doctor_failed = False
         self._upgrade_version = None
         self._upgrade_error = None
@@ -672,16 +677,18 @@ class LightcycleApp(App):
         try:
             report = self._doctor_check()
         except Exception:
-            self.call_from_thread(self._apply_doctor_result, (), True)
+            self.call_from_thread(self._apply_doctor_result, (), True, None)
             return
         areas = tuple(
             category for category, problems in report.problems.items()
             if problems and category != "github"
         )
-        self.call_from_thread(self._apply_doctor_result, areas, False)
+        self.call_from_thread(self._apply_doctor_result, areas, False, report)
 
-    def _apply_doctor_result(self, areas, failed) -> None:
+    def _apply_doctor_result(self, areas, failed, report=None) -> None:
         self._doctor_areas = areas
+        self._doctor_report = report
+        self._doctor_summary = doctor_summary(report.problems) if report is not None else ""
         self._doctor_failed = failed
         self._refresh_status_bar()
 
@@ -766,6 +773,7 @@ class LightcycleApp(App):
             config_changed=self._container.config.config_mtime() != self._config_mtime_at_load,
             github=github,
             doctor_areas=self._doctor_areas,
+            doctor_summary=self._doctor_summary,
             doctor_failed=self._doctor_failed,
             pool_tick_health=tick_health,
         )
@@ -961,7 +969,24 @@ class LightcycleApp(App):
         self.query_one(ReportView).display = self._view == "report"
         self._sync_active_glyph_animation()
 
+    def _doctor_findings_held(self) -> bool:
+        return (
+            not self._doctor_failed
+            and self._doctor_report is not None
+            and not self._doctor_report.healthy()
+        )
+
     def _desired_shortcuts(self):
+        shortcuts = self._view_shortcuts()
+        if (
+            self._doctor_findings_held()
+            and not isinstance(self.focused, Input)
+            and shortcuts[-1] == ("q", "quit")
+        ):
+            return shortcuts[:-1] + (("D", "doctor"), ("q", "quit"))
+        return shortcuts
+
+    def _view_shortcuts(self):
         if self._view == "priority":
             return GLOBAL_SHORTCUTS
         if self._view == "done":
@@ -1186,6 +1211,16 @@ class LightcycleApp(App):
             return
         self._done_day_filter = self._report_day or self._now().date()
         self._cycle_view_to("done")
+
+    def action_open_doctor(self) -> None:
+        if (
+            not isinstance(self.screen, MainScreen)
+            or self._picker_open
+            or isinstance(self.focused, Input)
+            or not self._doctor_findings_held()
+        ):
+            return
+        self.push_screen(DoctorReportScreen(self._doctor_report, self._doctor_summary))
 
     def action_focus_search(self) -> None:
         if self._view == "backlog":

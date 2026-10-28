@@ -162,7 +162,7 @@ What an upgrade **changes**: the engine venv (code + `prompts/`). What it **does
 
 Schema changes are handled separately: when a new engine opens a store it stamps a current store with its schema version, applies the additive column and cleanup migrations that remain, and opens it. It refuses a store written before the item/step split (one that still carries the `nodes` table) with a message naming the lightcycle release able to migrate it; migrate with that release first, then reopen. Migrations are idempotent. Stop the pool loop before upgrading, so the old engine is not running against a newly-migrated store; restart it after.
 
-`lc doctor` reports what an upgrade left for you to bring up to date. Each of these findings carries a stable `kind` and a `fix` line (text and `lc doctor --json`), and is only reported, never fixed:
+`lc doctor` groups its findings into the categories `store`, `pins`, `contract`, `workflows`, `config`, `orphans`, `facets`, `guidance` and `github`; `workflows` holds the findings about workflow origins and failed maintenance hooks (it was called `origin` before). `lc doctor` reports what an upgrade left for you to bring up to date. Each of these findings carries a stable `kind` and a `fix` line (text and `lc doctor --json`), and is only reported, never fixed:
 
 - `config-key-blank` - a required config key is set but blank, with what it does and how to set it.
 - `origin-behind` - a registered origin that tracks a ref has a remote sha different from the pulled bundle; the fix is `lc workflow upgrade <origin>`. An origin registered without a ref is never reported behind, and an unreachable origin keeps its own message instead.
