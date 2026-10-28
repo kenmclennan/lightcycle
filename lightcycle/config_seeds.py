@@ -70,7 +70,7 @@ _SEED_KEYS = [
     ("specs-path", "~/workspace/specs"),
     ("trusted-authors", ""),
     ("memory-reserve-fraction", "0.65"),
-    ("guidance-budget-bytes", "6144"),
+    ("guidance-budget-bytes", "8192"),
     ("guidance-unused-after-deliveries", "60"),
     ("guidance-dormant-days", "60"),
     ("schedules-paused", "false"),

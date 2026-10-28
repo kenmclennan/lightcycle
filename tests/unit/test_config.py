@@ -242,10 +242,10 @@ class TestTunables(unittest.TestCase):
 
 
 class TestGuidanceBudgetConfig(unittest.TestCase):
-    def test_seeded_default_is_6144(self):
+    def test_seeded_default_is_8192(self):
         seeds = dict(_SEED_KEYS)
-        self.assertEqual(seeds["guidance-budget-bytes"], "6144")
-        self.assertEqual(_cfg(guidance_budget_bytes=seeds["guidance-budget-bytes"]).guidance_budget_bytes(), 6144)
+        self.assertEqual(seeds["guidance-budget-bytes"], "8192")
+        self.assertEqual(_cfg(guidance_budget_bytes=seeds["guidance-budget-bytes"]).guidance_budget_bytes(), 8192)
 
     def test_env_override_wins(self):
         c = _cfg({"LC_GUIDANCE_BUDGET_BYTES": "10"}, guidance_budget_bytes="6144")
