@@ -168,6 +168,13 @@ REPORT_SHORTCUTS = (
     ("q", "quit"),
 )
 
+DOCTOR_REPORT_SHORTCUTS = (
+    ("↑↓", "scroll"),
+    ("ctrl-u/ctrl-d", "page"),
+    ("esc/←", "back"),
+    ("q", "quit"),
+)
+
 HUB_SHORTCUTS = (
     ("[/]", "switch tab"),
     ("↑↓", "scroll"),

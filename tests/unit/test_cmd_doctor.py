@@ -139,8 +139,14 @@ class TestCmdDoctor(unittest.TestCase):
         rc, out, err = call(cli.cmd_doctor)
         self.assertEqual(rc, 0)
         self.assertIn("healthy", out)
-        for cat in ("store", "pins", "contract", "origin", "config", "orphans"):
+        for cat in ("store", "pins", "contract", "workflows", "config", "orphans"):
             self.assertIn("%s: ok" % cat, out)
+
+    def test_text_prints_the_workflows_category_and_no_origin_category(self):
+        cli.set_container(FakeContainer(FakeStore()))
+        rc, out, err = call(cli.cmd_doctor)
+        self.assertIn("workflows: ok", out)
+        self.assertNotIn("origin:", out)
 
     def test_unhealthy_store_returns_one(self):
         store = FakeStore()
@@ -157,7 +163,7 @@ class TestCmdDoctor(unittest.TestCase):
         self.assertEqual(rc, 0)
         data = json.loads(out)
         self.assertEqual(
-            set(data.keys()), {"store", "pins", "contract", "origin", "config", "orphans", "facets", "guidance", "github"}
+            set(data.keys()), {"store", "pins", "contract", "workflows", "config", "orphans", "facets", "guidance", "github"}
         )
         for probs in data.values():
             self.assertEqual(probs, [])
@@ -199,21 +205,21 @@ class TestCmdDoctor(unittest.TestCase):
 
         self.assertEqual(json.loads(out)["orphans"], [])
 
-    def test_failing_origin_reports_in_origin_category(self):
+    def test_failing_origin_reports_in_workflows_category(self):
         source = FakeWorkflowSource()
         source.register_origin("acme2", ref="gone-branch")
         source.fail_resolve("acme2", "ref 'gone-branch' no longer resolves against acme2")
         cli.set_container(FakeContainer(FakeStore(), workflow_source=source))
         rc, out, err = call(cli.cmd_doctor)
         self.assertEqual(rc, 1)
-        self.assertIn("origin:", out)
+        self.assertIn("workflows:", out)
         self.assertIn("acme2", out)
 
         cli.set_container(FakeContainer(FakeStore(), workflow_source=source))
         rc, out, err = call(cli.cmd_doctor, "--json")
         self.assertEqual(rc, 1)
         data = json.loads(out)
-        self.assertTrue(any("acme2" in p["message"] for p in data["origin"]))
+        self.assertTrue(any("acme2" in p["message"] for p in data["workflows"]))
 
     def _behind_source(self):
         source = FakeWorkflowSource()
@@ -225,7 +231,7 @@ class TestCmdDoctor(unittest.TestCase):
         cli.set_container(FakeContainer(FakeStore(), workflow_source=self._behind_source()))
         rc, out, err = call(cli.cmd_doctor, "--json")
         self.assertEqual(rc, 1)
-        (finding,) = json.loads(out)["origin"]
+        (finding,) = json.loads(out)["workflows"]
         self.assertEqual(finding["kind"], "origin-behind")
         self.assertEqual(finding["fix"], "lc workflow upgrade acme2")
 

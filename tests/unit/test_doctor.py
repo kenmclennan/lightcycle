@@ -372,8 +372,8 @@ class TestDoctorUseCase(unittest.TestCase):
         config = _cfg(**_ALL_KEYS)
         report = _uc(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
         self.assertFalse(report.healthy())
-        self.assertEqual(len(report.problems["origin"]), 1)
-        self.assertIn("acme", report.problems["origin"][0].message)
+        self.assertEqual(len(report.problems["workflows"]), 1)
+        self.assertIn("acme", report.problems["workflows"][0].message)
 
     def test_registered_origin_with_resolvable_ref_reports_no_origin_problem(self):
         store = FakeStore()
@@ -382,7 +382,7 @@ class TestDoctorUseCase(unittest.TestCase):
         source.register_origin("acme", ref="main")
         config = _cfg(**_ALL_KEYS)
         report = _uc(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
-        self.assertEqual(report.problems["origin"], [])
+        self.assertEqual(report.problems["workflows"], [])
 
     def _behind_report(self, ref, current, remote):
         source = FakeWorkflowSource()
@@ -391,7 +391,7 @@ class TestDoctorUseCase(unittest.TestCase):
         if remote is not None:
             source.remotes["acme"] = remote
         report = _uc(FakeStore(), source, _cfg(**_ALL_KEYS), FakeWorkflowBundle()).execute(DoctorInput())
-        return source, report.problems["origin"]
+        return source, report.problems["workflows"]
 
     def test_origin_behind_its_ref_reports_one_problem_with_upgrade_fix(self):
         source, problems = self._behind_report("main", "a" * 40, "b" * 40)
@@ -421,15 +421,15 @@ class TestDoctorUseCase(unittest.TestCase):
         source.remotes["acme"] = "b" * 40
         source.fail_resolve("acme", "acme is not reachable right now")
         report = _uc(FakeStore(), source, _cfg(**_ALL_KEYS), FakeWorkflowBundle()).execute(DoctorInput())
-        self.assertEqual([p.message for p in report.problems["origin"]], ["acme: acme is not reachable right now"])
-        self.assertIsNone(report.problems["origin"][0].kind)
+        self.assertEqual([p.message for p in report.problems["workflows"]], ["acme: acme is not reachable right now"])
+        self.assertIsNone(report.problems["workflows"][0].kind)
 
     def test_origin_without_a_registry_reports_a_problem_and_is_not_probed(self):
         source = FakeWorkflowSource()
         source.add_bundle("acme", "sha1", 1, current=True)
         source.registries["bare"] = None
         report = _uc(FakeStore(), source, _cfg(**_ALL_KEYS), FakeWorkflowBundle()).execute(DoctorInput())
-        self.assertEqual([p.message for p in report.problems["origin"]], ["bare: origin has no registry"])
+        self.assertEqual([p.message for p in report.problems["workflows"]], ["bare: origin has no registry"])
         self.assertEqual(source.probe_calls, [])
 
     def test_registered_origin_with_deleted_ref_reports_origin_problem(self):
@@ -440,8 +440,8 @@ class TestDoctorUseCase(unittest.TestCase):
         source.fail_resolve("acme", "ref 'gone-branch' no longer resolves against acme")
         config = _cfg(**_ALL_KEYS)
         report = _uc(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
-        self.assertEqual(len(report.problems["origin"]), 1)
-        problem = report.problems["origin"][0]
+        self.assertEqual(len(report.problems["workflows"]), 1)
+        problem = report.problems["workflows"][0]
         self.assertIn("acme", problem.message)
         self.assertIn("gone-branch", problem.message)
 
@@ -453,8 +453,8 @@ class TestDoctorUseCase(unittest.TestCase):
         source.fail_resolve("acme", "acme is not reachable right now")
         config = _cfg(**_ALL_KEYS)
         report = _uc(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
-        self.assertEqual(len(report.problems["origin"]), 1)
-        message = report.problems["origin"][0].message
+        self.assertEqual(len(report.problems["workflows"]), 1)
+        message = report.problems["workflows"][0].message
         self.assertIn("not reachable", message)
         self.assertNotIn("no longer resolves", message)
 
@@ -467,8 +467,8 @@ class TestDoctorUseCase(unittest.TestCase):
         source.fail_resolve("other", "ref 'gone-branch' no longer resolves against other")
         config = _cfg(**_ALL_KEYS)
         report = _uc(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
-        self.assertEqual(len(report.problems["origin"]), 1)
-        self.assertIn("other", report.problems["origin"][0].message)
+        self.assertEqual(len(report.problems["workflows"]), 1)
+        self.assertIn("other", report.problems["workflows"][0].message)
 
     def test_unpulled_default_origin_and_separate_resolvable_registered_origin_coexist(self):
         store = FakeStore()
@@ -476,8 +476,8 @@ class TestDoctorUseCase(unittest.TestCase):
         source.register_origin("other", ref="main")
         config = _cfg(**_ALL_KEYS)
         report = _uc(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
-        self.assertEqual(len(report.problems["origin"]), 1)
-        self.assertIn("acme", report.problems["origin"][0].message)
+        self.assertEqual(len(report.problems["workflows"]), 1)
+        self.assertIn("acme", report.problems["workflows"][0].message)
 
     def test_default_origin_missing_from_config_reports_no_origin_problem(self):
         keys = dict(_ALL_KEYS)
@@ -486,7 +486,7 @@ class TestDoctorUseCase(unittest.TestCase):
         source = FakeWorkflowSource()
         config = _cfg(**keys)
         report = _uc(store, source, config, FakeWorkflowBundle()).execute(DoctorInput())
-        self.assertEqual(report.problems["origin"], [])
+        self.assertEqual(report.problems["workflows"], [])
         self.assertTrue(any("default-origin" in p.message for p in report.problems["config"]))
 
     def test_missing_required_config_key_reports_config_problem(self):
@@ -910,8 +910,11 @@ class TestDoctorSchedules(unittest.TestCase):
     def test_the_json_category_keys_are_unchanged(self):
         self.assertEqual(
             set(_schedule_doctor({}).problems),
-            {"store", "pins", "contract", "origin", "config", "orphans", "facets", "guidance",
+            {"store", "pins", "contract", "workflows", "config", "orphans", "facets", "guidance",
              "github"})
+
+    def test_the_report_has_no_origin_category(self):
+        self.assertNotIn("origin", _schedule_doctor({}).problems)
 
     def test_an_off_schedule_is_not_a_finding(self):
         report = _schedule_doctor({"weekly": _block(enabled="false", guard="shell-out")})

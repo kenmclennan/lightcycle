@@ -92,7 +92,7 @@ class DoctorUseCase:
             "store": fsck(nodes),
             "pins": pins,
             "contract": contracts,
-            "origin": self._origin_problems() + self._hook_failure_problems(),
+            "workflows": self._origin_problems() + self._hook_failure_problems(),
             "config": (
                 self._config_problems() + self._retired_job_problems()
                 + self._schedule_problems() + self._reload_problems() + lifecycle_config),
@@ -226,19 +226,19 @@ class DoctorUseCase:
             origin = self._config.default_origin()
             if self._workflow_source.current_sha(origin) is None:
                 problems.append(
-                    Problem("origin", "default-origin %r is set but has no pulled bundle" % origin))
+                    Problem("workflows", "default-origin %r is set but has no pulled bundle" % origin))
         for name in self._workflow_source.list_origins():
             registry = self._workflow_source.read_registry(name)
             if registry is None:
-                problems.append(Problem("origin", "%s: origin has no registry" % name))
+                problems.append(Problem("workflows", "%s: origin has no registry" % name))
                 continue
             probe = self._workflow_source.probe_remote(registry.url, registry.ref)
             if probe.reason:
-                problems.append(Problem("origin", "%s: %s" % (name, probe.reason)))
+                problems.append(Problem("workflows", "%s: %s" % (name, probe.reason)))
             elif (registry.ref and registry.current and probe.sha
                     and probe.sha != registry.current):
                 problems.append(Problem(
-                    "origin",
+                    "workflows",
                     "%s: behind %s - pulled %s, remote %s"
                     % (name, registry.ref, registry.current[:12], probe.sha[:12]),
                     kind="origin-behind", fix="lc workflow upgrade %s" % name))
@@ -256,7 +256,7 @@ class DoctorUseCase:
             log = next((c.log_path for c in steps if c.log_path), None)
             where = "log %s" % log if log else "no log recorded"
             problems.append(Problem(
-                "origin", "open maintenance failure %s (%s): %s" % (item.id, item.title, where),
+                "workflows", "open maintenance failure %s (%s): %s" % (item.id, item.title, where),
                 node_id=item.id))
         return problems
 

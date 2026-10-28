@@ -1197,11 +1197,19 @@ class TestPeriodicUpgradeCheck(unittest.TestCase):
         self.assertEqual(text.strip(), "upgrade check failed: network down")
 
 
-def _doctor_report(*categories, healthy=("orphans", "config", "store", "github")):
+def _doctor_report(*categories, healthy=("orphans", "config", "store", "github"), kind=None):
     problems = {c: [] for c in healthy}
     for c in categories:
-        problems[c] = [Problem(category=c, message="%s is off" % c)]
+        problems[c] = [Problem(category=c, message="%s is off" % c, kind=kind, fix="fix %s" % c)]
     return DoctorReport(problems=problems)
+
+
+def _behind_report(count):
+    return DoctorReport(problems={"workflows": [
+        Problem(category="workflows", message="origin%d: behind main" % i, kind="origin-behind",
+                fix="lc workflow upgrade origin%d" % i)
+        for i in range(count)
+    ]})
 
 
 class TestFooterDoctorSegment(unittest.TestCase):
@@ -1223,22 +1231,29 @@ class TestFooterDoctorSegment(unittest.TestCase):
         self.assertFalse(widget.display)
         self.assertEqual(text, "")
 
-    def test_names_a_single_problem_category(self):
+    def test_says_how_many_workflows_are_out_of_date(self):
+        glyph = FOOTER_GLYPHS["doctor-problems"].glyph
+        two = self._launch(lambda: _behind_report(2))
+        self.assertEqual(self._segment(two)[1], "%s doctor · 2 workflows out of date" % glyph)
+        one = self._launch(lambda: _behind_report(1))
+        self.assertEqual(self._segment(one)[1], "%s doctor · 1 workflow out of date" % glyph)
+
+    def test_says_what_is_wrong_in_a_single_problem_category(self):
         session = self._launch(lambda: _doctor_report("orphans"))
         widget, text, style = self._segment(session)
         self.assertTrue(widget.display)
-        self.assertEqual(text, "%s doctor · orphans" % FOOTER_GLYPHS["doctor-problems"].glyph)
+        self.assertEqual(text, "%s doctor · 1 item left behind" % FOOTER_GLYPHS["doctor-problems"].glyph)
         self.assertEqual(_colour_of(style), COLOURS["amber"].lower())
 
-    def test_names_two_problem_categories_in_report_order(self):
+    def test_says_what_is_wrong_in_two_categories_in_report_order(self):
         session = self._launch(lambda: _doctor_report("config", "orphans"))
         _, text, _ = self._segment(session)
-        self.assertEqual(text, "%s doctor · orphans, config" % FOOTER_GLYPHS["doctor-problems"].glyph)
+        self.assertEqual(text, "%s doctor · 1 item left behind, 1 config problem" % FOOTER_GLYPHS["doctor-problems"].glyph)
 
-    def test_counts_three_or_more_problem_categories_as_areas(self):
+    def test_counts_three_or_more_problem_categories_as_problems_and_skips_github(self):
         session = self._launch(lambda: _doctor_report("orphans", "config", "github", "store"))
         _, text, _ = self._segment(session)
-        self.assertEqual(text, "%s doctor · 3 areas" % FOOTER_GLYPHS["doctor-store"].glyph)
+        self.assertEqual(text, "%s doctor · 3 problems" % FOOTER_GLYPHS["doctor-store"].glyph)
 
     def test_github_only_problems_leave_it_hidden(self):
         session = self._launch(lambda: _doctor_report("github"))
@@ -1249,7 +1264,7 @@ class TestFooterDoctorSegment(unittest.TestCase):
     def test_a_store_problem_turns_it_red(self):
         session = self._launch(lambda: _doctor_report("store"))
         _, text, style = self._segment(session)
-        self.assertEqual(text, "%s doctor · store" % FOOTER_GLYPHS["doctor-store"].glyph)
+        self.assertEqual(text, "%s doctor · 1 store problem" % FOOTER_GLYPHS["doctor-store"].glyph)
         self.assertEqual(_colour_of(style), COLOURS["red"].lower())
 
     def test_a_raising_doctor_shows_a_dim_failure(self):
@@ -1317,7 +1332,7 @@ class TestFooterDoctorSegment(unittest.TestCase):
         self.assertEqual(self._segment(session)[1], "")
         session.check_doctor_tick()
         self.assertEqual(
-            self._segment(session)[1], "%s doctor · orphans" % FOOTER_GLYPHS["doctor-problems"].glyph
+            self._segment(session)[1], "%s doctor · 1 item left behind" % FOOTER_GLYPHS["doctor-problems"].glyph
         )
 
 
@@ -4067,3 +4082,85 @@ class TestDoneTabAutomationFilter(unittest.TestCase):
         ]
 
         self.assertEqual(counts, ["2", "2"])
+
+
+class TestDoctorReportView(unittest.TestCase):
+    def _launch(self, doctor_check):
+        session = launch(make_test_container(), doctor_check=doctor_check)
+        self.addCleanup(session.close)
+        return session
+
+    def _body_text(self, session):
+        from lightcycle.adapters.tui.doctor_report import ArtifactTextBody
+
+        body = session.app.screen.query_one(ArtifactTextBody)
+        return "\n".join(strip.text for strip in body.lines)
+
+    def _shortcut_keys(self, session):
+        from lightcycle.adapters.tui.footer import ShortcutBar
+
+        return [key for key, _ in session.app.screen_stack[0].query_one(ShortcutBar).shortcuts]
+
+    def test_D_opens_the_report_with_every_message_and_fix(self):
+        from lightcycle.adapters.tui.doctor_report import DoctorReportScreen
+
+        session = self._launch(lambda: _behind_report(2))
+        session.press("D")
+        self.assertIsInstance(session.app.screen, DoctorReportScreen)
+        text = self._body_text(session)
+        self.assertIn("workflows:", text)
+        self.assertIn("origin0: behind main", text)
+        self.assertIn("fix: lc workflow upgrade origin1", text)
+
+    def test_the_report_includes_github_findings(self):
+        session = self._launch(lambda: _doctor_report("github", "config"))
+        session.press("D")
+        text = self._body_text(session)
+        self.assertIn("github:", text)
+        self.assertIn("config is off", text)
+
+    def test_the_header_carries_the_summary(self):
+        session = self._launch(lambda: _behind_report(2))
+        session.press("D")
+        header = session.app.screen.query_one("#doctor-report-header")
+        self.assertIn("doctor · 2 workflows out of date", str(header.render()))
+
+    def test_escape_returns_to_the_main_screen(self):
+        from lightcycle.adapters.tui.doctor_report import DoctorReportScreen
+
+        session = self._launch(lambda: _behind_report(1))
+        session.press("D")
+        session.press("escape")
+        self.assertNotIsInstance(session.app.screen, DoctorReportScreen)
+
+    def test_D_does_nothing_when_healthy(self):
+        from lightcycle.adapters.tui.doctor_report import DoctorReportScreen
+
+        session = self._launch(lambda: _doctor_report())
+        session.press("D")
+        self.assertNotIsInstance(session.app.screen, DoctorReportScreen)
+
+    def test_D_does_nothing_when_the_check_failed(self):
+        from lightcycle.adapters.tui.doctor_report import DoctorReportScreen
+
+        def _boom():
+            raise RuntimeError("store locked")
+
+        session = self._launch(_boom)
+        session.press("D")
+        self.assertNotIsInstance(session.app.screen, DoctorReportScreen)
+
+    def test_lower_d_still_opens_the_day_picker_path_not_the_report(self):
+        from lightcycle.adapters.tui.doctor_report import DoctorReportScreen
+
+        session = self._launch(lambda: _behind_report(1))
+        session.press("d")
+        self.assertNotIsInstance(session.app.screen, DoctorReportScreen)
+
+    def test_shortcut_line_gains_doctor_only_with_findings(self):
+        healthy = self._launch(lambda: _doctor_report())
+        self.assertEqual(len(self._shortcut_keys(healthy)), 5)
+        self.assertNotIn("D", self._shortcut_keys(healthy))
+        broken = self._launch(lambda: _behind_report(1))
+        keys = self._shortcut_keys(broken)
+        self.assertEqual(keys[-2:], ["D", "q"])
