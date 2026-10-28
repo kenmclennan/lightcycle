@@ -894,6 +894,19 @@ class TestDoctorSchedules(unittest.TestCase):
                 self.assertTrue(
                     any(m.startswith("schedule %s: " % sid) for m in messages), messages)
 
+    def test_a_malformed_block_name_is_a_config_finding_naming_the_rule(self):
+        report = _schedule_doctor({"weekly": _block(name="Bad Name")})
+        self.assertIn(
+            "schedule weekly: name must match [a-z0-9-]+", self._messages(report))
+
+    def test_a_malformed_suggestion_name_is_a_contract_finding(self):
+        known = {"acme/audit": {"schedule": {
+            "cron": "0 9 * * 1", "guard": "materials-changed", "name": "Bad_Name"}}}
+        report = _schedule_doctor({}, known=known)
+        self.assertEqual(
+            self._messages(report, "contract"),
+            ["schedule acme/audit: name must match [a-z0-9-]+"])
+
     def test_the_json_category_keys_are_unchanged(self):
         self.assertEqual(
             set(_schedule_doctor({}).problems),

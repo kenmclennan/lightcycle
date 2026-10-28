@@ -390,6 +390,25 @@ class TestSeededPathsInTheWrittenConfig(unittest.TestCase):
         self.assertIn("guidance-path: ~/workspace/agent-guidance\n", text)
         self.assertIn("specs-path: ~/workspace/specs\n", text)
 
+    def test_the_seeded_schedules_carry_a_purpose_name_and_resolve_clean(self):
+        from lightcycle.config_seeds import default_config_text
+        from lightcycle.domain.schedule.schedule import merge_schedule
+
+        blocks = {}
+        current = None
+        for line in default_config_text().splitlines():
+            if line.startswith("schedule-"):
+                current = blocks.setdefault(line[len("schedule-"):-1], {})
+            elif line.startswith("  ") and current is not None:
+                key, _, value = line.strip().partition(":")
+                current[key] = value.strip()
+
+        schedules = [merge_schedule(sid, b, None) for sid, b in blocks.items()]
+
+        self.assertEqual(len(schedules), 4)
+        self.assertEqual(sorted(s.name for s in schedules), ["audit", "audit", "audit", "summary"])
+        self.assertEqual([s.problem for s in schedules], [None] * 4)
+
     def test_a_scratch_home_seeds_both_paths_under_it(self):
         import os
         import tempfile

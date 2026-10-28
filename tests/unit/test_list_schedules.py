@@ -22,6 +22,17 @@ def suggesting_rig(blocks=None, paused="false"):
             workflows={"lightcycle/audit": None}, shas={"lightcycle": "sha1"}))
 
 
+class TestName(unittest.TestCase):
+    def test_a_row_carries_the_block_name_or_none(self):
+        rig = ScheduleRig({"named": block(name="audit"), "plain": block()})
+
+        rows = rows_of(rig)
+
+        self.assertEqual((rows["named"].name, rows["plain"].name), ("audit", None))
+        self.assertEqual(rows["named"].as_dict()["name"], "audit")
+        self.assertIsNone(rows["plain"].as_dict()["name"])
+
+
 class TestStates(unittest.TestCase):
     def test_a_bare_suggestion_is_off_and_listed_from_the_bundle(self):
         rows = rows_of(suggesting_rig())
