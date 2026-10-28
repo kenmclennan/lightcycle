@@ -535,6 +535,7 @@ class LightcycleApp(App):
         self._doctor_areas = ()
         self._doctor_report = None
         self._doctor_summary = ""
+        self._doctor_checked_at = None
         self._doctor_failed = False
         self._upgrade_version = None
         self._upgrade_error = None
@@ -689,6 +690,7 @@ class LightcycleApp(App):
         self._doctor_areas = areas
         self._doctor_report = report
         self._doctor_summary = doctor_summary(report.problems) if report is not None else ""
+        self._doctor_checked_at = self._now().timestamp()
         self._doctor_failed = failed
         self._refresh_status_bar()
 
@@ -974,6 +976,7 @@ class LightcycleApp(App):
             not self._doctor_failed
             and self._doctor_report is not None
             and not self._doctor_report.healthy()
+            and bool(self._doctor_summary)
         )
 
     def _desired_shortcuts(self):
@@ -1220,7 +1223,8 @@ class LightcycleApp(App):
             or not self._doctor_findings_held()
         ):
             return
-        self.push_screen(DoctorReportScreen(self._doctor_report, self._doctor_summary))
+        self.push_screen(DoctorReportScreen(
+            self._doctor_report, self._doctor_summary, self._doctor_checked_at))
 
     def action_focus_search(self) -> None:
         if self._view == "backlog":
