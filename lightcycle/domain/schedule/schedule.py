@@ -12,7 +12,7 @@ SOURCE_BOTH = "both"
 _ID = re.compile(r"^[a-z0-9-]+$")
 _TRUE = ("true", "yes", "1", "on")
 _FALSE = ("false", "no", "0", "off")
-_RESERVED = ("enabled", "workflow", "project", "cron", "guard", "shortcode", "labels")
+_RESERVED = ("enabled", "workflow", "project", "cron", "guard", "shortcode", "labels", "name")
 
 
 @dataclass(frozen=True)
@@ -29,13 +29,14 @@ class Schedule:
     labels: Tuple[str, ...] = ()
     problem: Optional[str] = None
     explicit_off: bool = False
+    name: Optional[str] = None
 
 
 def _suggestion_fields(suggestion):
     return dict(suggestion) if isinstance(suggestion, dict) else {}
 
 
-def _problem_of(id, enabled_text, workflow, project, cron, guard, params, has_block):
+def _problem_of(id, enabled_text, workflow, project, cron, guard, params, has_block, name=None):
     if not _ID.match(id) and has_block:
         return "id must match [a-z0-9-]+"
     if has_block:
@@ -47,6 +48,8 @@ def _problem_of(id, enabled_text, workflow, project, cron, guard, params, has_bl
             return "config block has no workflow"
         if not project:
             return "config block has no project"
+    if name is not None and not _ID.match(name):
+        return "name must match [a-z0-9-]+"
     if not cron:
         return "no cron from config or the bundle suggestion"
     if not guard:
@@ -76,6 +79,7 @@ def merge_schedule(id, block, suggestion, workflow=None):
     guard = block.get("guard") or suggested.get("guard")
     merged = {k: v for k, v in suggested.items() if k not in _RESERVED}
     merged.update({k: v for k, v in block.items() if k not in _RESERVED})
+    name = (str(block.get("name") or suggested.get("name") or "").strip()) or None
     workflow = block.get("workflow") or workflow
     project = block.get("project")
     enabled_text = block.get("enabled")
@@ -86,13 +90,13 @@ def merge_schedule(id, block, suggestion, workflow=None):
         source = SOURCE_BOTH
     else:
         source = SOURCE_CONFIG
-    problem = _problem_of(id, enabled_text, workflow, project, cron, guard, merged, has_block)
+    problem = _problem_of(id, enabled_text, workflow, project, cron, guard, merged, has_block, name)
     return Schedule(
         id=id, source=source, enabled=enabled, workflow=workflow, project=project,
         cron=cron, guard=guard, params=_typed_params(guard, merged, problem),
         shortcode=block.get("shortcode") or None,
         labels=tuple((block.get("labels") or "").split()),
-        problem=problem,
+        problem=problem, name=name,
         explicit_off=has_block and enabled_text is not None
         and enabled_text.strip().lower() in _FALSE,
     )

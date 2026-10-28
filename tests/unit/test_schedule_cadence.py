@@ -69,6 +69,31 @@ class TestFiring(unittest.TestCase):
         resp = rig.cadence.execute(epoch(11))
         self.assertTrue(resp.fired[0].startswith("APP-"))
 
+    def test_a_named_schedule_files_its_item_under_the_name_and_keeps_the_repo(self):
+        rig = ScheduleRig({"weekly": block(name="audit", shortcode="AUD")})
+
+        item_id = rig.cadence.execute(epoch(11)).fired[0]
+
+        item = rig.store.get_item(item_id)
+        self.assertEqual(item.project, "audit")
+        self.assertEqual(item.repo, "acme/app")
+        self.assertTrue(item_id.startswith("AUD-"))
+
+    def test_an_unnamed_schedule_files_under_the_registered_short_name(self):
+        rig = ScheduleRig({"weekly": block()})
+
+        item_id = rig.cadence.execute(epoch(11)).fired[0]
+
+        self.assertEqual(rig.store.get_item(item_id).project, "app")
+
+    def test_a_named_and_an_unnamed_block_each_file_one_item_under_their_own_project(self):
+        rig = ScheduleRig({"named": block(name="audit"), "plain": block()})
+
+        fired = rig.cadence.execute(epoch(11)).fired
+
+        self.assertEqual(
+            sorted(rig.store.get_item(i).project for i in fired), ["app", "audit"])
+
     def test_a_failing_guard_files_nothing_and_is_asked_once_per_due_time(self):
         rig = ScheduleRig({"weekly": block()})
         seed_firing(rig, "weekly", "2026-10-14T08:00:00",

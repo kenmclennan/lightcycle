@@ -11,7 +11,7 @@ _SUGGESTION = "---\nschedule:\n  cron: 0 9 * * 1\n  guard: materials-changed\n--
 
 _ROW_KEYS = {
     "id", "source", "state", "reason", "workflow", "project", "cron", "guard",
-    "last_fire", "next_fire", "guard_result",
+    "last_fire", "next_fire", "guard_result", "name",
 }
 
 
@@ -53,6 +53,20 @@ class TestScheduleListCommand(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         fields = out.splitlines()[0].split("\t")
         self.assertEqual(fields[:4], ["weekly", "both", "on", "waiting for next due time"])
+        self.assertEqual(fields[9:], ["lightcycle/spec-driven", "-"])
+
+    def test_the_text_listing_ends_with_the_name_and_json_carries_it(self):
+        h = _harness()
+        cfg = Path(h._cfg)
+        cfg.write_text(cfg.read_text() + (
+            "schedule-weekly:\n  enabled: true\n  workflow: lightcycle/spec-driven\n"
+            "  project: acme/app\n  name: audit\n"))
+
+        _rc, out, _err = h.run("schedule", "list")
+        _rc, js, _err = h.run("schedule", "list", "--json")
+
+        self.assertEqual(out.splitlines()[0].split("\t")[-1], "audit")
+        self.assertEqual(json.loads(js)[0]["name"], "audit")
 
     def test_no_subcommand_prints_help_and_refuses(self):
         h = _harness()

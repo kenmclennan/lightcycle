@@ -86,9 +86,9 @@ def cmd_schedule(argv):
         print(json.dumps([r.as_dict() for r in resp.rows], indent=2))
         return 0
     for r in resp.rows:
-        print("%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s" % (
+        print("%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s" % (
             r.id, r.source, r.state, r.reason, r.cron or "-", r.guard or "-",
-            r.last_fire, r.next_fire, r.guard_result, r.workflow or "-"))
+            r.last_fire, r.next_fire, r.guard_result, r.workflow or "-", r.name or "-"))
     return 0
 
 

@@ -83,6 +83,7 @@ _SEED_SCHEDULES = """\
 schedule-retro-audit:
   enabled: true
   workflow: lightcycle/retro-audit
+  name: audit
   project: guidance
   shortcode: AUD
   cron: 0 9 * * *
@@ -91,6 +92,7 @@ schedule-retro-audit:
 schedule-material-audit:
   enabled: true
   workflow: lightcycle/material-audit
+  name: audit
   project: guidance
   shortcode: AUD
   cron: 0 9 * * 1
@@ -98,6 +100,7 @@ schedule-material-audit:
 schedule-daily-summary:
   enabled: true
   workflow: lightcycle/daily-summary
+  name: summary
   project: guidance
   shortcode: SUM
   cron: 0 7 * * *
@@ -105,6 +108,7 @@ schedule-daily-summary:
 schedule-ratchet-sweep:
   enabled: true
   workflow: lightcycle/ratchet-sweep
+  name: audit
   project: guidance
   shortcode: AUD
   cron: 0 9 * * 1

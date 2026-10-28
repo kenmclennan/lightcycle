@@ -86,3 +86,39 @@ class TestMergeSchedule(unittest.TestCase):
 
     def test_an_id_must_be_lowercase_words(self):
         self.assertIsNotNone(merge_schedule("Weekly_Audit", full_block(), None).problem)
+
+
+class TestScheduleName(unittest.TestCase):
+    _SUGGESTION = {"cron": "0 9 * * 1", "guard": "materials-changed"}
+
+    def test_a_block_name_is_the_schedule_name(self):
+        self.assertEqual(merge_schedule("weekly", full_block(name="audit"), None).name, "audit")
+
+    def test_a_suggestion_name_applies_when_the_block_has_none(self):
+        suggestion = dict(self._SUGGESTION, name="audit")
+        schedule = merge_schedule("weekly", full_block(), suggestion)
+        self.assertEqual((schedule.name, schedule.problem), ("audit", None))
+
+    def test_the_block_name_wins_over_the_suggestion(self):
+        suggestion = {"name": "audit", **self._SUGGESTION}
+        schedule = merge_schedule("weekly", full_block(name="summary"), suggestion)
+        self.assertEqual((schedule.name, schedule.problem), ("summary", None))
+
+    def test_with_no_name_the_name_is_none_and_the_problem_unchanged(self):
+        schedule = merge_schedule("weekly", full_block(), None)
+        self.assertEqual((schedule.name, schedule.problem), (None, None))
+
+    def test_a_malformed_name_is_a_problem_for_a_block(self):
+        for bad in ("Audit", "plugin drift", "plugin_drift"):
+            with self.subTest(bad):
+                self.assertEqual(
+                    merge_schedule("weekly", full_block(name=bad), None).problem,
+                    "name must match [a-z0-9-]+")
+
+    def test_a_malformed_name_is_a_problem_for_a_bare_suggestion(self):
+        for bad in ("Audit", "plugin drift", "plugin_drift"):
+            with self.subTest(bad):
+                suggestion = {"name": bad, **self._SUGGESTION}
+                self.assertEqual(
+                    merge_schedule("lightcycle/audit", None, suggestion).problem,
+                    "name must match [a-z0-9-]+")

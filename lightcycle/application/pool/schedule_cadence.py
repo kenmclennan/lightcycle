@@ -228,7 +228,7 @@ class ScheduleCadenceUseCase:
         schedule = resolved.schedule
         with self._store.transaction():
             item_id = self._store.create_item(
-                result.title, result.description, project=resolved.project_name,
+                result.title, result.description, project=schedule.name or resolved.project_name,
                 workflow=schedule.workflow, shortcode=resolved.shortcode)
             self._store.add_artifact(item_id, "repo", resolved.identity)
             self._store.label_add(item_id, SCHEDULE_ORIGIN_LABEL)

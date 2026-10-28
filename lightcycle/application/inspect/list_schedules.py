@@ -33,6 +33,7 @@ class ScheduleRow:
     last_fire: str
     next_fire: str
     guard_result: str
+    name: Optional[str] = None
 
     def as_dict(self):
         return dict(self.__dict__)
@@ -73,7 +74,7 @@ class ListSchedulesUseCase:
             rows.append(ScheduleRow(
                 id=schedule.id, source=schedule.source, state=state, reason=reason,
                 workflow=schedule.workflow, project=schedule.project, cron=schedule.cron,
-                guard=schedule.guard,
+                guard=schedule.guard, name=schedule.name,
                 last_fire=last.isoformat(sep=" ", timespec="minutes") if last else NEVER,
                 next_fire=self._next_fire(schedule, now_local),
                 guard_result=self._guard_result(resolved, firings, now_local),
