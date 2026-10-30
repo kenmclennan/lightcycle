@@ -152,6 +152,12 @@ def expect_real_home_access():
         del _State.violations[mark:]
 
 
+def cleanup():
+    if _State.fake_home:
+        shutil.rmtree(_State.fake_home, ignore_errors=True)
+        _State.fake_home = None
+
+
 def apply():
     if _State.fake_home:
         shutil.rmtree(_State.fake_home, ignore_errors=True)

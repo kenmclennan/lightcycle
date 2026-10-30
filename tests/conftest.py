@@ -1,4 +1,5 @@
 import os
+import shutil
 import tempfile
 
 import pytest
@@ -10,10 +11,19 @@ _LIVE_HOME = os.path.realpath(os.path.join(hermetic_env.REAL_HOME, ".lightcycle"
 
 _WORKER_ENV = ("LC_WORKER", "LC_SPAWNID", "LC_ROLE")
 
+_made_homes = []
+
+
+def _remove_made_homes():
+    while _made_homes:
+        shutil.rmtree(_made_homes.pop(), ignore_errors=True)
+
 
 def _fresh_test_home():
     hermetic_env.apply()
+    _remove_made_homes()
     home = tempfile.mkdtemp(prefix="lc-test-home-")
+    _made_homes.append(home)
     if os.path.realpath(home) == _LIVE_HOME:
         raise RuntimeError("test store home resolved to the live store; aborting")
     os.environ["LC_HOME"] = home
@@ -24,6 +34,11 @@ def _fresh_test_home():
 
 def pytest_configure(config):
     _fresh_test_home()
+
+
+def pytest_unconfigure(config):
+    _remove_made_homes()
+    hermetic_env.cleanup()
 
 
 @pytest.fixture(autouse=True)
