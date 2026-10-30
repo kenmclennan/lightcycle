@@ -59,13 +59,44 @@ def test_indented_include_in_a_fence_is_not_reported():
     assert _check("```\n  @include plain-language\n```\n") == []
 
 
+def test_include_with_text_directly_above_is_reported():
+    assert _check("a\n\ntext\n@include plain-language\n") == [
+        "line 4: @include plain-language has text directly above it; prettier joins "
+        "the two lines - put a blank line before it"
+    ]
+
+
+def test_include_with_a_blank_line_above_passes():
+    assert _check("text\n\n@include plain-language\n") == []
+
+
+def test_include_on_line_one_passes():
+    assert _check("@include plain-language\ntext\n") == []
+
+
+def test_joined_include_at_end_of_a_prose_line_is_reported():
+    assert _check("text @include plain-language\n") == [
+        "line 1: @include plain-language is mid-line and will not resolve; put it on its "
+        "own line with a blank line above"
+    ]
+
+
+def test_backticked_include_mid_line_is_not_reported():
+    assert _check("see `@include plain-language`\n") == []
+    assert _check("see `@include plain-language` for it\n") == []
+
+
+def test_include_rules_are_skipped_inside_a_fence():
+    assert _check("```\ntext\n@include plain-language\ntext @include plain-language\n```\n") == []
+
+
 def test_resolving_include_passes():
     assert _check("@include plain-language\n") == []
 
 
 def test_unresolvable_include_names_the_available_fragments():
-    assert _check("a\n@include missing\n") == [
-        "line 2: @include missing does not resolve in a pinned bundle "
+    assert _check("a\n\n@include missing\n") == [
+        "line 3: @include missing does not resolve in a pinned bundle "
         "(available fragments: plain-language)"
     ]
 
@@ -81,14 +112,16 @@ def test_mixed_file_reports_exactly_the_broken_ones_in_line_order():
     text = (
         "1. a\n"
         "2. b\n"
+        "\n"
         "@include plain-language\n"
+        "\n"
         "@include missing\n"
         "2. c\n"
     )
     assert _check(text) == [
-        "line 4: @include missing does not resolve in a pinned bundle "
+        "line 6: @include missing does not resolve in a pinned bundle "
         "(available fragments: plain-language)",
-        "line 5: top-level list item 2 follows 2 (expected 3)",
+        "line 7: top-level list item 2 follows 2 (expected 3)",
     ]
 
 
@@ -124,5 +157,5 @@ def test_library_step_files_are_sound():
 
 def test_union_of_engine_and_origin_fragment_names_resolves_both():
     assert check_step_structure(
-        {"s": "@include plain-language\n@include x\n"}, {"plain-language", "x"}
+        {"s": "@include plain-language\n\n@include x\n"}, {"plain-language", "x"}
     ) == {}

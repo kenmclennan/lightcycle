@@ -182,10 +182,10 @@ class TestWorkflowCheckDir(unittest.TestCase):
         self.assertIn("steps/cleanup.md line 3: @include plain-language is indented", err)
 
     def test_unresolvable_include_fails_naming_file_and_line(self):
-        self._set_step("Do it.\n@include nonexistent-frag\n")
+        self._set_step("Do it.\n\n@include nonexistent-frag\n")
         rc, _out, err = run_check("--dir", self.tmp, "spec-driven")
         self.assertEqual(rc, 1)
-        self.assertIn("steps/cleanup.md line 3: @include nonexistent-frag does not resolve", err)
+        self.assertIn("steps/cleanup.md line 4: @include nonexistent-frag does not resolve", err)
 
     def test_sound_include_and_nested_list_pass(self):
         self._set_step("1. a\n  1. nested\n2. b\n\n@include plain-language\n")
@@ -198,7 +198,7 @@ class TestWorkflowCheckDir(unittest.TestCase):
             f.write("local\n")
 
     def test_origin_fragment_resolves(self):
-        self._set_step("Do it.\n@include x\n")
+        self._set_step("Do it.\n\n@include x\n")
         self._add_fragment("x")
         rc, _out, err = run_check("--dir", self.tmp, "spec-driven")
         self.assertEqual(rc, 0, err)
@@ -212,7 +212,7 @@ class TestWorkflowCheckDir(unittest.TestCase):
         self.assertIn("available fragments: plain-language, x", err)
 
     def test_mixed_includes_report_only_the_missing_one(self):
-        self._set_step("Do it.\n@include x\n@include y\n")
+        self._set_step("Do it.\n\n@include x\n@include y\n")
         self._add_fragment("x")
         rc, _out, err = run_check("--dir", self.tmp, "spec-driven")
         self.assertEqual(rc, 1)

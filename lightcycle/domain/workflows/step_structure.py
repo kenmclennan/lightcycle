@@ -3,6 +3,7 @@ import re
 _ITEM = re.compile(r"^(\d+)\. ")
 _HEADING = re.compile(r"^#{1,6} ")
 _INDENTED_INCLUDE = re.compile(r"^\s+@include (\S.*)$")
+_MID_LINE_INCLUDE = re.compile(r"\S\s+(@include (\S+))\s*$")
 _INCLUDE = "@include "
 
 
@@ -56,8 +57,21 @@ def _includes(lines, fragment_names):
                     "line %d: @include %s does not resolve in a pinned bundle "
                     "(available fragments: %s)" % (number, name, available)
                 )
+            above = lines[number - 2] if number > 1 else ""
+            if above.strip() and not _fence_toggles(above) and not fenced:
+                problems.append(
+                    "line %d: @include %s has text directly above it; prettier joins "
+                    "the two lines - put a blank line before it" % (number, name)
+                )
             continue
         if fenced:
+            continue
+        joined = _MID_LINE_INCLUDE.search(line)
+        if joined and line[: joined.start(1)].count("`") % 2 == 0:
+            problems.append(
+                "line %d: @include %s is mid-line and will not resolve; put it on its "
+                "own line with a blank line above" % (number, joined.group(2))
+            )
             continue
         indented = _INDENTED_INCLUDE.match(line)
         if indented:
