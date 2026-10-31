@@ -4,7 +4,7 @@ from typing import List, Optional
 from lightcycle.application.errors import FieldRefusalError, UseCaseError
 from lightcycle.application.flow.passes import PassBook
 from lightcycle.application.work.title_guard import validate_title
-from lightcycle.domain.work import refuse_fields
+from lightcycle.domain.work import State, refuse_fields
 
 
 @dataclass(frozen=True)
@@ -29,6 +29,16 @@ class CreateStepUseCase:
 
     def execute(self, input: CreateStepInput) -> CreateStepResponse:
         validate_title(self._config, input.title)
+        if input.parent:
+            try:
+                owner = self._store.get_node(input.parent)
+            except KeyError:
+                owner = None
+            if owner is not None and owner.state == State.DONE:
+                raise UseCaseError(
+                    "item %s is closed; use lc reopen %s to bring it back"
+                    % (owner.id, owner.id)
+                )
         flow = None
         pin = None
         if input.workflow:
