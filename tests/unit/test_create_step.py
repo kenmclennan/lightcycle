@@ -53,6 +53,22 @@ def _flow_with_single_default_origin(store):
 
 
 class TestCreateStepUseCase(unittest.TestCase):
+    def test_closed_parent_refuses_and_creates_no_step_until_reopened(self):
+        s = FakeStore()
+        parent = s.create_item("an item", "a description", workflow="standard")
+        s.complete_node(parent, "done")
+        use_case = CreateStepUseCase(s, _flow(s), _Config())
+        with self.assertRaises(UseCaseError) as ctx:
+            use_case.execute(CreateStepInput(title="", step="build", parent=parent))
+        self.assertEqual(
+            str(ctx.exception),
+            "item %s is closed; use lc reopen %s to bring it back" % (parent, parent),
+        )
+        self.assertEqual(list(s.all_steps_including_done()), [])
+        s.reopen(parent)
+        resp = use_case.execute(CreateStepInput(title="", step="build", parent=parent))
+        self.assertEqual(s.get_node(resp.id).item, parent)
+
     def test_role_resolves_from_the_parents_pinned_workflow(self):
         s = FakeStore()
         parent = s.create_item("an item", "a description", workflow="standard")
