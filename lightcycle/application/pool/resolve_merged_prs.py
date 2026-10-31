@@ -7,6 +7,7 @@ from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.application.pool.pr_lookups import (
     active_step_any,
     active_step_at,
+    active_step_in_phase,
     false_on_failure,
     flow_for,
     latest_step,
@@ -171,7 +172,7 @@ class ResolveMergedPrsUseCase:
                             refused.append((item.id, resp.teardown_refusal))
                         merged.append(item.id)
                     else:
-                        if self._at_another_gate(item, flow, stage):
+                        if active_step_at(self._store, item.id, stage) is None:
                             continue
                         disposition = self._disposition_for_close(item, flow, merge_outcome, stage)
                         if disposition is None:
@@ -205,6 +206,10 @@ class ResolveMergedPrsUseCase:
                         abandoned.append(item.id)
                     else:
                         if self._at_another_gate(item, flow, stage):
+                            continue
+                        if active_step_in_phase(
+                            self._store, self._flow_service, item.id, phase
+                        ) is None:
                             continue
                         disposition = self._disposition_for_close(item, flow, close_outcome, stage)
                         if disposition is None:
