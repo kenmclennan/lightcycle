@@ -715,7 +715,7 @@ class TestMonitorPrsMerged(unittest.TestCase):
 
         self.assertEqual(result.merged, [])
 
-    def test_merged_pr_closes_story_whose_live_task_is_upstream_of_ready_merge(self):
+    def test_merged_pr_leaves_story_open_when_live_task_is_upstream_of_ready_merge(self):
         url = "https://github.com/x/y/pull/40"
         store = FakeStore()
         item = store.create_item("upstream feature", "a description")
@@ -730,13 +730,12 @@ class TestMonitorPrsMerged(unittest.TestCase):
 
         result = uc.execute()
 
-        self.assertEqual(result.merged, [item])
-        self.assertEqual(store.get_node(item).state, "done")
-        self.assertEqual(store.get_node(item).outcome, "merged")
-        self.assertEqual(store.get_node(step).state, "done")
-        self.assertIn(item, worktrees.removed)
+        self.assertEqual(result.merged, [])
+        self.assertNotEqual(store.get_node(item).state, "done")
+        self.assertNotEqual(store.get_node(step).state, "done")
+        self.assertEqual(worktrees.removed, [])
 
-    def test_merged_pr_closes_story_whose_live_task_regressed_to_review(self):
+    def test_merged_pr_leaves_story_open_when_live_task_regressed_to_review(self):
         url = "https://github.com/x/y/pull/41"
         store = FakeStore()
         item = store.create_item("regressed feature", "a description")
@@ -751,8 +750,8 @@ class TestMonitorPrsMerged(unittest.TestCase):
 
         result = uc.execute()
 
-        self.assertEqual(result.merged, [item])
-        self.assertEqual(store.get_node(step).state, "done")
+        self.assertEqual(result.merged, [])
+        self.assertNotEqual(store.get_node(step).state, "done")
 
     def test_task_without_pr_artifact_is_skipped(self):
         store = FakeStore()
@@ -1050,17 +1049,37 @@ _TWO_GATES_ONE_PHASE = (
 )
 
 
+_CODE_GATE_FLOW = (
+    "entry: write-code\n\n"
+    "requires: brief repo\n\n"
+    "phase:\n"
+    "  write-code        code\n"
+    "  code-await-merge  code\n\n"
+    "nodes:\n"
+    "  code-await-merge  await-merge\n"
+    "  write-code        coder\n\n"
+    "edges:\n"
+    "  write-code  done  code-await-merge\n\n"
+    "hooks:\n"
+    "  pr_merge  code-await-merge  merged\n"
+    "  pr_close  code-await-merge  abandoned\n\n"
+    "disposition:\n"
+    "  merged     completed\n"
+    "  abandoned  abandoned\n"
+)
+
+
 class TestSharedPhaseGatesResolveOnlyTheGateTheItemIsAt(unittest.TestCase):
-    def _setup(self, at, github_kwargs, github=None):
+    def _setup(self, at, github_kwargs, github=None, run_phase="spec", graph=_TWO_GATES_ONE_PHASE):
         from lightcycle.domain.flow import Flow
         from lightcycle.domain.flow.graph import parse_graph
 
         metas = {"await-merge": {"step": "await-merge"}, "coder": {"model": "sonnet"}}
-        flow = Flow.from_graph(parse_graph(_TWO_GATES_ONE_PHASE), metas)
+        flow = Flow.from_graph(parse_graph(graph), metas)
         store = FakeStore()
         item = store.create_item("spec item", "a description")
         url = "https://github.com/x/y/pull/9"
-        plant_pr(store, item, url, "spec")
+        plant_pr(store, item, url, run_phase)
         step = store.create_step(stage=at, role="human", item=item)
         gh = github(url) if github else FakeGitHub(**github_kwargs(url))
         adapter = _FlowAdapter(flow)
@@ -1116,6 +1135,34 @@ class TestSharedPhaseGatesResolveOnlyTheGateTheItemIsAt(unittest.TestCase):
 
     def test_close_at_the_terminal_gate_still_closes_the_item_with_its_disposition(self):
         store, item, step, uc = self._setup("nochange-await-merge", lambda u: {"closed_prs": {u}})
+
+        result = uc.execute()
+
+        self.assertEqual(result.abandoned, [item])
+        self.assertEqual(store.get_node(item).state, State.DONE)
+
+    def test_merge_does_not_close_an_item_active_at_write_code(self):
+        store, item, step, uc = self._setup("write-code", lambda u: {"merged_prs": {u}})
+
+        result = uc.execute()
+
+        self.assertEqual(result.merged, [])
+        self.assertNotEqual(store.get_node(item).state, State.DONE)
+        self.assertNotEqual(store.get_node(step).state, "done")
+
+    def test_close_of_a_spec_run_does_not_close_an_item_active_in_the_code_phase(self):
+        store, item, step, uc = self._setup("write-code", lambda u: {"closed_prs": {u}})
+
+        result = uc.execute()
+
+        self.assertEqual(result.abandoned, [])
+        self.assertNotEqual(store.get_node(item).state, State.DONE)
+        self.assertNotEqual(store.get_node(step).state, "done")
+
+    def test_close_of_a_code_run_closes_an_item_active_at_write_code(self):
+        store, item, step, uc = self._setup(
+            "write-code", lambda u: {"closed_prs": {u}}, run_phase="code", graph=_CODE_GATE_FLOW
+        )
 
         result = uc.execute()
 
