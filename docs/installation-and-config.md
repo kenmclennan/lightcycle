@@ -17,7 +17,7 @@ lightcycle keeps code, data, and pulled workflows strictly apart. This split is 
 graph TD
   subgraph engine[ENGINE - the pipx venv, REPLACED by an upgrade]
     code[lightcycle code]
-    prompts[prompts - steps/audit.md, steps/daily-summary.md]
+    prompts[prompts - steps/audit.md, steps/material-audit.md, steps/daily-summary.md]
   end
   subgraph data[DATA - your home dir, NEVER touched by an upgrade]
     store[store.db]
@@ -31,7 +31,7 @@ graph TD
   end
 ```
 
-- **Engine** (`~/.local/pipx/venvs/lightcycle`) - the code plus `prompts/` (the engine-owned agent prompts it spawns directly: `prompts/steps/audit.md`, `prompts/steps/daily-summary.md`). This is the only thing an upgrade changes; the engine ships no workflow library.
+- **Engine** (`~/.local/pipx/venvs/lightcycle`) - the code plus `prompts/` (the engine-owned agent prompts it spawns directly: `prompts/steps/audit.md`, `prompts/steps/material-audit.md`, `prompts/steps/daily-summary.md`). This is the only thing an upgrade changes; the engine ships no workflow library.
 - **Data** (`~/.lightcycle`, the `data_root`) - `store.db`, the `config` file, `logs/`, `.worktrees/` (isolated per-item checkouts), `backups/`, the `.lc-run.pid` singleton lock, `workflows/<origin>/<sha>/` (the immutable, sha-pinned workflow bundles pulled from origins), and `workflow-data/<origin>/<workflow>/` (each workflow's own data directory, kept across upgrades and `lc workflow rm`; `lc workflow purge` removes it).
 - **Projects** - your repos, wherever they live. Each is named to lightcycle by registering it (`lc project add <owner/name> [--shortcode X] [--path P] [--facets a,b,c]`); the registry holds the identity, the shortcode ids are minted from, the local path, and the project's facets (`lc project scan` suggests facets for a repo from the guidance repo's `detected-by` lists; you set them yourself). A project carries no lightcycle config of its own, and there is no step or workflow override. `lc init` registers two projects automatically. The first has the identity `specs` (its path seeded as the `specs-path` config key, `~/workspace/specs`) - the `workspace: specs` value a spec-driven workflow declares resolves through this same registry entry, not a dedicated config key. The second is the **guidance repo**, identity `guidance`, seeded as the `guidance-path` config key, `~/workspace/agent-guidance`; `lc init --guidance-path <dir>` overrides the path.
 
