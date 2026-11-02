@@ -467,6 +467,24 @@ class TestGitAdapterGuidanceRef(unittest.TestCase):
         _git(self.clone, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/trunk")
         self.assertEqual(self.adapter.default_ref(self.clone), "origin/trunk")
 
+    def test_worktree_base_follows_origin_head_when_it_names_a_branch_that_is_neither_main_nor_master(self):
+        _git(self.clone, "branch", "-q", "trunk")
+        _git(self.clone, "push", "-q", "origin", "trunk")
+        _git(self.clone, "fetch", "-q", "origin")
+        _git(self.clone, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/trunk")
+        _git(self.clone, "update-ref", "-d", "refs/remotes/origin/main")
+        self.assertEqual(self.adapter.worktree_base(self.clone), "origin/trunk")
+
+    def test_worktree_base_prefers_origin_head_master_over_a_stale_origin_main(self):
+        _git(self.clone, "branch", "-q", "master")
+        _git(self.clone, "push", "-q", "origin", "master")
+        _git(self.clone, "fetch", "-q", "origin")
+        _git(self.clone, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/master")
+        self.assertEqual(self.adapter.worktree_base(self.clone), "origin/master")
+
+    def test_worktree_base_falls_back_to_origin_main_when_origin_head_is_unset(self):
+        self.assertEqual(self.adapter.worktree_base(self.clone), "origin/main")
+
     def test_default_ref_is_local_main_without_a_remote(self):
         self.assertEqual(self.adapter.default_ref(_make_repo()), "main")
 
