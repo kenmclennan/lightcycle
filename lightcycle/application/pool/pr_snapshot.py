@@ -16,6 +16,7 @@ class PrEntry:
     pull_comments: object = None
     reviews: object = None
     stale: bool = False
+    read_at: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -217,11 +218,14 @@ class PrSnapshot(GitHubEventsPort):
         view = self._view(pr)
         if isinstance(view, ReadFailure):
             return view
+        entry_read_at = self.entry_of(pr).read_at
         return PrSync(
             behind=view.merge_state_status == "BEHIND",
             conflicted=view.mergeable == "CONFLICTING" or view.merge_state_status == "DIRTY",
             head_sha=view.head_sha,
             base_key=view.base_key,
+            settled=view.mergeable != "UNKNOWN" and view.merge_state_status != "UNKNOWN",
+            read_at=entry_read_at,
         )
 
     def last_push_time(self, pr):

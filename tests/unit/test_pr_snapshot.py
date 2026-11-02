@@ -174,3 +174,29 @@ class TestPollEpoch(unittest.TestCase):
         self.snap.retain(frozenset(), frozenset())
 
         self.assertFalse(self.snap.confirmed_after(_PR, 0))
+
+
+class TestSyncReadingSettledAndReadAt(unittest.TestCase):
+    def _sync(self, **view):
+        snap = PrSnapshot(FakeGitHub())
+        snap.publish(_PR, PrEntry(state="OPEN", view=_view(**view), read_at=42.0))
+        return snap.pr_sync_state(_PR)
+
+    def test_a_conflicting_view_is_settled_and_carries_the_entry_read_time(self):
+        sync = self._sync(mergeable="CONFLICTING")
+
+        self.assertTrue(sync.settled)
+        self.assertTrue(sync.conflicted)
+        self.assertEqual(sync.read_at, 42.0)
+
+    def test_an_unknown_mergeable_is_unsettled_and_conflicted_is_unchanged(self):
+        sync = self._sync(mergeable="UNKNOWN", merge_state_status="DIRTY")
+
+        self.assertFalse(sync.settled)
+        self.assertTrue(sync.conflicted)
+
+    def test_an_unknown_merge_state_is_unsettled_and_conflicted_is_unchanged(self):
+        sync = self._sync(mergeable="CONFLICTING", merge_state_status="UNKNOWN")
+
+        self.assertFalse(sync.settled)
+        self.assertTrue(sync.conflicted)

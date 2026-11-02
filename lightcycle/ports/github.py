@@ -67,6 +67,8 @@ class PrSync:
     conflicted: bool
     head_sha: str
     base_key: str
+    settled: bool = True
+    read_at: Optional[float] = None
 
 
 @dataclass(frozen=True)
