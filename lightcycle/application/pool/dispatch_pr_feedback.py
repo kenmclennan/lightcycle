@@ -48,8 +48,13 @@ def _epoch(value):
         return 0.0
 
 
-def _is_conflicted(sync):
-    return not isinstance(sync, ReadFailure) and sync.conflicted
+def _is_conflicted(sync, step):
+    if isinstance(sync, ReadFailure) or not sync.conflicted or not sync.settled:
+        return False
+    if sync.read_at is None:
+        return True
+    opened = parse_timestamp(step.created_at)
+    return opened is None or sync.read_at >= opened.timestamp()
 
 
 @dataclass(frozen=True)
@@ -296,7 +301,7 @@ class DispatchPrFeedbackUseCase:
                 self._settle(step, reason)
                 seen.add(step.id)
             sync = reads.read(pr_value) if not advanced and conflict_outcome else None
-            if sync is not None and _is_conflicted(sync):
+            if sync is not None and _is_conflicted(sync, step):
                 history = [t for t in self._store.steps_at_step(step.stage)
                            if t.item == step.item and t.state == State.DONE]
                 conflicts = sorted(

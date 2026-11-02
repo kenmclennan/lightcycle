@@ -169,7 +169,8 @@ class PrPoll:
         entry = self._snapshot.entry_of(pr) or PrEntry()
         if view.updated_at > entry.updated_at:
             return self._read_in_full(pr, view) is not None
-        self._snapshot.publish(pr, replace(entry, state=view.state, view=view))
+        self._snapshot.publish(
+            pr, replace(entry, state=view.state, view=view, read_at=self._now))
         return True
 
     def _read_in_full(self, pr, view=None):
@@ -180,7 +181,9 @@ class PrPoll:
                 self._snapshot.mark_stale(pr)
                 return None
         previous = self._snapshot.entry_of(pr) or PrEntry()
-        entry = replace(previous, state=view.state, view=view, updated_at=view.updated_at)
+        entry = replace(
+            previous, state=view.state, view=view, updated_at=view.updated_at, read_at=self._now,
+        )
         self._snapshot.publish(pr, entry)
         push_time = self._github.last_push_time(pr)
         comments = self._github.comments_since(pr, 0.0)
@@ -251,6 +254,7 @@ class PrPoll:
             if not isinstance(required, ReadFailure):
                 self._snapshot.publish_required(view.base_key, required)
             current = self._snapshot.entry_of(pr) or entry
-            self._snapshot.publish(pr, replace(current, state=view.state, view=view))
+            self._snapshot.publish(
+                pr, replace(current, state=view.state, view=view, read_at=self._now))
             if view.head_sha == sha:
                 self._snapshot.publish_checks(pr, sha, runs)
