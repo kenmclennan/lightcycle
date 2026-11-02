@@ -56,6 +56,12 @@ Feature: Closing and reopening an item
     Then the item's outcome and close time are cleared
     And the item is backlogged
 
+  Scenario: Reopening a closed item clears its disposition
+    Given an item with workflow "lightcycle/spec-driven", with a spec attached
+    And I have closed the item with outcome "wontfix"
+    When I reopen the item
+    Then the item's disposition is cleared
+
   Scenario: Reopening a closed item whose old children are still done rolls it back to the backlog
     Given an item with workflow "lightcycle/spec-driven", with a spec attached
     And I have activated the item

@@ -175,6 +175,13 @@ def _outcome_and_close_time_cleared(ctx):
     assert node.closed_at is None
 
 
+@then("the item's disposition is cleared")
+def _disposition_cleared(ctx):
+    node = _item_node(ctx)
+    assert node.disposition is None
+    assert node.note is None
+
+
 @then("the command is rejected")
 def _rejected(ctx):
     assert ctx["rc"] != 0

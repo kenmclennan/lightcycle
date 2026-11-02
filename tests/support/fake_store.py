@@ -448,6 +448,9 @@ class FakeStore(StorePort):
         b["state"] = "in_progress"
         b["outcome"] = None
         b["closed_at"] = None
+        if b.get("type") == "item":
+            b["disposition"] = None
+            b["note"] = None
 
     def complete_node(self, tid, reason, disposition=None, note=None):
         b = self._get(tid)
