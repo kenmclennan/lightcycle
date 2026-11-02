@@ -63,6 +63,11 @@ def branch_exists(root, branch):
 def worktree_base(root):
     if not is_git_repo(root):
         raise GitReadError("cannot read worktree base: %s is not a readable git repo" % root)
+    head = git(root, "symbolic-ref", "--short", "refs/remotes/origin/HEAD")
+    if head.returncode == 0 and head.stdout.strip():
+        ref = head.stdout.strip()
+        if git_ok(root, "rev-parse", "--verify", "--quiet", "refs/remotes/" + ref):
+            return ref
     for ref in ("origin/main", "origin/master"):
         if git_ok(root, "rev-parse", "--verify", "--quiet", "refs/remotes/" + ref):
             return ref
