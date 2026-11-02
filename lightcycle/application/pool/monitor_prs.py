@@ -41,6 +41,7 @@ class MonitorPrsUseCase:
         self._dispatch = DispatchPrFeedbackUseCase(
             store, github, flow_service, complete,
             trusted_authors=trusted_authors, held_shortcode=held_shortcode,
+            poll_epoch=ci_views.poll_epoch, unread_note_polls=ci_unconfirmed_note_polls,
         )
         self._detect_head_moved = DetectHeadMovedUseCase(store, flow_service, complete)
         self._update_behind = UpdateBehindPrsUseCase(store, github, flow_service, writes)

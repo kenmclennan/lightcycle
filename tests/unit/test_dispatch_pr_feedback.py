@@ -16,7 +16,8 @@ from tests.support.fake_github import FakeGitHub
 from tests.support.fake_store import FakeStore
 
 _BOT_LOGIN = "copilot-pull-request-reviewer[bot]"
-_TRUST = dict(trusted_authors=lambda: frozenset({"reviewer", _BOT_LOGIN}), held_shortcode=lambda: "HLD")
+_TRUST = dict(trusted_authors=lambda: frozenset({"reviewer", _BOT_LOGIN}), held_shortcode=lambda: "HLD",
+              poll_epoch=lambda: 0, unread_note_polls=lambda: 3)
 
 
 def plant_pr(store, item, url, phase=None, branch=None, n=1, state="open"):

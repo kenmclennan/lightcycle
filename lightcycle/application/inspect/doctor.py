@@ -59,6 +59,9 @@ class DoctorReport:
         return not any(self.problems.values())
 
 
+_CONDITION_SUFFIX_RE = re.compile(r" \(x\d+, last .*\)$")
+
+
 class DoctorUseCase:
     def __init__(
         self, store, workflow_source, config, workflow_bundle, fs, machine, worktrees,
@@ -88,6 +91,7 @@ class DoctorUseCase:
             contracts + self._requirement_problems() + self._suggestion_problems()
             + lifecycle_contract)
         github_problems, github_note = self._github_budget_problems()
+        github_problems = github_problems + self._pr_feedback_problems(nodes)
         return DoctorReport(notes=github_note, problems={
             "store": fsck(nodes) + self._fork_problems(nodes),
             "pins": pins,
@@ -134,6 +138,22 @@ class DoctorUseCase:
                 kind="step-fork",
                 fix="remove (lc rm) or close (lc done) all but one of these steps",
             ))
+        return problems
+
+    def _pr_feedback_problems(self, nodes):
+        problems = []
+        for n in nodes:
+            if n.type != "step" or n.state == State.DONE:
+                continue
+            for line in (n.notes or "").splitlines():
+                if not line.startswith("pr-feedback:"):
+                    continue
+                problems.append(Problem(
+                    "github", _CONDITION_SUFFIX_RE.sub("", line), n.item or n.id,
+                    kind="pr-feedback-unwatched",
+                    fix="see the github lines in run.log for the failing read; "
+                        "the condition clears when the poll fills the PR",
+                ))
         return problems
 
     def _github_budget_problems(self):

@@ -1,5 +1,5 @@
 from lightcycle.domain.work.outputs import ArtifactRecord
-from lightcycle.domain.work import Artifact, State, merge_condition_note
+from lightcycle.domain.work import Artifact, State, drop_condition_lines, merge_condition_note
 from lightcycle.ports.store import NodeNotFoundError
 from lightcycle.adapters.sqlite.shared import _PARK_COLUMNS, _RAW_STORAGE_STATE
 
@@ -62,6 +62,18 @@ class StepsAggregate:
             raise NodeNotFoundError("unknown node '%s'" % tid)
         combined = merge_condition_note(row[0] or "", text, self._now())
         self._conn.execute("UPDATE steps SET notes = ? WHERE id = ?", (combined, tid))
+        self._commit()
+
+    def clear_condition(self, tid, prefix):
+        row = self._conn.execute("SELECT notes FROM steps WHERE id = ?", (tid,)).fetchone()
+        if row is None:
+            raise NodeNotFoundError("unknown node '%s'" % tid)
+        if not row[0]:
+            return
+        self._conn.execute(
+            "UPDATE steps SET notes = ? WHERE id = ?",
+            (drop_condition_lines(row[0], prefix) or None, tid),
+        )
         self._commit()
 
     def set_notes(self, tid, text):
