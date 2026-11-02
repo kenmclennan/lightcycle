@@ -424,6 +424,8 @@ class FakeStore(StorePort):
         pass
 
     def reclaim(self, tid):
+        if self._get(tid).get("state") != _RAW_STORAGE_STATE[State.RUNNING]:
+            return
         self.update_state(tid, State.QUEUED)
         self.assign(tid, "")
 

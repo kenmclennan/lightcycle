@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from lightcycle.application.errors import UseCaseError
+from lightcycle.application.flow.reopen_guard import ReopenGuard
 from lightcycle.application.flow.route_step import RouteStepService
 from lightcycle.domain.work.park import Park
 
@@ -27,6 +28,7 @@ class ParkStepUseCase:
             raise UseCaseError(
                 "cannot park %s: a decision (what the human must judge) is required" % input.step
             )
+        ReopenGuard(self._store).ensure_reopenable(input.step)
         park = Park(reason=input.observation, needs=input.decision, tried=input.tried)
         with self._store.transaction():
             self._store.update_metadata(input.step, {k: v for k, v in park.as_dict().items() if v})

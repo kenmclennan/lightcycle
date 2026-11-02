@@ -33,12 +33,16 @@ class StepsAggregate:
 
     def reclaim(self, tid):
         try:
-            self._conn.execute(
-                "UPDATE %s SET state = ?, assignee = NULL WHERE id = ?"
+            cur = self._conn.execute(
+                "UPDATE %s SET state = ?, assignee = NULL WHERE id = ? AND state = ?"
                 % self._table_of(tid),
-                (_RAW_STORAGE_STATE.get(State.QUEUED, State.QUEUED), tid),
+                (
+                    _RAW_STORAGE_STATE.get(State.QUEUED, State.QUEUED), tid,
+                    _RAW_STORAGE_STATE.get(State.RUNNING, State.RUNNING),
+                ),
             )
-            self._record_history(tid, State.QUEUED)
+            if cur.rowcount:
+                self._record_history(tid, State.QUEUED)
             self._commit()
         except Exception:
             self._conn.rollback()

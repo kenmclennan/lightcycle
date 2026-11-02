@@ -29,6 +29,7 @@ from lightcycle.ports.git import GitReadError
 from lightcycle.domain.health import (
     Problem, blank_key_fix, fsck, obsolete_key_fix, schedule_not_enabled_fix,
 )
+from lightcycle.domain.health.fork import forks, main_path_stages
 from lightcycle.domain.schedule.guards import RETIRED_JOB_SCHEDULES
 from lightcycle.domain.schedule.schedule import SOURCE_BUNDLE
 from lightcycle.application.workflows.script_tooling import WorkflowScripts
@@ -76,9 +77,8 @@ class DoctorUseCase:
         self._config_reload_status = config_reload_status
         self._lock = lock
         self._pin_drift = PinDrift(workflow_source, workflow_bundle, config)
-        self._schedule_resolver = ScheduleResolver(
-            store, config, FlowService(workflow_bundle, store, config, workflow_source),
-            workflow_source)
+        self._flow = FlowService(workflow_bundle, store, config, workflow_source)
+        self._schedule_resolver = ScheduleResolver(store, config, self._flow, workflow_source)
 
     def execute(self, input: DoctorInput) -> DoctorReport:
         nodes = self._store.all_nodes_including_done()
@@ -89,7 +89,7 @@ class DoctorUseCase:
             + lifecycle_contract)
         github_problems, github_note = self._github_budget_problems()
         return DoctorReport(notes=github_note, problems={
-            "store": fsck(nodes),
+            "store": fsck(nodes) + self._fork_problems(nodes),
             "pins": pins,
             "contract": contracts,
             "workflows": self._origin_problems() + self._hook_failure_problems(),
@@ -101,6 +101,40 @@ class DoctorUseCase:
             "guidance": self._guidance_problems() + self._guidance_shortcode_problems(),
             "github": github_problems,
         })
+
+    def _fork_problems(self, nodes):
+        graphs = {}
+
+        def graph_of(node):
+            if node.item not in graphs:
+                graphs[node.item] = self._flow.graph_for(node)
+            return graphs[node.item]
+
+        open_steps = []
+        samples = {}
+        for n in nodes:
+            if n.type != "step" or n.state == State.DONE:
+                continue
+            graph = graph_of(n)
+            if graph is None:
+                continue
+            samples.setdefault(n.item, n)
+            open_steps.append((n.item, n.id, n.stage, graph.phase_for(n.stage)))
+        mains = {
+            item: main_path_stages(graphs[item]) for item in samples
+        }
+        problems = []
+        for fork in forks(open_steps, lambda item: mains.get(item)):
+            names = ", ".join("%s (%s)" % (sid, stage) for sid, stage in fork.steps)
+            problems.append(Problem(
+                "store",
+                "item %s has a fork in phase %s: %d open main-path steps: %s" % (
+                    fork.item, fork.phase or "(none)", len(fork.steps), names),
+                fork.item,
+                kind="step-fork",
+                fix="remove (lc rm) or close (lc done) all but one of these steps",
+            ))
+        return problems
 
     def _github_budget_problems(self):
         reading = self._github_budget.reading()
