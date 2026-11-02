@@ -1192,6 +1192,23 @@ class StoreContractBase:
         self.assertIn(open_tid, all_ids)
         self.assertIn(closed_tid, all_ids)
 
+    def test_reopening_an_item_clears_its_close_fields_and_keeps_history(self):
+        s = self.make_store()
+        item = s.create_item("an item", "a description", shortcode="LC")
+        s.complete_node(item, "shipped", disposition="completed", note="shipped it")
+        s.reopen(item)
+        node = s.get_node(item)
+        self.assertNotEqual(node.state, "done")
+        self.assertIsNone(node.disposition)
+        self.assertIsNone(node.note)
+        self.assertIsNone(node.outcome)
+        self.assertIsNone(node.closed_at)
+        self.assertIn("done", [state for state, _ in s.history(item)])
+        s.complete_node(item, "wontfix", disposition="abandoned", note="dropped")
+        node = s.get_node(item)
+        self.assertEqual(node.disposition, "abandoned")
+        self.assertEqual(node.note, "dropped")
+
     def test_history_records_claim_and_close_in_order(self):
         s = self.make_store()
         tid = self._step(s, "t", role="agent")

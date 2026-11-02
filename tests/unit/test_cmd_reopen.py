@@ -83,6 +83,18 @@ class TestCmdReopenAClosedChildlessItem(unittest.TestCase):
         self.assertIsNone(node.outcome)
         self.assertIsNone(node.closed_at)
 
+    def test_clears_disposition_and_note_and_keeps_the_done_history_row(self):
+        item = self.store.create_item("an item", "a description")
+        self.store.complete_node(item, "shipped", disposition="completed", note="shipped it")
+        rc, out, err = call(cli.cmd_reopen, item)
+        self.assertEqual(rc, 0, err)
+        node = self.store.get_node(item)
+        self.assertIsNone(node.disposition)
+        self.assertIsNone(node.note)
+        self.assertIsNone(node.outcome)
+        self.assertIsNone(node.closed_at)
+        self.assertIn("done", [state for state, _ in self.store.history(item)])
+
 
 if __name__ == "__main__":
     unittest.main()

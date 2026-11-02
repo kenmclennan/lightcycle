@@ -162,9 +162,11 @@ class ItemsAggregate:
         return result
 
     def reopen(self, tid):
+        table = self._table_of(tid)
+        cleared = ", disposition = NULL, note = NULL" if table == "items" else ""
         self._conn.execute(
-            "UPDATE %s SET state = 'in_progress', outcome = NULL, closed_at = NULL "
-            "WHERE id = ? AND state = 'done'" % self._table_of(tid),
+            "UPDATE %s SET state = 'in_progress', outcome = NULL, closed_at = NULL%s "
+            "WHERE id = ? AND state = 'done'" % (table, cleared),
             (tid,),
         )
         self._commit()
