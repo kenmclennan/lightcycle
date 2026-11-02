@@ -182,6 +182,39 @@ class TestCmdSetRefusesReopeningAClosedStepWithAnOpenSuccessor(unittest.TestCase
         self.assertIsNone(self.store.get_node(self.a).park.needs)
 
 
+class TestCmdSetReopeningAClosedStepClearsItsClose(unittest.TestCase):
+    def setUp(self):
+        self.h = Harness(["coder", "reviewer"])
+        self.store = self.h.store
+        item = self.store.create_item("x", "d", shortcode="OWN")
+        self.item = item
+        self.a = create_owned_step(self.store, "a", role="agent", item=item, stage="build")
+        self.store.claim_ready("agent", "w1")
+        self.store.complete_step_atomic(self.a, "done", "w1", None)
+
+    def test_waiting_then_ready_clear_outcome_and_closed_at_and_keep_the_done_row(self):
+        self.assertEqual(self.store.get_node(self.a).outcome, "done")
+        for state, extra in (
+            ("waiting", ["--needs", "n", "--reason", "r"]),
+            ("ready", []),
+        ):
+            rc, _, err = self.h.run("set", self.a, "--state", state, *extra)
+            self.assertEqual(rc, 0, err)
+            node = self.store.get_node(self.a)
+            self.assertIsNone(node.outcome)
+            self.assertIsNone(node.closed_at)
+            self.assertIn("done", [st for st, _ in self.store.history(self.a)])
+
+    def test_show_of_the_successor_prints_no_none_outcome(self):
+        b = self.store.create_step(
+            stage="code-open-pr", role="agent", item=self.item, previous=self.a)
+        self.store.set_report(self.a, "prior report")
+        self.store.update_state(self.a, "waiting")
+        rc, out, err = self.h.run("show", b)
+        self.assertEqual(rc, 0, err)
+        self.assertNotIn("(None)", out)
+
+
 class TestRenderFieldRefusalOfNoStructure(unittest.TestCase):
     def test_a_field_owned_by_neither_structure_says_so(self):
         refusal = FieldRefusal(fields=("goal",), requested_type="item", owner=None)

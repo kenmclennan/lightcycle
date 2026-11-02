@@ -1211,6 +1211,31 @@ class StoreContractBase:
         self.assertTrue(all(ts.startswith("2026-01-01T1") for ts in stamps))
         self.assertLess(stamps[0], stamps[1])
 
+    def test_reopening_a_closed_step_clears_outcome_and_closed_at_and_keeps_history(self):
+        s = self.make_store()
+        tid = self._step(s, "t", role="agent")
+        s.claim_ready("agent")
+        s.complete_node(tid, "done")
+        for target in ("waiting", "ready"):
+            s.update_state(tid, target)
+            node = s.get_node(tid)
+            self.assertIsNone(node.outcome)
+            self.assertIsNone(node.closed_at)
+            self.assertNotEqual(node.state, "done")
+            self.assertIn("done", [state for state, _ in s.history(tid)])
+        s.complete_node(tid, "done")
+        node = s.get_node(tid)
+        self.assertEqual(node.outcome, "done")
+        self.assertIsNotNone(node.closed_at)
+
+    def test_update_state_leaves_a_never_closed_step_without_outcome(self):
+        s = self.make_store()
+        tid = self._step(s, "t", role="agent")
+        s.update_state(tid, "waiting")
+        node = s.get_node(tid)
+        self.assertIsNone(node.outcome)
+        self.assertIsNone(node.closed_at)
+
     def test_history_empty_for_unclaimed_task(self):
         s = self.make_store()
         tid = self._step(s, "t", role="agent")

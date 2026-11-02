@@ -521,7 +521,11 @@ class FakeStore(StorePort):
         return list(self._labels.get(tid, []))
 
     def update_state(self, tid, state):
-        self._get(tid)["state"] = _RAW_STORAGE_STATE.get(state, state)
+        record = self._get(tid)
+        record["state"] = _RAW_STORAGE_STATE.get(state, state)
+        if record.get("type") != "item" and state != State.DONE:
+            record["outcome"] = None
+            record["closed_at"] = None
         self._record_history(tid, state)
 
     def _record_history(self, tid, state):

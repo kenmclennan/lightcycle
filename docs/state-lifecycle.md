@@ -21,7 +21,7 @@ stateDiagram-v2
   done --> [*]
 ```
 
-A `done` step moved back to `waiting` or `queued` (any route through `RouteStepService.route`) is refused while a step whose `previous_step` is it is still open; `reclaim` only writes a `running` step.
+A `done` step moved back to `waiting` or `queued` (any route through `RouteStepService.route`) is refused while a step whose `previous_step` is it is still open; `reclaim` only writes a `running` step. Re-opening a `done` step clears its `outcome` and `closed_at` in the same write; the `done` row in `history` stays, and the `outcome` is not kept.
 
 - **backlogged** - not activated yet; nothing is waiting on anything.
 - **blocked** - waiting on another item or step's unresolved dependency.

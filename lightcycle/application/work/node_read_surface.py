@@ -29,7 +29,7 @@ def node_read_surface(store, flow, view):
         out["detail"] = [e.as_dict() for e in entries]
         out["detail_presents"] = presents
         prev = step_inputs.previous(step)
-        if prev is not None:
+        if prev is not None and prev.outcome:
             out["notes"] = shim_notes(prev.stage, prev.outcome, prev.report, step.notes)
         artifacts = {a.type: a.value for a in step_artifacts}
         if artifacts.get("session-id"):
