@@ -52,6 +52,7 @@ class CheckRun:
     url: str = ""
     started_at: float = 0.0
     completed_at: float = 0.0
+    workflow: str = ""
 
 
 @dataclass(frozen=True)

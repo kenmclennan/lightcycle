@@ -6,7 +6,7 @@ from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.application.pool.pr_lookups import flow_for, run_of, skip_unpinned
 from lightcycle.application.pool.skip_idle_ci_watch import SkipIdleCiWatchUseCase
 from lightcycle.domain.pool import (
-    MISSING_STATUS, cancelled_check, ci_outcome, failing_check, judged_checks, pr_workflows_expected, status_mismatch,
+    MISSING_STATUS, cancelled_check, check_label, ci_outcome, failing_check, judged_checks, pr_workflows_expected, status_mismatch,
     timed_out_check,
 )
 from lightcycle.domain.work import State
@@ -96,7 +96,7 @@ class ResolveCiUseCase:
         self._store.note_condition(
             step.id,
             "poll-ci is holding check '%s' pending: GitHub reports it completed with no conclusion"
-            % odd.name,
+            % check_label(odd),
         )
 
     def _required(self, pr_value):
@@ -151,7 +151,7 @@ class ResolveCiUseCase:
             observation=(
                 "Check '%s'%s was cancelled on %s, PR %s, and no other check failed; no test "
                 "failed, so no code change is called for."
-            ) % (check.name, url, sha, pr_value),
+            ) % (check_label(check), url, sha, pr_value),
             decision=(
                 "Rerun the cancelled job, then unblock this step; unblocking restarts the wait "
                 "for a fresh result."
@@ -276,7 +276,7 @@ class ResolveCiUseCase:
                     note = (
                         "CI timed out on %s: check '%s'%s still %s after %ds, past the "
                         "ceiling of %ds (ci-check-ceiling-seconds), PR %s."
-                    ) % (sha, hung.name, url, hung.status.replace("_", " "), int(now - started),
+                    ) % (sha, check_label(hung), url, hung.status.replace("_", " "), int(now - started),
                          ceiling, pr_value)
                 self._complete.execute(CompleteInput(step=step.id, outcome=sd.ci_failure, note=note))
                 ci_resolved.append(step.item)
@@ -287,7 +287,7 @@ class ResolveCiUseCase:
                 fc = failing_check(judged_checks(checks, required, since))
                 url = " %s" % fc.url if fc and fc.url else ""
                 note = "CI failed on %s: check '%s'%s, PR %s." % (
-                    sha, fc.name if fc else "unknown", url, pr_value,
+                    sha, check_label(fc) if fc else "unknown", url, pr_value,
                 )
                 self._complete.execute(CompleteInput(step=step.id, outcome=sd.ci_failure, note=note))
                 ci_resolved.append(step.item)

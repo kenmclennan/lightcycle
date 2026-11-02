@@ -1,5 +1,6 @@
 import datetime
 import json
+import os
 import re
 import subprocess
 from typing import Optional, Tuple, Union
@@ -11,6 +12,12 @@ from lightcycle.ports.github import (
 
 _PR_URL_RE = re.compile(r"https://github\.com/([^/]+)/([^/]+)/pull/(\d+)")
 _GH_TIMEOUT_SECONDS = 30
+_ACTIONS_RUN_URL = re.compile(r"/actions/runs/(\d+)/")
+
+
+def _actions_run_id(url):
+    m = _ACTIONS_RUN_URL.search(url)
+    return m.group(1) if m else ""
 _LISTING_PAGE_SIZE = 100
 _PULL_API_URL_RE = re.compile(r"/repos/([^/]+)/([^/]+)/pulls/(\d+)$")
 
@@ -290,8 +297,10 @@ class GitHubEventsAdapter(GitHubEventsPort):
                 "check-runs total_count %s does not match the %d runs returned"
                 % (data[0].get("total"), len(data)),
             )
+        workflows = self._workflow_names(owner, repo, sha, data)
         return tuple(
             CheckRun(
+                workflow=workflows.get(_actions_run_id(c.get("url") or ""), ""),
                 name=c.get("name") or "",
                 status=c.get("status") or "",
                 conclusion=c.get("conclusion"),
@@ -301,6 +310,25 @@ class GitHubEventsAdapter(GitHubEventsPort):
             )
             for c in data
         )
+
+    def _workflow_names(self, owner, repo, sha, data):
+        if not any(_actions_run_id(c.get("url") or "") for c in data):
+            return {}
+        rows = self._gh_api_lines(
+            "/repos/%s/%s/actions/runs?head_sha=%s&per_page=100" % (owner, repo, sha),
+            ".workflow_runs[] | {id,name,path}",
+            paginate=True,
+        )
+        if isinstance(rows, ReadFailure):
+            return {}
+        names = {}
+        for r in rows:
+            if not isinstance(r, dict) or r.get("id") is None:
+                continue
+            name = r.get("name") or os.path.splitext(os.path.basename(r.get("path") or ""))[0]
+            if name:
+                names[str(r["id"])] = name
+        return names
 
     def workflow_sources(self, pr: str, sha: str) -> Union[Tuple[WorkflowFile, ...], ReadFailure]:
         parts = _repo_parts(pr)

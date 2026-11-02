@@ -542,6 +542,42 @@ class TestRequiredChecksAndCeiling(unittest.TestCase):
         self.assertIn("ceiling of 3600s", node.report)
         self.assertEqual([a.value for a in store.item_artifacts(step) if a.type == "ci-judged-sha"], ["sha1"])
 
+    def test_timeout_note_names_the_queued_check_by_its_own_workflow(self):
+        done = CheckRun(name="test (3.13)", status="completed", conclusion="success", workflow="scanner-python")
+        hung = CheckRun(name="test (3.13)", status="queued", conclusion=None, started_at=6399.0, workflow="scanner-kotlin")
+        store, item, step, uc = _ci_setup(_gh([done, hung]))
+
+        uc.execute()
+
+        node = store.get_node(step)
+        self.assertEqual(node.outcome, "failed")
+        self.assertIn("check 'scanner-kotlin / test (3.13)'", node.report)
+        self.assertNotIn("scanner-python", node.report)
+
+    def test_failure_note_names_the_failing_check_by_workflow(self):
+        bad = CheckRun(name="test", status="completed", conclusion="failure", workflow="sensors")
+        store, item, step, uc = _ci_setup(_gh([bad]))
+
+        uc.execute()
+
+        self.assertIn("check 'sensors / test'", store.get_node(step).report)
+
+    def test_cancelled_park_names_the_check_by_workflow(self):
+        cancelled = CheckRun(name="test", status="completed", conclusion="cancelled", workflow="sensors")
+        store, item, step, uc = _ci_setup(_gh([cancelled]))
+
+        uc.execute()
+
+        self.assertIn("sensors / test", store.get_node(step).park.reason)
+
+    def test_completed_with_no_conclusion_condition_names_the_check_by_workflow(self):
+        odd = CheckRun(name="test", status="completed", conclusion=None, workflow="sensors")
+        store, item, step, uc = _ci_setup(_gh([odd]))
+
+        uc.execute()
+
+        self.assertIn("check 'sensors / test'", store.get_node(step).notes or "")
+
     def test_required_set_with_one_absent_keeps_waiting(self):
         gh = _gh([_ok("a")], required={"a", "b"})
         store, item, step, uc = _ci_setup(gh)
