@@ -150,10 +150,17 @@ class StepsAggregate:
         self._commit()
 
     def update_state(self, tid, state):
-        self._conn.execute(
-            "UPDATE %s SET state = ? WHERE id = ?" % self._table_of(tid),
-            (_RAW_STORAGE_STATE.get(state, state), tid),
-        )
+        table = self._table_of(tid)
+        raw = _RAW_STORAGE_STATE.get(state, state)
+        if table == "steps" and state != State.DONE:
+            self._conn.execute(
+                "UPDATE steps SET state = ?, outcome = NULL, closed_at = NULL WHERE id = ?",
+                (raw, tid),
+            )
+        else:
+            self._conn.execute(
+                "UPDATE %s SET state = ? WHERE id = ?" % table, (raw, tid)
+            )
         self._record_history(tid, state)
         self._commit()
 
