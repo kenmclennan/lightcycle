@@ -538,6 +538,20 @@ class StoreContractBase:
         s.reclaim(tid)
         self.assertEqual(s.get_node(tid).state, "queued")
 
+    def test_reclaim_leaves_a_done_step_untouched(self):
+        s = self.make_store()
+        tid = self._step(s, "t", role="agent")
+        s.claim_ready("agent")
+        s.complete_step_atomic(tid, "done", s.get_node(tid).claimed_by, None)
+        before = s.get_node(tid)
+        history = list(s.history(tid))
+        s.reclaim(tid)
+        after = s.get_node(tid)
+        self.assertEqual(after.state, "done")
+        self.assertEqual(after.outcome, before.outcome)
+        self.assertEqual(after.closed_at, before.closed_at)
+        self.assertEqual(list(s.history(tid)), history)
+
     def test_reclaim_clears_assignee(self):
         s = self.make_store()
         tid = self._step(s, "t", role="agent")

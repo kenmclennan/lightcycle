@@ -162,6 +162,26 @@ class TestCmdSetRefusesFlagsOutsideState(unittest.TestCase):
         )
 
 
+class TestCmdSetRefusesReopeningAClosedStepWithAnOpenSuccessor(unittest.TestCase):
+    def setUp(self):
+        self.store = FakeStore()
+        cli.set_container(FakeContainer(self.store))
+        item = self.store.create_item("x", "d", shortcode="OWN")
+        self.a = self.store.create_step(stage="write-code", role="agent", item=item)
+        self.store.claim_ready("agent", "w1")
+        self.store.complete_step_atomic(self.a, "done", "w1", None)
+        self.b = self.store.create_step(
+            stage="code-open-pr", role="agent", item=item, previous=self.a)
+
+    def test_state_waiting_exits_1_naming_the_successor_and_changes_nothing(self):
+        rc, out, err = call(
+            cli.cmd_set, self.a, "--state", "waiting", "--needs", "n", "--reason", "r")
+        self.assertEqual(rc, 1)
+        self.assertIn(self.b, err)
+        self.assertEqual(self.store.get_node(self.a).state, "done")
+        self.assertIsNone(self.store.get_node(self.a).park.needs)
+
+
 class TestRenderFieldRefusalOfNoStructure(unittest.TestCase):
     def test_a_field_owned_by_neither_structure_says_so(self):
         refusal = FieldRefusal(fields=("goal",), requested_type="item", owner=None)

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from lightcycle.application.errors import UseCaseError
+from lightcycle.application.flow.reopen_guard import ReopenGuard
 from lightcycle.application.flow.route_step import RouteStepService
 from lightcycle.domain.work.park import Park
 
@@ -28,6 +29,7 @@ class UnblockStepUseCase:
             raise UseCaseError(
                 "nothing to unblock: step '%s' has no agent owner" % (t.stage or "(none)")
             )
+        ReopenGuard(self._store).ensure_reopenable(input.step)
         kept = Park.strip_blocked_notes(t.notes)
         history = t.park.as_history_note()
         if history:

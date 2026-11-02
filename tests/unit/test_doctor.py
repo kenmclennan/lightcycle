@@ -154,6 +154,90 @@ class TestDoctorEngineRequirement(unittest.TestCase):
             self.assertEqual(self._report(requires).problems["contract"], [])
 
 
+_FORK_GRAPH = """entry: draft
+
+edges:
+  draft  done  build
+  build  done  gate
+  gate   changes  build
+  gate   merged
+
+hooks:
+  pr_feedback  gate  handle-feedback
+"""
+
+
+class _GraphFlow:
+    def __init__(self, text):
+        from lightcycle.domain.flow.graph import parse_graph
+        self._graph = parse_graph(text)
+
+    def graph_for(self, node):
+        return self._graph
+
+
+class TestDoctorFork(unittest.TestCase):
+    def setUp(self):
+        self.store = FakeStore()
+        self.item = self.store.create_item("x", "d", shortcode="OWN")
+
+    def _problems(self, text=_FORK_GRAPH):
+        source = FakeWorkflowSource()
+        source.add_bundle("acme", "sha1", 1, current=True)
+        uc = _uc(self.store, source, _cfg(**_ALL_KEYS), FakeWorkflowBundle())
+        uc._flow = _GraphFlow(text)
+        return [p for p in uc.execute(DoctorInput()).problems["store"] if p.kind == "step-fork"]
+
+    def _step(self, stage):
+        return self.store.create_step(stage=stage, role="agent", item=self.item)
+
+    def test_two_open_main_path_steps_report_a_fork_naming_item_and_steps(self):
+        a, b = self._step("build"), self._step("gate")
+        (p,) = self._problems()
+        self.assertEqual(p.node_id, self.item)
+        self.assertIn(a, p.message)
+        self.assertIn(b, p.message)
+        self.assertIn("lc rm", p.fix)
+
+    def test_two_steps_at_the_same_stage_report_a_fork(self):
+        self._step("build")
+        self._step("build")
+        self.assertEqual(len(self._problems()), 1)
+
+    def test_one_open_step_reports_none(self):
+        self._step("build")
+        self.assertEqual(self._problems(), [])
+
+    def test_an_open_gate_beside_a_feedback_step_is_not_a_fork(self):
+        self._step("gate")
+        self._step("handle-feedback")
+        self.assertEqual(self._problems(), [])
+
+    def test_one_open_step_beside_a_done_step_is_not_a_fork(self):
+        done = self._step("build")
+        self.store.claim_ready("agent", "w1")
+        self.store.complete_step_atomic(done, "done", "w1", None)
+        self._step("gate")
+        self.assertEqual(self._problems(), [])
+
+    def test_open_steps_in_different_phases_are_not_a_fork(self):
+        text = _FORK_GRAPH + "\nphase:\n  draft  one\n  build  one\n  gate  two\n"
+        self._step("build")
+        self._step("gate")
+        self.assertEqual(self._problems(text), [])
+
+
+class TestMainPathOfCommittedWorkflow(unittest.TestCase):
+    def test_main_path_has_the_code_stages_and_no_feedback_stage(self):
+        from lightcycle.domain.flow.graph import parse_graph
+        from lightcycle.domain.health.fork import main_path_stages
+        text = Path("tests/support/library/workflows/spec-driven.md").read_text()
+        stages = main_path_stages(parse_graph(text))
+        for stage in ("write-code", "code-open-pr", "watch-ci", "review-code"):
+            self.assertIn(stage, stages)
+        self.assertFalse([s for s in stages if "handle-feedback" in s])
+
+
 class TestDoctorUseCase(unittest.TestCase):
     def test_clean_store_and_healthy_config_reports_healthy(self):
         store = FakeStore()
