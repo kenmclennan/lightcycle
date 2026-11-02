@@ -167,17 +167,18 @@ class PrPoll:
             self._snapshot.mark_stale(pr)
             return False
         entry = self._snapshot.entry_of(pr) or PrEntry()
-        self._snapshot.publish(
-            pr, replace(entry, state=view.state, view=view, updated_at=view.updated_at)
-        )
+        if view.updated_at > entry.updated_at:
+            return self._read_in_full(pr, view) is not None
+        self._snapshot.publish(pr, replace(entry, state=view.state, view=view))
         return True
 
-    def _read_in_full(self, pr):
-        view = self._github.pr_view(pr)
-        if isinstance(view, ReadFailure):
-            self._log_failure("pr_view", pr, view)
-            self._snapshot.mark_stale(pr)
-            return None
+    def _read_in_full(self, pr, view=None):
+        if view is None:
+            view = self._github.pr_view(pr)
+            if isinstance(view, ReadFailure):
+                self._log_failure("pr_view", pr, view)
+                self._snapshot.mark_stale(pr)
+                return None
         previous = self._snapshot.entry_of(pr) or PrEntry()
         entry = replace(previous, state=view.state, view=view, updated_at=view.updated_at)
         self._snapshot.publish(pr, entry)
