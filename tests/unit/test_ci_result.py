@@ -1,6 +1,6 @@
 import unittest
 
-from lightcycle.domain.pool import cancelled_check, ci_outcome, failing_check, judged_checks, timed_out_check
+from lightcycle.domain.pool import cancelled_check, check_label, ci_outcome, failing_check, judged_checks, timed_out_check
 from lightcycle.ports.github import CheckRun
 
 
@@ -228,3 +228,18 @@ class TestEveryNonCompletedStatusTimesOut(unittest.TestCase):
 
     def test_a_completed_check_never_times_out(self):
         self.assertIsNone(timed_out_check((_run("build", started_at=1.0),), 10000.0, 3600))
+
+
+class TestCheckLabel(unittest.TestCase):
+    def test_label_joins_workflow_and_job(self):
+        self.assertEqual(check_label(CheckRun(name="job", status="queued", conclusion=None, workflow="wf")), "wf / job")
+
+    def test_label_is_the_bare_name_without_a_workflow(self):
+        self.assertEqual(check_label(CheckRun(name="job", status="queued", conclusion=None)), "job")
+
+    def test_required_matching_ignores_workflow(self):
+        checks = (
+            CheckRun(name="test (3.13)", status="completed", conclusion="success", workflow="a"),
+            CheckRun(name="test (3.13)", status="queued", conclusion=None, workflow="b"),
+        )
+        self.assertEqual(judged_checks(checks, frozenset({"test (3.13)"})), checks)

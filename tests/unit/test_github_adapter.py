@@ -575,6 +575,74 @@ class TestCheckRuns(unittest.TestCase):
 
         self.assertEqual(runs[0].url, "https://github.com/x/y/actions/runs/1/job/2")
 
+    def _with_runs(self, payload, runs_proc):
+        lines = "\n".join(json.dumps({**c, "total": len(payload)}) for c in payload)
+        return patch(
+            "lightcycle.adapters.github.subprocess.run",
+            MagicMock(side_effect=[_proc(lines), runs_proc]),
+        )
+
+    def test_same_named_checks_get_their_own_workflow_from_the_run_id(self):
+        runs = "\n".join(json.dumps(r) for r in (
+            {"id": 10, "name": "scanner-python", "path": ".github/workflows/p.yml"},
+            {"id": 20, "name": "scanner-kotlin", "path": ".github/workflows/k.yml"},
+        ))
+        payload = [
+            {"name": "test (3.13)", "status": "completed", "conclusion": "success",
+             "url": "https://github.com/x/y/actions/runs/10/job/1"},
+            {"name": "test (3.13)", "status": "queued", "conclusion": None,
+             "url": "https://github.com/x/y/actions/runs/20/job/2"},
+        ]
+        with self._with_runs(payload, _proc(runs)):
+            result = self.adapter.check_runs(_PR, "sha1")
+
+        self.assertEqual([(c.workflow, c.name) for c in result],
+                         [("scanner-python", "test (3.13)"), ("scanner-kotlin", "test (3.13)")])
+
+    def test_workflow_name_falls_back_to_the_path_basename(self):
+        runs = json.dumps({"id": 10, "name": None, "path": ".github/workflows/sensors.yml"})
+        payload = [{"name": "test", "status": "completed", "conclusion": "success",
+                    "url": "https://github.com/x/y/actions/runs/10/job/1"}]
+        with self._with_runs(payload, _proc(runs)):
+            result = self.adapter.check_runs(_PR, "sha1")
+
+        self.assertEqual(result[0].workflow, "sensors")
+
+    def test_no_actions_url_makes_no_workflow_runs_call(self):
+        mock_run = self._run([
+            {"name": "codacy", "status": "completed", "conclusion": "success",
+             "url": "https://app.codacy.com/x"},
+        ])
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            result = self.adapter.check_runs(_PR, "sha1")
+
+        self.assertEqual(mock_run.call_count, 1)
+        self.assertEqual(result[0].workflow, "")
+
+    def test_failed_workflow_runs_read_leaves_workflow_empty_not_a_read_failure(self):
+        payload = [{"name": "test", "status": "completed", "conclusion": "success",
+                    "url": "https://github.com/x/y/actions/runs/10/job/1"}]
+        with self._with_runs(payload, _proc("", returncode=1, stderr="boom")):
+            result = self.adapter.check_runs(_PR, "sha1")
+
+        self.assertNotIsInstance(result, ReadFailure)
+        self.assertEqual([(c.name, c.workflow) for c in result], [("test", "")])
+
+    def test_mixed_checks_only_the_resolvable_one_has_a_workflow(self):
+        runs = json.dumps({"id": 10, "name": "check"})
+        payload = [
+            {"name": "a", "status": "completed", "conclusion": "success",
+             "url": "https://github.com/x/y/actions/runs/10/job/1"},
+            {"name": "b", "status": "completed", "conclusion": "success",
+             "url": "https://github.com/x/y/actions/runs/99/job/2"},
+            {"name": "c", "status": "completed", "conclusion": "success",
+             "url": "https://app.codacy.com/x"},
+        ]
+        with self._with_runs(payload, _proc(runs)):
+            result = self.adapter.check_runs(_PR, "sha1")
+
+        self.assertEqual([c.workflow for c in result], ["check", "", ""])
+
     def test_started_at_parses_to_epoch_and_missing_is_zero(self):
         mock_run = self._run([
             {"name": "a", "status": "completed", "conclusion": "success",

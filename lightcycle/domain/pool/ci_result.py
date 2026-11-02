@@ -15,6 +15,13 @@ class MissingCheck:
     conclusion: None = None
     url: str = ""
     completed_at: float = 0.0
+    workflow: str = ""
+
+
+def check_label(check):
+    if check.workflow:
+        return "%s / %s" % (check.workflow, check.name)
+    return check.name
 
 
 def is_concluded(check):
