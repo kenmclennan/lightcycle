@@ -68,8 +68,13 @@ class PrPoll:
                 self._log_failure("repo_inline_comments", repo, comments)
             if isinstance(rows, ReadFailure) or isinstance(comments, ReadFailure):
                 for pr in prs:
+                    entry = self._snapshot.entry_of(pr)
+                    unfilled = entry is None or entry.push_time is None
+                    if unfilled and self._read_in_full(pr) is not None:
+                        continue
                     self._snapshot.mark_stale(pr)
-                return set(prs)
+                    failed.add(pr)
+                return failed
             listed = {row.url: row for row in rows}
             inline = comments
         newest = max([row.updated_at for row in listed.values()] + [cutoff or 0.0])

@@ -14,3 +14,8 @@ def merge_condition_note(existing, text, now):
     else:
         lines.append("%s (x1, last %s)" % (normalized, now))
     return "\n".join(lines)
+
+
+def drop_condition_lines(notes, prefix):
+    kept = [line for line in (notes or "").splitlines() if not line.startswith(prefix)]
+    return "\n".join(kept)

@@ -13,6 +13,7 @@ from lightcycle.ports.workflow_source import OriginRegistration, RemoteProbe
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_git import FakeGit
 from tests.support.fake_machine import FakeMachine
+from lightcycle.domain.health.doctor_summary import doctor_summary
 from tests.support.fake_store import FakeStore
 from tests.support.tui_harness import FakeConfigReloadStatus, FakeGuidanceSyncStatus, FakeLock
 
@@ -692,6 +693,53 @@ class TestDoctorGithubBudget(unittest.TestCase):
         self.assertEqual(report.problems["github"], [])
         self.assertEqual(report.notes, {})
         self.assertTrue(report.healthy())
+
+
+class TestDoctorPrFeedbackConditions(unittest.TestCase):
+    def _report(self, store):
+        source = FakeWorkflowSource()
+        source.add_bundle("acme", "sha1", 1, current=True)
+        return DoctorUseCase(
+            store, source, _cfg(**_ALL_KEYS), FakeWorkflowBundle(), FakeFs(), FakeMachine(),
+            _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(),
+            FakeLock(running=False), FakeGithubBudget()).execute(DoctorInput())
+
+    def _gate(self, store):
+        item = store.create_item("feature", "d")
+        step = store.create_step(stage="ready-merge", role="human", item=item)
+        store.note_condition(step, "pr-feedback: not watching p - the poll has not read reviews yet")
+        store.note_condition(step, "pr-feedback: not watching p - the poll has not read reviews yet")
+        return item, step
+
+    def test_an_open_step_with_the_line_yields_one_github_problem(self):
+        store = FakeStore()
+        item, step = self._gate(store)
+
+        problems = self._report(store).problems["github"]
+
+        self.assertEqual(len(problems), 1)
+        self.assertEqual(problems[0].kind, "pr-feedback-unwatched")
+        self.assertEqual(
+            problems[0].message,
+            "pr-feedback: not watching p - the poll has not read reviews yet")
+        self.assertEqual(problems[0].node_id, item)
+        self.assertNotIn("(x", problems[0].message)
+        self.assertIn("run.log", problems[0].fix)
+
+    def test_a_done_step_with_the_line_yields_none(self):
+        store = FakeStore()
+        item, step = self._gate(store)
+        store.complete_node(step, "done")
+
+        self.assertEqual(self._report(store).problems["github"], [])
+
+    def test_the_summary_is_unchanged_by_the_problem(self):
+        store = FakeStore()
+        self._gate(store)
+
+        report = self._report(store)
+
+        self.assertEqual(doctor_summary(report.problems), "")
 
 
 class TestDoctorOrphans(unittest.TestCase):

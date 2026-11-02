@@ -40,7 +40,8 @@ _METAS = {
                         "routes": {"done": "await-merge"}, "phase": "code"},
 }
 _FLOW = flow_from_metas(_METAS)
-_TRUST = dict(trusted_authors=lambda: frozenset({"ken"}), held_shortcode=lambda: "HLD")
+_TRUST = dict(trusted_authors=lambda: frozenset({"ken"}), held_shortcode=lambda: "HLD",
+              poll_epoch=lambda: 0, unread_note_polls=lambda: 3)
 
 
 class _Rig:

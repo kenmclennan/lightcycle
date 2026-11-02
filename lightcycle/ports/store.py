@@ -137,6 +137,10 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def clear_condition(self, tid, prefix):
+        pass
+
+    @abstractmethod
     def set_notes(self, tid, text):
         pass
 

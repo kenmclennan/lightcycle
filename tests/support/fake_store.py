@@ -26,6 +26,7 @@ from lightcycle.domain.runs import Pass, PhaseRun, pass_id, run_id
 from lightcycle.domain.work.outputs import ArtifactRecord
 from lightcycle.domain.work import (
     Artifact, DailySummary, Item, NodeView, Park, State, Step, default_kind_for, derive_state,
+    drop_condition_lines,
     merge_condition_note,
 )
 
@@ -437,6 +438,11 @@ class FakeStore(StorePort):
     def note_condition(self, tid, text):
         b = self._get(tid)
         b["notes"] = merge_condition_note(b.get("notes") or "", text, self._now())
+
+    def clear_condition(self, tid, prefix):
+        b = self._get(tid)
+        if b.get("notes"):
+            b["notes"] = drop_condition_lines(b["notes"], prefix) or None
 
     def set_notes(self, tid, text):
         self._get(tid)["notes"] = text or None

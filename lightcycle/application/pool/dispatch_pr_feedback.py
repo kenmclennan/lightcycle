@@ -27,6 +27,12 @@ from lightcycle.domain.work import State, node_id_key, parse_timestamp
 from lightcycle.ports.github import NotYetRead, ReadFailure
 
 CONFLICT_BASE_TIP = "conflict-base-tip"
+PR_FEEDBACK_PREFIX = "pr-feedback:"
+
+
+def _unread_reason(pr, names):
+    return "%s not watching %s - the poll has not read %s yet" % (
+        PR_FEEDBACK_PREFIX, pr, ", ".join(names))
 
 
 @dataclass(frozen=True)
@@ -64,7 +70,13 @@ def _candidate(run, kind, obj, path=None, line=None):
 
 
 class DispatchPrFeedbackUseCase:
-    def __init__(self, store, github, flow_service, complete, *, trusted_authors, held_shortcode):
+    def __init__(
+        self, store, github, flow_service, complete, *, trusted_authors, held_shortcode,
+        poll_epoch, unread_note_polls,
+    ):
+        self._poll_epoch = poll_epoch
+        self._unread_note_polls = unread_note_polls
+        self._streaks = {}
         self._store = store
         self._github = github
         self._flow_service = flow_service
@@ -100,23 +112,24 @@ class DispatchPrFeedbackUseCase:
         since = self._github.last_push_time(pr)
         if isinstance(since, ReadFailure):
             self._note_gh_read_failure(step.id, since)
-            return _Feedback()
+            reason = _unread_reason(pr, ["last_push_time"]) if isinstance(since, NotYetRead) else None
+            return _Feedback(), reason
         top_level = self._github.comments_since(pr, since)
         inline = self._github.pull_comments(pr, since)
         reviews = self._github.reviews(pr, since)
-        failure = next(
-            (r for r in (top_level, inline, reviews) if isinstance(r, ReadFailure)), None
-        )
+        reads = (("comments_since", top_level), ("pull_comments", inline), ("reviews", reviews))
+        failure = next((r for _, r in reads if isinstance(r, ReadFailure)), None)
         if failure is not None:
             self._note_gh_read_failure(step.id, failure)
-            return _Feedback()
+            names = [n for n, r in reads if isinstance(r, NotYetRead)]
+            return _Feedback(), (_unread_reason(pr, names) if names else None)
 
         try:
             trusted = self._trusted_authors()
         except ConfigError as e:
             self._store.note_condition(
                 step.id, "feedback not read: config key trusted-authors is unset (%s)" % e)
-            return _Feedback()
+            return _Feedback(), None
 
         step_def = flow.step_def(step.stage)
         mention_token = step_def.mention_token
@@ -151,7 +164,31 @@ class DispatchPrFeedbackUseCase:
                 self._hold.execute(run, origin, pr, held)
 
         return _Feedback(
-            admitted=admitted, approved=self._store.approved_holds(run.id), cutoff=since)
+            admitted=admitted, approved=self._store.approved_holds(run.id), cutoff=since), None
+
+    def _settle(self, step, reason):
+        held = [
+            line for line in (step.notes or "").splitlines()
+            if line.startswith(PR_FEEDBACK_PREFIX)
+        ]
+        if reason is None:
+            self._streaks.pop(step.id, None)
+            if held:
+                self._store.clear_condition(step.id, PR_FEEDBACK_PREFIX)
+            return
+        epoch = self._poll_epoch()
+        bound = self._unread_note_polls()
+        streak = self._streaks.get(step.id)
+        if streak is None or streak[0] != reason:
+            streak = (reason, epoch, None)
+            if held and any(not line.startswith(reason + " (x") for line in held):
+                self._store.clear_condition(step.id, PR_FEEDBACK_PREFIX)
+        _, first, last = streak
+        due = (epoch - first >= bound) if last is None else (epoch - last >= bound)
+        if due:
+            self._store.note_condition(step.id, reason)
+            last = epoch
+        self._streaks[step.id] = (reason, first, last)
 
     def _open_feedback_step(self, step, flow, feedback_step, run, outstanding):
         with self._store.transaction():
@@ -216,6 +253,7 @@ class DispatchPrFeedbackUseCase:
     def execute(self, reads=None) -> DispatchPrFeedbackResponse:
         reads = reads or PrSyncReads(self._github)
         reworked, conflicted = [], []
+        seen = set()
         for step in self._store.all_nodes():
             if step.type != "step" or step.state == State.DONE:
                 continue
@@ -231,19 +269,32 @@ class DispatchPrFeedbackUseCase:
             run = run_of(self._store, self._flow_service, step)
             pr_value = run.pr if run else None
             if pr_value is None:
+                if feedback_step:
+                    self._settle(step, PR_FEEDBACK_PREFIX
+                                 + " not watching - the phase run has no pr recorded")
+                    seen.add(step.id)
                 continue
             advanced = False
+            reason = None
             if feedback_step:
-                outstanding = self._outstanding_feedback(step, pr_value, flow, run)
+                outstanding, reason = self._outstanding_feedback(step, pr_value, flow, run)
                 if outstanding:
                     advanced = True
-                    open_now = any(
-                        n.type == "step" and n.stage == feedback_step and n.item == step.item
-                        for n in self._store.all_nodes()
+                    open_step = next(
+                        (n for n in self._store.all_nodes()
+                         if n.type == "step" and n.stage == feedback_step
+                         and n.item == step.item),
+                        None,
                     )
-                    if not open_now:
+                    if open_step is None:
                         self._open_feedback_step(step, flow, feedback_step, run, outstanding)
                         reworked.append(step.item)
+                    else:
+                        reason = (
+                            "%s feedback is waiting on %s - %s %s is still open for this item"
+                            % (PR_FEEDBACK_PREFIX, pr_value, feedback_step, open_step.id))
+                self._settle(step, reason)
+                seen.add(step.id)
             sync = reads.read(pr_value) if not advanced and conflict_outcome else None
             if sync is not None and _is_conflicted(sync):
                 history = [t for t in self._store.steps_at_step(step.stage)
@@ -270,4 +321,6 @@ class DispatchPrFeedbackUseCase:
                         self._conflict_cap_note(fired.hook, failures, prior, step.stage, done.next_step),
                     )
                 conflicted.append(step.item)
+        for step_id in [k for k in self._streaks if k not in seen]:
+            del self._streaks[step_id]
         return DispatchPrFeedbackResponse(reworked=reworked, conflicted=conflicted)

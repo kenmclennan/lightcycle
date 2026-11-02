@@ -49,6 +49,7 @@ class _Base(unittest.TestCase):
         self.uc = DispatchPrFeedbackUseCase(
             self.store, github, self.adapter, None,
             trusted_authors=trusted, held_shortcode=lambda: "HLD",
+            poll_epoch=lambda: 0, unread_note_polls=lambda: 3,
         )
         return self.uc
 

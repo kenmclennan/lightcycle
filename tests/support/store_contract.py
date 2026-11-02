@@ -263,6 +263,37 @@ class StoreContractBase:
         lines = s.get_node(tid).notes.splitlines()
         self.assertEqual(len(lines), 2)
 
+    def test_clear_condition_removes_only_prefixed_lines_and_keeps_order(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+        s.note_condition(tid, "other one")
+        s.note_condition(tid, "pr-feedback: waiting")
+        s.note_condition(tid, "other two")
+
+        s.clear_condition(tid, "pr-feedback:")
+
+        lines = s.get_node(tid).notes.splitlines()
+        self.assertEqual(len(lines), 2)
+        self.assertTrue(lines[0].startswith("other one"))
+        self.assertTrue(lines[1].startswith("other two"))
+
+    def test_clear_condition_on_the_last_prefixed_line_leaves_no_notes(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+        s.note_condition(tid, "pr-feedback: waiting")
+
+        s.clear_condition(tid, "pr-feedback:")
+
+        self.assertFalse(s.get_node(tid).notes)
+
+    def test_clear_condition_on_a_step_with_no_notes_is_a_noop(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+
+        s.clear_condition(tid, "pr-feedback:")
+
+        self.assertFalse(s.get_node(tid).notes)
+
     def test_note_condition_non_adjacent_recurrence_starts_a_fresh_line(self):
         s = self.make_store()
         tid = self._step(s, "t")

@@ -32,7 +32,7 @@ from lightcycle.domain.work.node_id import format_step_id, node_id_key
 from lightcycle.domain.work.node_queue import NodeQueue
 from lightcycle.domain.work.node_spec import NodeSpec
 from lightcycle.domain.work.node_view import NodeView
-from lightcycle.domain.work.note_condition import merge_condition_note
+from lightcycle.domain.work.note_condition import drop_condition_lines, merge_condition_note
 from lightcycle.domain.work.plain_language_caps import (
     MAX_PARAGRAPHS, MAX_SENTENCES_PER_PARAGRAPH, MAX_SENTENCE_WORDS, MAX_WORDS, CapBreach,
     cap_breaches, cap_rules_help, render_cap_refusal,
@@ -69,7 +69,7 @@ __all__ = [
     "Step", "compose_step_title", "format_step_id", "node_id_key",
     "MAX_PARAGRAPHS", "MAX_SENTENCES_PER_PARAGRAPH", "MAX_SENTENCE_WORDS", "MAX_WORDS",
     "CapBreach", "cap_breaches", "cap_rules_help", "render_cap_refusal",
-    "merge_condition_note", "ProjectIdentity", "ProjectedStep",
+    "merge_condition_note", "drop_condition_lines", "ProjectIdentity", "ProjectedStep",
     "format_facets", "parse_facets", "unformat_facets",
     "parse_timestamp",
     "guard_log_label",
