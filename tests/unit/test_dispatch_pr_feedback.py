@@ -1091,3 +1091,42 @@ class TestConflictCapCountsFailuresNotConflicts(unittest.TestCase):
 
         self.assertEqual(self._gate_outcomes()[-1], "gave-up")
         self.assertIn("pr_conflict_total_cap reached: 6 conflicts", self._escalation_note())
+
+
+class _ClosesStepOnSyncRead(FakeGitHub):
+    def __init__(self, close, **kw):
+        super().__init__(**kw)
+        self._close = close
+
+    def pr_sync_state(self, pr):
+        self._close()
+        return super().pr_sync_state(pr)
+
+
+class TestMonitorSkipsAStepAnotherPathClosed(unittest.TestCase):
+    def test_a_step_closed_during_the_sync_read_is_not_closed_again(self):
+        url = "https://github.com/x/y/pull/60"
+        store = FakeStore()
+        item = store.create_item("conflicting feature", "a description")
+        plant_pr(store, item, url)
+        step = store.create_step(stage="watch-step", role="agent", item=item)
+        flow = _FlowAdapter(_CONFLICT_FLOW)
+        complete = CompleteStepUseCase(store, flow)
+        real = complete.execute
+        calls = []
+        closed = []
+
+        def close_elsewhere():
+            if not closed:
+                closed.append(real(CompleteInput(step=step, outcome="conflicted")))
+
+        gh = _ClosesStepOnSyncRead(close_elsewhere, conflicted_prs={url})
+        complete.execute = lambda i: calls.append(i) or real(i)
+        uc = DispatchPrFeedbackUseCase(store, gh, flow, complete, **_TRUST)
+
+        result = uc.execute()
+
+        self.assertEqual(calls, [])
+        self.assertEqual(result.conflicted, [])
+        successors = [c for c in store.children(item) if c.previous_step == step]
+        self.assertEqual(len(successors), 1)

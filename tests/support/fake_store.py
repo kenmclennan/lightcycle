@@ -23,6 +23,7 @@ from lightcycle.domain.feedback import (
 from lightcycle.domain.money import Cost
 from lightcycle.domain.pool import ToolUsage
 from lightcycle.domain.runs import Pass, PhaseRun, pass_id, run_id
+from lightcycle.domain.work.open_successors import open_successors
 from lightcycle.domain.work.outputs import ArtifactRecord
 from lightcycle.domain.work import (
     Artifact, DailySummary, Item, NodeView, Park, State, Step, default_kind_for, derive_state,
@@ -488,7 +489,9 @@ class FakeStore(StorePort):
         self.complete_node(step, outcome)
         new_id = None
         if next_step_spec is not None:
-            new_id = self.create_step(**next_step_spec.as_kwargs())
+            item = b.get("parent")
+            if not open_successors(step, self.children(item)):
+                new_id = self.create_step(**next_step_spec.as_kwargs())
         return (True, new_id)
 
     def release(self):

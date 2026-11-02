@@ -159,6 +159,9 @@ class ResolveCiUseCase:
             tried="Judged every check on the head; none failed and the cancelled one is not a failure.",
         ))
 
+    def _already_closed(self, step):
+        return self._store.get_node(step.id).state == State.DONE
+
     def execute(self) -> ResolveCiResponse:
         ci_resolved = []
         ci_unread = []
@@ -249,6 +252,8 @@ class ResolveCiUseCase:
                 self._store.add_artifact(step.id, "ci-judged-sha", sha, internal=True)
                 note = "CI succeeded on %s." % sha if judged else (
                     "no CI checks are defined for this repo; none appeared on %s." % sha)
+                if self._already_closed(step):
+                    continue
                 done = self._complete.execute(CompleteInput(
                     step=step.id, outcome=sd.ci_success, note=note,
                 ))
@@ -278,6 +283,8 @@ class ResolveCiUseCase:
                         "ceiling of %ds (ci-check-ceiling-seconds), PR %s."
                     ) % (sha, check_label(hung), url, hung.status.replace("_", " "), int(now - started),
                          ceiling, pr_value)
+                if self._already_closed(step):
+                    continue
                 self._complete.execute(CompleteInput(step=step.id, outcome=sd.ci_failure, note=note))
                 ci_resolved.append(step.item)
             elif outcome == "failure" and sd.ci_failure:
@@ -289,6 +296,8 @@ class ResolveCiUseCase:
                 note = "CI failed on %s: check '%s'%s, PR %s." % (
                     sha, check_label(fc) if fc else "unknown", url, pr_value,
                 )
+                if self._already_closed(step):
+                    continue
                 self._complete.execute(CompleteInput(step=step.id, outcome=sd.ci_failure, note=note))
                 ci_resolved.append(step.item)
         for step_id in [k for k in self._unread if k not in still_unread]:

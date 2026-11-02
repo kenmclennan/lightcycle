@@ -43,8 +43,14 @@ class ItemCloseFault(FakeStore):
         return super().complete_node(tid, reason, disposition, note)
 
 
-def _complete(store, worktrees, step, outcome="done", note=None):
-    uc = CompleteStepUseCase(store, FlowService(FakeFs(METAS), store), worktrees)
+ROUTED_METAS = {
+    "finaliser": {"model": "sonnet", "step": "finalise", "routes": {"done": "follow"}},
+    "follower": {"model": "sonnet", "step": "follow"},
+}
+
+
+def _complete(store, worktrees, step, outcome="done", note=None, metas=METAS):
+    uc = CompleteStepUseCase(store, FlowService(FakeFs(metas), store), worktrees)
     return uc.execute(CompleteInput(step=step, outcome=outcome, note=note))
 
 
@@ -317,3 +323,34 @@ def _shift(ts, micros):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestDoubleCloseOfAReopenedStep(unittest.TestCase):
+    def _setup(self):
+        store = FakeStore()
+        item = store.create_item("thing", "d")
+        step = store.create_step(stage="finalise", role="finaliser", item=item)
+        return store, item, step
+
+    def _successors(self, store, item, step):
+        return [c for c in store.children(item) if c.previous_step == step]
+
+    def test_closing_a_reopened_step_again_leaves_one_open_successor(self):
+        store, item, step = self._setup()
+        _complete(store, StubWorktrees(), step, metas=ROUTED_METAS)
+        store.update_state(step, 'open')
+        _complete(store, StubWorktrees(), step, metas=ROUTED_METAS)
+        successors = self._successors(store, item, step)
+        self.assertEqual(len(successors), 1)
+        self.assertEqual(store.get_node(step).state, State.DONE)
+
+    def test_a_reopened_step_whose_successor_is_done_gets_exactly_one_new_successor(self):
+        store, item, step = self._setup()
+        _complete(store, StubWorktrees(), step, metas=ROUTED_METAS)
+        first = self._successors(store, item, step)[0].id
+        store.complete_node(first, "done")
+        store.update_state(step, 'open')
+        _complete(store, StubWorktrees(), step, metas=ROUTED_METAS)
+        successors = self._successors(store, item, step)
+        self.assertEqual(len(successors), 2)
+        self.assertEqual(sorted(s.state == State.DONE for s in successors), [False, True])

@@ -96,6 +96,48 @@ class StoreContractBase:
         self.assertEqual(s.get_node(tid).state, "done")
         self.assertEqual(s.get_node(tid).outcome, "done")
 
+    def _successors_of(self, s, tid):
+        item = s.get_step(tid).item
+        return [c for c in s.children(item) if getattr(c, "previous_step", None) == tid]
+
+    def _spec_for(self, s, tid):
+        return NodeSpec(stage="resolve", role="agent", item=s.get_step(tid).item, previous=tid)
+
+    def test_a_reclosed_step_with_an_open_successor_adds_no_second_successor(self):
+        s = self.make_store()
+        tid = self._step(s, "t", role="agent")
+        won, first = s.complete_step_atomic(tid, "done", "", self._spec_for(s, tid))
+        self.assertTrue(won)
+        s.update_state(tid, "open")
+        won, second = s.complete_step_atomic(tid, "done", "", self._spec_for(s, tid))
+        self.assertTrue(won)
+        self.assertIsNone(second)
+        self.assertEqual(s.get_node(tid).state, "done")
+        self.assertEqual([c.id for c in self._successors_of(s, tid)], [first])
+
+    def test_a_closed_step_with_no_successor_still_gets_one(self):
+        s = self.make_store()
+        tid = self._step(s, "t", role="agent")
+        won, new = s.complete_step_atomic(tid, "done", "", self._spec_for(s, tid))
+        self.assertTrue(won)
+        self.assertIsNotNone(new)
+        self.assertEqual(len(self._successors_of(s, tid)), 1)
+
+    def test_a_reclosed_step_whose_successor_is_done_gets_a_fresh_successor(self):
+        s = self.make_store()
+        tid = self._step(s, "t", role="agent")
+        _, first = s.complete_step_atomic(tid, "done", "", self._spec_for(s, tid))
+        s.update_state(first, "done")
+        s.update_state(tid, "open")
+        won, second = s.complete_step_atomic(tid, "done", "", self._spec_for(s, tid))
+        self.assertTrue(won)
+        self.assertIsNotNone(second)
+        self.assertNotEqual(first, second)
+        successors = self._successors_of(s, tid)
+        self.assertEqual(len(successors), 2)
+        self.assertEqual(
+            sorted(c.state == "done" for c in successors), [False, True])
+
     def test_complete_step_atomic_already_done_loses(self):
         s = self.make_store()
         tid = self._step(s, "t", role="agent")

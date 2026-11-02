@@ -1,5 +1,6 @@
 from lightcycle.domain.work.outputs import ArtifactRecord
 from lightcycle.domain.work import Artifact, State, drop_condition_lines, merge_condition_note
+from lightcycle.domain.work.open_successors import open_successors
 from lightcycle.ports.store import NodeNotFoundError
 from lightcycle.adapters.sqlite.shared import _PARK_COLUMNS, _RAW_STORAGE_STATE
 
@@ -115,7 +116,7 @@ class StepsAggregate:
         try:
             self._record_history(step, State.DONE)
             new_id = None
-            if next_step_spec is not None:
+            if next_step_spec is not None and not self._has_open_successor(step):
                 new_id = self._insert_step_nocommit(**next_step_spec.as_kwargs())
             self._commit()
         except Exception:
@@ -123,6 +124,12 @@ class StepsAggregate:
                 self._conn.rollback()
             raise
         return (True, new_id)
+
+    def _has_open_successor(self, step):
+        row = self._conn.execute("SELECT item FROM steps WHERE id = ?", (step,)).fetchone()
+        if row is None:
+            return False
+        return bool(open_successors(step, self.children(row[0])))
 
     def release(self):
         self._conn.close()

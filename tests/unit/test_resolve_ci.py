@@ -1,7 +1,7 @@
 import time
 import unittest
 
-from lightcycle.application.flow.complete_step import CompleteStepUseCase
+from lightcycle.application.flow.complete_step import CompleteInput, CompleteStepUseCase
 from lightcycle.application.pool.pr_snapshot import PrSnapshot
 from lightcycle.application.pool.resolve_ci import ResolveCiUseCase
 from lightcycle.domain.work import State
@@ -875,3 +875,48 @@ class TestHeldPrResolvesWithinOnePoll(unittest.TestCase):
         uc.execute()
 
         self.assertEqual(store.get_node(step_b).state, State.DONE)
+
+
+class _ClosesStepOnCheckRead(FakeGitHub):
+    def __init__(self, close, **kw):
+        super().__init__(**kw)
+        self._close = close
+
+    def check_runs(self, pr, sha):
+        self._close()
+        return super().check_runs(pr, sha)
+
+
+class TestResolveCiSkipsAStepAnotherPathClosed(unittest.TestCase):
+    def test_a_step_closed_during_the_checks_read_is_not_closed_again(self):
+        store = FakeStore()
+        item = store.create_item("building a thing", "a description")
+        plant_pr(store, item, _URL, branch=_BRANCH)
+        step = store.create_step(stage="poll-ci", role="engine", item=item)
+        flow = _FlowAdapter(_FLOW)
+        complete = CompleteStepUseCase(store, flow)
+        real = complete.execute
+        calls = []
+        closes = []
+
+        def close_elsewhere():
+            if not closes:
+                closes.append(real(CompleteInput(step=step, outcome="succeeded")))
+
+        gh = _ClosesStepOnCheckRead(
+            close_elsewhere, head_shas={_URL: "sha1"},
+            check_runs_by_sha={(_URL, "sha1"): (
+                CheckRun(name="build", status="completed", conclusion="success"),)})
+        complete.execute = lambda i: calls.append(i) or real(i)
+        uc = ResolveCiUseCase(
+            store, gh, flow, complete, clock=time.monotonic, poll_seconds=lambda: 60,
+            ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600,
+            ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3,
+            wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
+
+        result = uc.execute()
+
+        self.assertEqual(calls, [])
+        self.assertEqual(result.ci_resolved, [])
+        successors = [c for c in store.children(item) if c.previous_step == step]
+        self.assertEqual(len(successors), 1)

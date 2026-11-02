@@ -314,6 +314,8 @@ class DispatchPrFeedbackUseCase:
                 counts = outcome_counts(history, conflict_outcome, failures)
                 fired = flow.fired_cap(step.stage, conflict_outcome, counts)
                 outcome = flow.escalated_outcome(step.stage, conflict_outcome, counts)
+                if self._store.get_node(step.id).state == State.DONE:
+                    continue
                 done = self._complete.execute(CompleteInput(step=step.id, outcome=outcome))
                 if fired is not None and done.next_step:
                     self._store.note_condition(
