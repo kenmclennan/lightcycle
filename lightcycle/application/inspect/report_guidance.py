@@ -6,15 +6,20 @@ from typing import Optional, Tuple
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.services.guidance_library import GuidanceLibrary
+from lightcycle.application.services.installed_agent_steps import InstalledAgentSteps
 from lightcycle.application.setup.project_registry import ProjectRegistry
+from lightcycle.config import ConfigError
 from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE
+from lightcycle.domain.guidance.budget import overflows
 from lightcycle.domain.guidance.guidance import matches
 from lightcycle.domain.guidance.retirement import (
     APPROVAL_UNKNOWN, Approval, COVERS_UNKNOWN, CoversResult, Thresholds, Usage, build_rows,
 )
 from lightcycle.domain.workflows.identity import parse_pin
 from lightcycle.ports.github import ReadFailure
-from lightcycle.ports.store import ProjectNotRegisteredError, ProjectResolutionError
+from lightcycle.ports.store import (
+    ProjectNotRegisteredError, ProjectResolutionError, StoreUnreadableError,
+)
 
 _ISSUE_URL_RE = re.compile(r"https://github\.com/[^/\s]+/[^/\s]+/issues/\d+")
 
@@ -26,6 +31,7 @@ class GuidanceReport:
     since: Optional[str] = None
     spawns: int = 0
     projects: Tuple = ()
+    overflows: Tuple = ()
 
     def as_dict(self):
         return {
@@ -33,6 +39,8 @@ class GuidanceReport:
             "work": {"spawns": self.spawns, "projects": [dict(p) for p in self.projects]},
             "entries": [r.as_dict() for r in self.rows],
             "notes": list(self.notes),
+            "overflows": [
+                dict(dataclasses.asdict(o), skipped=list(o.skipped)) for o in self.overflows],
         }
 
 
@@ -53,12 +61,14 @@ def _ids(value):
 
 
 class ReportGuidanceUseCase:
-    def __init__(self, store, fs, git, github, config):
+    def __init__(self, store, fs, git, github, config, workflow_source, workflow_bundle):
         self._store = store
         self._fs = fs
         self._git = git
         self._github = github
         self._config = config
+        self._workflow_source = workflow_source
+        self._workflow_bundle = workflow_bundle
 
     def _project(self, item):
         if item is None or not item.repo:
@@ -139,6 +149,24 @@ class ReportGuidanceUseCase:
             })
         return tuple(sorted(projects, key=lambda p: (-p["spawns"], p["project"] or "")))
 
+    def _overflows(self, entries):
+        try:
+            budget = self._config.guidance_budget_bytes()
+        except ConfigError as e:
+            return (), ["budget check skipped: %s" % e]
+        try:
+            projects = [
+                (p.identity, p.facets) for p in self._store.list_projects()
+                if p.identity != GUIDANCE_WORKSPACE
+            ]
+            steps = InstalledAgentSteps(
+                self._workflow_source, self._workflow_bundle, self._config).list()
+        except (StoreUnreadableError, OSError) as e:
+            return (), ["budget check skipped: %s" % e]
+        if not projects or not steps:
+            return (), []
+        return tuple(overflows(entries, projects, steps, budget)), []
+
     def _covers(self, entries):
         results, notes = {}, []
         by_url = {}
@@ -207,6 +235,7 @@ class ReportGuidanceUseCase:
         notes = ["%s: %s" % (name, reason) for name, reason in problems]
         usage, window, opportunity, spawns, projects = self._usage(entries, since)
         covers, covers_notes = self._covers(entries)
+        found, overflow_notes = self._overflows(entries)
         thresholds = Thresholds(
             self._config.guidance_unused_after_deliveries(), self._config.guidance_dormant_days())
         moment = datetime.datetime.fromtimestamp(now).astimezone()
@@ -222,4 +251,5 @@ class ReportGuidanceUseCase:
                 entries, usage, thresholds, moment, covers, added, opportunity, approvals)
         ]
         return GuidanceReport(
-            tuple(rows), tuple(notes + covers_notes), since, spawns, projects)
+            tuple(rows), tuple(notes + covers_notes + overflow_notes), since, spawns, projects,
+            found)

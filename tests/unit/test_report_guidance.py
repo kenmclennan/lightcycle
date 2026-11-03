@@ -17,6 +17,9 @@ from tests.support.fake_fs import FakeFs
 from tests.support.fake_git import FakeGit
 from tests.support.fake_github import FakeGitHub
 from tests.support.fake_store import FakeStore
+from tests.support.installed_steps import AGENT, HUMAN, SCRIPT, graph, installed
+from tests.unit.test_doctor import FakeWorkflowBundle, FakeWorkflowSource
+from tests.unit.test_select_guidance import _entry as _sized_entry
 
 ROOT = "/kb"
 ISSUE_A = "https://github.com/x/y/issues/1"
@@ -26,7 +29,8 @@ ISSUE_B = "https://github.com/x/y/issues/2"
 def _cfg():
     path = os.path.join(tempfile.mkdtemp(), "config")
     Path(path).write_text(
-        "guidance-unused-after-deliveries: 60\nguidance-dormant-days: 60\n")
+        "guidance-unused-after-deliveries: 60\nguidance-dormant-days: 60\n"
+        "guidance-budget-bytes: 8192\n")
     return Config(environ={"LC_CONFIG": path})
 
 
@@ -45,7 +49,7 @@ def _entry(status="stable", covers=None, stale_after=None, facets=None, steps=No
     return "\n".join(lines).encode()
 
 
-def _setup(files, github=None, added=None, approvals=None):
+def _setup(files, github=None, added=None, approvals=None, steps=None, cfg=None):
     if added is None:
         added = {name: "2020-01-01T00:00:00+00:00" for name in files}
     store = FakeStore()
@@ -54,7 +58,9 @@ def _setup(files, github=None, added=None, approvals=None):
     git = FakeGit(ref="origin/main", ref_files={"origin/main": dict(files)}, added=added,
                   approvals=approvals)
     github = github or FakeGitHub()
-    return store, fs, github, ReportGuidanceUseCase(store, fs, git, github, _cfg())
+    source, bundle = steps if steps is not None else (FakeWorkflowSource(), FakeWorkflowBundle())
+    return store, fs, github, ReportGuidanceUseCase(
+        store, fs, git, github, cfg or _cfg(), source, bundle)
 
 
 def _step(store, item, delivered, cited=None, created_at=None, stage="write-code"):
@@ -78,7 +84,8 @@ class TestCounts(unittest.TestCase):
         store.add_project("guidance", local_path=ROOT)
         git = FakeGit(origin="git@x:kb.git", ref=None)
         report = ReportGuidanceUseCase(
-            store, FakeFs(dirs={ROOT: []}), git, FakeGitHub(), _cfg()).execute(0.0)
+            store, FakeFs(dirs={ROOT: []}), git, FakeGitHub(), _cfg(),
+            FakeWorkflowSource(), FakeWorkflowBundle()).execute(0.0)
         self.assertEqual(report.rows, ())
         self.assertEqual(len(report.notes), 1)
         self.assertIn("not been fetched", report.notes[0])
@@ -110,11 +117,13 @@ class TestCounts(unittest.TestCase):
 
     def test_unregistered_or_missing_repo_raises(self):
         with self.assertRaises(UseCaseError):
-            ReportGuidanceUseCase(FakeStore(), FakeFs(), FakeGit(), FakeGitHub(), _cfg()).execute(0.0)
+            ReportGuidanceUseCase(FakeStore(), FakeFs(), FakeGit(), FakeGitHub(), _cfg(),
+            FakeWorkflowSource(), FakeWorkflowBundle()).execute(0.0)
         store = FakeStore()
         store.add_project("guidance", local_path="/gone")
         with self.assertRaises(UseCaseError):
-            ReportGuidanceUseCase(store, FakeFs(), FakeGit(), FakeGitHub(), _cfg()).execute(0.0)
+            ReportGuidanceUseCase(store, FakeFs(), FakeGit(), FakeGitHub(), _cfg(),
+            FakeWorkflowSource(), FakeWorkflowBundle()).execute(0.0)
 
 
 class _UnreadableApprovals(FakeGit):
@@ -145,7 +154,8 @@ class TestApproval(unittest.TestCase):
             ref="origin/main", ref_files={"origin/main": dict(files)},
             added={n: "2020-01-01T00:00:00+00:00" for n in files},
             approvals={"a.md": ("abc1234", "2026-10-02T10:00:00+01:00", "feat: a (#7)"), "b.md": ()})
-        report = ReportGuidanceUseCase(store, fs, git, gh, _cfg()).execute(time.time())
+        report = ReportGuidanceUseCase(store, fs, git, gh, _cfg(),
+            FakeWorkflowSource(), FakeWorkflowBundle()).execute(time.time())
         rows = _rows(report)
         self.assertEqual(
             [rows[i].approval.state for i in "abc"], ["known", "none", "unknown"])
@@ -334,6 +344,7 @@ class TestCmdGuidance(unittest.TestCase):
         cli_mod.set_container(Container(
             config=_cfg(), git=git, store=store, spawner=object(), workers=object(),
             fs=fs, github=FakeGitHub(), lock=object(), breaker=object(),
+            workflow_source=FakeWorkflowSource(), workflow_bundle=FakeWorkflowBundle(),
         ))
         out, err = io.StringIO(), io.StringIO()
         with redirect_stdout(out), redirect_stderr(err):
@@ -347,7 +358,7 @@ class TestCmdGuidance(unittest.TestCase):
         rc, out, err = self._run(store, fs, ["--json"], use._git)
         self.assertEqual(rc, 0, err)
         data = json.loads(out)
-        self.assertEqual(set(data), {"window", "work", "entries", "notes"})
+        self.assertEqual(set(data), {"window", "work", "entries", "notes", "overflows"})
         entry = data["entries"][0]
         self.assertEqual(entry["id"], "a")
         self.assertEqual(entry["status"], "stable")
@@ -380,10 +391,6 @@ class TestCmdGuidance(unittest.TestCase):
         self.assertIn("no guidance repo is registered", err)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TestCmdGuidanceWindow(unittest.TestCase):
     def setUp(self):
         self._orig = cli_mod._container
@@ -397,6 +404,7 @@ class TestCmdGuidanceWindow(unittest.TestCase):
         cli_mod.set_container(Container(
             config=_cfg(), git=use._git, store=store, spawner=object(), workers=object(),
             fs=fs, github=FakeGitHub(), lock=object(), breaker=object(),
+            workflow_source=FakeWorkflowSource(), workflow_bundle=FakeWorkflowBundle(),
         ))
         out, err = io.StringIO(), io.StringIO()
         with redirect_stdout(out), redirect_stderr(err):
@@ -425,3 +433,138 @@ class TestCmdGuidanceWindow(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertEqual(out, "")
         self.assertIn("YYYY-MM-DD", err)
+
+
+_ORIGINS = {"acme": ("sha1", {
+    "write-code": AGENT, "other-agent": AGENT, "script-step": SCRIPT, "human-step": HUMAN,
+}, {"wf": graph(
+    ("write-code", "done", "other-agent"), ("other-agent", "done", "script-step"),
+    ("script-step", "done", "human-step"))})}
+
+
+def _budget_cfg(budget):
+    path = os.path.join(tempfile.mkdtemp(), "config")
+    lines = "guidance-unused-after-deliveries: 60\nguidance-dormant-days: 60\n"
+    if budget is not None:
+        lines += "guidance-budget-bytes: %s\n" % budget
+    Path(path).write_text(lines)
+    return Config(environ={"LC_CONFIG": path})
+
+
+def _overflow_report(files, projects=(("acme/x", ()),), budget="100", origins=_ORIGINS):
+    store, fs, gh, use = _setup(
+        files, steps=installed(origins) if origins is not None else None,
+        cfg=_budget_cfg(budget))
+    for identity, facets in projects:
+        store.add_project(identity, facets=list(facets))
+    return use.execute(time.time())
+
+
+_SIZED = {
+    "a.md": _sized_entry(steps=["write-code"], body="x" * 60),
+    "b.md": _sized_entry(steps=["write-code"], body="x" * 60),
+    "c.md": _sized_entry(body="x" * 10),
+}
+
+
+class TestOverflows(unittest.TestCase):
+    def test_overflow_object_carries_the_five_fields(self):
+        data = _overflow_report(_SIZED).as_dict()
+        self.assertEqual(data["overflows"], [{
+            "project": "acme/x", "step": "acme/write-code", "matched_bytes": 130,
+            "budget": 100, "skipped": ["b"]}])
+
+    def test_a_project_that_does_not_overflow_is_absent(self):
+        files = {
+            "a.md": _sized_entry(facets=["python"], steps=["write-code"], body="x" * 60),
+            "b.md": _sized_entry(facets=["python"], steps=["write-code"], body="x" * 60),
+            "python.md": b"",
+        }
+        data = _overflow_report(
+            files, projects=(("py/x", ("python",)), ("kt/x", ("kotlin",)))).as_dict()
+        self.assertEqual([o["project"] for o in data["overflows"]], ["py/x"])
+
+    def test_nothing_overflowing_is_an_empty_list(self):
+        self.assertEqual(_overflow_report(_SIZED, budget="8192").as_dict()["overflows"], [])
+
+    def test_a_pair_exactly_on_the_bound_is_not_an_overflow(self):
+        files = {"a.md": _sized_entry(body="x" * 60), "b.md": _sized_entry(body="x" * 60)}
+        probe = _overflow_report(files, budget="1").as_dict()["overflows"]
+        total = probe[0]["matched_bytes"]
+        self.assertEqual(
+            _overflow_report(files, budget=str(total)).as_dict()["overflows"], [])
+
+    def test_the_guidance_project_is_not_simulated(self):
+        report = _overflow_report(_SIZED, projects=())
+        self.assertEqual(report.overflows, ())
+
+    def test_a_draft_entry_is_not_counted(self):
+        files = dict(_SIZED)
+        files["d.md"] = _sized_entry(status="draft", body="x" * 500)
+        data = _overflow_report(files).as_dict()
+        self.assertEqual(data["overflows"][0]["matched_bytes"], 130)
+
+    def test_script_and_human_stages_yield_no_object(self):
+        files = {"a.md": _sized_entry(body="x" * 60), "b.md": _sized_entry(body="x" * 60)}
+        steps = [o["step"] for o in _overflow_report(files).as_dict()["overflows"]]
+        self.assertEqual(sorted(steps), ["acme/other-agent", "acme/write-code"])
+
+    def test_an_unreadable_budget_skips_with_one_note(self):
+        report = _overflow_report(_SIZED, budget=None)
+        self.assertEqual(report.overflows, ())
+        self.assertEqual(
+            len([n for n in report.notes if n.startswith("budget check skipped:")]), 1)
+
+    def test_no_installed_steps_gives_no_overflows_and_no_note(self):
+        report = _overflow_report(_SIZED, origins=None)
+        self.assertEqual(report.overflows, ())
+        self.assertFalse(any("budget check skipped" in n for n in report.notes))
+
+    def test_since_does_not_change_overflows(self):
+        store, fs, gh, use = _setup(
+            _SIZED, steps=installed(_ORIGINS), cfg=_budget_cfg("100"))
+        store.add_project("acme/x")
+        self.assertEqual(
+            use.execute(time.time(), "2026-10-01").overflows, use.execute(time.time()).overflows)
+
+
+class TestCmdGuidanceOverflows(unittest.TestCase):
+    def setUp(self):
+        self._orig = cli_mod._container
+        self.addCleanup(lambda: cli_mod.set_container(self._orig))
+
+    def test_text_prints_one_overflow_line_between_notes_and_work(self):
+        store, fs, gh, use = _setup(
+            _SIZED, steps=installed(_ORIGINS), cfg=_budget_cfg("100"))
+        store.add_project("acme/x")
+        source, bundle = installed(_ORIGINS)
+        cli_mod.set_container(Container(
+            config=_budget_cfg("100"), git=use._git, store=store, spawner=object(),
+            workers=object(), fs=fs, github=FakeGitHub(), lock=object(), breaker=object(),
+            workflow_source=source, workflow_bundle=bundle,
+        ))
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            rc = cli_mod.cmd_guidance([]) or 0
+        self.assertEqual(rc, 0, err.getvalue())
+        lines = [l for l in out.getvalue().splitlines() if l.startswith("overflow:")]
+        self.assertEqual(len(lines), 1)
+        for part in ("acme/x", "acme/write-code", "130", "100", "b"):
+            self.assertIn(part, lines[0])
+        self.assertLess(out.getvalue().index("overflow:"), out.getvalue().index("work: no spawns"))
+
+    def test_text_prints_no_overflow_line_without_one(self):
+        store, fs, gh, use = _setup({"a.md": _entry()})
+        cli_mod.set_container(Container(
+            config=_cfg(), git=use._git, store=store, spawner=object(), workers=object(),
+            fs=fs, github=FakeGitHub(), lock=object(), breaker=object(),
+            workflow_source=FakeWorkflowSource(), workflow_bundle=FakeWorkflowBundle(),
+        ))
+        out = io.StringIO()
+        with redirect_stdout(out):
+            cli_mod.cmd_guidance([])
+        self.assertNotIn("overflow:", out.getvalue())
+
+
+if __name__ == "__main__":
+    unittest.main()
