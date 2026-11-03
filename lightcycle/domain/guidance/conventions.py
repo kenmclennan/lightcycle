@@ -2,7 +2,7 @@ import re
 
 from lightcycle.domain.guidance.detection import validate_element
 
-CONVENTIONS_VERSION = 5
+CONVENTIONS_VERSION = 6
 
 CONVENTIONS_TEXT = """# Conventions
 
@@ -18,6 +18,8 @@ This guidance repo follows the Open Knowledge Format (OKF) 0.2 with the lightcyc
 - `applies-to` may hold `facets` and `steps`, each written as an inline list on one line: `facets: [kotlin, spring-boot]`. A block list (`- kotlin` on the next line) is malformed.
 - `facets`: every facet listed must be declared on the project (`lc project set <repo> --facets ...`). No facets means every project.
 - `steps`: a bare name (`write-code`) matches that step in any workflow origin; `<origin>/<step>` matches it in that origin only. No steps means every step.
+- A `steps` list names the steps where the decision the entry's `when` field describes is taken, not every step that touches the files the entry is about. An entry about a design choice lists the design steps.
+- A universal entry is a stable entry with no `facets`, whatever its `steps`: it applies to every project, so it is delivered at each step it matches. Keep universal entries few and short. The universal entries matching any one step should together stay well inside `guidance-budget-bytes`.
 - Every guidance entry carries three required front-matter fields, each one non-empty line, none delivered to a worker: `purpose` (the problem the entry solves), `when` (the circumstances in which it helps) and `why` (why this approach over the alternatives).
 - An entry names no item id anywhere in the file. Where a finding came from lives on the `guidance-entry` item.
 - A change that touches only `purpose`, `when` and `why` leaves `status`, `verified` and the body byte-identical, and the entry keeps its `stable` status.
@@ -69,6 +71,8 @@ Both modes run the same rules:
 14. `detected-by` on a `type: Guidance` entry fails.
 
 A changed page without `type: Guidance` that carries `detected-by` is a facet concept page by its own declaration, so rule 10 does not report it.
+
+`lc guidance-check` also prints a warning, never a failure, for each changed universal entry, naming its size, the installed step with the largest universal total, and that total against `guidance-budget-bytes`.
 """
 
 STEP = re.compile(r"^([a-z0-9][a-z0-9-]*/)?[a-z0-9][a-z0-9-]*$")

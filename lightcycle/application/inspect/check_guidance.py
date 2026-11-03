@@ -3,7 +3,7 @@ from lightcycle.application.services.guidance_library import GuidanceLibrary
 from lightcycle.application.services.installed_agent_steps import InstalledAgentSteps
 from lightcycle.config import ConfigError
 from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE
-from lightcycle.domain.guidance.budget import overflows
+from lightcycle.domain.guidance.budget import heaviest_universal_step, is_universal, overflows
 from lightcycle.domain.guidance.conventions import check_entries, is_checked_path
 from lightcycle.ports.git import GitReadError
 from lightcycle.ports.store import StoreUnreadableError
@@ -72,8 +72,40 @@ class CheckGuidanceUseCase:
         if changed:
             more, notes = self._budget_lines(directory, base)
             failures = failures + more
-            warnings = notes
+            warnings = notes + self._universal_lines(directory, changed)
         return failures, len(changed), warnings
+
+    def _universal_lines(self, directory, changed):
+        try:
+            budget = self._config.guidance_budget_bytes()
+        except ConfigError:
+            return []
+        try:
+            steps = InstalledAgentSteps(self._workflow_source, self._workflow_bundle, self._config).list()
+        except OSError:
+            steps = ()
+        head_paths = [
+            rel for rel in self._fs.list_files(directory)
+            if not any(part.startswith(".") for part in rel.split("/"))
+        ]
+        entries, _ = GuidanceLibrary(self._git).load_files(
+            head_paths, lambda rel: self._fs.read_bytes("%s/%s" % (directory, rel)))
+        by_id = {e.id: e for e in entries}
+        step, total = heaviest_universal_step(entries, steps)
+        lines = []
+        for path in changed:
+            found = by_id.get(path[:-3])
+            if found is None or not is_universal(found):
+                continue
+            if step is None:
+                lines.append(
+                    "warning: universal entries total %d of %d bytes; universal entry %s is %d bytes" % (
+                        total, budget, found.id, found.size()))
+            else:
+                lines.append(
+                    "warning: universal entry %s is %d bytes; step %s receives the most universal bytes, %d of %d" % (
+                        found.id, found.size(), step, total, budget))
+        return lines
 
     def _budget_lines(self, directory, base):
         try:
