@@ -158,10 +158,14 @@ def cmd_guidance_check(argv):
     a = build_parser(COMMANDS["guidance-check"]).parse_args(argv)
     c = container()
     try:
-        failures, checked = CheckGuidanceUseCase(c.git, c.fs).execute(a.dir, a.mode, a.base)
+        failures, checked, warnings = CheckGuidanceUseCase(
+            c.git, c.fs, c.store, c.workflow_source, c.workflow_bundle, c.config,
+        ).execute(a.dir, a.mode, a.base)
     except UseCaseError as e:
         sys.stderr.write("lc guidance-check: %s\n" % e)
         return 1
+    if warnings:
+        print("\n".join(warnings))
     if failures:
         print("\n".join(failures))
         return 1

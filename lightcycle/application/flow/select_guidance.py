@@ -2,7 +2,7 @@ from lightcycle.application.services.guidance_library import GuidanceLibrary
 from lightcycle.application.setup.project_registry import ProjectRegistry
 from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE
 from lightcycle.domain.guidance.guidance import (
-    GuidanceSelection, fill, matches, order, render_section,
+    GuidanceSelection, deliver, render_section,
 )
 from lightcycle.domain.workflows.identity import parse_pin
 from lightcycle.ports.store import ProjectNotRegisteredError, ProjectResolutionError
@@ -36,10 +36,8 @@ class SelectGuidanceUseCase:
         facets = self._project_facets(item_id)
         parsed = parse_pin(pin)
         origin = parsed[0] if parsed else None
-        matched = order([
-            e for e in entries if e.is_candidate() and matches(e, facets, stage, origin)
-        ])
-        delivered, skipped = fill(matched, self._config.guidance_budget_bytes())
+        _, delivered, skipped = deliver(
+            entries, facets, stage, origin, self._config.guidance_budget_bytes())
         return GuidanceSelection(
             section=render_section(delivered, step_id) if delivered else "",
             delivered=tuple(e.id for e in delivered),

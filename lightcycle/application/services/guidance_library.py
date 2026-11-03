@@ -40,12 +40,16 @@ class GuidanceLibrary:
         ref = self.ref(root)
         if ref is None:
             return [], [(NO_REF_ENTRY, self.no_ref_reason(root))]
+        return self.load_files(
+            self._git.list_files_at(root, ref), lambda rel: self._git.read_file_at(root, ref, rel))
+
+    def load_files(self, paths, read):
         entries, problems = [], []
-        for rel in self._git.list_files_at(root, ref):
+        for rel in paths:
             if not rel.endswith(".md") or rel.rsplit("/", 1)[-1] == "index.md":
                 continue
             entry_id = rel[: -len(".md")]
-            raw = self._git.read_file_at(root, ref, rel)
+            raw = read(rel)
             if raw is None:
                 problems.append((entry_id, "file could not be read"))
                 continue

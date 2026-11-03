@@ -1,7 +1,7 @@
 import unittest
 
 from lightcycle.domain.guidance.guidance import (
-    ENTRY, MALFORMED, NOT_GUIDANCE, GuidanceEntry, classify, fill, matches, matches_step_key,
+    ENTRY, MALFORMED, NOT_GUIDANCE, GuidanceEntry, classify, fill, matches,
     order, parse_citation, render_section,
 )
 
@@ -104,13 +104,6 @@ class TestMatching(unittest.TestCase):
     def test_any_listed_step_is_enough(self):
         e = _entry(steps=("a", "acme/b"))
         self.assertTrue(matches(e, (), "b", "acme"))
-
-    def test_step_key_rule_for_doctor(self):
-        self.assertTrue(matches_step_key(_entry(), None))
-        self.assertFalse(matches_step_key(_entry(steps=("a",)), None))
-        self.assertTrue(matches_step_key(_entry(steps=("acme/a",)), "a"))
-        self.assertFalse(matches_step_key(_entry(steps=("a",)), "acme/a"))
-        self.assertTrue(matches_step_key(_entry(steps=("acme/a",)), "acme/a"))
 
 
 class TestOrderAndFill(unittest.TestCase):

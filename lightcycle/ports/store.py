@@ -16,6 +16,10 @@ class ProjectNotRegisteredError(ProjectResolutionError):
     pass
 
 
+class StoreUnreadableError(Exception):
+    pass
+
+
 class StoreError(Exception):
     pass
 

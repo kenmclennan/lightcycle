@@ -8,6 +8,7 @@ from tests.support.fake_fs import FakeFs
 from tests.support.fake_git import FakeGit
 from tests.support.fake_machine import FakeMachine
 from tests.support.fake_store import FakeStore
+from tests.support.installed_steps import AGENT, HUMAN, SCRIPT, graph, installed
 from tests.support.tui_harness import FakeConfigReloadStatus, FakeGuidanceSyncStatus, FakeLock
 from tests.unit.test_doctor import (
     _ALL_KEYS, FakeWorkflowBundle, FakeWorkflowSource, _Worktrees, _cfg,
@@ -15,7 +16,7 @@ from tests.unit.test_doctor import (
 from tests.unit.test_select_guidance import _entry
 
 
-def _problems(files, projects=(), budget=None, git=None, status=None):
+def _problems(files, projects=(), budget=None, git=None, status=None, origins=None, kind=None):
     files = {"CONVENTIONS.md": _conventions(CONVENTIONS_VERSION), **files}
     store = FakeStore()
     store.add_project("guidance", shortcode="GDN", local_path="/kb")
@@ -27,15 +28,27 @@ def _problems(files, projects=(), budget=None, git=None, status=None):
     keys = dict(_ALL_KEYS)
     if budget is not None:
         keys["guidance_budget_bytes"] = budget
-    source = FakeWorkflowSource()
+    source, bundle = FakeWorkflowSource(), FakeWorkflowBundle()
     source.add_bundle("acme", "sha1", 1, current=True)
+    if origins is not None:
+        source, bundle = installed(origins)
     report = DoctorUseCase(
-        store, source, _cfg(**keys), FakeWorkflowBundle(), fs, FakeMachine(), _Worktrees(),
+        store, source, _cfg(**keys), bundle, fs, FakeMachine(), _Worktrees(),
         git, status if status is not None else FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False), FakeGithubBudget()).execute(DoctorInput())
+    if kind is not None:
+        return [p for p in report.problems["guidance"] if p.kind == kind]
     return [
         p.message for p in report.problems["guidance"]
-        if p.kind != "guidance-entries-nonconforming"
+        if p.kind not in ("guidance-entries-nonconforming", "guidance-budget-overflow")
     ]
+
+
+_KIND = "guidance-budget-overflow"
+_ORIGINS = {"acme": ("sha1", {
+    "write-code": AGENT, "other-agent": AGENT, "script-step": SCRIPT, "human-step": HUMAN,
+}, {"wf": graph(
+    ("write-code", "done", "other-agent"), ("other-agent", "done", "script-step"),
+    ("script-step", "done", "human-step"))})}
 
 
 def _problem_objects(files):
@@ -230,24 +243,48 @@ class TestDoctorGuidance(unittest.TestCase):
     def test_draft_without_verified_is_not_reported(self):
         self.assertEqual(_problems({"a.md": _entry(status="draft", verified=None)}), [])
 
-    def test_budget_overflow_names_project_step_and_ids(self):
+    def test_overflow_reports_project_step_total_and_skipped_ids(self):
         files = {
             "a.md": _entry(steps=["write-code"], body="x" * 60),
             "b.md": _entry(steps=["write-code"], body="x" * 60),
             "c.md": _entry(body="x" * 10),
         }
-        msgs = _problems(files, [("acme/x", ())], budget="100")
-        self.assertEqual(len(msgs), 1)
-        self.assertIn("project acme/x", msgs[0])
-        self.assertIn("write-code", msgs[0])
-        self.assertIn("exceed guidance-budget-bytes (100)", msgs[0])
-        self.assertTrue(msgs[0].endswith("b - shorten them or raise the budget"))
+        found = _problems(files, [("acme/x", ())], budget="100", origins=_ORIGINS, kind=_KIND)
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0].kind, "guidance-budget-overflow")
+        self.assertIn("project acme/x", found[0].message)
+        self.assertIn("step acme/write-code", found[0].message)
+        self.assertIn("matches 130 bytes", found[0].message)
+        self.assertIn("(100)", found[0].message)
+        self.assertTrue(found[0].message.endswith("delivery skips: b"))
+        for remedy in ("narrow", "consolidate", "deprecate"):
+            self.assertIn(remedy, found[0].fix)
+        self.assertNotIn("raise", found[0].fix)
 
-    def test_overflow_with_no_step_entries_names_any_step(self):
+    def test_unscoped_overflow_is_reported_at_every_agent_step(self):
         files = {"a.md": _entry(body="x" * 60), "b.md": _entry(body="x" * 60)}
-        msgs = _problems(files, [("acme/x", ())], budget="100")
-        self.assertEqual(len(msgs), 1)
-        self.assertIn("for any step", msgs[0])
+        found = _problems(files, [("acme/x", ())], budget="100", origins=_ORIGINS, kind=_KIND)
+        self.assertEqual(
+            sorted(p.message.split("step ")[1].split(" ")[0] for p in found),
+            ["acme/other-agent", "acme/write-code"])
+
+    def test_one_overflowing_pair_among_four_yields_one_problem(self):
+        files = {
+            "a.md": _entry(facets=["python"], steps=["write-code"], body="x" * 60),
+            "b.md": _entry(facets=["python"], steps=["write-code"], body="x" * 60),
+            "python.md": b"",
+        }
+        found = _problems(
+            files, [("py/x", ("python",)), ("kt/x", ("kotlin",))], budget="100",
+            origins=_ORIGINS, kind=_KIND)
+        self.assertEqual(len(found), 1)
+        self.assertIn("project py/x", found[0].message)
+
+    def test_a_script_stage_never_yields_a_problem(self):
+        files = {"a.md": _entry(body="x" * 60), "b.md": _entry(body="x" * 60)}
+        found = _problems(files, [("acme/x", ())], budget="100", origins=_ORIGINS, kind=_KIND)
+        self.assertFalse(any("script-step" in p.message for p in found))
+        self.assertFalse(any("human-step" in p.message for p in found))
 
     def test_entries_for_other_facets_do_not_overflow_a_project(self):
         files = {"a.md": _entry(facets=["python"], body="x" * 600), "python.md": b""}
