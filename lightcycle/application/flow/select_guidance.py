@@ -15,14 +15,15 @@ class SelectGuidanceUseCase:
         self._git = git
         self._config = config
 
-    def _project_facets(self, item_id):
-        repo = self._store.get_item(item_id).repo
-        if not repo:
-            return ()
+    def _project_scope(self, item_id):
+        item = self._store.get_item(item_id)
+        if not item.repo:
+            return (), None, item.project
         try:
-            return ProjectRegistry(self._store).find(repo).facets
+            found = ProjectRegistry(self._store).find(item.repo)
         except (ProjectNotRegisteredError, ProjectResolutionError):
-            return ()
+            return (), item.repo, item.project
+        return found.facets, found.identity, item.project
 
     def execute(self, item_id, stage, pin, step_id):
         project = self._store.get_project(GUIDANCE_WORKSPACE)
@@ -33,11 +34,11 @@ class SelectGuidanceUseCase:
                 notes=("guidance repo is missing at %s" % project.local_path,))
         entries, problems = GuidanceLibrary(self._git).load(project.local_path)
         notes = tuple("%s: %s" % (name, reason) for name, reason in problems)
-        facets = self._project_facets(item_id)
+        facets, repo, label = self._project_scope(item_id)
         parsed = parse_pin(pin)
         origin = parsed[0] if parsed else None
         _, delivered, skipped = deliver(
-            entries, facets, stage, origin, self._config.guidance_budget_bytes())
+            entries, facets, repo, label, stage, origin, self._config.guidance_budget_bytes())
         return GuidanceSelection(
             section=render_section(delivered, step_id) if delivered else "",
             delivered=tuple(e.id for e in delivered),

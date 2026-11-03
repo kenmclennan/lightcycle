@@ -386,3 +386,38 @@ class TestGuidanceConventionsCommand(unittest.TestCase):
 
     def test_a_worker_may_run_it(self):
         self.assertTrue(worker_permitted("guidance-conventions", {}))
+
+
+def _projected(values):
+    return entry(status="stable", applies="  projects: [%s]" % values, body="x\n")
+
+
+class TestUnregisteredProjectWarning(_Rig):
+    def _warnings(self, values, rows=(("A", "a.md"),), **kw):
+        (failures, _, warnings), _ = self._full(
+            list(rows), {"a.md": _projected(values)}, budget="1000", **kw)
+        return failures, [w for w in warnings if "names no project" in w]
+
+    def test_registered_identity_and_short_name_warn_nothing(self):
+        self.assertEqual(self._warnings("acme/x, x"), ([], []))
+
+    def test_unregistered_identity_and_bare_name_each_warn_once_without_failing(self):
+        failures, warns = self._warnings("ghost/repo")
+        self.assertEqual(failures, [])
+        self.assertEqual(warns, ["warning: a.md: project 'ghost/repo' names no project registered on this machine"])
+        failures, warns = self._warnings("ghost")
+        self.assertEqual(failures, [])
+        self.assertEqual(warns, ["warning: a.md: project 'ghost' names no project registered on this machine"])
+
+    def test_mixed_values_warn_only_for_the_unregistered_one(self):
+        _, warns = self._warnings("acme/x, ghost")
+        self.assertEqual(warns, ["warning: a.md: project 'ghost' names no project registered on this machine"])
+
+    def test_unchanged_entry_warns_nothing(self):
+        files = {"a.md": _projected("ghost"), "b.md": _sized(5), **_PAGES}
+        (_, _, warnings), _ = self._full([("A", "b.md")], files, budget="1000")
+        self.assertEqual([w for w in warnings if "names no project" in w], [])
+
+    def test_unreadable_registry_warns_nothing_and_does_not_fail(self):
+        failures, warns = self._warnings("ghost", store=_Unreadable())
+        self.assertEqual((failures, warns), ([], []))

@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Tuple
 
 from lightcycle.domain.guidance.guidance import deliver, matches_step
+from lightcycle.domain.work.project_identity import ProjectIdentity
 
 
 @dataclass(frozen=True)
@@ -16,8 +17,10 @@ class Overflow:
 def overflows(entries, projects, steps, budget):
     found = []
     for identity, facets in projects:
+        label = ProjectIdentity.short_name(identity)
         for origin, stage in steps:
-            matched, _, skipped = deliver(entries, facets, stage, origin, budget)
+            matched, _, skipped = deliver(
+                entries, facets, identity, label, stage, origin, budget)
             if skipped:
                 found.append(Overflow(
                     project=identity,
@@ -30,7 +33,7 @@ def overflows(entries, projects, steps, budget):
 
 
 def is_universal(entry):
-    return entry.is_candidate() and not entry.facets
+    return entry.is_candidate() and not entry.facets and not entry.projects
 
 
 def heaviest_universal_step(entries, steps):

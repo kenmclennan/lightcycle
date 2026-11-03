@@ -18,8 +18,11 @@ def _cfg(budget="6144"):
     return Config(environ={"LC_CONFIG": p})
 
 
-def _entry(status="stable", verified="ken", facets=None, steps=None, body="body", type_="Guidance"):
+def _entry(status="stable", verified="ken", facets=None, steps=None, body="body", type_="Guidance",
+           projects=None):
     applies = []
+    if projects is not None:
+        applies.append("  projects: [%s]" % ", ".join(projects))
     if facets is not None:
         applies.append("  facets: [%s]" % ", ".join(facets))
     if steps is not None:
@@ -168,3 +171,25 @@ class TestSelectGuidance(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestProjectsDelivery(unittest.TestCase):
+    def test_registered_repo_identity_matches_and_another_repo_does_not(self):
+        files = {"p.md": _entry(projects=["acme/x"])}
+        use, item = _setup(files)
+        self.assertEqual(use.execute(item, "write-code", None, "S.1").delivered, ("p",))
+        use, item = _setup(files)
+        use._store.add_project("acme/y")
+        other = use._store.create_item("t", "d")
+        use._store.add_artifact(other, "repo", "acme/y")
+        self.assertEqual(use.execute(other, "write-code", None, "S.2").delivered, ())
+
+    def test_bare_name_matches_the_item_project_label(self):
+        use, _ = _setup({"p.md": _entry(projects=["docs"])})
+        labelled = use._store.create_item("t", "d", project="docs")
+        use._store.add_artifact(labelled, "repo", "acme/x")
+        self.assertEqual(use.execute(labelled, "write-code", None, "S.1").delivered, ("p",))
+
+    def test_unregistered_repo_matches_its_raw_repo_string(self):
+        use, item = _setup({"p.md": _entry(projects=["ghost/repo"])}, repo="ghost/repo")
+        self.assertEqual(use.execute(item, "write-code", None, "S.1").delivered, ("p",))

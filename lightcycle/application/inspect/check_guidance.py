@@ -4,7 +4,7 @@ from lightcycle.application.services.installed_agent_steps import InstalledAgent
 from lightcycle.config import ConfigError
 from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE
 from lightcycle.domain.guidance.budget import heaviest_universal_step, is_universal, overflows
-from lightcycle.domain.guidance.conventions import check_entries, is_checked_path
+from lightcycle.domain.guidance.conventions import check_entries, is_checked_path, project_names
 from lightcycle.ports.git import GitReadError
 from lightcycle.ports.store import StoreUnreadableError
 
@@ -72,7 +72,7 @@ class CheckGuidanceUseCase:
         if changed:
             more, notes = self._budget_lines(directory, base)
             failures = failures + more
-            warnings = notes + self._universal_lines(directory, changed)
+            warnings = notes + self._universal_lines(directory, changed) + self._project_lines(directory, changed)
         return failures, len(changed), warnings
 
     def _universal_lines(self, directory, changed):
@@ -105,6 +105,30 @@ class CheckGuidanceUseCase:
                 lines.append(
                     "warning: universal entry %s is %d bytes; step %s receives the most universal bytes, %d of %d" % (
                         found.id, found.size(), step, total, budget))
+        return lines
+
+    def _project_lines(self, directory, changed):
+        try:
+            known = project_names(p.identity for p in self._store.list_projects())
+        except StoreUnreadableError:
+            return []
+        head_paths = [
+            rel for rel in self._fs.list_files(directory)
+            if not any(part.startswith(".") for part in rel.split("/"))
+        ]
+        entries, _ = GuidanceLibrary(self._git).load_files(
+            head_paths, lambda rel: self._fs.read_bytes("%s/%s" % (directory, rel)))
+        by_id = {e.id: e for e in entries}
+        lines = []
+        for path in changed:
+            found = by_id.get(path[:-3])
+            if found is None:
+                continue
+            for value in found.projects:
+                if value not in known:
+                    lines.append(
+                        "warning: %s: project '%s' names no project registered on this machine" % (
+                            path, value))
         return lines
 
     def _budget_lines(self, directory, base):

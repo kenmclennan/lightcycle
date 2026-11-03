@@ -19,6 +19,7 @@ class GuidanceEntry:
     body: str
     covers: str = ""
     stale_after: str = ""
+    projects: Tuple[str, ...] = ()
 
     def is_candidate(self):
         return self.status == "stable"
@@ -56,6 +57,7 @@ def classify(entry_id, meta, body):
     try:
         facets = _inline_list("facets", applies["facets"]) if "facets" in applies else ()
         steps = _inline_list("steps", applies["steps"]) if "steps" in applies else ()
+        projects = _inline_list("projects", applies["projects"]) if "projects" in applies else ()
     except ValueError as e:
         return Classification(MALFORMED, reason=str(e))
     entry = GuidanceEntry(
@@ -67,12 +69,19 @@ def classify(entry_id, meta, body):
         body=body.rstrip(),
         covers=_scalar(meta.get("covers")),
         stale_after=_scalar(meta.get("stale_after")),
+        projects=projects,
     )
     return Classification(ENTRY, entry=entry)
 
 
-def matches_project(entry, project_facets):
-    return all(f in project_facets for f in entry.facets)
+def matches_project(entry, project_facets, repo, project):
+    if not all(f in project_facets for f in entry.facets):
+        return False
+    if not entry.projects:
+        return True
+    return any(
+        value is not None and value in entry.projects for value in (repo, project)
+    )
 
 
 def matches_step(entry, stage, origin):
@@ -87,8 +96,9 @@ def matches_step(entry, stage, origin):
     return False
 
 
-def matches(entry, project_facets, stage, origin):
-    return matches_project(entry, project_facets) and matches_step(entry, stage, origin)
+def matches(entry, project_facets, repo, project, stage, origin):
+    return matches_project(entry, project_facets, repo, project) and matches_step(
+        entry, stage, origin)
 
 
 def order(entries):
@@ -108,9 +118,10 @@ def fill(entries, budget):
     return delivered, skipped
 
 
-def deliver(entries, project_facets, stage, origin, budget):
+def deliver(entries, project_facets, repo, project, stage, origin, budget):
     matched = order([
-        e for e in entries if e.is_candidate() and matches(e, project_facets, stage, origin)
+        e for e in entries
+        if e.is_candidate() and matches(e, project_facets, repo, project, stage, origin)
     ])
     delivered, skipped = fill(matched, budget)
     return matched, delivered, skipped

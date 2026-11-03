@@ -6,10 +6,10 @@ from lightcycle.domain.guidance.guidance import GuidanceEntry
 STEP = ("lightcycle", "write-code")
 
 
-def _e(id_, size, steps=(), facets=()):
+def _e(id_, size, steps=(), facets=(), projects=()):
     return GuidanceEntry(
         id=id_, status="stable", verified="k", facets=tuple(facets),
-        steps=tuple(steps), body="x" * size)
+        steps=tuple(steps), body="x" * size, projects=tuple(projects))
 
 
 class TestOverflows(unittest.TestCase):
@@ -42,6 +42,16 @@ class TestOverflows(unittest.TestCase):
         self.assertEqual([o.project for o in found], ["py"])
         self.assertEqual(found[0].skipped, ("b",))
 
+    def test_project_targeted_entry_costs_nothing_in_a_project_it_does_not_name(self):
+        entries = [_e("a", 60), _e("b", 60, projects=["acme/y"])]
+        self.assertEqual(self._run(entries, projects=[("acme/x", ())]), [])
+
+    def test_project_targeted_entry_counts_for_its_identity_and_its_short_name(self):
+        for value in ("acme/x", "x"):
+            entries = [_e("a", 60), _e("b", 60, projects=[value])]
+            found = self._run(entries, projects=[("acme/x", ())])
+            self.assertEqual(found[0].skipped, ("b",), value)
+
     def test_origin_qualified_step_matches_only_its_origin(self):
         other = _e("a", 600, ["other-origin/write-code"])
         bare = _e("a", 600, ["write-code"])
@@ -64,6 +74,12 @@ class TestIsUniversal(unittest.TestCase):
     def test_stable_without_facets_is_universal_whatever_its_steps(self):
         self.assertTrue(is_universal(_status("a", "stable")))
         self.assertTrue(is_universal(_status("a", "stable", steps=["write-code"])))
+
+    def test_entry_with_projects_is_not_universal(self):
+        e = GuidanceEntry(
+            id="a", status="stable", verified="k", facets=(), steps=(), body="x",
+            projects=("acme/x",))
+        self.assertFalse(is_universal(e))
 
     def test_faceted_entry_is_not_universal(self):
         self.assertFalse(is_universal(_status("a", "stable", facets=["kotlin"])))

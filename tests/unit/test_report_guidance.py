@@ -34,7 +34,7 @@ def _cfg():
     return Config(environ={"LC_CONFIG": path})
 
 
-def _entry(status="stable", covers=None, stale_after=None, facets=None, steps=None):
+def _entry(status="stable", covers=None, stale_after=None, facets=None, steps=None, projects=None):
     lines = ["---", "type: Guidance", "status: %s" % status, "verified: ken"]
     if covers:
         lines.append("covers: %s" % covers)
@@ -45,6 +45,8 @@ def _entry(status="stable", covers=None, stale_after=None, facets=None, steps=No
         lines.append("  facets: [%s]" % ", ".join(facets))
     if steps is not None:
         lines.append("  steps: [%s]" % ", ".join(steps))
+    if projects is not None:
+        lines.append("  projects: [%s]" % ", ".join(projects))
     lines += ["---", "", "body", ""]
     return "\n".join(lines).encode()
 
@@ -258,6 +260,14 @@ class TestOpportunity(unittest.TestCase):
             "facets": ["python", "cli"], "spawns": 3,
             "steps": [{"stage": "write-code", "origin": "lightcycle", "count": 3}],
         },))
+
+    def test_project_targeted_entry_counts_only_matching_spawns(self):
+        store, use = self._store({"t.md": _entry(projects=["kenmclennan/lightcycle"])})
+        store.add_project("other/repo")
+        _step(store, _item(store, "kenmclennan/lightcycle"), "")
+        _step(store, _item(store, "kenmclennan/lightcycle"), "")
+        _step(store, _item(store, "other/repo"), "")
+        self.assertEqual(_rows(use.execute(time.time()))["t"].opportunity, 2)
 
     def test_unresolvable_projects_are_listed_unregistered_with_no_facets(self):
         store, use = self._store({"any.md": _entry(), "py.md": _entry(facets=["python"])})

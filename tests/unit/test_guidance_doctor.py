@@ -130,6 +130,12 @@ class TestDoctorNonconformingEntries(unittest.TestCase):
         self.assertNotIn("fine.md", found[0].message)
         self.assertIn("guidance-entry", found[0].fix)
 
+    def test_unregistered_project_value_is_not_counted(self):
+        entry = _entry().replace(b"applies-to:\n", b"applies-to:\n  projects: [ghost/repo]\n")
+        self.assertIn(b"ghost/repo", entry)
+        self.assertEqual(
+            _of_kind(self._files(**{"a.md": entry}), "guidance-entries-nonconforming"), [])
+
     def test_all_conforming_reports_nothing(self):
         self.assertEqual(
             _of_kind(self._files(**{"a.md": _entry(), "b.md": _entry()}),
