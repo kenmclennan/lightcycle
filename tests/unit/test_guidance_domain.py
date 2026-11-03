@@ -17,8 +17,9 @@ def _meta(**over):
     return meta
 
 
-def _entry(entry_id="a", facets=(), steps=(), body="x"):
-    return GuidanceEntry(entry_id, "stable", "ken", tuple(facets), tuple(steps), body)
+def _entry(entry_id="a", facets=(), steps=(), body="x", projects=()):
+    return GuidanceEntry(
+        entry_id, "stable", "ken", tuple(facets), tuple(steps), body, projects=tuple(projects))
 
 
 class TestClassify(unittest.TestCase):
@@ -77,33 +78,33 @@ class TestClassify(unittest.TestCase):
 class TestMatching(unittest.TestCase):
     def test_every_listed_facet_must_be_declared(self):
         e = _entry(facets=("kotlin", "spring"))
-        self.assertTrue(matches(e, ("kotlin", "spring", "x"), "s", None))
-        self.assertFalse(matches(e, ("kotlin",), "s", None))
+        self.assertTrue(matches(e, ("kotlin", "spring", "x"), None, None, "s", None))
+        self.assertFalse(matches(e, ("kotlin",), None, None, "s", None))
 
     def test_no_facets_matches_a_project_with_none(self):
-        self.assertTrue(matches(_entry(), (), "s", None))
+        self.assertTrue(matches(_entry(), (), None, None, "s", None))
 
     def test_facet_entry_does_not_match_the_empty_facet_project(self):
-        self.assertFalse(matches(_entry(facets=("kotlin",)), (), "s", None))
+        self.assertFalse(matches(_entry(facets=("kotlin",)), (), None, None, "s", None))
 
     def test_no_steps_matches_every_step(self):
-        self.assertTrue(matches(_entry(), (), "anything", None))
+        self.assertTrue(matches(_entry(), (), None, None, "anything", None))
 
     def test_bare_step_matches_in_any_origin_and_without_one(self):
         e = _entry(steps=("write-code",))
-        self.assertTrue(matches(e, (), "write-code", "acme"))
-        self.assertTrue(matches(e, (), "write-code", None))
-        self.assertFalse(matches(e, (), "review-code", "acme"))
+        self.assertTrue(matches(e, (), None, None, "write-code", "acme"))
+        self.assertTrue(matches(e, (), None, None, "write-code", None))
+        self.assertFalse(matches(e, (), None, None, "review-code", "acme"))
 
     def test_origin_scoped_step_matches_only_that_origin(self):
         e = _entry(steps=("acme/write-code",))
-        self.assertTrue(matches(e, (), "write-code", "acme"))
-        self.assertFalse(matches(e, (), "write-code", "other"))
-        self.assertFalse(matches(e, (), "write-code", None))
+        self.assertTrue(matches(e, (), None, None, "write-code", "acme"))
+        self.assertFalse(matches(e, (), None, None, "write-code", "other"))
+        self.assertFalse(matches(e, (), None, None, "write-code", None))
 
     def test_any_listed_step_is_enough(self):
         e = _entry(steps=("a", "acme/b"))
-        self.assertTrue(matches(e, (), "b", "acme"))
+        self.assertTrue(matches(e, (), None, None, "b", "acme"))
 
 
 class TestOrderAndFill(unittest.TestCase):
@@ -167,3 +168,34 @@ class TestClassifyRetirementFields(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestProjectsFilter(unittest.TestCase):
+    def test_classify_reads_projects_and_a_block_list_is_malformed(self):
+        c = classify("a", _meta(**{"applies-to": {"projects": "[acme/x, docs]"}}), "b")
+        self.assertEqual(c.entry.projects, ("acme/x", "docs"))
+        bad = classify("a", _meta(**{"applies-to": {"projects": ""}}), "b")
+        self.assertEqual(bad.kind, MALFORMED)
+
+    def test_no_projects_matches_any_repo_and_project(self):
+        e = _entry()
+        self.assertTrue(matches(e, (), "acme/x", "x", "s", None))
+        self.assertTrue(matches(e, (), None, None, "s", None))
+
+    def test_repo_identity_or_project_label_matches(self):
+        e = _entry(projects=("acme/x", "docs"))
+        self.assertTrue(matches(e, (), "acme/x", None, "s", None))
+        self.assertTrue(matches(e, (), None, "docs", "s", None))
+
+    def test_value_equal_to_neither_fails(self):
+        e = _entry(projects=("acme/x",))
+        self.assertFalse(matches(e, (), "acme/y", "y", "s", None))
+
+    def test_missing_repo_and_project_fail_a_projects_entry(self):
+        self.assertFalse(matches(_entry(projects=("acme/x",)), (), None, None, "s", None))
+
+    def test_facets_and_projects_must_both_match(self):
+        e = _entry(facets=("kotlin",), projects=("acme/x",))
+        self.assertTrue(matches(e, ("kotlin",), "acme/x", None, "s", None))
+        self.assertFalse(matches(e, ("kotlin",), "acme/y", None, "s", None))
+        self.assertFalse(matches(e, (), "acme/x", None, "s", None))

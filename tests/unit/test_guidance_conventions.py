@@ -7,6 +7,7 @@ from lightcycle.domain.guidance.conventions import (
     is_checked_path,
     item_ids,
     parse,
+    project_names,
 )
 
 
@@ -43,7 +44,7 @@ class TestConventionsText(unittest.TestCase):
         lines = CONVENTIONS_TEXT.splitlines()
         self.assertEqual(lines[0], "# Conventions")
         self.assertEqual(lines[2], "Conventions version: %d" % CONVENTIONS_VERSION)
-        self.assertEqual(CONVENTIONS_VERSION, 6)
+        self.assertEqual(CONVENTIONS_VERSION, 7)
 
     def test_text_names_every_rule_and_no_item_id(self):
         self.assertEqual(item_ids(CONVENTIONS_TEXT), [])
@@ -56,7 +57,7 @@ class TestConventionsText(unittest.TestCase):
 
     def test_text_states_the_step_decision_and_universal_entry_rules(self):
         self.assertIn("A `steps` list names the steps where the decision the entry's `when` field describes is taken", CONVENTIONS_TEXT)
-        self.assertIn("- A universal entry is a stable entry with no `facets`, whatever its `steps`", CONVENTIONS_TEXT)
+        self.assertIn("- A universal entry is a stable entry with no `facets` and no `projects`, whatever its `steps`", CONVENTIONS_TEXT)
         self.assertIn("Keep universal entries few and short.", CONVENTIONS_TEXT)
         self.assertIn("\n`lc guidance-check` also prints a warning, never a failure, for each changed universal entry", CONVENTIONS_TEXT)
 
@@ -77,7 +78,7 @@ class TestConventionsText(unittest.TestCase):
         self.assertEqual(positions, sorted(positions))
 
     def test_text_is_version_six_and_drops_the_verified_rules(self):
-        self.assertIn("Conventions version: 6", CONVENTIONS_TEXT)
+        self.assertIn("Conventions version: 7", CONVENTIONS_TEXT)
         for removed in (
             "fails unless the entry is context-only",
             "with an empty or missing `verified` fails",
@@ -298,3 +299,25 @@ class TestVerifiedAndStatusAreNoLongerChecked(unittest.TestCase):
         tree = Tree(head)
         self.assertNotEqual(tree.check("draft"), [])
         self.assertEqual(tree.check("draft"), tree.check("final"))
+
+
+class TestProjectsConvention(unittest.TestCase):
+    def test_text_carries_the_projects_bullet_rule_and_warning_paragraph(self):
+        self.assertIn("`applies-to` may hold `facets`, `steps` and `projects`", CONVENTIONS_TEXT)
+        self.assertIn(
+            "- `projects`: each value is a registered repo identity (`owner/name`) or the short name of a registered project (`lc project list`).",
+            CONVENTIONS_TEXT)
+        self.assertIn("4. `facets`, `steps` or `projects` that is not an inline list on one line fails.", CONVENTIONS_TEXT)
+        self.assertIn("for each `projects` value of a changed entry that names no project registered on this machine.", CONVENTIONS_TEXT)
+        self.assertNotIn("\n15. ", CONVENTIONS_TEXT)
+
+    def test_block_list_projects_fails_rule_four(self):
+        tree = Tree({"a.md": entry(applies="  projects:\n    - acme/x")})
+        self.assertEqual(
+            tree.check("final"), ["a.md: applies-to projects must be an inline list on one line"])
+
+    def test_inline_projects_passes(self):
+        self.assertEqual(Tree({"a.md": entry(applies="  projects: [acme/x]")}).check("final"), [])
+
+    def test_project_names_holds_each_identity_and_short_name(self):
+        self.assertEqual(project_names(["acme/x", "o/y"]), {"acme/x", "x", "o/y", "y"})

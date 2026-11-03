@@ -1,8 +1,9 @@
 import re
 
 from lightcycle.domain.guidance.detection import validate_element
+from lightcycle.domain.work.project_identity import ProjectIdentity
 
-CONVENTIONS_VERSION = 6
+CONVENTIONS_VERSION = 7
 
 CONVENTIONS_TEXT = """# Conventions
 
@@ -15,11 +16,12 @@ This guidance repo follows the Open Knowledge Format (OKF) 0.2 with the lightcyc
 - An entry is one markdown file with front matter. Its id is its path from the repo root without `.md`, for example `testing/pg-tests-use-testcontainers`. Files named `index.md` are never entries.
 - `type: Guidance` marks an entry lightcycle may deliver to an agent. Pages without it are ordinary concept pages, linked from entries.
 - Every guidance entry has an `applies-to` mapping. An entry without one is malformed and never delivered.
-- `applies-to` may hold `facets` and `steps`, each written as an inline list on one line: `facets: [kotlin, spring-boot]`. A block list (`- kotlin` on the next line) is malformed.
+- `applies-to` may hold `facets`, `steps` and `projects`, each written as an inline list on one line: `facets: [kotlin, spring-boot]`. A block list (`- kotlin` on the next line) is malformed.
 - `facets`: every facet listed must be declared on the project (`lc project set <repo> --facets ...`). No facets means every project.
 - `steps`: a bare name (`write-code`) matches that step in any workflow origin; `<origin>/<step>` matches it in that origin only. No steps means every step.
+- `projects`: each value is a registered repo identity (`owner/name`) or the short name of a registered project (`lc project list`). An entry applies to a spawn whose item repo or item project equals a value. No projects means every project. With `facets` as well, both must match.
 - A `steps` list names the steps where the decision the entry's `when` field describes is taken, not every step that touches the files the entry is about. An entry about a design choice lists the design steps.
-- A universal entry is a stable entry with no `facets`, whatever its `steps`: it applies to every project, so it is delivered at each step it matches. Keep universal entries few and short. The universal entries matching any one step should together stay well inside `guidance-budget-bytes`.
+- A universal entry is a stable entry with no `facets` and no `projects`, whatever its `steps`: it applies to every project, so it is delivered at each step it matches. Keep universal entries few and short. The universal entries matching any one step should together stay well inside `guidance-budget-bytes`.
 - Every guidance entry carries three required front-matter fields, each one non-empty line, none delivered to a worker: `purpose` (the problem the entry solves), `when` (the circumstances in which it helps) and `why` (why this approach over the alternatives).
 - An entry names no item id anywhere in the file. Where a finding came from lives on the `guidance-entry` item.
 - A change that touches only `purpose`, `when` and `why` leaves `status`, `verified` and the body byte-identical, and the entry keeps its `stable` status.
@@ -58,7 +60,7 @@ Both modes run the same rules:
 1. A deleted entry fails: retire it with `status: deprecated` instead.
 2. Front matter that is missing, unclosed or malformed fails.
 3. A `type: Guidance` entry with no `applies-to` mapping fails.
-4. `facets` or `steps` that is not an inline list on one line fails.
+4. `facets`, `steps` or `projects` that is not an inline list on one line fails.
 5. A facet with no `<facet>.md` concept page anywhere in the tree fails.
 6. A step that is not a bare name or `<origin>/<step>` fails.
 7. A `status` other than `draft`, `stable` or `deprecated` fails.
@@ -73,6 +75,8 @@ Both modes run the same rules:
 A changed page without `type: Guidance` that carries `detected-by` is a facet concept page by its own declaration, so rule 10 does not report it.
 
 `lc guidance-check` also prints a warning, never a failure, for each changed universal entry, naming its size, the installed step with the largest universal total, and that total against `guidance-budget-bytes`.
+
+`lc guidance-check` also prints a warning, never a failure, for each `projects` value of a changed entry that names no project registered on this machine. The project registry is per machine and a guidance repo is shared, so the value may be registered elsewhere.
 """
 
 STEP = re.compile(r"^([a-z0-9][a-z0-9-]*/)?[a-z0-9][a-z0-9-]*$")
@@ -121,6 +125,14 @@ def inline_list(value):
     return [item.strip() for item in match.group(1).split(",") if item.strip()]
 
 
+def project_names(identities):
+    names = set()
+    for identity in identities:
+        names.add(identity)
+        names.add(ProjectIdentity.short_name(identity))
+    return names
+
+
 def is_checked_path(path):
     name = path.rsplit("/", 1)[-1]
     return path.endswith(".md") and name not in SKIPPED_NAMES
@@ -163,7 +175,7 @@ def check_entries(mode, changed, deleted, facet_pages, entry_ids, read_head, rea
         if "applies-to" not in top:
             failures.append("%s: no applies-to mapping" % path)
         applies = nested.get("applies-to", {})
-        for key in ("facets", "steps"):
+        for key in ("facets", "steps", "projects"):
             if key in applies and inline_list(applies[key]) is None:
                 failures.append("%s: applies-to %s must be an inline list on one line" % (path, key))
         for facet in inline_list(applies.get("facets", "[]")) or []:

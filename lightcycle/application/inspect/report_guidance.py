@@ -112,10 +112,12 @@ class ReportGuidanceUseCase:
             item = self._store.get_item(step.item)
             project = self._project(item)
             facets = project.facets if project else ()
+            repo = project.identity if project else (item.repo if item is not None else None) or None
+            label = item.project if item is not None else None
             parsed = parse_pin(item.workflow) if item is not None else None
             origin = parsed[0] if parsed else None
             for entry in entries:
-                if matches(entry, facets, step.stage, origin):
+                if matches(entry, facets, repo, label, step.stage, origin):
                     opportunity[entry.id] += 1
             if project is not None:
                 key, registered = project.identity, True
