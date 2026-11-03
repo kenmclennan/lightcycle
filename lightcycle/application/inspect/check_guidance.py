@@ -1,6 +1,12 @@
 from lightcycle.application.errors import UseCaseError
+from lightcycle.application.services.guidance_library import GuidanceLibrary
+from lightcycle.application.services.installed_agent_steps import InstalledAgentSteps
+from lightcycle.config import ConfigError
+from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE
+from lightcycle.domain.guidance.budget import overflows
 from lightcycle.domain.guidance.conventions import check_entries, is_checked_path
 from lightcycle.ports.git import GitReadError
+from lightcycle.ports.store import StoreUnreadableError
 
 
 def _text(raw):
@@ -9,9 +15,13 @@ def _text(raw):
 
 class CheckGuidanceUseCase:
 
-    def __init__(self, git, fs):
+    def __init__(self, git, fs, store, workflow_source, workflow_bundle, config):
         self._git = git
         self._fs = fs
+        self._store = store
+        self._workflow_source = workflow_source
+        self._workflow_bundle = workflow_bundle
+        self._config = config
 
     def execute(self, directory, mode, base):
         try:
@@ -26,7 +36,7 @@ class CheckGuidanceUseCase:
             return [
                 "%s: uncommitted change - commit it first, guidance-check reads only committed work" % p
                 for p in dirty
-            ], 0
+            ], 0, []
         changed, deleted = [], []
         for status, path in rows:
             if not is_checked_path(path):
@@ -58,4 +68,52 @@ class CheckGuidanceUseCase:
             if is_checked_path(rel)
         }
         failures = check_entries(mode, changed, deleted, facet_pages, entry_ids, read_head, read_base)
-        return failures, len(changed)
+        warnings = []
+        if changed:
+            more, notes = self._budget_lines(directory, base)
+            failures = failures + more
+            warnings = notes
+        return failures, len(changed), warnings
+
+    def _budget_lines(self, directory, base):
+        try:
+            budget = self._config.guidance_budget_bytes()
+        except ConfigError as e:
+            return [], ["budget check skipped: %s" % e]
+        try:
+            projects = [
+                (p.identity, p.facets) for p in self._store.list_projects()
+                if p.identity != GUIDANCE_WORKSPACE
+            ]
+            steps = InstalledAgentSteps(self._workflow_source, self._workflow_bundle, self._config).list()
+        except (StoreUnreadableError, OSError) as e:
+            return [], ["budget check skipped: %s" % e]
+        if not projects or not steps:
+            return [], []
+        library = GuidanceLibrary(self._git)
+        head_paths = [
+            rel for rel in self._fs.list_files(directory)
+            if not any(part.startswith(".") for part in rel.split("/"))
+        ]
+        head_entries, _ = library.load_files(
+            head_paths, lambda rel: self._fs.read_bytes("%s/%s" % (directory, rel)))
+        base_paths = self._git.list_files_at(directory, base)
+        base_entries, _ = library.load_files(
+            base_paths, lambda rel: self._git.read_file_at(directory, base, rel))
+        before = {
+            (o.project, o.step): set(o.skipped)
+            for o in overflows(base_entries, projects, steps, budget)
+        }
+        failures, warnings = [], []
+        for o in overflows(head_entries, projects, steps, budget):
+            fresh = [i for i in o.skipped if i not in before.get((o.project, o.step), set())]
+            if fresh:
+                failures.append(
+                    "budget: project %s, step %s: matched %d bytes against %d; "
+                    "this change newly skips: %s" % (
+                        o.project, o.step, o.matched_bytes, o.budget, ", ".join(fresh)))
+            else:
+                warnings.append(
+                    "warning: project %s, step %s: matched %d bytes against %d; skipped: %s" % (
+                        o.project, o.step, o.matched_bytes, o.budget, ", ".join(o.skipped)))
+        return failures, warnings

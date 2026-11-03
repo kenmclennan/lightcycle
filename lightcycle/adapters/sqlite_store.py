@@ -27,15 +27,16 @@ from lightcycle.domain.workspace.isolation import refuses_live_store
 from lightcycle.ports.store import (
     StoreError,
     StorePort,
+    StoreUnreadableError,
 )
 
 
 
-class LiveStoreRefused(Exception):
+class LiveStoreRefused(StoreUnreadableError):
     pass
 
 
-class SchemaVersionRefused(Exception):
+class SchemaVersionRefused(StoreUnreadableError):
     pass
 
 

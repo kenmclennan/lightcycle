@@ -8,8 +8,12 @@ from lightcycle.application.inspect.check_guidance import CheckGuidanceUseCase
 from lightcycle.container import Container
 from lightcycle.domain.work.worker_permissions import WORKER_VERBS, worker_permitted
 from tests.support.fake_fs import FakeFs
+from lightcycle.ports.store import StoreUnreadableError
 from tests.support.fake_git import FakeGit
+from tests.support.fake_store import FakeStore
+from tests.support.installed_steps import AGENT, graph, installed
 from tests.unit.test_guidance_conventions import entry
+from tests.unit.test_select_guidance import _cfg
 
 ROOT = "/kb"
 
@@ -18,13 +22,44 @@ def _fs(files):
     return FakeFs(files={"%s/%s" % (ROOT, p): t.encode() for p, t in files.items()})
 
 
-class TestCheckGuidanceUseCase(unittest.TestCase):
-    def _run(self, rows, files, base_files=None, mode="final", base="origin/main", **git_kw):
-        git = FakeGit(
-            changed={(ROOT, base): rows}, ref_files={base: {k: v.encode() for k, v in (base_files or {}).items()}}, **git_kw
-        )
-        return CheckGuidanceUseCase(git, _fs(files)).execute(ROOT, mode, base), git
+_ORIGINS = {"acme": ("sha1", {"write-code": AGENT}, {"wf": graph(("write-code", "done", "x"))})}
 
+
+def _store(projects):
+    store = FakeStore()
+    store.add_project("guidance", local_path=ROOT)
+    for identity, facets in projects:
+        store.add_project(identity, facets=facets)
+    return store
+
+
+def _sized(size, applies="  facets: [kotlin]\n  steps: [write-code]"):
+    return entry(status="stable", applies=applies, body="x" * size + "\n")
+
+
+class _Unreadable(FakeStore):
+    def list_projects(self):
+        raise StoreUnreadableError("live store refused")
+
+
+class _Rig(unittest.TestCase):
+    def _full(self, rows, files, base_files=None, mode="final", base="origin/main",
+              projects=(("acme/x", ("kotlin",)),), budget="100", origins=_ORIGINS,
+              store=None, config=None, **git_kw):
+        git = FakeGit(
+            changed={(ROOT, base): rows},
+            ref_files={base: {k: v.encode() for k, v in (base_files or {}).items()}}, **git_kw)
+        source, bundle = installed(origins)
+        use_case = CheckGuidanceUseCase(
+            git, _fs(files), store if store is not None else _store(projects), source, bundle,
+            config if config is not None else _cfg(budget))
+        return use_case.execute(ROOT, mode, base), git
+
+    def _run(self, rows, files, **kw):
+        result, git = self._full(rows, files, **kw)
+        return result[:2], git
+
+class TestCheckGuidanceUseCase(_Rig):
     def test_clean_changed_entry(self):
         (failures, checked), git = self._run(
             [("A", "a.md"), ("M", "index.md")],
@@ -93,9 +128,7 @@ class TestCheckGuidanceUseCase(unittest.TestCase):
 
     def test_failing_diff_raises_use_case_error(self):
         with self.assertRaises(UseCaseError):
-            CheckGuidanceUseCase(FakeGit(raises=("changed_paths",)), _fs({})).execute(
-                ROOT, "final", "nope"
-            )
+            self._run([], {}, raises=("changed_paths",))
 
     def test_changed_file_missing_from_the_tree_raises(self):
         with self.assertRaises(UseCaseError):
@@ -106,20 +139,121 @@ class TestCheckGuidanceUseCase(unittest.TestCase):
             self._run([("D", "a.md")], {})
 
 
+_PAGES = {"kotlin.md": "x", "python.md": "x"}
+
+
+class TestBudgetCheck(_Rig):
+    def test_new_entry_that_does_not_fit_fails_naming_it(self):
+        base = {"a.md": _sized(60), **_PAGES}
+        files = {**base, "b.md": _sized(60)}
+        (failures, checked, warnings), _ = self._full([("A", "b.md")], files, base_files=base)
+        self.assertEqual(len(failures), 1)
+        self.assertTrue(failures[0].startswith("budget: project acme/x, step acme/write-code"))
+        self.assertIn("matched 120 bytes against 100", failures[0])
+        self.assertTrue(failures[0].endswith("newly skips: b"))
+        self.assertEqual(warnings, [])
+
+    def test_retag_that_pushes_a_delivered_entry_out_fails_naming_it(self):
+        unscoped = "  facets: [kotlin]"
+        base = {
+            "a.md": _sized(60, unscoped),
+            "b.md": _sized(50, "  facets: [kotlin]\n  steps: [other-step]"),
+            **_PAGES,
+        }
+        files = {**base, "b.md": _sized(50)}
+        (failures, _, _), _ = self._full([("M", "b.md")], files, base_files=base)
+        self.assertEqual(len(failures), 1)
+        self.assertTrue(failures[0].endswith("newly skips: a"))
+
+    def test_preexisting_overflow_is_a_warning_when_another_entry_changes(self):
+        base = {"a.md": _sized(60), "b.md": _sized(60), **_PAGES}
+        files = {**base, "d.md": entry()}
+        (failures, checked, warnings), _ = self._full([("A", "d.md")], files, base_files=base)
+        self.assertEqual((failures, checked), ([], 1))
+        self.assertEqual(len(warnings), 1)
+        self.assertTrue(warnings[0].startswith("warning: project acme/x, step acme/write-code"))
+        self.assertTrue(warnings[0].endswith("skipped: b"))
+
+    def test_one_worsened_pair_and_one_preexisting_pair(self):
+        py = "  facets: [python]\n  steps: [write-code]"
+        base = {"p1.md": _sized(60, py), "p2.md": _sized(60, py), **_PAGES}
+        files = {**base, "k1.md": _sized(60), "k2.md": _sized(60)}
+        (failures, _, warnings), _ = self._full(
+            [("A", "k1.md"), ("A", "k2.md")], files, base_files=base,
+            projects=(("py/x", ("python",)), ("kt/x", ("kotlin",))))
+        self.assertEqual(len(failures), 1)
+        self.assertIn("project kt/x", failures[0])
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("project py/x", warnings[0])
+
+    def test_entry_skipped_at_base_that_grows_and_is_still_skipped_passes(self):
+        base = {"a.md": _sized(60), "b.md": _sized(60), **_PAGES}
+        files = {**base, "b.md": _sized(70)}
+        (failures, _, warnings), _ = self._full([("M", "b.md")], files, base_files=base)
+        self.assertEqual(failures, [])
+        self.assertEqual(len(warnings), 1)
+
+    def test_no_registered_projects_passes_silently(self):
+        files = {"a.md": _sized(600), **_PAGES}
+        (failures, _, warnings), _ = self._full([("A", "a.md")], files, projects=())
+        self.assertEqual((failures, warnings), ([], []))
+
+    def test_unreadable_budget_passes_with_a_skip_warning(self):
+        files = {"a.md": _sized(600), **_PAGES}
+        (failures, _, warnings), _ = self._full([("A", "a.md")], files, budget="-1")
+        self.assertEqual(failures, [])
+        self.assertTrue(warnings[0].startswith("budget check skipped"))
+
+    def test_unreadable_store_passes_with_a_skip_warning(self):
+        files = {"a.md": _sized(600), **_PAGES}
+        (failures, _, warnings), _ = self._full(
+            [("A", "a.md")], files, store=_Unreadable())
+        self.assertEqual(failures, [])
+        self.assertTrue(warnings[0].startswith("budget check skipped"))
+
+    def test_no_installed_agent_steps_passes_silently(self):
+        files = {"a.md": _sized(600), **_PAGES}
+        (failures, _, warnings), _ = self._full([("A", "a.md")], files, origins={})
+        self.assertEqual((failures, warnings), ([], []))
+
+
 class TestGuidanceCheckCommand(unittest.TestCase):
     def setUp(self):
         self._orig = cli_mod._container
         self.addCleanup(lambda: cli_mod.set_container(self._orig))
 
     def _call(self, argv, git, fs):
+        source, bundle = installed({})
         cli_mod.set_container(Container(
-            config=object(), git=git, store=object(), spawner=object(), workers=object(),
+            config=_cfg(), git=git, store=_store(()), spawner=object(), workers=object(),
             fs=fs, github=object(), lock=object(), breaker=object(),
+            workflow_source=source, workflow_bundle=bundle,
         ))
         out, err = io.StringIO(), io.StringIO()
         with redirect_stdout(out), redirect_stderr(err):
             rc = cli_mod.cmd_guidance_check(argv)
         return rc, out.getvalue(), err.getvalue()
+
+    def test_a_remaining_overflow_prints_a_warning_and_exits_zero(self):
+        source, bundle = installed(_ORIGINS)
+        cli_mod.set_container(Container(
+            config=_cfg("100"), git=FakeGit(
+                changed={(ROOT, "main"): [("A", "d.md")]},
+                ref_files={"main": {
+                    "a.md": _sized(60).encode(), "b.md": _sized(60).encode(),
+                    "kotlin.md": b"x", "python.md": b"x"}}),
+            store=_store([("acme/x", ("kotlin",))]), spawner=object(), workers=object(),
+            fs=_fs({"a.md": _sized(60), "b.md": _sized(60), "d.md": entry(), **_PAGES}),
+            github=object(), lock=object(), breaker=object(),
+            workflow_source=source, workflow_bundle=bundle,
+        ))
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            rc = cli_mod.cmd_guidance_check(["--dir", ROOT, "--mode", "draft", "--base", "main"])
+        lines = out.getvalue().splitlines()
+        self.assertEqual(rc, 0)
+        self.assertTrue(lines[0].startswith("warning: project acme/x"))
+        self.assertEqual(lines[-1], "1 changed file(s) clean (draft mode)")
 
     def test_defaults_to_final_mode_against_origin_main_and_exits_clean(self):
         git = FakeGit(changed={(".", "origin/main"): [("A", "a.md")]})

@@ -19,7 +19,9 @@ from lightcycle.application.workflows.lifecycle import (
 from lightcycle.application.services.guidance_library import NO_REF_ENTRY, GuidanceLibrary
 from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE, LEGACY_KNOWLEDGE_WORKSPACE
 from lightcycle.config import ConfigError
-from lightcycle.domain.guidance.guidance import ENTRY, classify, fill, matches_project, matches_step_key, order
+from lightcycle.application.services.installed_agent_steps import InstalledAgentSteps
+from lightcycle.domain.guidance.budget import overflows
+from lightcycle.domain.guidance.guidance import ENTRY, classify
 from lightcycle.domain.pool import HEALTH_IMAGE_STATES, png_size
 from lightcycle.domain.guidance.conventions import (
     CONVENTIONS_VERSION, SKIPPED_NAMES, check_entries,
@@ -631,23 +633,23 @@ class DoctorUseCase:
             budget = self._config.guidance_budget_bytes()
         except ConfigError:
             return []
-        problems = []
-        for project in self._store.list_projects():
-            if project.identity == GUIDANCE_WORKSPACE:
-                continue
-            local = [e for e in candidates if matches_project(e, project.facets)]
-            keys = sorted({name for e in local for name in e.steps})
-            for key in [None] + keys:
-                _, skipped = fill(order([e for e in local if matches_step_key(e, key)]), budget)
-                if skipped:
-                    problems.append(Problem(
-                        "guidance",
-                        "project %s: entries for %s exceed guidance-budget-bytes (%d) and would "
-                        "be skipped: %s - shorten them or raise the budget" % (
-                            project.identity, key or "any step", budget,
-                            ", ".join(e.id for e in skipped)),
-                    ))
-        return problems
+        projects = [
+            (p.identity, p.facets) for p in self._store.list_projects()
+            if p.identity != GUIDANCE_WORKSPACE
+        ]
+        steps = InstalledAgentSteps(self._workflow_source, self._workflow_bundle, self._config).list()
+        return [
+            Problem(
+                "guidance",
+                "project %s: step %s matches %d bytes of guidance against "
+                "guidance-budget-bytes (%d); delivery skips: %s" % (
+                    o.project, o.step, o.matched_bytes, o.budget, ", ".join(o.skipped)),
+                kind="guidance-budget-overflow",
+                fix="narrow the skipped entries' applies-to (facets or steps), consolidate "
+                "overlapping entries, or deprecate those no longer earning their bytes",
+            )
+            for o in overflows(candidates, projects, steps, budget)
+        ]
 
     def _facet_problems(self):
         declaring = [p for p in self._store.list_projects() if p.facets]

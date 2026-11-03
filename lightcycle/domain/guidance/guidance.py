@@ -87,19 +87,6 @@ def matches_step(entry, stage, origin):
     return False
 
 
-def matches_step_key(entry, key):
-    if not entry.steps:
-        return True
-    if key is None:
-        return False
-    for name in entry.steps:
-        if name == key:
-            return True
-        if "/" not in key and "/" in name and name.rsplit("/", 1)[1] == key:
-            return True
-    return False
-
-
 def matches(entry, project_facets, stage, origin):
     return matches_project(entry, project_facets) and matches_step(entry, stage, origin)
 
@@ -119,6 +106,14 @@ def fill(entries, budget):
         else:
             skipped.append(entry)
     return delivered, skipped
+
+
+def deliver(entries, project_facets, stage, origin, budget):
+    matched = order([
+        e for e in entries if e.is_candidate() and matches(e, project_facets, stage, origin)
+    ])
+    delivered, skipped = fill(matched, budget)
+    return matched, delivered, skipped
 
 
 CITE_INSTRUCTION = (

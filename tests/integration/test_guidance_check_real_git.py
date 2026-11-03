@@ -9,7 +9,10 @@ import lightcycle.cli as cli_mod
 from lightcycle.adapters.fsio import FsAdapter
 from lightcycle.adapters.gitio import GitAdapter
 from lightcycle.container import Container
+from tests.support.fake_store import FakeStore
+from tests.support.installed_steps import AGENT, graph, installed
 from tests.unit.test_guidance_conventions import entry
+from tests.unit.test_select_guidance import _cfg
 
 
 def _git(root, *args):
@@ -35,9 +38,14 @@ class TestGuidanceCheckRealGit(unittest.TestCase):
         self.addCleanup(lambda: cli_mod.set_container(self._orig))
 
     def _check(self):
+        store = FakeStore()
+        store.add_project("acme/x", facets=("kotlin",))
+        source, bundle = installed({
+            "acme": ("sha1", {"write-code": AGENT}, {"wf": graph(("write-code", "done", "x"))})})
         cli_mod.set_container(Container(
-            config=object(), git=GitAdapter(), store=object(), spawner=object(),
+            config=_cfg("100"), git=GitAdapter(), store=store, spawner=object(),
             workers=object(), fs=FsAdapter(object()), github=object(), lock=object(), breaker=object(),
+            workflow_source=source, workflow_bundle=bundle,
         ))
         out, err = io.StringIO(), io.StringIO()
         with redirect_stdout(out), redirect_stderr(err):
@@ -97,3 +105,14 @@ class TestGuidanceCheckRealGit(unittest.TestCase):
         rc, _, _ = self._check()
 
         self.assertEqual(rc, 0)
+
+    def test_committed_entry_that_overflows_a_registered_pair_fails_with_a_budget_line(self):
+        sized = entry(status="stable", body="x" * 120 + "\n")
+        (Path(self.repo) / "a.md").write_text(sized)
+        _commit(self.repo, "add a")
+
+        rc, out, _ = self._check()
+
+        self.assertEqual(rc, 1)
+        self.assertIn("budget: project acme/x, step acme/write-code", out)
+        self.assertIn("newly skips: a", out)
