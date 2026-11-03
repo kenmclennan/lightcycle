@@ -19,7 +19,7 @@ def _spawn(cwd, stdin=None, new_session=False):
 
 
 @unittest.skipUnless(shutil.which("lsof"), "lsof not installed")
-class TestWorktreePidsAgainstRealProcesses(unittest.TestCase):
+class TestCwdPidsUnderAgainstRealProcesses(unittest.TestCase):
     def setUp(self):
         self.root = os.path.realpath(tempfile.mkdtemp())
         self.worktree = os.path.join(self.root, "wt")
@@ -42,7 +42,12 @@ class TestWorktreePidsAgainstRealProcesses(unittest.TestCase):
     def _pids(self, expected):
         deadline = time.time() + 5
         while True:
-            pids = MachineAdapter().worktree_pids(self.worktree)
+            found = MachineAdapter().cwd_pids_under(self.root)
+            pids = [
+                pid for cwd, group in found.items()
+                if cwd == self.worktree or cwd.startswith(self.worktree + os.sep)
+                for pid in group
+            ]
             if all(p in pids for p in expected) or time.time() > deadline:
                 return pids
             time.sleep(0.1)

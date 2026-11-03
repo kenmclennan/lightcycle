@@ -778,7 +778,7 @@ class TestDoctorOrphans(unittest.TestCase):
                 return {"write-code": code_path, "spec-handle-feedback": spec_path}[node.stage]
 
         fs = FakeFs(dirs={"/repo/.worktrees": ["%s-code" % item, "%s-spec" % item]})
-        machine = FakeMachine(worktree_pids={code_path: [1], spec_path: [2]})
+        machine = FakeMachine(cwd_pids={code_path: [1], spec_path: [2]})
         report = self._report(store, fs, machine, _ByStage())
         self.assertEqual(report.problems["orphans"], [])
 
@@ -786,7 +786,7 @@ class TestDoctorOrphans(unittest.TestCase):
         store = FakeStore()
         store.add_project("acme", local_path="/repo")
         fs = FakeFs(dirs={"/repo/.worktrees": ["stray-item-code"]})
-        machine = FakeMachine(worktree_pids={"/repo/.worktrees/stray-item-code": [111, 222]})
+        machine = FakeMachine(cwd_pids={"/repo/.worktrees/stray-item-code": [111, 222]})
         report = self._report(store, fs, machine, _Worktrees())
         self.assertEqual(len(report.problems["orphans"]), 1)
         problem = report.problems["orphans"][0]
@@ -832,12 +832,49 @@ class TestDoctorOrphans(unittest.TestCase):
         store = FakeStore()
         store.add_project("acme", local_path="/repo")
         fs = FakeFs(dirs={"/repo/.worktrees": ["stray"]})
-        machine = FakeMachine(
-            worktree_pids={"/repo/.worktrees/stray": [5]},
-            cwd_pids={"/repo/.worktrees/stray": [5]},
-        )
+        machine = FakeMachine(cwd_pids={"/repo/.worktrees/stray": [5]})
         report = self._report(store, fs, machine, _Worktrees())
         self.assertEqual(len(report.problems["orphans"]), 1)
+
+    def test_worktree_created_after_the_listing_is_not_reported_as_deleted(self):
+        store = FakeStore()
+        store.add_project("acme", local_path="/repo")
+
+        class _ListsStale(FakeFs):
+            def list_dir(self, path):
+                return []
+
+        fs = _ListsStale(dirs={"/repo/.worktrees": ["AUD-170"], "/repo/.worktrees/AUD-170": []})
+        machine = FakeMachine(cwd_pids={"/repo/.worktrees/AUD-170": [9]})
+        report = self._report(store, fs, machine, _Worktrees())
+        self.assertEqual(report.problems["orphans"], [])
+
+    def test_claimed_step_worktree_missing_from_the_listing_is_not_reported_as_deleted(self):
+        store = FakeStore()
+        store.add_project("acme", local_path="/repo")
+        item = store.create_item("item", "a description")
+        step = store.create_step(item=item, role="agent")
+        store.update_state(step, "in_progress")
+        path = "/repo/.worktrees/%s-code" % item
+        fs = FakeFs(dirs={"/repo/.worktrees": []})
+        machine = FakeMachine(cwd_pids={path: [7]})
+        report = self._report(store, fs, machine, _Worktrees({item: path}))
+        self.assertEqual(report.problems["orphans"], [])
+
+    def test_orphans_check_reads_the_machine_cwd_table_once(self):
+        store = FakeStore()
+        store.add_project("acme", local_path="/repo")
+        fs = FakeFs(dirs={"/repo/.worktrees": ["a", "b", "c"]})
+
+        class _Counting(FakeMachine):
+            calls = 0
+
+            def cwd_pids_under(self, root):
+                type(self).calls += 1
+                return super().cwd_pids_under(root)
+
+        self._report(store, fs, _Counting(), _Worktrees())
+        self.assertEqual(_Counting.calls, 1)
 
 
 
