@@ -107,7 +107,8 @@ def cmd_guidance(argv):
     try:
         since = parse_since(a.since)
         report = ReportGuidanceUseCase(
-            c.store, c.fs, c.git, c.github, c.config).execute(time.time(), since)
+            c.store, c.fs, c.git, c.github, c.config,
+            c.workflow_source, c.workflow_bundle).execute(time.time(), since)
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
         return 1
@@ -132,6 +133,9 @@ def cmd_guidance(argv):
         print("notes:")
         for n in notes:
             print(n)
+    for o in report.overflows:
+        print("overflow: project %s, step %s: matched %d bytes against %d; delivery skips: %s" % (
+            o.project, o.step, o.matched_bytes, o.budget, ", ".join(o.skipped)))
     _print_guidance_work(report)
     return 0
 
