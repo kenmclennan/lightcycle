@@ -217,6 +217,84 @@ class TestBudgetCheck(_Rig):
         self.assertEqual((failures, warnings), ([], []))
 
 
+def _universal(size, steps="  steps: []"):
+    return entry(status="stable", applies=steps, body="x" * size + "\n")
+
+
+_TWO_STEPS = {"acme": ("sha1", {"a": AGENT, "b": AGENT}, {"wf": graph(("a", "b", "x"), ("b", "done", "x"))})}
+
+
+class TestUniversalWarning(_Rig):
+    def test_new_universal_entry_warns_with_size_step_total_and_budget(self):
+        files = {"a.md": _universal(30)}
+        (failures, checked, warnings), _ = self._full([("A", "a.md")], files)
+        self.assertEqual((failures, checked), ([], 1))
+        self.assertEqual(warnings, [
+            "warning: universal entry a is 30 bytes; step acme/write-code receives the most universal bytes, 30 of 100"])
+
+    def test_steps_tag_is_ignored(self):
+        files = {"a.md": _universal(30, "  steps: [write-code]")}
+        (_, _, warnings), _ = self._full([("A", "a.md")], files)
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("universal entry a", warnings[0])
+
+    def test_names_the_heaviest_step_and_swapping_sizes_moves_it(self):
+        files = {
+            "u1.md": _universal(10),
+            "u2.md": _universal(30, "  steps: [a]"),
+            "u3.md": _universal(20, "  steps: [b]"),
+        }
+        (_, _, warnings), _ = self._full([("A", "u1.md")], files, origins=_TWO_STEPS)
+        self.assertTrue(warnings[0].endswith("step acme/a receives the most universal bytes, 40 of 100"))
+        files["u2.md"], files["u3.md"] = files["u3.md"], files["u2.md"]
+        files["u2.md"] = files["u2.md"].replace("steps: [b]", "steps: [a]")
+        files["u3.md"] = files["u3.md"].replace("steps: [a]", "steps: [b]")
+        (_, _, warnings), _ = self._full([("A", "u1.md")], files, origins=_TWO_STEPS)
+        self.assertIn("step acme/b receives the most universal bytes", warnings[0])
+
+    def test_no_installed_steps_takes_the_second_form_and_sums_all(self):
+        files = {"a.md": _universal(10), "b.md": _universal(20)}
+        (_, _, warnings), _ = self._full([("A", "a.md")], files, origins={})
+        self.assertEqual(warnings, [
+            "warning: universal entries total 30 of 100 bytes; universal entry a is 10 bytes"])
+
+    def test_unchanged_universal_entry_is_counted_but_not_named(self):
+        files = {"a.md": _universal(10), "b.md": _universal(20)}
+        (_, _, warnings), _ = self._full([("A", "a.md")], files)
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("universal entry a ", warnings[0])
+        self.assertTrue(warnings[0].endswith("30 of 100"))
+
+    def test_draft_and_faceted_entries_print_nothing(self):
+        files = {
+            "d.md": entry(status="draft", applies="  steps: []"),
+            "f.md": _sized(10),
+            **_PAGES,
+        }
+        (failures, _, warnings), _ = self._full([("A", "d.md"), ("A", "f.md")], files)
+        self.assertEqual((failures, warnings), ([], []))
+
+    def test_warns_when_no_project_is_registered(self):
+        (failures, _, warnings), _ = self._full([("A", "a.md")], {"a.md": _universal(10)}, projects=())
+        self.assertEqual(failures, [])
+        self.assertEqual(len(warnings), 1)
+
+    def test_unreadable_budget_prints_only_the_skip_note(self):
+        (failures, _, warnings), _ = self._full([("A", "a.md")], {"a.md": _universal(10)}, budget="-1")
+        self.assertEqual(failures, [])
+        self.assertEqual(len(warnings), 1)
+        self.assertTrue(warnings[0].startswith("budget check skipped"))
+
+    def test_overflow_warnings_print_before_universal_warnings(self):
+        base = {"a.md": _sized(60), "b.md": _sized(60), **_PAGES}
+        files = {**base, "u.md": _universal(5)}
+        (failures, _, warnings), _ = self._full([("A", "u.md")], files, base_files=base)
+        self.assertEqual(failures, [])
+        self.assertEqual(len(warnings), 2)
+        self.assertTrue(warnings[0].startswith("warning: project "))
+        self.assertTrue(warnings[1].startswith("warning: universal entry u"))
+
+
 class TestGuidanceCheckCommand(unittest.TestCase):
     def setUp(self):
         self._orig = cli_mod._container

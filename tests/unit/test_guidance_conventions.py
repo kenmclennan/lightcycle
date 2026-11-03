@@ -43,7 +43,7 @@ class TestConventionsText(unittest.TestCase):
         lines = CONVENTIONS_TEXT.splitlines()
         self.assertEqual(lines[0], "# Conventions")
         self.assertEqual(lines[2], "Conventions version: %d" % CONVENTIONS_VERSION)
-        self.assertEqual(CONVENTIONS_VERSION, 5)
+        self.assertEqual(CONVENTIONS_VERSION, 6)
 
     def test_text_names_every_rule_and_no_item_id(self):
         self.assertEqual(item_ids(CONVENTIONS_TEXT), [])
@@ -53,6 +53,12 @@ class TestConventionsText(unittest.TestCase):
         self.assertNotIn("\n15. ", CONVENTIONS_TEXT)
         for word in ("purpose", "when", "why", "item id"):
             self.assertIn(word, CONVENTIONS_TEXT)
+
+    def test_text_states_the_step_decision_and_universal_entry_rules(self):
+        self.assertIn("A `steps` list names the steps where the decision the entry's `when` field describes is taken", CONVENTIONS_TEXT)
+        self.assertIn("- A universal entry is a stable entry with no `facets`, whatever its `steps`", CONVENTIONS_TEXT)
+        self.assertIn("Keep universal entries few and short.", CONVENTIONS_TEXT)
+        self.assertIn("\n`lc guidance-check` also prints a warning, never a failure, for each changed universal entry", CONVENTIONS_TEXT)
 
     def test_text_states_the_moved_to_field_and_rule(self):
         self.assertIn("- `moved-to: <entry id>`", CONVENTIONS_TEXT)
@@ -70,8 +76,8 @@ class TestConventionsText(unittest.TestCase):
         positions = [CONVENTIONS_TEXT.index("`%s`" % h) for h in headings]
         self.assertEqual(positions, sorted(positions))
 
-    def test_text_is_version_five_and_drops_the_verified_rules(self):
-        self.assertIn("Conventions version: 5", CONVENTIONS_TEXT)
+    def test_text_is_version_six_and_drops_the_verified_rules(self):
+        self.assertIn("Conventions version: 6", CONVENTIONS_TEXT)
         for removed in (
             "fails unless the entry is context-only",
             "with an empty or missing `verified` fails",
