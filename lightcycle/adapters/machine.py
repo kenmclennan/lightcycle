@@ -259,13 +259,6 @@ class MachineAdapter(MachinePort):
         except ValueError:
             return None
 
-    def worktree_pids(self, path):
-        roots = {os.path.normpath(path), os.path.realpath(path)}
-        return [
-            pid for pid, name in _cwd_entries()
-            if any(name == r or name.startswith(r + os.sep) for r in roots)
-        ]
-
     def cwd_pids_under(self, root):
         base = os.path.normpath(root)
         roots = {base, os.path.realpath(root)}

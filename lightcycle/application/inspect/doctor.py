@@ -702,35 +702,37 @@ class DoctorUseCase:
             if not project.local_path:
                 continue
             wt_dir = self._fs.worktrees_dir(project.local_path)
+            by_worktree = self._pids_by_worktree(wt_dir)
             existing = set(self._fs.list_dir(wt_dir))
-            for name in existing:
+            for name in sorted(existing):
                 path = os.path.join(wt_dir, name)
-                if path in expected:
-                    continue
-                pids = self._machine.worktree_pids(path)
-                if not pids:
+                pids = sorted(by_worktree.get(name, ()))
+                if path in expected or not pids:
                     continue
                 problems.append(Problem(
                     "orphans",
                     "worktree %s has no active worker but %d live process(es): %s" % (
                         path, len(pids), ", ".join(str(p) for p in pids)),
                 ))
-            problems += self._deleted_worktree_problems(wt_dir, existing)
+            problems += self._deleted_worktree_problems(wt_dir, existing, expected, by_worktree)
         return problems
 
-    def _deleted_worktree_problems(self, wt_dir, existing):
+    def _pids_by_worktree(self, wt_dir):
         by_worktree = {}
         for cwd, pids in self._machine.cwd_pids_under(wt_dir).items():
             name = os.path.relpath(cwd, wt_dir).split(os.sep)[0]
-            if name in existing:
+            by_worktree.setdefault(name, set()).update(pids)
+        return by_worktree
+
+    def _deleted_worktree_problems(self, wt_dir, existing, expected, by_worktree):
+        problems = []
+        for name, pids in sorted(by_worktree.items()):
+            path = os.path.join(wt_dir, name)
+            if name in existing or path in expected or self._fs.exists(path):
                 continue
-            by_worktree.setdefault(name, []).extend(pids)
-        return [
-            Problem(
+            problems.append(Problem(
                 "orphans",
                 "worktree %s no longer exists but %d live process(es) remain: %s" % (
-                    os.path.join(wt_dir, name), len(pids),
-                    ", ".join(str(p) for p in sorted(pids))),
-            )
-            for name, pids in sorted(by_worktree.items())
-        ]
+                    path, len(pids), ", ".join(str(p) for p in sorted(pids))),
+            ))
+        return problems
