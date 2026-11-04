@@ -93,6 +93,12 @@ class TestHealthIconUseCase(unittest.TestCase):
         use_case, _, _ = _use_case(config, _files(config))
         self.assertEqual(use_case.reading(**{**BASE, "doctor_areas": ("orphans",)}).state, "1")
 
+    def test_teardown_is_a_doctor_finding_and_not_an_orphan(self):
+        for areas, state in ((("teardown",), "1"), (("teardown", "orphans"), "2")):
+            config = _config()
+            use_case, _, _ = _use_case(config, _files(config))
+            self.assertEqual(use_case.reading(**{**BASE, "doctor_areas": areas}).state, state)
+
     def test_stale_upgrade_adds_to_maintenance(self):
         config = _config()
         use_case, _, _ = _use_case(config, _files(config))

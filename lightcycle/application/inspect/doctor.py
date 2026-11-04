@@ -104,7 +104,8 @@ class DoctorUseCase:
             "config": (
                 self._config_problems() + self._retired_job_problems()
                 + self._schedule_problems() + self._reload_problems() + lifecycle_config),
-            "orphans": self._orphan_problems() + self._teardown_refusal_problems(),
+            "orphans": self._orphan_problems(),
+            "teardown": self._teardown_refusal_problems(),
             "facets": self._guidance_registration_problems() + self._facet_problems(),
             "guidance": self._guidance_problems() + self._guidance_shortcode_problems(),
             "github": github_problems,
@@ -693,7 +694,7 @@ class DoctorUseCase:
                 if artifact.type != TEARDOWN_REFUSED_ARTIFACT:
                     continue
                 problems.append(Problem(
-                    "orphans",
+                    "teardown",
                     "item %s close was refused: %s" % (node.id, artifact.value),
                     node_id=node.id,
                     fix="resolve the work named, then close the item again",

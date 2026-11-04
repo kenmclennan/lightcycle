@@ -912,6 +912,18 @@ class TestDoctorOrphans(unittest.TestCase):
         self.assertEqual(len(messages), 1)
         self.assertIn("/repo/.worktrees/live", messages[0])
 
+    def test_a_refused_close_and_a_stray_worktree_land_in_their_own_categories(self):
+        store = self._stray_store()
+        item = store.create_item("stuck", "a description")
+        store.add_artifact(item, "teardown-refused", "worktree /w has uncommitted paths: a.py", internal=True)
+        fs = FakeFs(dirs={"/repo/.worktrees": ["live"]})
+        machine = FakeMachine(cwd_pids={"/repo/.worktrees/live": [2]})
+        report = self._report(store, fs, machine, _Worktrees())
+        self.assertEqual(len(report.problems["orphans"]), 1)
+        self.assertIn("/repo/.worktrees/live", report.problems["orphans"][0].message)
+        self.assertEqual(len(report.problems["teardown"]), 1)
+        self.assertIn(item, report.problems["teardown"][0].message)
+
     def test_two_projects_with_candidates_share_one_wait(self):
         waits = []
         store = FakeStore()
@@ -1191,8 +1203,8 @@ class TestDoctorSchedules(unittest.TestCase):
     def test_the_json_category_keys_are_unchanged(self):
         self.assertEqual(
             set(_schedule_doctor({}).problems),
-            {"store", "pins", "contract", "workflows", "config", "orphans", "facets", "guidance",
-             "github"})
+            {"store", "pins", "contract", "workflows", "config", "orphans", "teardown", "facets",
+             "guidance", "github"})
 
     def test_the_report_has_no_origin_category(self):
         self.assertNotIn("origin", _schedule_doctor({}).problems)

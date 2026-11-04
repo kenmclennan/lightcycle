@@ -33,6 +33,14 @@ class TestDoctorSummary(unittest.TestCase):
     def test_orphans(self):
         self._singular_and_plural("orphans", "worktree with stray processes", "worktrees with stray processes")
 
+    def test_teardown(self):
+        self._singular_and_plural("teardown", "item close refused", "item closes refused")
+
+    def test_a_stray_worktree_and_a_refused_close_render_as_two_parts(self):
+        problems = {"orphans": _findings("orphans", 1), "teardown": _findings("teardown", 1)}
+        self.assertEqual(
+            doctor_summary(problems), "1 worktree with stray processes, 1 item close refused")
+
     def test_facets(self):
         self._singular_and_plural("facets", "facet problem", "facet problems")
 
