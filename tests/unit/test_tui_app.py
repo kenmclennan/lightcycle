@@ -1213,10 +1213,12 @@ def _behind_report(count):
 
 
 class TestFooterDoctorSegment(unittest.TestCase):
-    def _launch(self, doctor_check, doctor_check_seconds=3600):
+    def _launch(self, doctor_check, doctor_check_seconds=3600, now=None):
+        fixed = datetime.datetime(2026, 11, 4, 12, 0, tzinfo=datetime.timezone.utc)
         session = launch(
             make_test_container(doctor_check_seconds=doctor_check_seconds),
             doctor_check=doctor_check,
+            now=now or (lambda: fixed),
         )
         self.addCleanup(session.close)
         return session
@@ -1234,26 +1236,26 @@ class TestFooterDoctorSegment(unittest.TestCase):
     def test_says_how_many_workflows_are_out_of_date(self):
         glyph = FOOTER_GLYPHS["doctor-problems"].glyph
         two = self._launch(lambda: _behind_report(2))
-        self.assertEqual(self._segment(two)[1], "%s doctor · 2 workflows out of date" % glyph)
+        self.assertEqual(self._segment(two)[1], "%s doctor 0s ago · 2 workflows out of date" % glyph)
         one = self._launch(lambda: _behind_report(1))
-        self.assertEqual(self._segment(one)[1], "%s doctor · 1 workflow out of date" % glyph)
+        self.assertEqual(self._segment(one)[1], "%s doctor 0s ago · 1 workflow out of date" % glyph)
 
     def test_says_what_is_wrong_in_a_single_problem_category(self):
         session = self._launch(lambda: _doctor_report("orphans"))
         widget, text, style = self._segment(session)
         self.assertTrue(widget.display)
-        self.assertEqual(text, "%s doctor · 1 item left behind" % FOOTER_GLYPHS["doctor-problems"].glyph)
+        self.assertEqual(text, "%s doctor 0s ago · 1 worktree with stray processes" % FOOTER_GLYPHS["doctor-problems"].glyph)
         self.assertEqual(_colour_of(style), COLOURS["amber"].lower())
 
     def test_says_what_is_wrong_in_two_categories_in_report_order(self):
         session = self._launch(lambda: _doctor_report("config", "orphans"))
         _, text, _ = self._segment(session)
-        self.assertEqual(text, "%s doctor · 1 item left behind, 1 config problem" % FOOTER_GLYPHS["doctor-problems"].glyph)
+        self.assertEqual(text, "%s doctor 0s ago · 1 worktree with stray processes, 1 config problem" % FOOTER_GLYPHS["doctor-problems"].glyph)
 
     def test_counts_three_or_more_problem_categories_as_problems_and_skips_github(self):
         session = self._launch(lambda: _doctor_report("orphans", "config", "github", "store"))
         _, text, _ = self._segment(session)
-        self.assertEqual(text, "%s doctor · 3 problems" % FOOTER_GLYPHS["doctor-store"].glyph)
+        self.assertEqual(text, "%s doctor 0s ago · 3 problems" % FOOTER_GLYPHS["doctor-store"].glyph)
 
     def test_github_only_problems_leave_it_hidden(self):
         session = self._launch(lambda: _doctor_report("github"))
@@ -1264,7 +1266,7 @@ class TestFooterDoctorSegment(unittest.TestCase):
     def test_a_store_problem_turns_it_red(self):
         session = self._launch(lambda: _doctor_report("store"))
         _, text, style = self._segment(session)
-        self.assertEqual(text, "%s doctor · 1 store problem" % FOOTER_GLYPHS["doctor-store"].glyph)
+        self.assertEqual(text, "%s doctor 0s ago · 1 store problem" % FOOTER_GLYPHS["doctor-store"].glyph)
         self.assertEqual(_colour_of(style), COLOURS["red"].lower())
 
     def test_a_raising_doctor_shows_a_dim_failure(self):
@@ -1332,8 +1334,39 @@ class TestFooterDoctorSegment(unittest.TestCase):
         self.assertEqual(self._segment(session)[1], "")
         session.check_doctor_tick()
         self.assertEqual(
-            self._segment(session)[1], "%s doctor · 1 item left behind" % FOOTER_GLYPHS["doctor-problems"].glyph
+            self._segment(session)[1], "%s doctor 0s ago · 1 worktree with stray processes" % FOOTER_GLYPHS["doctor-problems"].glyph
         )
+
+    def test_shows_the_age_of_the_cached_result_in_minutes(self):
+        clock = {"now": datetime.datetime(2026, 11, 4, 12, 0, tzinfo=datetime.timezone.utc)}
+        session = self._launch(lambda: _doctor_report("orphans"), now=lambda: clock["now"])
+        clock["now"] += datetime.timedelta(minutes=42)
+        session.app._refresh_status_bar()
+        session.pause()
+        self.assertEqual(
+            self._segment(session)[1],
+            "%s doctor 42m ago · 1 worktree with stray processes" % FOOTER_GLYPHS["doctor-problems"].glyph,
+        )
+
+    def test_the_age_advances_on_a_poll_refresh_without_a_new_doctor_run(self):
+        clock = {"now": datetime.datetime(2026, 11, 4, 12, 0, tzinfo=datetime.timezone.utc)}
+        calls = []
+
+        def check():
+            calls.append(1)
+            return _doctor_report("orphans")
+
+        session = self._launch(check, now=lambda: clock["now"])
+        glyph = FOOTER_GLYPHS["doctor-problems"].glyph
+        clock["now"] += datetime.timedelta(seconds=30)
+        session.app._refresh_status_bar()
+        session.pause()
+        self.assertEqual(self._segment(session)[1], "%s doctor 30s ago · 1 worktree with stray processes" % glyph)
+        clock["now"] += datetime.timedelta(minutes=5)
+        session.app._refresh_status_bar()
+        session.pause()
+        self.assertEqual(self._segment(session)[1], "%s doctor 5m ago · 1 worktree with stray processes" % glyph)
+        self.assertEqual(len(calls), 1)
 
 
 class TestFooterPoolSegment(unittest.TestCase):

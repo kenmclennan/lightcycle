@@ -758,6 +758,11 @@ class LightcycleApp(App):
         else:
             self._rebuild_table(table, rows)
 
+    def _doctor_age_seconds(self):
+        if self._doctor_checked_at is None:
+            return None
+        return max(0, int(self._now().timestamp() - self._doctor_checked_at))
+
     def _render_status_bar(self, status_bar, running, breaker, hold, drain=None, github=None,
                            tick_health=None) -> None:
         status_bar.report(
@@ -777,6 +782,7 @@ class LightcycleApp(App):
             doctor_areas=self._doctor_areas,
             doctor_summary=self._doctor_summary,
             doctor_failed=self._doctor_failed,
+            doctor_age_seconds=self._doctor_age_seconds(),
             pool_tick_health=tick_health,
         )
 

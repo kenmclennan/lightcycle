@@ -119,7 +119,7 @@ class _Worktrees:
 def _uc(store, source, config, bundle):
     return DoctorUseCase(
         store, source, config, bundle, FakeFs(), FakeMachine(), _Worktrees(),
-        FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False), FakeGithubBudget())
+        FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False), FakeGithubBudget(), lambda seconds: None)
 
 
 class TestAllKeysCoversEverySeedKey(unittest.TestCase):
@@ -670,7 +670,7 @@ class TestDoctorGithubBudget(unittest.TestCase):
         return DoctorUseCase(
             FakeStore(), source, _cfg(**_ALL_KEYS), FakeWorkflowBundle(), FakeFs(), FakeMachine(),
             _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(),
-            FakeLock(running=False), budget).execute(DoctorInput())
+            FakeLock(running=False), budget, lambda seconds: None).execute(DoctorInput())
 
     def test_a_known_budget_above_the_reserve_is_ok_with_the_figures(self):
         report = self._report(FakeGithubBudget(remaining=4261, limit=5000, reset=1792503970))
@@ -702,7 +702,7 @@ class TestDoctorPrFeedbackConditions(unittest.TestCase):
         return DoctorUseCase(
             store, source, _cfg(**_ALL_KEYS), FakeWorkflowBundle(), FakeFs(), FakeMachine(),
             _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(),
-            FakeLock(running=False), FakeGithubBudget()).execute(DoctorInput())
+            FakeLock(running=False), FakeGithubBudget(), lambda seconds: None).execute(DoctorInput())
 
     def _gate(self, store):
         item = store.create_item("feature", "d")
@@ -743,13 +743,14 @@ class TestDoctorPrFeedbackConditions(unittest.TestCase):
 
 
 class TestDoctorOrphans(unittest.TestCase):
-    def _report(self, store, fs, machine, worktrees):
+    def _report(self, store, fs, machine, worktrees, sleep=None):
         source = FakeWorkflowSource()
         source.add_bundle("acme", "sha1", 1, current=True)
         config = _cfg(**_ALL_KEYS)
         return DoctorUseCase(
             store, source, config, FakeWorkflowBundle(), fs, machine, worktrees,
-            FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False), FakeGithubBudget()).execute(DoctorInput())
+            FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False), FakeGithubBudget(),
+            sleep if sleep is not None else (lambda seconds: None)).execute(DoctorInput())
 
     def test_worktree_matching_a_claimed_items_path_reports_no_problem(self):
         store = FakeStore()
@@ -876,6 +877,117 @@ class TestDoctorOrphans(unittest.TestCase):
         self._report(store, fs, _Counting(), _Worktrees())
         self.assertEqual(_Counting.calls, 1)
 
+    def _stray_store(self):
+        store = FakeStore()
+        store.add_project("acme", local_path="/repo")
+        return store
+
+    def test_a_candidate_gone_on_the_second_sample_reports_nothing_after_one_wait(self):
+        waits = []
+        fs = FakeFs(dirs={"/repo/.worktrees": ["stray"]})
+        machine = FakeMachine(cwd_pids=[{"/repo/.worktrees/stray": [7]}, {}])
+        report = self._report(self._stray_store(), fs, machine, _Worktrees(), waits.append)
+        self.assertEqual(report.problems["orphans"], [])
+        self.assertEqual(waits, [2])
+
+    def test_a_candidate_still_present_is_reported_with_the_second_samples_pids(self):
+        waits = []
+        fs = FakeFs(dirs={"/repo/.worktrees": ["stray"]})
+        machine = FakeMachine(cwd_pids=[
+            {"/repo/.worktrees/stray": [7, 8]}, {"/repo/.worktrees/stray": [8]}])
+        report = self._report(self._stray_store(), fs, machine, _Worktrees(), waits.append)
+        messages = [p.message for p in report.problems["orphans"]]
+        self.assertEqual(len(messages), 1)
+        self.assertIn("8", messages[0])
+        self.assertNotIn("7", messages[0])
+        self.assertEqual(waits, [2])
+
+    def test_only_the_candidate_still_live_is_reported_when_two_are_listed(self):
+        fs = FakeFs(dirs={"/repo/.worktrees": ["gone", "live"]})
+        machine = FakeMachine(cwd_pids=[
+            {"/repo/.worktrees/gone": [1], "/repo/.worktrees/live": [2]},
+            {"/repo/.worktrees/live": [2]}])
+        report = self._report(self._stray_store(), fs, machine, _Worktrees())
+        messages = [p.message for p in report.problems["orphans"]]
+        self.assertEqual(len(messages), 1)
+        self.assertIn("/repo/.worktrees/live", messages[0])
+
+    def test_two_projects_with_candidates_share_one_wait(self):
+        waits = []
+        store = FakeStore()
+        store.add_project("acme", local_path="/repo")
+        store.add_project("beta", local_path="/other")
+        fs = FakeFs(dirs={"/repo/.worktrees": ["a"], "/other/.worktrees": ["b"]})
+        machine = FakeMachine(cwd_pids=[
+            {"/repo/.worktrees/a": [1]}, {"/other/.worktrees/b": [2]},
+            {"/repo/.worktrees/a": [1]}, {"/other/.worktrees/b": [2]}])
+        report = self._report(store, fs, machine, _Worktrees(), waits.append)
+        self.assertEqual(len(report.problems["orphans"]), 2)
+        self.assertEqual(waits, [2])
+        self.assertEqual(len(machine.cwd_calls), 4)
+
+    def test_only_projects_with_a_candidate_are_resampled(self):
+        store = FakeStore()
+        store.add_project("acme", local_path="/repo")
+        store.add_project("beta", local_path="/other")
+        fs = FakeFs(dirs={"/repo/.worktrees": ["a"], "/other/.worktrees": []})
+        machine = FakeMachine(cwd_pids=[{"/repo/.worktrees/a": [1]}, {}, {"/repo/.worktrees/a": [1]}])
+        self._report(store, fs, machine, _Worktrees())
+        self.assertEqual(len(machine.cwd_calls), 3)
+
+    def test_no_candidate_means_no_wait_and_one_read_per_project(self):
+        waits = []
+        store = FakeStore()
+        store.add_project("acme", local_path="/repo")
+        store.add_project("beta", local_path="/other")
+        fs = FakeFs(dirs={"/repo/.worktrees": ["a"], "/other/.worktrees": ["b"]})
+        machine = FakeMachine()
+        self._report(store, fs, machine, _Worktrees(), waits.append)
+        self.assertEqual(waits, [])
+        self.assertEqual(len(machine.cwd_calls), 2)
+
+    def test_a_worktree_that_becomes_expected_during_the_wait_is_not_reported(self):
+        store = FakeStore()
+        store.add_project("acme", local_path="/repo")
+        item = store.create_item("item", "a description")
+        step = store.create_step(item=item, role="agent")
+        path = "/repo/.worktrees/%s-code" % item
+        fs = FakeFs(dirs={"/repo/.worktrees": ["%s-code" % item]})
+        machine = FakeMachine(cwd_pids={path: [5]})
+        report = self._report(
+            store, fs, machine, _Worktrees({item: path}),
+            lambda seconds: store.update_state(step, "in_progress"))
+        self.assertEqual(report.problems["orphans"], [])
+
+    def test_a_deleted_worktree_whose_pids_are_gone_reports_nothing_after_one_wait(self):
+        waits = []
+        fs = FakeFs(dirs={"/repo/.worktrees": []})
+        machine = FakeMachine(cwd_pids=[{"/repo/.worktrees/LC-9-change": [41]}, {}])
+        report = self._report(self._stray_store(), fs, machine, _Worktrees(), waits.append)
+        self.assertEqual(report.problems["orphans"], [])
+        self.assertEqual(waits, [2])
+
+    def test_a_deleted_worktree_still_live_is_reported_once_naming_the_second_samples_pids(self):
+        fs = FakeFs(dirs={"/repo/.worktrees": []})
+        machine = FakeMachine(cwd_pids=[
+            {"/repo/.worktrees/LC-9-change": [41, 42]}, {"/repo/.worktrees/LC-9-change": [42]}])
+        report = self._report(self._stray_store(), fs, machine, _Worktrees())
+        messages = [p.message for p in report.problems["orphans"]]
+        self.assertEqual(len(messages), 1)
+        self.assertIn("42", messages[0])
+        self.assertNotIn("41", messages[0])
+
+    def test_an_existing_and_a_deleted_candidate_report_only_the_live_one_with_one_wait(self):
+        waits = []
+        fs = FakeFs(dirs={"/repo/.worktrees": ["kept"]})
+        machine = FakeMachine(cwd_pids=[
+            {"/repo/.worktrees/kept": [1], "/repo/.worktrees/removed": [2]},
+            {"/repo/.worktrees/removed": [2]}])
+        report = self._report(self._stray_store(), fs, machine, _Worktrees(), waits.append)
+        messages = [p.message for p in report.problems["orphans"]]
+        self.assertEqual(len(messages), 1)
+        self.assertIn("/repo/.worktrees/removed", messages[0])
+        self.assertEqual(waits, [2])
 
 
 class TestDoctorFacets(unittest.TestCase):
@@ -884,7 +996,7 @@ class TestDoctorFacets(unittest.TestCase):
         source.add_bundle("acme", "sha1", 1, current=True)
         report = DoctorUseCase(
             store, source, _cfg(**_ALL_KEYS), FakeWorkflowBundle(), fs, FakeMachine(), _Worktrees(),
-            git if git is not None else FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False), FakeGithubBudget()).execute(DoctorInput())
+            git if git is not None else FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False), FakeGithubBudget(), lambda seconds: None).execute(DoctorInput())
         return report.problems["facets"]
 
     def _kb(self, *pages):
@@ -1027,7 +1139,7 @@ def _schedule_doctor(blocks, known=None, projects=("acme/app",), origin="acme"):
     config = _ScheduleConfig(_cfg(**_ALL_KEYS), blocks)
     uc = DoctorUseCase(
         store, _ScheduleSource(known, origin), config, _ScheduleBundle(known), FakeFs(),
-        FakeMachine(), _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False), FakeGithubBudget())
+        FakeMachine(), _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False), FakeGithubBudget(), lambda seconds: None)
     return uc.execute(DoctorInput())
 
 
@@ -1156,7 +1268,7 @@ def _lifecycle_doctor(known, config_text="", present=("acme/scripts/install.sh",
     uc = DoctorUseCase(
         FakeStore(), _ScheduleSource(known), config, _ScheduleBundle(known), fs,
         FakeMachine(), _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(),
-        FakeConfigReloadStatus(), FakeLock(running=False), FakeGithubBudget())
+        FakeConfigReloadStatus(), FakeLock(running=False), FakeGithubBudget(), lambda seconds: None)
     return uc.execute(DoctorInput())
 
 
@@ -1232,7 +1344,7 @@ class TestDoctorWorkflowLifecycle(unittest.TestCase):
         uc = DoctorUseCase(
             FakeStore(), source, config, _ScheduleBundle(known), FakeFs(), FakeMachine(),
             _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(),
-            FakeLock(running=False), FakeGithubBudget())
+            FakeLock(running=False), FakeGithubBudget(), lambda seconds: None)
         messages = [p.message for p in uc.execute(DoctorInput()).problems["config"]]
         self.assertTrue(any("workflow-acme-b-c" in m for m in messages), messages)
 
@@ -1250,7 +1362,7 @@ class TestReloadProblems(unittest.TestCase):
             _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(),
             FakeConfigReloadStatus(replace(state, pid=pid)),
             FakeLock(running=True, pid=4242), FakeGithubBudget(),
-        ).execute(DoctorInput()).problems["config"]
+         lambda seconds: None).execute(DoctorInput()).problems["config"]
 
     def _rejected(self, **kw):
         return self._report(
@@ -1289,7 +1401,7 @@ class TestDoctorHealthIcons(unittest.TestCase):
         uc = DoctorUseCase(
             FakeStore(), FakeWorkflowSource(), config, FakeWorkflowBundle(), fs, FakeMachine(),
             _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(),
-            FakeLock(running=False), FakeGithubBudget())
+            FakeLock(running=False), FakeGithubBudget(), lambda seconds: None)
         report = uc.execute(DoctorInput())
         return [p.message for p in report.problems["config"] if "tui-health-icon" in p.message], paths
 

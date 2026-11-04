@@ -44,6 +44,7 @@ from lightcycle.domain.workflows.source import parse_source_manifest
 
 CONVENTIONS_FILE = "CONVENTIONS.md"
 REVERT_HISTORY_LIMIT = 200
+ORPHAN_RECHECK_SECONDS = 2
 _VERSION_LINE = re.compile(r"^Conventions version:\s*(\d+)\s*$")
 
 
@@ -67,8 +68,9 @@ _CONDITION_SUFFIX_RE = re.compile(r" \(x\d+, last .*\)$")
 class DoctorUseCase:
     def __init__(
         self, store, workflow_source, config, workflow_bundle, fs, machine, worktrees,
-        git, guidance_sync_status, config_reload_status, lock, github_budget,
+        git, guidance_sync_status, config_reload_status, lock, github_budget, sleep,
     ):
+        self._sleep = sleep
         self._github_budget = github_budget
         self._store = store
         self._workflow_source = workflow_source
@@ -700,24 +702,51 @@ class DoctorUseCase:
 
     def _orphan_problems(self):
         expected = self._expected_worktree_paths()
-        problems = []
+        candidates = {}
         for project in self._store.list_projects():
             if not project.local_path:
                 continue
             wt_dir = self._fs.worktrees_dir(project.local_path)
             by_worktree = self._pids_by_worktree(wt_dir)
             existing = set(self._fs.list_dir(wt_dir))
-            for name in sorted(existing):
-                path = os.path.join(wt_dir, name)
-                pids = sorted(by_worktree.get(name, ()))
-                if path in expected or not pids:
-                    continue
-                problems.append(Problem(
-                    "orphans",
-                    "worktree %s has no active worker but %d live process(es): %s" % (
-                        path, len(pids), ", ".join(str(p) for p in pids)),
-                ))
-            problems += self._deleted_worktree_problems(wt_dir, existing, expected, by_worktree)
+            names = self._orphan_candidates(wt_dir, existing, expected, by_worktree)
+            if names:
+                candidates[wt_dir] = names
+        if not candidates:
+            return []
+        self._sleep(ORPHAN_RECHECK_SECONDS)
+        expected = self._expected_worktree_paths()
+        problems = []
+        for wt_dir, names in candidates.items():
+            by_worktree = self._pids_by_worktree(wt_dir)
+            existing = set(self._fs.list_dir(wt_dir))
+            problems += self._existing_orphan_problems(wt_dir, existing, expected, by_worktree, names)
+            problems += self._deleted_worktree_problems(
+                wt_dir, existing, expected, by_worktree, names)
+        return problems
+
+    def _orphan_candidates(self, wt_dir, existing, expected, by_worktree):
+        names = set()
+        for name, pids in by_worktree.items():
+            path = os.path.join(wt_dir, name)
+            if not pids or path in expected:
+                continue
+            if name in existing or not self._fs.exists(path):
+                names.add(name)
+        return names
+
+    def _existing_orphan_problems(self, wt_dir, existing, expected, by_worktree, names):
+        problems = []
+        for name in sorted(existing & names):
+            path = os.path.join(wt_dir, name)
+            pids = sorted(by_worktree.get(name, ()))
+            if path in expected or not pids:
+                continue
+            problems.append(Problem(
+                "orphans",
+                "worktree %s has no active worker but %d live process(es): %s" % (
+                    path, len(pids), ", ".join(str(p) for p in pids)),
+            ))
         return problems
 
     def _pids_by_worktree(self, wt_dir):
@@ -727,9 +756,11 @@ class DoctorUseCase:
             by_worktree.setdefault(name, set()).update(pids)
         return by_worktree
 
-    def _deleted_worktree_problems(self, wt_dir, existing, expected, by_worktree):
+    def _deleted_worktree_problems(self, wt_dir, existing, expected, by_worktree, names):
         problems = []
         for name, pids in sorted(by_worktree.items()):
+            if name not in names:
+                continue
             path = os.path.join(wt_dir, name)
             if name in existing or path in expected or self._fs.exists(path):
                 continue

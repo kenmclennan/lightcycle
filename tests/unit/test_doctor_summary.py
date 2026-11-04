@@ -31,7 +31,7 @@ class TestDoctorSummary(unittest.TestCase):
         self._singular_and_plural("config", "config problem", "config problems")
 
     def test_orphans(self):
-        self._singular_and_plural("orphans", "item left behind", "items left behind")
+        self._singular_and_plural("orphans", "worktree with stray processes", "worktrees with stray processes")
 
     def test_facets(self):
         self._singular_and_plural("facets", "facet problem", "facet problems")
@@ -58,7 +58,7 @@ class TestDoctorSummary(unittest.TestCase):
 
     def test_two_categories_join_in_report_order(self):
         problems = {"config": _findings("config", 1), "orphans": _findings("orphans", 3)}
-        self.assertEqual(doctor_summary(problems), "1 config problem, 3 items left behind")
+        self.assertEqual(doctor_summary(problems), "1 config problem, 3 worktrees with stray processes")
 
     def test_three_parts_collapse_to_a_total(self):
         problems = {
@@ -91,7 +91,7 @@ class TestDoctorSummary(unittest.TestCase):
             "orphans": _findings("orphans", 1),
             "github": _findings("github", 4),
         }
-        self.assertEqual(doctor_summary(problems), "1 store problem, 1 item left behind")
+        self.assertEqual(doctor_summary(problems), "1 store problem, 1 worktree with stray processes")
 
 
 class TestProblemLines(unittest.TestCase):
