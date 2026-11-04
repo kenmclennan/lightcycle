@@ -41,6 +41,7 @@ class StatusBar(Horizontal):
         doctor_areas=(),
         doctor_summary="",
         doctor_failed=False,
+        doctor_age_seconds=None,
         pool_tick_health=None,
     ):
         if pool_transition_kind == "start":
@@ -110,8 +111,15 @@ class StatusBar(Horizontal):
             doctor_glyph, doctor_colour = FOOTER_GLYPHS[
                 "doctor-store" if "store" in doctor_areas else "doctor-problems"
             ]
+            doctor_label = (
+                "doctor" if doctor_age_seconds is None
+                else "doctor %s ago" % tick_age_text(doctor_age_seconds)
+            )
             doctor_widget.update(
-                Text("%s doctor · %s" % (doctor_glyph, doctor_summary), style=COLOURS[doctor_colour])
+                Text(
+                    "%s %s · %s" % (doctor_glyph, doctor_label, doctor_summary),
+                    style=COLOURS[doctor_colour],
+                )
             )
             doctor_widget.display = True
         else:

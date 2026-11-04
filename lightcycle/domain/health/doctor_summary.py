@@ -3,7 +3,7 @@ _PHRASES = {
     "pins": ("item on an old workflow version", "items on an old workflow version"),
     "contract": ("workflow the engine rejects", "workflows the engine rejects"),
     "config": ("config problem", "config problems"),
-    "orphans": ("item left behind", "items left behind"),
+    "orphans": ("worktree with stray processes", "worktrees with stray processes"),
     "facets": ("facet problem", "facet problems"),
     "guidance": ("guidance problem", "guidance problems"),
 }

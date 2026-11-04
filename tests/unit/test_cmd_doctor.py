@@ -129,7 +129,7 @@ class FakeContainer:
             self.store, self.workflow_source, self.config, self.workflow_bundle,
             self.fs, self.machine, self.worktrees(),
             self.git, self.guidance_sync_status,
-            self.config_reload_status, self.lock, self.github_budget(),
+            self.config_reload_status, self.lock, self.github_budget(), lambda seconds: None,
         )
 
 

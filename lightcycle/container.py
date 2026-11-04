@@ -172,11 +172,12 @@ class Container:
             self.store, self.workflow_source, self.config, self.workflow_bundle,
             self.fs, self.machine, self.worktrees(),
             self.git, self.guidance_sync_status,
-            self.config_reload_status, self.lock, self.github_budget(),
+            self.config_reload_status, self.lock, self.github_budget(), self.sleep,
         )
 
     def doctor_for_current_thread(self):
-        return Container(config=self.config, clock=self.clock, monotonic=self.monotonic).doctor()
+        return Container(config=self.config, clock=self.clock, monotonic=self.monotonic,
+            sleep=self.sleep).doctor()
 
     def report_for_current_thread(self):
         if self._report_runner is None:
