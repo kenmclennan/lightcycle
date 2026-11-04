@@ -789,7 +789,9 @@ jobs:
         run: |
           set -euo pipefail
           export LC_HOME="$(mktemp -d)"
-          lc init >/dev/null 2>&1 || true
+          git config --global user.name "lightcycle-ci"
+          git config --global user.email "lightcycle-ci@users.noreply.github.com"
+          lc init >/dev/null
           lc workflow add "$GITHUB_WORKSPACE" --name ci-bundle --ref HEAD
           fail=0
           for f in workflows/*.md; do
@@ -797,10 +799,15 @@ jobs:
             echo "== lc workflow check ci-bundle/$name =="
             lc workflow check "ci-bundle/$name" || fail=1
             echo "== lc workflow simulate ci-bundle/$name =="
-            lc workflow simulate "ci-bundle/$name" || fail=1
+            slices_flag=""
+            if grep -q '^slices:' "$f"; then slices_flag="--slices 3 --trace"; fi
+            lc workflow simulate "ci-bundle/$name" $slices_flag || fail=1
             echo "== lc workflow describe ci-bundle/$name --mermaid =="
             lc workflow describe "ci-bundle/$name" --mermaid || fail=1
           done
+          if [ "$fail" != "0" ] && [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "::error::simulate failed against the engine's main ($ENGINE_REF) while the pinned gate is $ENGINE_PIN - this is engine drift, not a bundle defect, until proven otherwise"
+          fi
           exit "$fail"
 """)
 
