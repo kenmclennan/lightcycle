@@ -236,6 +236,24 @@ def cmd_set(argv):
     try:
         if a.state == "active":
             depends_ids = a.depends or []
+            if a.stacks_on and depends_ids:
+                sys.stderr.write(
+                    "--stacks-on and --depends cannot be combined: a stacked item is gated "
+                    "by the stack\n"
+                )
+                return 2
+            if a.stacks_on:
+                try:
+                    stack_node = container().store.get_node(a.stacks_on)
+                except KeyError:
+                    sys.stderr.write("unknown node '%s'\n" % a.stacks_on)
+                    return 1
+                if stack_node.type != "item":
+                    sys.stderr.write(
+                        "'%s' is a step, not an item; --stacks-on names the parent item - "
+                        "pass the item id, not one of its steps\n" % a.stacks_on
+                    )
+                    return 1
             for node_id in depends_ids:
                 try:
                     node = container().store.get_node(node_id)
@@ -252,7 +270,8 @@ def cmd_set(argv):
                 container().store, _flow(), container().git, container().config, container().scaffold
             ).execute(
                 ActivateItemInput(
-                    item=a.id, workflow=a.workflow, step=a.step, deps=depends_ids
+                    item=a.id, workflow=a.workflow, step=a.step, deps=depends_ids,
+                    stacks_on=a.stacks_on,
                 )
             )
             print(resp.step)

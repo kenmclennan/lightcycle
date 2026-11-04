@@ -1,6 +1,7 @@
 import contextlib
 import io
 import os
+import shutil
 import sqlite3
 import tempfile
 import unittest
@@ -44,6 +45,27 @@ class TestBusyTimeout(unittest.TestCase):
     def test_the_connection_waits_for_a_lock_for_the_shared_busy_timeout(self):
         s = make_sqlite_store()
         self.assertEqual(s._conn.execute("PRAGMA busy_timeout").fetchone()[0], BUSY_TIMEOUT_MS)
+
+
+class TestItemsStacksOnColumn(unittest.TestCase):
+    def test_a_store_without_the_column_opens_and_gains_it(self):
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root, True)
+        config = Config(environ={"LC_HOME": root, "LC_CONFIG": os.path.join(root, "config")})
+        store = SqliteStore(config)
+        db_path = store._db_path
+        store.release()
+        conn = sqlite3.connect(db_path)
+        conn.execute("ALTER TABLE items DROP COLUMN stacks_on")
+        conn.execute("INSERT INTO items (id, title, state) VALUES ('APP-1', 't', 'ready')")
+        conn.commit()
+        conn.close()
+
+        reopened = SqliteStore(config)
+
+        columns = [r[1] for r in reopened._conn.execute("PRAGMA table_info(items)").fetchall()]
+        self.assertIn("stacks_on", columns)
+        self.assertIsNone(reopened.get_item("APP-1").stacks_on)
 
 
 class TestHeldCommentsSchema(unittest.TestCase):

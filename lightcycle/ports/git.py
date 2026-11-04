@@ -46,6 +46,10 @@ class GitPort(ABC):
         pass
 
     @abstractmethod
+    def remote_branch_exists(self, root, branch):
+        pass
+
+    @abstractmethod
     def worktree_base(self, root):
         pass
 

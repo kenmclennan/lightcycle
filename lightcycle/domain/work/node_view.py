@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 from lightcycle.domain.work.artifact import Artifact
 from lightcycle.domain.work.step import Step
@@ -9,6 +9,7 @@ from lightcycle.domain.work.step import Step
 class NodeView:
     step: Step
     item_artifacts: List[Artifact]
+    stacks_on: Optional[str] = None
 
     def as_dict(self) -> dict:
         d = self.step.as_dict()

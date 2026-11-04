@@ -6,6 +6,7 @@ from lightcycle.application.work.human_node_row import HumanNodeRow
 from lightcycle.application.work.watched_steps import watched_step_ids
 from lightcycle.domain.flow import Flow
 from lightcycle.domain.work import NodeQueue, compose_step_title
+from lightcycle.domain.work.stack_order import order_stacks
 from lightcycle.ports.store import NodeNotFoundError
 
 _NO_FLOW = Flow({})
@@ -32,7 +33,12 @@ class InboxUseCase:
         steps = [t for t in self._store.all_steps() if t.id not in watched]
         rows = NodeQueue(steps).for_human(
             resolver, {"action", "blocked"}, input.n)
-        return InboxResponse(rows=[self._row(k, o, t, resolver) for (k, o), t in rows])
+        built = [self._row(k, o, t, resolver) for (k, o), t in rows]
+        return InboxResponse(rows=order_stacks(built, lambda r: r.step.item, self._stacks_on))
+
+    def _stacks_on(self, item_id):
+        item = self._item(item_id)
+        return item.stacks_on if item else None
 
     def _resolver(self):
         def resolve(t):

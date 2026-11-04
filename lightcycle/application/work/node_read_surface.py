@@ -1,8 +1,32 @@
 from lightcycle.application.flow.engine_steps import engine_outcomes_for_node
 from lightcycle.application.work.item_outputs import ItemOutputs
 from lightcycle.application.work.step_detail import StepDetail
+from lightcycle.application.work.stack_runs import StackRuns
 from lightcycle.application.work.step_inputs import StepInputs
+from lightcycle.domain.flow.flow import PROJECT_WORKSPACE
 from lightcycle.domain.work.forwarded_note import shim_notes
+from lightcycle.ports.store import NodeNotFoundError
+
+
+def _stack_of(store, flow, step, item_id):
+    parent_id = store.get_item(item_id).stacks_on
+    if not parent_id:
+        return None
+    if (flow.workspace_for_node(step) or PROJECT_WORKSPACE) != PROJECT_WORKSPACE:
+        return None
+    try:
+        parent = store.get_item(parent_id)
+    except NodeNotFoundError:
+        return None
+    run = StackRuns(store, flow).run_of(parent_id)
+    if run is None:
+        return None
+    return {
+        "parent": parent_id,
+        "parent_title": parent.title,
+        "branch": run.branch,
+        "pr": run.pr,
+    }
 
 
 def node_read_surface(store, flow, view):
@@ -28,6 +52,7 @@ def node_read_surface(store, flow, view):
         entries, presents = StepDetail(store, flow).resolve(step, inputs, output_entries)
         out["detail"] = [e.as_dict() for e in entries]
         out["detail_presents"] = presents
+        out["stack"] = _stack_of(store, flow, step, item_id)
         prev = step_inputs.previous(step)
         if prev is not None and prev.outcome:
             out["notes"] = shim_notes(prev.stage, prev.outcome, prev.report, step.notes)
@@ -42,6 +67,7 @@ def node_read_surface(store, flow, view):
                 out[field] = [i for i in artifacts[artifact_type].split("\n") if i]
     if step.type == "item":
         out["outputs"] = {"artifacts": ItemOutputs(store, flow).for_item(step.id).entry_dicts()}
+        out["stacked_children"] = [i.id for i in store.items_stacked_on(step.id)]
     out["workflow"] = store.item_workflow(item_id)
     out["passes"] = [p.as_dict() for p in store.passes_of(item_id)]
     out["runs"] = [r.as_dict() for r in store.runs_of(item_id)]

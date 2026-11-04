@@ -134,6 +134,7 @@ def record_to_item(record, blocked_by=None, child_states=()):
         blocked_by=list(blocked_by or []),
         created_at=record.get("created_at"),
         closed_at=record.get("closed_at"),
+        stacks_on=record.get("stacks_on"),
     )
 
 
@@ -390,7 +391,7 @@ class FakeStore(StorePort):
         t = self.get_node(tid)
         item = getattr(t, "item", None) or t.id
         arts = self.item_artifacts(item)
-        return NodeView(step=t, item_artifacts=list(arts))
+        return NodeView(step=t, item_artifacts=list(arts), stacks_on=self.get_item(item).stacks_on)
 
     def present_types(self, step):
         item = getattr(step, "item", None) or step.id
@@ -882,6 +883,16 @@ class FakeStore(StorePort):
         tid = b["id"]
         self._records[tid] = b
         return tid
+
+    def set_stacks_on(self, item_id, parent):
+        self._get(item_id)["stacks_on"] = parent
+
+    def items_stacked_on(self, parent):
+        ids = sorted(
+            rid for rid, rec in self._records.items()
+            if rec.get("type") == "item" and rec.get("stacks_on") == parent
+        )
+        return [self.get_item(i) for i in ids]
 
     def open_pass(self, item):
         n = max([p.n for p in self._passes if p.item == item], default=0) + 1

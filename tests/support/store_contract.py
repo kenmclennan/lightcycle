@@ -391,6 +391,29 @@ class StoreContractBase:
         ready_ids = [t.id for t in s.ready_steps()]
         self.assertIn(blocked, ready_ids)
 
+    def test_stacks_on_round_trips_and_clears(self):
+        s = self.make_store()
+        parent = s.create_item("parent", "d", shortcode="APP")
+        child = s.create_item("child", "d", shortcode="APP")
+        self.assertIsNone(s.get_item(child).stacks_on)
+        s.set_stacks_on(child, parent)
+        self.assertEqual(s.get_item(child).stacks_on, parent)
+        self.assertEqual(s.get_item(child).as_dict()["stacks_on"], parent)
+        s.set_stacks_on(child, None)
+        self.assertIsNone(s.get_item(child).stacks_on)
+
+    def test_items_stacked_on_lists_children_in_id_order(self):
+        s = self.make_store()
+        parent = s.create_item("parent", "d", shortcode="APP")
+        other = s.create_item("other", "d", shortcode="APP")
+        first = s.create_item("first", "d", shortcode="APP")
+        second = s.create_item("second", "d", shortcode="APP")
+        s.set_stacks_on(second, parent)
+        s.set_stacks_on(first, parent)
+        s.set_stacks_on(other, first)
+        self.assertEqual([i.id for i in s.items_stacked_on(parent)], sorted([first, second]))
+        self.assertEqual([i.id for i in s.items_stacked_on(second)], [])
+
     def test_dep_remove_drops_blocker(self):
         s = self.make_store()
         blocker = self._step(s, "blocker", role="agent")

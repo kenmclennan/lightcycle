@@ -3542,6 +3542,20 @@ class TestNodeDTOReadSurface(unittest.TestCase):
         for field in self.AGENT_CONSUMED_FIELDS:
             self.assertIn(field, d, "lc claim dropped field: %s" % field)
 
+    def test_show_surfaces_the_stack_fields(self):
+        tid = self._make_task()
+        step = self.store.get_node(tid)
+        parent = self.store.create_item("parent item", "a description")
+        self.store.set_stacks_on(step.item, parent)
+        rc, out, err = call(_cli_mod.cmd_show, tid)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("stack", json.loads(out))
+        rc, out, err = call(_cli_mod.cmd_show, step.item)
+        self.assertEqual(rc, 0, err)
+        d = json.loads(out)
+        self.assertEqual(d["stacks_on"], parent)
+        self.assertEqual(d["stacked_children"], [])
+
     def test_show_surfaces_the_steps_api_call_count(self):
         tid = self._make_task()
         rc, out, err = call(_cli_mod.cmd_show, tid)

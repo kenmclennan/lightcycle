@@ -13,7 +13,7 @@ class FakeGit(GitPort, TeardownLedgerPort):
                  missing_identity=(), ref=None, ref_files=None, fetch_ok=True,
                  fetch_detail="boom", added=None, changed=None, ref_shas=None,
                  history=None, approvals=None, uncommitted=None, beyond=None,
-                 remote_delete_fails=False):
+                 remote_delete_fails=False, remote_branches=()):
         self._repos = set(repos) if repos is not None else None
         self._is_repo = is_repo
         self._origin = origin
@@ -21,6 +21,7 @@ class FakeGit(GitPort, TeardownLedgerPort):
         self.dirty = set(dirty)
         self._events = events
         self._branches = set(branches)
+        self._remote_branches = set(remote_branches)
         self._base = base
         self._raises = set(raises)
         self._remote_unreadable = set(remote_unreadable)
@@ -100,6 +101,11 @@ class FakeGit(GitPort, TeardownLedgerPort):
         self.calls.append(("branch_exists", root, branch))
         self._raise_if("branch_exists", root)
         return (root, branch) in self._branches
+
+    def remote_branch_exists(self, root, branch):
+        self.calls.append(("remote_branch_exists", root, branch))
+        self._raise_if("remote_branch_exists", root)
+        return (root, branch) in self._remote_branches
 
     def worktree_base(self, root):
         self.calls.append(("worktree_base", root))

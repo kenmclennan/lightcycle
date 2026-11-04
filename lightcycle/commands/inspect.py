@@ -143,6 +143,9 @@ def cmd_status(argv):
             print("== %s (%d) ==" % (key, len(lanes[key])))
             for t in lanes[key]:
                 suffix = "  [blocked by %s]" % ", ".join(sorted(t.blocked_by)) if t.blocked_by else ""
+                parent = container().store.get_item(t.item if t.type == "step" else t.id).stacks_on
+                if parent:
+                    suffix += "  [stacked on %s]" % parent
                 step_suffix = (
                     "  %s" % display_stage(flow_service.display_for(t), t.stage) if t.stage else ""
                 )

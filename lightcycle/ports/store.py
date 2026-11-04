@@ -310,6 +310,14 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def set_stacks_on(self, item_id, parent):
+        pass
+
+    @abstractmethod
+    def items_stacked_on(self, parent):
+        pass
+
+    @abstractmethod
     def create_item(self, title, description, *, project=None, workflow=None,
                     id=None, shortcode=None):
         pass

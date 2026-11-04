@@ -60,6 +60,12 @@ def branch_exists(root, branch):
     return git_ok(root, "rev-parse", "--verify", "--quiet", "refs/heads/" + branch)
 
 
+def remote_branch_exists(root, branch):
+    if not is_git_repo(root):
+        raise GitReadError("cannot check branch %r: %s is not a readable git repo" % (branch, root))
+    return git_ok(root, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/" + branch)
+
+
 def worktree_base(root):
     if not is_git_repo(root):
         raise GitReadError("cannot read worktree base: %s is not a readable git repo" % root)
@@ -405,6 +411,9 @@ class GitAdapter(GitPort):
 
     def branch_exists(self, root, branch):
         return branch_exists(root, branch)
+
+    def remote_branch_exists(self, root, branch):
+        return remote_branch_exists(root, branch)
 
     def worktree_base(self, root):
         return worktree_base(root)

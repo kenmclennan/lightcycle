@@ -54,6 +54,7 @@ Two further additive tables, created by `CREATE TABLE IF NOT EXISTS` (no migrati
 - **review artifacts** - internal artifacts the engine validates: `review-findings` on a review step (a JSON array, see **review finding** in `docs/ontology.md`), and `caused-by` (one per source item) and at most one `found-by` on a fix item, set only through `lc new item` / `lc set`.
 - **artifacts** - typed values attached to an **item** (or to a **step**, whose declared `produces` are promoted to the item at read time): `repo`, `spec`, `brief`, `blueprint`, `spec-amendment`. Steps declare `accepts` / `produces` in their frontmatter, and the engine checks the item's artifacts against that contract before a step may close. `branch`, `pr` and `comments-handled` are NOT artifacts: `lc attach` routes them onto the item's current phase run, which is where every reader looks for them.
 - **deps** - a node can be blocked by another. A step with an unmet dependency is `blocked` and becomes claimable (`queued`, or `waiting` for a human role) only once every blocker is closed.
+- **stacks_on** - a nullable relation on an **item** naming the parent item its branch starts from and whose PR it targets, set at `lc set <item> --state active --stacks-on <parent>`. It gates like **deps** but is released by the parent's **stack run** holding a PR rather than by the parent closing, and it is exclusive with `--depends`. Returning the item to the backlog clears it.
 
 ```mermaid
 graph LR
