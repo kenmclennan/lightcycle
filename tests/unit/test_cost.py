@@ -39,12 +39,23 @@ class TestCacheHitRate(unittest.TestCase):
 
 
 class TestStepCost(unittest.TestCase):
-    def test_human_role_short_circuits_regardless_of_turn_or_cost_data(self):
+    def test_human_role_step_that_ran_as_an_agent_is_applicable(self):
         step = _FakeStep(role="human", turn_count=5, usage_cost_usd=Cost.from_usd(5.0), usage_cost_basis="list")
+        cost = step_cost(step, {})
+        self.assertTrue(cost.applicable)
+        self.assertTrue(cost.has_run)
+        self.assertTrue(cost.recorded)
+        self.assertEqual(cost.turn_count, 5)
+
+    def test_human_role_step_with_a_basis_but_no_turns_is_applicable(self):
+        step = _FakeStep(role="human", turn_count=0, usage_cost_basis="unpriced")
+        self.assertTrue(step_cost(step, {}).applicable)
+
+    def test_human_gate_that_never_ran_is_not_applicable(self):
+        step = _FakeStep(role="human", turn_count=0)
         cost = step_cost(step, {})
         self.assertFalse(cost.applicable)
         self.assertFalse(cost.has_run)
-        self.assertFalse(cost.recorded)
         self.assertEqual(cost.turn_count, 0)
 
     def test_role_none_is_treated_as_human_not_as_agent_not_yet_run(self):

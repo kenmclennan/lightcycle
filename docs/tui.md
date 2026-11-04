@@ -58,6 +58,8 @@ A step always renders one level below its item - never a pass row, never a secon
 
 The node the hub is open for is highlighted wherever it falls. As you scroll past its parent item, that item's row stays pinned to the top, so context is never lost. Enter or the right arrow opens whatever is highlighted into its own hub.
 
+A step that ran as an agent step and was then parked for a human keeps its turns and cost on its row, and its time cell shows the worker's wall and active time followed by the human wait, for example `57s (57s active) · waited 22s`. A human gate that never ran shows its wait alone and no turns or cost; an agent step shows wall and active time alone. The Cost tab follows the same rule.
+
 ## Roles, and what the TUI does with them
 
 A step's role is `agent`, `human`, or `engine`.

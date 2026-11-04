@@ -41,8 +41,12 @@ class StepCost:
     api_calls: Optional[int] = None
 
 
+def _ran_as_agent(step) -> bool:
+    return step.turn_count > 0 or step.usage_cost_basis is not None
+
+
 def step_cost(step, tool_usage) -> StepCost:
-    if _not_agent(step):
+    if _not_agent(step) and not (step.role == "human" and _ran_as_agent(step)):
         return StepCost(
             applicable=False, has_run=False, recorded=False, turn_count=0,
             input_tokens=0, output_tokens=0, cache_read_tokens=0, cache_creation_tokens=0,

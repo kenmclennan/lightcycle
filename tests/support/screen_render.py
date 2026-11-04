@@ -945,6 +945,39 @@ def _hub_hierarchy_time(size):
     return _open_hub(_launch(store, size=size), item, tab="workflow")
 
 
+def _hierarchy_parked_ran_store():
+    clock = {"now": _at(40)}
+    store = DemoStore(now=lambda: clock["now"])
+    item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
+
+    ran = store.step("LC-143.3.1", stage="spec-writer", role="agent", item=item)
+    store.claim_ready("agent")
+    store.accrue_active_seconds([ran], 60 * 20)
+    store.record_usage(ran, 1000, 200, 0, 0, 2.91, "list", None)
+    store.record_attribution(ran, 20, {})
+    clock["now"] = _at(16)
+    store.complete_node(ran, "done")
+    store._records[ran]["closed_at"] = _at(16)
+
+    clock["now"] = _at(14)
+    parked = store.step("LC-143.3.4", stage="watch-ci", role="agent", item=item)
+    store.claim_ready("agent")
+    store.accrue_active_seconds([parked], 57)
+    store.record_usage(parked, 500, 100, 0, 0, 0.23, "list", None)
+    store.record_attribution(parked, 9, {})
+    clock["now"] = _at(13)
+    route_to_human(store, parked, "BLOCKED: re-run the CI job")
+
+    clock["now"] = _at(6)
+    store.step("LC-143.3.6", stage="code-await-merge", role="human", item=item)
+    return store, item
+
+
+def _hub_hierarchy_parked_ran(size):
+    store, item = _hierarchy_parked_ran_store()
+    return _open_hub(_launch(store, size=size), item, tab="workflow")
+
+
 def _stacked_hierarchy_time_store():
     store = DemoStore(now=lambda: _at(12))
     item = store.item("LC-290.1", LONG_ITEM_TITLE, project="lightcycle")
@@ -1682,6 +1715,7 @@ SCREENS = {
     "hub#workflow-cost": _hub_hierarchy_cost,
     "hub#workflow-human-square": _hub_hierarchy_human_square,
     "hub#workflow-time": _hub_hierarchy_time,
+    "hub#workflow-parked-ran": _hub_hierarchy_parked_ran,
     "hub#workflow-stacked-time": _hub_hierarchy_stacked_time,
     "hub#active-log": _hub_active_log,
     "hub#log-finished": _hub_log_finished,
