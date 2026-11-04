@@ -73,9 +73,15 @@ class WorktreeService:
     def _run(self, node, create=False):
         item = self._item_of(node)
         phase = self._phase(node)
-        run = self._store.current_run(item, phase)
+        slice = getattr(node, "slice", 0)
+        run = self._store.current_run(item, phase, slice)
         if run is not None or not create:
             return run
+        if slice > 0:
+            raise UseCaseError(
+                "cannot set up workspace for %s: slice %d has no run in phase %s"
+                % (item, slice, phase)
+            )
         current = self._store.current_pass(item)
         pid = current.id if current else self._store.open_pass(item)
         return self._store.get_run(self._store.open_run(item, pid, phase))
@@ -99,6 +105,8 @@ class WorktreeService:
             return None if run.round <= 1 else "r%d" % run.round
         n = pass_number(run.pass_id)
         key = run.phase if n <= 1 else "%s-%d" % (run.phase, n)
+        if run.slice > 0:
+            key = "%s-s%d" % (key, run.slice)
         return key if run.round <= 1 else "%s-r%d" % (key, run.round)
 
     def worktree_path(self, node):
@@ -174,9 +182,31 @@ class WorktreeService:
             return
         self._store.set_branch(run.id, branch)
 
+    def _slice_base(self, node, item, target):
+        run = self._run(node)
+        if run is None or run.base_slice is None:
+            return False
+        siblings = [
+            r for r in self._store.runs_of(item, run.pass_id)
+            if r.phase == run.phase and r.slice == run.base_slice
+        ]
+        base_run = siblings[-1] if siblings else None
+        if base_run is None or base_run.state == RunState.MERGED or not base_run.branch:
+            return None
+        if not self._git.remote_branch_exists(target, base_run.branch):
+            raise UseCaseError(
+                "cannot set up workspace for %s: the base slice %s's branch %s no longer "
+                "exists on origin" % (item, base_run.slice_name, base_run.branch)
+            )
+        return "origin/" + base_run.branch
+
     def _stacked_base(self, node, item, target):
         if self._flow is None or not self._uses_item_repo(node):
             return None
+        if getattr(node, "slice", 0) > 0:
+            sliced = self._slice_base(node, item, target)
+            if sliced is not False:
+                return sliced
         parent_id = self._item(item).stacks_on
         if not parent_id:
             return None

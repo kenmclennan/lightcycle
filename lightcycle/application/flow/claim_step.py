@@ -156,7 +156,7 @@ class ClaimStepUseCase:
         phase = self._flow.phase_for(t)
         if phase is None:
             return
-        run = self._store.current_run(t.item or t.id, phase)
+        run = self._store.current_run(t.item or t.id, phase, t.slice)
         if run is None or not run.pr:
             return
         try:
@@ -171,7 +171,7 @@ class ClaimStepUseCase:
         phase = self._flow.phase_for(t)
         if ws is None or phase is None:
             return True
-        run = self._store.current_run(t.item or t.id, phase)
+        run = self._store.current_run(t.item or t.id, phase, t.slice)
         if run is None:
             return True
         if run.branch == branch and self._worktrees.path_for_run(run) == ws:

@@ -34,6 +34,10 @@ class InboxUseCase:
         rows = NodeQueue(steps).for_human(
             resolver, {"action", "blocked"}, input.n)
         built = [self._row(k, o, t, resolver) for (k, o), t in rows]
+        first_seen = {}
+        for r in built:
+            first_seen.setdefault(r.step.item, len(first_seen))
+        built.sort(key=lambda r: (first_seen[r.step.item], r.slice))
         return InboxResponse(rows=order_stacks(built, lambda r: r.step.item, self._stacks_on))
 
     def _stacks_on(self, item_id):
@@ -58,12 +62,23 @@ class InboxUseCase:
             pr=self._pr_for(t, resolver),
             title=compose_step_title(t.stage, item.title if item else None),
             behind=behind_reason(self._store, t.id),
+            slice=t.slice,
+            slice_name=self._slice_name(t),
+            item_title=item.title if item else None,
+        )
+
+    def _slice_name(self, t):
+        if t.slice <= 0 or not t.item or t.pass_id is None:
+            return None
+        return next(
+            (r.slice_name for r in self._store.runs_of(t.item, t.pass_id) if r.slice == t.slice),
+            None,
         )
 
     def _pr_for(self, t, resolver):
         if not t.item:
             return None
-        run = self._store.current_run(t.item, resolver(t).step_def(t.stage).phase)
+        run = self._store.current_run(t.item, resolver(t).step_def(t.stage).phase, t.slice)
         return run.pr if run else None
 
     def _item(self, item_id):

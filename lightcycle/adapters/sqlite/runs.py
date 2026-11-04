@@ -44,25 +44,28 @@ class RunsAggregate:
         )
         self._commit()
 
-    def open_run(self, item, pid, phase):
+    def open_run(self, item, pid, phase, slice=0, slice_name=None, base_slice=None):
         open_sql = (
             "SELECT id FROM phase_runs WHERE item = ? AND pass_id = ? AND phase IS ? "
-            "AND state = 'open' ORDER BY opened_at DESC, rowid DESC LIMIT 1"
+            "AND slice = ? AND state = 'open' ORDER BY opened_at DESC, rowid DESC LIMIT 1"
         )
-        found = self._conn.execute(open_sql, (item, pid, phase)).fetchone()
+        found = self._conn.execute(open_sql, (item, pid, phase, slice)).fetchone()
         if found:
             return found[0]
         (existing,) = self._conn.execute(
-            "SELECT COUNT(*) FROM phase_runs WHERE item = ? AND pass_id = ? AND phase IS ?",
-            (item, pid, phase),
+            "SELECT COUNT(*) FROM phase_runs WHERE item = ? AND pass_id = ? AND phase IS ? "
+            "AND slice = ?",
+            (item, pid, phase, slice),
         ).fetchone()
         self._conn.execute(
-            "INSERT OR IGNORE INTO phase_runs (id, item, pass_id, phase, state, opened_at) "
-            "VALUES (?, ?, ?, ?, 'open', ?)",
-            (run_id(pid, phase, existing + 1), item, pid, phase, self._now()),
+            "INSERT OR IGNORE INTO phase_runs "
+            "(id, item, pass_id, phase, state, opened_at, slice, slice_name, base_slice) "
+            "VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?)",
+            (run_id(pid, phase, existing + 1, slice), item, pid, phase, self._now(),
+             slice, slice_name, base_slice),
         )
         self._commit()
-        return self._conn.execute(open_sql, (item, pid, phase)).fetchone()[0]
+        return self._conn.execute(open_sql, (item, pid, phase, slice)).fetchone()[0]
 
     def _run_row_to_record(self, row):
         return PhaseRun(*row)
@@ -73,11 +76,11 @@ class RunsAggregate:
         ).fetchone()
         return self._run_row_to_record(row) if row else None
 
-    def current_run(self, item, phase):
+    def current_run(self, item, phase, slice=0):
         row = self._conn.execute(
-            "%s WHERE item = ? AND phase IS ? AND state = 'open' "
+            "%s WHERE item = ? AND phase IS ? AND slice = ? AND state = 'open' "
             "ORDER BY opened_at DESC, rowid DESC LIMIT 1" % _RUN_SELECT,
-            (item, phase),
+            (item, phase, slice),
         ).fetchone()
         return self._run_row_to_record(row) if row else None
 

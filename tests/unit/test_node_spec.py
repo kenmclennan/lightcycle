@@ -27,6 +27,7 @@ class TestNodeSpec(unittest.TestCase):
                 "item": "s-1",
                 "deps": ["t-1", "t-2"],
                 "previous": "t-1",
+                "slice": 0,
             },
         )
 

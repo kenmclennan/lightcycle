@@ -520,6 +520,9 @@ class SqliteStore(
         "phase_runs": (
             ("comments_dispatched_through", "TEXT"),
             ("comments_handled_through", "TEXT"),
+            ("slice", "INTEGER NOT NULL DEFAULT 0"),
+            ("slice_name", "TEXT"),
+            ("base_slice", "INTEGER"),
         ),
         "steps": (
             ("active_seconds", "REAL"),
@@ -537,6 +540,7 @@ class SqliteStore(
             ("previous_step", "TEXT"),
             ("report", "TEXT"),
             ("log_path", "TEXT"),
+            ("slice", "INTEGER NOT NULL DEFAULT 0"),
         ),
         "usage_backfill_log": (
             ("had_result_line", "INTEGER"),
@@ -633,6 +637,7 @@ class SqliteStore(
             previous_step=d["previous_step"],
             report=d["report"],
             log_path=d["log_path"],
+            slice=d["slice"],
         )
 
     def _row_to_item(self, row, artifacts, blocked_by, child_states):

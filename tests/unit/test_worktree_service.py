@@ -871,6 +871,9 @@ class _TwoPhaseFlow:
     def phase_for(self, node):
         return self._PHASES.get(getattr(node, "stage", None))
 
+    def slicing(self, name=None):
+        return None, None
+
     def phase_for_stage(self, stage, name=None):
         return self._PHASES.get(stage)
 

@@ -3556,6 +3556,18 @@ class TestNodeDTOReadSurface(unittest.TestCase):
         self.assertEqual(d["stacks_on"], parent)
         self.assertEqual(d["stacked_children"], [])
 
+    def test_show_surfaces_the_slice_fields(self):
+        tid = self._make_task()
+        step = self.store.get_node(tid)
+        rc, out, err = call(_cli_mod.cmd_show, tid)
+        self.assertEqual(rc, 0, err)
+        shown = json.loads(out)
+        self.assertEqual(shown["slice"], 0)
+        self.assertIsNone(shown["slice_name"])
+        rc, out, err = call(_cli_mod.cmd_show, step.item)
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(json.loads(out)["slices"], [])
+
     def test_show_surfaces_the_steps_api_call_count(self):
         tid = self._make_task()
         rc, out, err = call(_cli_mod.cmd_show, tid)

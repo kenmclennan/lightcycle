@@ -11,7 +11,7 @@ from lightcycle.domain.feedback.review_yield import (
     parse_findings,
 )
 from lightcycle.domain.guidance.guidance import parse_citation
-from lightcycle.domain.runs import RUN_FIELDS
+from lightcycle.domain.runs import RUN_FIELDS, parse_slices
 from lightcycle.domain.work import State
 from lightcycle.domain.workspace.isolation import has_worktrees_component
 from lightcycle.ports.store import NodeNotFoundError, ProjectResolutionError
@@ -51,6 +51,7 @@ class LinkArtifactUseCase:
         if input.atype == GUIDANCE_CITED:
             self._record_citation(input)
             return
+        self._validate_slices(input)
         if input.atype in (CAUSED_BY, FOUND_BY):
             raise UseCaseError(
                 "'%s' is set when creating or editing an item: use `lc new item --%s` or "
@@ -72,6 +73,26 @@ class LinkArtifactUseCase:
             )
         if input.atype == "repo":
             self._derive_project_if_unset(input.item, input.value)
+
+    def _validate_slices(self, input):
+        if self._flow is None:
+            return
+        try:
+            node = self._store.get_node(input.item)
+        except (KeyError, NodeNotFoundError):
+            return
+        if node.type != "item" or self._flow.workflow_for(node) is None:
+            return
+        graph = self._flow.graph_for(node)
+        if graph is None or graph.slices_artifact != input.atype:
+            return
+        try:
+            parse_slices(input.value)
+        except ValueError as e:
+            raise UseCaseError(
+                "the %s artifact on '%s' is not a valid slice list: %s"
+                % (input.atype, input.item, e)
+            )
 
     def _record_citation(self, input):
         step_id = input.item
@@ -218,13 +239,20 @@ class LinkArtifactUseCase:
 
     def _current_run(self, item, acting=None):
         if acting is not None and self._flow.phase_for(acting) is not None:
-            return self._store.current_run(item, self._flow.phase_for(acting))
+            return self._store.current_run(item, self._flow.phase_for(acting), acting.slice)
         open_runs = self._store.open_runs_of(item)
         if not open_runs:
             return None
         if self._flow is None or len(open_runs) == 1:
             return open_runs[-1]
         phase = self._active_phase(item)
+        in_phase = [r for r in open_runs if r.phase == phase]
+        if len([r for r in in_phase if r.slice > 0]) > 1:
+            raise UseCaseError(
+                "item '%s' has open runs for slices %s of phase '%s'; pass the acting step to "
+                "choose one" % (item, ", ".join(
+                    str(r.slice_name or r.slice) for r in in_phase if r.slice > 0), phase)
+            )
         return next((r for r in reversed(open_runs) if r.phase == phase), open_runs[-1])
 
     def _active_phase(self, item):

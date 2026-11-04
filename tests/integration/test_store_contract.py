@@ -68,6 +68,36 @@ class TestItemsStacksOnColumn(unittest.TestCase):
         self.assertIsNone(reopened.get_item("APP-1").stacks_on)
 
 
+class TestSliceColumns(unittest.TestCase):
+    def test_a_store_without_the_columns_opens_and_gains_them(self):
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root, True)
+        config = Config(environ={"LC_HOME": root, "LC_CONFIG": os.path.join(root, "config")})
+        store = SqliteStore(config)
+        db_path = store._db_path
+        store.release()
+        conn = sqlite3.connect(db_path)
+        for column in ("slice", "slice_name", "base_slice"):
+            conn.execute("ALTER TABLE phase_runs DROP COLUMN %s" % column)
+        conn.execute("ALTER TABLE steps DROP COLUMN slice")
+        conn.execute("INSERT INTO items (id, title, state) VALUES ('APP-1', 't', 'ready')")
+        conn.execute(
+            "INSERT INTO phase_runs (id, item, pass_id, phase, state) "
+            "VALUES ('APP-1.p1.code', 'APP-1', 'APP-1.p1', 'code', 'open')")
+        conn.commit()
+        conn.close()
+
+        reopened = SqliteStore(config)
+
+        for table, column in (("phase_runs", "slice"), ("phase_runs", "slice_name"),
+                              ("phase_runs", "base_slice"), ("steps", "slice")):
+            columns = [r[1] for r in reopened._conn.execute(
+                "PRAGMA table_info(%s)" % table).fetchall()]
+            self.assertIn(column, columns)
+        run = reopened.get_run("APP-1.p1.code")
+        self.assertEqual((run.slice, run.slice_name, run.base_slice), (0, None, None))
+
+
 class TestHeldCommentsSchema(unittest.TestCase):
     def test_the_two_named_indexes_exist_and_there_is_no_foreign_key(self):
         s = make_sqlite_store()

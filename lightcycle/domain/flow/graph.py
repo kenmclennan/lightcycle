@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from types import MappingProxyType
+from typing import Optional
 
 
 _SECTIONS = ("nodes", "edges", "hooks", "signals", "display", "pass-end", "disposition")
@@ -31,6 +32,8 @@ class WorkflowGraph:
     display: dict = field(default_factory=dict)
     pass_ends: frozenset = field(default_factory=frozenset)
     disposition: dict = field(default_factory=dict)
+    sliced_phase: Optional[str] = None
+    slices_artifact: Optional[str] = None
 
     def __post_init__(self):
         object.__setattr__(self, "nodes", MappingProxyType(dict(self.nodes)))
@@ -95,6 +98,8 @@ def parse_graph(text):
     display = {}
     pass_ends = set()
     disposition = {}
+    sliced_phase = None
+    slices_artifact = None
     section = None
     for line_no, line in enumerate(text.splitlines(), start=1):
         if not line.strip():
@@ -108,6 +113,14 @@ def parse_graph(text):
                 requires = frozenset(value.split())
             elif head == "provides":
                 provides = frozenset(value.split())
+            elif head == "slices":
+                tokens = value.split()
+                if len(tokens) != 3 or tokens[1] != "from":
+                    raise ValueError(
+                        "line %d: slices expected '<phase> from <artifact-type>', got %r"
+                        % (line_no, value)
+                    )
+                sliced_phase, slices_artifact = tokens[0], tokens[2]
             elif head == "workspace" and value:
                 if len(value.split()) > 1:
                     raise ValueError(
@@ -178,4 +191,5 @@ def parse_graph(text):
         nodes=nodes, edges=edges, hooks=hooks, signals=signals,
         workspaces=workspaces, phases=phases, primary=primary, display=display,
         pass_ends=frozenset(pass_ends), disposition=disposition,
+        sliced_phase=sliced_phase, slices_artifact=slices_artifact,
     )

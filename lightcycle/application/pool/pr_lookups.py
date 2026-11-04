@@ -30,12 +30,15 @@ def skip_unpinned(store, flow_service, node):
 
 def run_of(store, flow_service, node):
     phase = flow_for(flow_service, node).step_def(getattr(node, "stage", None)).phase
-    return store.current_run(node.item, phase)
+    return store.current_run(node.item, phase, getattr(node, "slice", 0))
 
 
-def active_step_at(store, item_id, stage):
+def active_step_at(store, item_id, stage, slice=0):
     for child in store.children(item_id):
-        if child.type == "step" and child.state != State.DONE and child.stage == stage:
+        if (
+            child.type == "step" and child.state != State.DONE and child.stage == stage
+            and child.slice == slice
+        ):
             return child
     return None
 
@@ -47,12 +50,13 @@ def active_step_any(store, item_id):
     return None
 
 
-def active_step_in_phase(store, flow_service, item_id, phase):
+def active_step_in_phase(store, flow_service, item_id, phase, slice=None):
     for child in store.children(item_id):
         if (
             child.type == "step"
             and child.state != State.DONE
             and flow_service.phase_for(child) == phase
+            and (slice is None or child.slice == slice)
         ):
             return child
     return None

@@ -51,8 +51,8 @@ class CheckContentPinUseCase:
         unauthorized = {f for f in dropped if f not in authorized}
         return unauthorized, False, False
 
-    def execute(self, item, pr_value, phase):
-        run = self._store.current_run(item.id, phase)
+    def execute(self, item, pr_value, phase, slice=0):
+        run = self._store.current_run(item.id, phase, slice)
         if run is None:
             return
         head = self._github.head_sha(pr_value)

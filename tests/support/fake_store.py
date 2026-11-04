@@ -109,6 +109,7 @@ def record_to_step(record, blocked_by=None):
         previous_step=record.get("previous_step"),
         report=record.get("report"),
         log_path=record.get("log_path"),
+        slice=record.get("slice", 0),
     )
 
 
@@ -795,7 +796,7 @@ class FakeStore(StorePort):
         self._schedule_run_requests.discard(schedule_id)
 
     def create_step(self, *, stage=None, role=None, item=None, deps=None,
-                    id=None, previous=None):
+                    id=None, previous=None, slice=0):
         if item is None:
             raise ValueError("create_step requires an item")
         fields = dict(
@@ -803,6 +804,7 @@ class FakeStore(StorePort):
             parent=item,
             labels=labels_for(role=role, stage=stage),
             previous_step=previous,
+            slice=slice,
         )
         if id is not None:
             fields["id"] = id
@@ -814,6 +816,9 @@ class FakeStore(StorePort):
             for dep in deps:
                 self.dep_add(tid, dep)
         return tid
+
+    def set_step_slice(self, step, slice):
+        self._get(step)["slice"] = slice
 
     def set_report(self, step, text):
         self._get(step)["report"] = text or None
@@ -917,22 +922,27 @@ class FakeStore(StorePort):
             for p in self._passes
         ]
 
-    def open_run(self, item, pid, phase):
-        same = [r for r in self._runs if r.item == item and r.pass_id == pid and r.phase == phase]
+    def open_run(self, item, pid, phase, slice=0, slice_name=None, base_slice=None):
+        same = [
+            r for r in self._runs
+            if r.item == item and r.pass_id == pid and r.phase == phase and r.slice == slice
+        ]
         found = next((r for r in reversed(same) if r.is_open), None)
         if found:
             return found.id
-        rid = run_id(pid, phase, len(same) + 1)
-        self._runs.append(PhaseRun(rid, item, pid, phase, opened_at=self._now()))
+        rid = run_id(pid, phase, len(same) + 1, slice)
+        self._runs.append(PhaseRun(
+            rid, item, pid, phase, opened_at=self._now(),
+            slice=slice, slice_name=slice_name, base_slice=base_slice))
         return rid
 
     def get_run(self, rid):
         return next((r for r in self._runs if r.id == rid), None)
 
-    def current_run(self, item, phase):
+    def current_run(self, item, phase, slice=0):
         return next(
             (r for r in reversed(self._runs)
-             if r.item == item and r.phase == phase and r.is_open),
+             if r.item == item and r.phase == phase and r.slice == slice and r.is_open),
             None,
         )
 

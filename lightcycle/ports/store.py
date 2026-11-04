@@ -281,7 +281,11 @@ class StorePort(ABC):
 
     @abstractmethod
     def create_step(self, *, stage=None, role=None, item=None, deps=None, id=None,
-                    previous=None):
+                    previous=None, slice=0):
+        pass
+
+    @abstractmethod
+    def set_step_slice(self, step, slice):
         pass
 
     @abstractmethod
@@ -343,7 +347,7 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def open_run(self, item, pid, phase):
+    def open_run(self, item, pid, phase, slice=0, slice_name=None, base_slice=None):
         pass
 
     @abstractmethod
@@ -351,7 +355,7 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def current_run(self, item, phase):
+    def current_run(self, item, phase, slice=0):
         pass
 
     @abstractmethod
