@@ -20,6 +20,7 @@ from lightcycle.application.inspect.doctor import DoctorUseCase
 from lightcycle.application.pool.accrual_gates import AccrualGatesUseCase
 from lightcycle.application.pool.cadence_gates import CadenceGatesUseCase
 from lightcycle.application.pool.release_stacked_items import ReleaseStackedItemsUseCase
+from lightcycle.application.pool.restack_stacks import RestackStacksUseCase
 from lightcycle.application.pool.stop_pool import StopPoolUseCase
 from lightcycle.application.workflows.script_tooling import WorkflowScripts
 from lightcycle.application.workflows.simulate import WorkflowSimulateUseCase
@@ -253,6 +254,8 @@ class Container:
                     self.config.release_hold_note_seconds)),
             stranded_gate=CloseStrandedItemsUseCase(self.store, worktrees),
             release_stacked=ReleaseStackedItemsUseCase(self.store, flow),
+            restack=RestackStacksUseCase(
+                self.store, self.git, snapshot, worktrees, flow, complete, snapshot.mark_stale),
             config_reload=ReloadConfigUseCase(
                 self.config, self.config_reload_status, os.getpid()),
             sweep=self.sweep(flow=flow, worktrees=worktrees),

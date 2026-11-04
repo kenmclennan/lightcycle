@@ -11,6 +11,10 @@ from lightcycle.ports.git import GitReadError
 from lightcycle.ports.store import ProjectResolutionError
 
 
+STACK_BASE = "stack-base"
+STACK_BRANCH_RETAINED_LABEL = "stack-branch-retained"
+
+
 class WorktreeService:
     def __init__(self, store, git, fs, config, flow=None, scaffold=None):
         self._store = store
@@ -129,7 +133,9 @@ class WorktreeService:
         path = self.path_for_run(run)
         self._git.remove_worktree(target, path)
         self._git.delete_branch(target, run.branch)
-        if delete_remote:
+        if delete_remote and self._retained_for_children(run):
+            self._store.label_add(run.item, STACK_BRANCH_RETAINED_LABEL)
+        elif delete_remote:
             outcome = self._git.delete_remote_branch(target, run.branch)
             if outcome is not None and not outcome.ok:
                 print(
@@ -137,6 +143,17 @@ class WorktreeService:
                     % (run.branch, outcome.detail),
                     file=sys.stderr,
                 )
+
+    def _retained_for_children(self, run):
+        if self._flow is None:
+            return False
+        if not any(c.state != State.DONE for c in self._stacked_children(run.item)):
+            return False
+        stack_run = StackRuns(self._store, self._flow).run_of(run.item)
+        return stack_run is not None and stack_run.id == run.id
+
+    def _stacked_children(self, item):
+        return self._store.items_stacked_on(item)
 
     def release_interrupted(self, run):
         if run is None or run.state == RunState.OPEN or run.branch is None:
@@ -176,6 +193,14 @@ class WorktreeService:
             )
         return "origin/" + run.branch
 
+    def _stack_sha(self, target, stacked):
+        if not stacked:
+            return None
+        try:
+            return self._git.ref_sha(target, stacked)
+        except GitReadError:
+            return None
+
     def ensure(self, node):
         item = self._item_of(node)
         if self._uses_item_repo(node) and not self.has_repo(item):
@@ -211,9 +236,12 @@ class WorktreeService:
                 raise UseCaseError(
                     "cannot set up workspace for %s: no base branch found in %s" % (item, target)
                 )
-            base = self._stacked_base(node, item, target) or base
+            stacked = self._stacked_base(node, item, target)
+            base = stacked or base
+            stack_sha = self._stack_sha(target, stacked)
         else:
             base = None
+            stack_sha = None
         self._scaffold.make_dir(self._fs.worktrees_dir(target))
         try:
             common = self._git.common_dir(target)
@@ -227,6 +255,8 @@ class WorktreeService:
             raise UseCaseError("cannot set up workspace for %s: %s" % (item, outcome.detail))
         if is_new_branch:
             self._git.set_branch_upstream(target, branch)
+            if stack_sha:
+                self._store.replace_artifact(item, STACK_BASE, stack_sha, internal=True)
         return path
 
     def context_path(self):

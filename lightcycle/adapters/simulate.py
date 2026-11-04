@@ -1,7 +1,7 @@
 import os
 from types import SimpleNamespace
 
-from lightcycle.ports.git import GitOutcome, GitPort
+from lightcycle.ports.git import RESTACK_PUSHED, GitOutcome, GitPort, RestackOutcome
 from lightcycle.ports.github import Comment, GitHubEventsPort, PrSync, ReadFailure
 from lightcycle.ports.teardown_ledger import TeardownLedgerPort
 from lightcycle.ports.workers import WorkersPort
@@ -183,6 +183,14 @@ class RecordingGit(GitPort, TeardownLedgerPort):
         self._record("commits_beyond", root, base, branch)
         return []
 
+    def merge_base(self, root, a, b):
+        self._record("merge_base", root, a, b)
+        return "sim-sha"
+
+    def restack(self, root, steps):
+        self._record("restack", root, tuple(steps))
+        return RestackOutcome(RESTACK_PUSHED, None, tips={s.branch: "sim-sha" for s in steps})
+
 
 class ScriptedGitHub(GitHubEventsPort):
     def __init__(self, login="reviewer"):
@@ -277,6 +285,9 @@ class ScriptedGitHub(GitHubEventsPort):
 
     def update_branch(self, pr, expected_head_sha):
         return ReadFailure(-1, "branch updates are not simulated")
+
+    def set_pr_base(self, pr, base):
+        return ReadFailure(-1, "base edits are not simulated")
 
 
 class NullWorkers(WorkersPort):

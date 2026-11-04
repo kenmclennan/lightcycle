@@ -587,6 +587,23 @@ class GitHubEventsAdapter(GitHubEventsPort):
             return ReadFailure(result.returncode, result.stderr)
         return None
 
+    def set_pr_base(self, pr: str, base: str) -> Union[None, ReadFailure]:
+        parts = _repo_parts(pr)
+        if not parts:
+            return ReadFailure(-1, "pr is not a parseable GitHub PR URL: %r" % pr)
+        owner, repo, number = parts
+        try:
+            result = subprocess.run(
+                ["gh", "api", "-X", "PATCH",
+                 "repos/%s/%s/pulls/%s" % (owner, repo, number),
+                 "-f", "base=%s" % base],
+                capture_output=True, text=True, timeout=_GH_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            return _timeout_read_failure()
+        if result.returncode != 0:
+            return ReadFailure(result.returncode, result.stderr)
+        return None
+
     def _gh_api_lines(self, path, jq, paginate=False):
         argv = ["gh", "api"] + (["--paginate"] if paginate else []) + [path, "--jq", jq]
         try:

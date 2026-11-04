@@ -162,6 +162,10 @@ class GitHubEventsPort(ABC):
         pass
 
     @abstractmethod
+    def set_pr_base(self, pr: str, base: str) -> Union[None, ReadFailure]:
+        pass
+
+    @abstractmethod
     def list_prs(self, repo: str, cutoff: float) -> Union[Tuple[ListedPr, ...], ReadFailure]:
         pass
 

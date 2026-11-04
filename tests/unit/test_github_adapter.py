@@ -1098,6 +1098,31 @@ class TestRateLimit(unittest.TestCase):
         self.assertIsInstance(result, ReadFailure)
 
 
+class TestSetPrBase(unittest.TestCase):
+    def setUp(self):
+        self.adapter = GitHubEventsAdapter()
+
+    def test_argv_patches_the_pull_request_base(self):
+        mock_run = MagicMock(return_value=_proc("{}"))
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            result = self.adapter.set_pr_base(_PR, "main")
+
+        self.assertIsNone(result)
+        self.assertEqual(
+            mock_run.call_args[0][0],
+            ["gh", "api", "-X", "PATCH", "repos/x/y/pulls/7", "-f", "base=main"],
+        )
+
+    def test_refusal_is_read_failure(self):
+        mock_run = MagicMock(return_value=_proc("", returncode=1, stderr="HTTP 422"))
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            self.assertEqual(self.adapter.set_pr_base(_PR, "main"), ReadFailure(1, "HTTP 422"))
+
+    def test_timeout_is_read_failure(self):
+        with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):
+            self.assertIsInstance(self.adapter.set_pr_base(_PR, "main"), ReadFailure)
+
+
 class TestUpdateBranch(unittest.TestCase):
     def setUp(self):
         self.adapter = GitHubEventsAdapter()

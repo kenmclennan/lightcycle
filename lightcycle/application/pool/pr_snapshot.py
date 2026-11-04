@@ -175,6 +175,9 @@ class PrSnapshot(GitHubEventsPort):
     def update_branch(self, pr, expected_head_sha):
         return self._github.update_branch(pr, expected_head_sha)
 
+    def set_pr_base(self, pr, base):
+        return self._github.set_pr_base(pr, base)
+
     def list_prs(self, repo, cutoff):
         return self._github.list_prs(repo, cutoff)
 
