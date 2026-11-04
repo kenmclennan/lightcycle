@@ -28,6 +28,13 @@ class Duration:
             return self._parse(finished) - self._parse(claimed)
         return self._parse(now) - self._parse(claimed)
 
+    def elapsed_claim_to_release(self):
+        claimed = self._last(State.RUNNING)
+        released = self._last(State.WAITING)
+        if claimed is None or released is None or self._parse(released) < self._parse(claimed):
+            return None
+        return self._parse(released) - self._parse(claimed)
+
     def last_release(self):
         return self._last(State.WAITING)
 

@@ -542,6 +542,13 @@ def _step_wall_active(store, node, now):
     return delta.total_seconds(), node.active_seconds or 0
 
 
+def _parked_wall_active(store, node):
+    delta = Duration(store.history(node.id)).elapsed_claim_to_release()
+    if delta is None:
+        return None
+    return delta.total_seconds(), node.active_seconds or 0
+
+
 def _engine_wait_seconds(node, now):
     if not node.created_at:
         return None
@@ -655,7 +662,14 @@ def hierarchy_time_text(store, node, now):
         return ""
     if is_human_step(node):
         wait = _gate_wait_seconds(store, node, now)
-        return format_elapsed(wait) if wait is not None else ""
+        waited = format_elapsed(wait) if wait is not None else ""
+        if not step_cost(node, {}).applicable:
+            return waited
+        wall_active = _parked_wall_active(store, node)
+        if wall_active is None:
+            return waited
+        worked = format_wall_and_active(*wall_active)
+        return "%s · waited %s" % (worked, waited) if waited else worked
     wall_active = _step_wall_active(store, node, now)
     return format_wall_and_active(*wall_active) if wall_active is not None else ""
 

@@ -82,6 +82,21 @@ class TestHierarchyTimeText(unittest.TestCase):
         now = "2026-01-01T11:10:00"
         self.assertEqual(hierarchy_time_text(store, node, now), "10m")
 
+    def test_a_parked_step_that_ran_shows_worker_time_then_the_wait(self):
+        clock = {"now": "2026-01-01T09:00:00"}
+        store = FakeStore(now=lambda: clock["now"])
+        step = create_owned_step(store, "s", stage="watch-ci", role="agent")
+        clock["now"] = "2026-01-01T09:05:00"
+        store.claim_ready("agent")
+        store.record_attribution(step, 9, {})
+        store.accrue_active_seconds([step], 57)
+        clock["now"] = "2026-01-01T09:06:00"
+        route_to_human(store, step, "BLOCKED: re-run the CI job")
+        node = store.get_node(step)
+
+        now = "2026-01-01T09:16:00"
+        self.assertEqual(hierarchy_time_text(store, node, now), "1m (57s active) · waited 10m")
+
     def test_a_done_human_step_shows_elapsed_from_wait_start_to_closed_at(self):
         clock = {"now": "2026-01-01T09:00:00"}
         store = FakeStore(now=lambda: clock["now"])

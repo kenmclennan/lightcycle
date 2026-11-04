@@ -659,3 +659,45 @@ def test_selecting_a_slice_gate_row_opens_that_slices_pr_in_detail():
         assert SLICE_PRS[0] not in frame
     finally:
         session.close()
+
+
+def _row_containing(frame, needle):
+    return next(row for row in frame.split("\n") if needle in row)
+
+
+def test_a_parked_step_that_ran_shows_its_turns_cost_and_both_times():
+    row = _row_containing(render("hub#workflow-parked-ran", size=(140, 30)), "LC-143.3.4")
+
+    assert "9 turns" in row
+    assert "$0.23" in row
+    assert "(57s active) · waited" in row
+
+
+def test_a_human_gate_that_never_ran_shows_its_wait_only():
+    row = _row_containing(render("hub#workflow-parked-ran", size=(140, 30)), "LC-143.3.6")
+
+    assert "turn" not in row
+    assert "$" not in row
+    assert "active" not in row
+    assert "waited" not in row
+
+
+def test_an_agent_row_is_unchanged_by_the_parked_step_rendering():
+    row = _row_containing(render("hub#workflow-parked-ran", size=(140, 30)), "LC-143.3.1")
+
+    assert "20 turns" in row
+    assert "$2.91" in row
+    assert "(20m active)" in row
+    assert "waited" not in row
+
+
+def test_the_cost_tab_fields_of_a_parked_step_that_ran_are_populated():
+    from lightcycle.adapters.tui.hub import step_cost_fields
+    from lightcycle.domain.work.cost import step_cost
+    from tests.support.screen_render import _hierarchy_parked_ran_store
+
+    store, _item = _hierarchy_parked_ran_store()
+    fields = dict(step_cost_fields(step_cost(store.get_node("LC-143.3.4"), {})))
+
+    assert fields["turns"] == "9"
+    assert fields["cost"] == "$0.23"
