@@ -51,6 +51,7 @@ class TestDeclaredSurfaceCoversWhatTheEngineEmits(unittest.TestCase):
         claim = ClaimResponse(
             view=view, surface=node_read_surface(s, flow, view), workspace="w", branch="b",
             spec_path="p", description="d", repo_path="r", config={"k": "v"},
+            workflow_config={"k": "v"},
         )
         return keys | set(claim.as_dict())
 
@@ -60,12 +61,12 @@ class TestDeclaredSurfaceCoversWhatTheEngineEmits(unittest.TestCase):
     def test_the_guidance_keys_are_declared(self):
         self.assertLessEqual({"guidance_delivered", "guidance_skipped"}, json_surface())
 
-    def test_the_declared_extra_keys_are_the_scraped_twenty_six_and_the_guidance_pair(self):
-        self.assertEqual(len(READ_SURFACE_EXTRA_KEYS - {"stack", "stacked_children", "slice_name", "slices"}), 28)
+    def test_the_declared_extra_keys_are_the_scraped_twenty_seven_and_the_guidance_pair(self):
+        self.assertEqual(len(READ_SURFACE_EXTRA_KEYS - {"stack", "stacked_children", "slice_name", "slices"}), 29)
 
     def test_the_slice_pair_is_declared_beside_them(self):
         self.assertLessEqual({"slice_name", "slices"}, READ_SURFACE_EXTRA_KEYS)
 
     def test_the_stack_pair_is_declared_beside_them(self):
         self.assertLessEqual({"stack", "stacked_children"}, READ_SURFACE_EXTRA_KEYS)
-        self.assertEqual(len(READ_SURFACE_EXTRA_KEYS), 32)
+        self.assertEqual(len(READ_SURFACE_EXTRA_KEYS), 33)

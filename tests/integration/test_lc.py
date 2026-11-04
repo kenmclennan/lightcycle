@@ -3541,6 +3541,7 @@ class TestNodeDTOReadSurface(unittest.TestCase):
         self.assertEqual(d["id"], tid)
         for field in self.AGENT_CONSUMED_FIELDS:
             self.assertIn(field, d, "lc claim dropped field: %s" % field)
+        self.assertEqual(d["workflow_config"], {})
 
     def test_show_surfaces_the_stack_fields(self):
         tid = self._make_task()
