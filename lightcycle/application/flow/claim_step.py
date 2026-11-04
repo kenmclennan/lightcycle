@@ -4,6 +4,7 @@ from typing import Optional
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
+from lightcycle.application.flow.rebase_retries import earlier_rebase_retries
 from lightcycle.application.setup.project_registry import ProjectRegistry
 from lightcycle.application.work.item_outputs import ItemOutputs
 from lightcycle.application.work.release_holds import ReleaseHolds
@@ -43,6 +44,7 @@ class ClaimResponse:
     phase: Optional[str] = None
     pin: Optional[str] = None
     step_file: Optional[str] = None
+    rebase_retried: Optional[list] = None
 
     def as_dict(self) -> dict:
         out = dict(self.surface)
@@ -58,6 +60,8 @@ class ClaimResponse:
         if self.config:
             out["config"] = self.config
         out["workflow_config"] = self.workflow_config or {}
+        if self.rebase_retried is not None:
+            out["rebase_retried"] = self.rebase_retried
         return out
 
 
@@ -234,6 +238,10 @@ class ClaimStepUseCase:
             except ProjectResolutionError as e:
                 raise UseCaseError(str(e))
         config = {k: v for k, v in meta.items() if k not in _STRUCTURAL_META_KEYS}
+        rebase_retried = (
+            list(earlier_rebase_retries(self._store, self._flow, t))
+            if self._flow.load_flow(pin).rebase_retry(t.stage) is not None else None
+        )
         step_file = self._flow.file_for_step(t.stage, pin) if pin else t.stage
         return ClaimResponse(
             view=view, surface=surface, workspace=ws, branch=branch,
@@ -242,4 +250,5 @@ class ClaimStepUseCase:
             repo_path=repo_path, config=config or None,
             workflow_config=self._workflow_config(pin),
             phase=surface.get("phase"), pin=pin, step_file=step_file,
+            rebase_retried=rebase_retried,
         )

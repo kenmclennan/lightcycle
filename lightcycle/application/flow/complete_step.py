@@ -12,6 +12,7 @@ from lightcycle.domain.feedback import RETROED_LABEL
 from lightcycle.domain.flow.hooks import CI_FAILED_CAP
 from lightcycle.application.flow.next_step import NextStepResolver
 from lightcycle.application.flow.passes import PassBook
+from lightcycle.application.flow.rebase_retries import earlier_rebase_retries, repeated_checks
 from lightcycle.application.flow.schedule_completion import ScheduleCompletion
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.application.work.close_item import (
@@ -186,6 +187,7 @@ class CompleteStepUseCase:
         if repair:
             return self._complete(
                 t, input, writes=self._workflow_writes(t, input, None, True), repair=True)
+        self._refuse_repeated_rebase(t, input, name)
         transition = self._resolver.resolve(t, input.outcome, name)
         if self._passes.defers_to_last_slice(t, input.outcome, name):
             return self._complete(
@@ -243,6 +245,22 @@ class CompleteStepUseCase:
         if fired is not None and response.next_step:
             self._store.note_condition(response.next_step, _cap_note(fired, t.stage))
         return response
+
+    def _refuse_repeated_rebase(self, t, input: CompleteInput, name):
+        retry = self._flow.load_flow(name).rebase_retry(t.stage)
+        if retry is None or retry.failure_outcome is None:
+            return
+        if input.outcome not in retry.retry_outcomes:
+            return
+        repeated = repeated_checks(earlier_rebase_retries(self._store, self._flow, t), input.note)
+        if not repeated:
+            return
+        named = ", ".join("check '%s' (step %s)" % (c, sid) for c, sid in repeated.items())
+        raise UseCaseError(
+            "cannot close %s %s: %s already closed %s in this run, and a second rebase only "
+            "re-runs CI for the same answer. Close it %s instead."
+            % (input.step, input.outcome, named, input.outcome, retry.failure_outcome)
+        )
 
     def _deferred_writes(self, t, input: CompleteInput, name):
         inner = self._workflow_writes(t, input, None, name=name)
