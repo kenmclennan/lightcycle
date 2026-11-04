@@ -142,6 +142,34 @@ def _bfs_path(graph, start, goal):
     return None
 
 
+def shortest_path_to_stage(graph, start, accepts):
+    if accepts(start):
+        return start, []
+    q = deque([start])
+    prev = {start: None}
+    while q:
+        cur = q.popleft()
+        for outcome, target in sorted((graph.edges.get(cur) or {}).items()):
+            if not target or target in prev:
+                continue
+            prev[target] = (cur, outcome)
+            if accepts(target):
+                path = []
+                node = target
+                while prev[node] is not None:
+                    p, o = prev[node]
+                    path.append(PlannedStep(stage=p, kind="edge", outcome=o))
+                    node = p
+                path.reverse()
+                return target, path
+            q.append(target)
+    return None, None
+
+
+def merge_gate_stages(graph):
+    return {occ[0] for occ in graph.hook_occurrences(PR_MERGE) if occ}
+
+
 def _exit_step(graph, stage):
     for outcome, target in sorted((graph.edges.get(stage) or {}).items()):
         if target is None:

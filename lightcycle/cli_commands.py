@@ -98,7 +98,7 @@ COMMANDS = {
             Arg("workflow"), Arg("--mermaid", action="store_true"),
         )),
         "simulate": CommandSpec(prog="lc workflow simulate", args=(
-            Arg("workflow"), Arg("--trace", action="store_true"),
+            Arg("workflow"), Arg("--trace", action="store_true"), Arg("--slices", type=int),
         )),
         "rm": CommandSpec(prog="lc workflow rm", args=(
             Arg("origin"),
