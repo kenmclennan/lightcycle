@@ -55,6 +55,12 @@ An item's state is derived from its own unresolved dependency first, then its st
 
 The item's own dependency block outranks whatever its children are doing - it does not compete in the child-state precedence race. Within the children themselves, precedence is `waiting > running > queued > blocked`: if any part of the item needs the human, that outranks everything else, because it is the only position where the item stops until they act.
 
+## Slice runs
+
+A workflow that declares a **sliced phase** (`slices: <phase> from <artifact-type>`) runs that phase once per slice. On entry, `PassBook.enrol` reads the item's slices artifact and, when it lists two or more slices, opens one run per slice and files a first step for each, all at once. Slice 1's step is queued; slices 2..N carry a dependency on their own item, so they stay `blocked` while the item is open.
+
+`ReleaseStackedItemsUseCase` removes that dependency from a slice's step once the base slice's run holds a PR, so the next slice builds while the one below is in CI and review. A slice's merge gate closes the same way a single gate does, but when it completes with its `pr_merge` outcome while another slice run is still open it closes with no successor and closes its own run as merged, so the item stays open. The completion that finds no other slice run open takes the transition (`cleanup` in `spec-driven`), which therefore runs once. Rework inside a slice loops within that slice's run. An unsliced item is slice 0 throughout and behaves as before.
+
 ## Lanes are a view of `state` alone
 
 The `lc status` / `lc inbox` / `lc queue` / `lc active` boards are not stored - they are derived from each step's `state` by `lane_for`. `role` is no longer a separate input: `waiting` already encodes "this needs a human."

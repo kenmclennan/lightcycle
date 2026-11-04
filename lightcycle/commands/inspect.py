@@ -128,6 +128,26 @@ def cmd_queue(argv):
     return 0
 
 
+def _blocked_suffix(t):
+    if not t.blocked_by:
+        return ""
+    if t.type == "step" and t.slice > 0 and t.item in t.blocked_by:
+        rest = sorted(b for b in t.blocked_by if b != t.item)
+        text = "  [waiting on slice %s]" % _base_slice_name(t)
+        if rest:
+            text += "  [blocked by %s]" % ", ".join(rest)
+        return text
+    return "  [blocked by %s]" % ", ".join(sorted(t.blocked_by))
+
+
+def _base_slice_name(t):
+    runs = container().store.runs_of(t.item, t.pass_id) if t.pass_id else []
+    own = next((r for r in runs if r.slice == t.slice), None)
+    if own is None or own.base_slice is None:
+        return "-"
+    return next((r.slice_name for r in runs if r.slice == own.base_slice), "-")
+
+
 def cmd_status(argv):
     a = build_parser(COMMANDS["status"]).parse_args(argv)
     lanes = StatusUseCase(container().store).execute().lanes
@@ -142,7 +162,7 @@ def cmd_status(argv):
         for key in ("inbox", "active", "queue"):
             print("== %s (%d) ==" % (key, len(lanes[key])))
             for t in lanes[key]:
-                suffix = "  [blocked by %s]" % ", ".join(sorted(t.blocked_by)) if t.blocked_by else ""
+                suffix = _blocked_suffix(t)
                 parent = container().store.get_item(t.item if t.type == "step" else t.id).stacks_on
                 if parent:
                     suffix += "  [stacked on %s]" % parent
@@ -182,7 +202,9 @@ def cmd_trace(argv):
         for t in resp.steps:
             log = "  log:" + t.log if t.log else ""
             calls = "-" if t.api_calls is None else str(t.api_calls)
-            print("  step %s  %s  [%s]  calls:%s%s" % (t.id, t.step or "-", t.state, calls, log))
+            slice_text = "  slice:%d" % t.slice if t.slice > 0 else ""
+            print("  step %s  %s  [%s]  calls:%s%s%s" % (
+                t.id, t.step or "-", t.state, calls, log, slice_text))
             for art in t.artifacts:
                 if art.type == "findings":
                     print("    artifact findings: see lc show %s" % t.id)

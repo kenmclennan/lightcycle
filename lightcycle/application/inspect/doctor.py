@@ -109,6 +109,7 @@ class DoctorUseCase:
             "orphans": self._orphan_problems(),
             "teardown": self._teardown_refusal_problems(),
             "stack": self._stack_problems(),
+"slice": self._slice_problems(),
             "facets": self._guidance_registration_problems() + self._facet_problems(),
             "guidance": self._guidance_problems() + self._guidance_shortcode_problems(),
             "github": github_problems,
@@ -720,6 +721,51 @@ class DoctorUseCase:
                 node_id=item.id,
                 fix="restack or retarget the item by hand",
             ))
+        return problems
+
+    def _slice_problems(self):
+        problems = []
+        fetched = set()
+        for item in self._store.all_items():
+            if item.state == State.DONE:
+                continue
+            current = self._store.current_pass(item.id)
+            if current is None:
+                continue
+            runs = [r for r in self._store.runs_of(item.id, current.id) if r.slice > 0]
+            for run in runs:
+                if not run.is_open or run.base_slice is None:
+                    continue
+                bases = [
+                    r for r in runs if r.slice == run.base_slice and r.phase == run.phase
+                ]
+                if not bases:
+                    problems.append(Problem(
+                        "slice",
+                        "item %s slice %s is based on slice %d, which has no run in this pass"
+                        % (item.id, run.slice_name, run.base_slice),
+                        node_id=item.id,
+                        fix="re-enter the code phase for the item",
+                    ))
+                    continue
+                base = bases[-1]
+                if not run.pr or not base.is_open or not base.branch:
+                    continue
+                target = self._worktrees.target_for_run(base)
+                if not self._git.is_git_repo(target):
+                    continue
+                if target not in fetched:
+                    fetched.add(target)
+                    self._git.fetch_origin(target)
+                if self._git.remote_branch_exists(target, base.branch):
+                    continue
+                problems.append(Problem(
+                    "slice",
+                    "item %s slice %s has a PR but its base slice %s's branch %s no longer "
+                    "exists on origin" % (item.id, run.slice_name, base.slice_name, base.branch),
+                    node_id=item.id,
+                    fix="restack or retarget the slice by hand",
+                ))
         return problems
 
     def _teardown_refusal_problems(self):

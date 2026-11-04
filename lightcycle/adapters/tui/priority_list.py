@@ -9,7 +9,7 @@ from lightcycle.application.flow.engine_steps import engine_display_of
 from lightcycle.application.work.behind_reason import behind_reason
 from lightcycle.application.work.priority_rows import select_priority_rows
 from lightcycle.application.work.project_of import project_of, short_project_label
-from lightcycle.domain.work import is_human_step, item_active_seconds, row_bucket
+from lightcycle.domain.work import State, is_human_step, item_active_seconds, row_bucket
 from lightcycle.render import format_elapsed
 
 
@@ -119,9 +119,31 @@ def _rolled_up_time_text(children):
     return format_elapsed(total) if total > 0 else ""
 
 
+def _slice_gates_text(store, owning):
+    pass_record = store.current_pass(owning.id)
+    if pass_record is None:
+        return ""
+    runs = {r.slice: r for r in store.runs_of(owning.id, pass_record.id) if r.slice > 0}
+    gates = sorted(
+        (c for c in store.children(owning.id)
+         if c.slice > 0 and c.state != State.DONE and is_human_step(c)),
+        key=lambda c: c.slice,
+    )
+    parts = []
+    for gate in gates:
+        run = runs.get(gate.slice)
+        name = run.slice_name if run and run.slice_name else str(gate.slice)
+        parts.append("%s %s" % (name, run.pr) if run and run.pr else name)
+    return " · ".join(parts)
+
+
 def _row_for(store, row_builder, selected):
     row = row_builder(store, selected.node, selected.flow)
     children = store.children(selected.owning_node.id)
+    if row.group == "attention" and getattr(selected.node, "slice", 0) > 0:
+        gates = _slice_gates_text(store, selected.owning_node)
+        if gates:
+            row = replace(row, step="%s · %s" % (row.step, gates))
     return replace(
         row, id=selected.owning_node.id, title=selected.owning_node.title,
         cost=_item_cost_text(children),

@@ -75,7 +75,31 @@ def _flat_line(r, show_kind, title_cap):
 
 
 def render_inbox(rows, title_cap, flow_service=None):
-    return [_inbox_line(r, title_cap, flow_service) for r in rows]
+    lines = []
+    index = 0
+    while index < len(rows):
+        item = rows[index].step.item
+        end = index
+        while end < len(rows) and rows[end].step.item == item:
+            end += 1
+        group = rows[index:end]
+        index = end
+        if any(r.slice > 0 for r in group):
+            lines.extend(_slice_group_lines(group, title_cap, flow_service))
+        else:
+            lines.extend(_inbox_line(r, title_cap, flow_service) for r in group)
+    return lines
+
+
+def _slice_group_lines(group, title_cap, flow_service):
+    first = group[0]
+    title = _truncate(first.item_title or first.title, title_cap)
+    lines = ["%s  %s  %s" % (first.step.item, first.project or "-", title)]
+    for r in group:
+        line = "  %s  %s  slice:%s  pr:%s" % (
+            "[%s]" % r.kind, r.step.id, r.slice_name or r.slice, r.pr or "-")
+        lines.append(line + _step_extra(r.step, flow_service))
+    return lines
 
 
 def _inbox_line(r, title_cap, flow_service=None):

@@ -15,6 +15,7 @@ class StepRunResponse:
     phase: Optional[str] = None
     pass_id: Optional[str] = None
     round: int = 1
+    slice: int = 0
 
 
 class StepRunUseCase:
@@ -29,12 +30,12 @@ class StepRunUseCase:
             return StepRunResponse(branch=None, pr=None)
         return StepRunResponse(
             branch=run.branch, pr=run.pr, item=run.item, phase=run.phase, pass_id=run.pass_id,
-            round=run.round,
+            round=run.round, slice=run.slice,
         )
 
     def _run_for(self, step):
         if step.pass_id is None:
             return None
         phase = self._flow.phase_for(step)
-        runs = [r for r in self._store.runs_of(step.item, step.pass_id) if r.phase == phase]
+        runs = [r for r in self._store.runs_of(step.item, step.pass_id) if r.phase == phase and r.slice == step.slice]
         return runs[-1] if runs else None

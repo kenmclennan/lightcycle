@@ -207,6 +207,13 @@ class FlowService:
         graph, _root = self._graph_and_root(name)
         return graph.phase_for(stage)
 
+    def slicing(self, name=None):
+        graph, _root = self._graph_and_root(name)
+        return graph.sliced_phase, graph.slices_artifact
+
+    def merge_outcome(self, stage, name=None):
+        return self.load_flow(name).step_def(stage).pr_merge
+
     def ends_pass(self, stage, outcome, name=None):
         graph, _root = self._graph_and_root(name)
         return graph.ends_pass(stage, outcome)

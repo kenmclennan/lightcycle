@@ -187,6 +187,9 @@ class CompleteStepUseCase:
             return self._complete(
                 t, input, writes=self._workflow_writes(t, input, None, True), repair=True)
         transition = self._resolver.resolve(t, input.outcome, name)
+        if self._passes.defers_to_last_slice(t, input.outcome, name):
+            return self._complete(
+                t, input, writes=self._deferred_writes(t, input, name))
         declared = self._flow.outcomes_for(t.stage, name)
         if transition is None and declared and input.outcome not in declared:
             raise UseCaseError(
@@ -230,7 +233,7 @@ class CompleteStepUseCase:
 
         def enrol(new):
             if transition:
-                self._passes.enrol(t.item, new, transition.to_stage, name)
+                self._passes.enrol(t.item, new, transition.to_stage, name, completing=t)
 
         fired = transition.escalation if transition else None
         response = self._complete(
@@ -240,6 +243,15 @@ class CompleteStepUseCase:
         if fired is not None and response.next_step:
             self._store.note_condition(response.next_step, _cap_note(fired, t.stage))
         return response
+
+    def _deferred_writes(self, t, input: CompleteInput, name):
+        inner = self._workflow_writes(t, input, None, name=name)
+
+        def writes(new):
+            self._passes.close_slice_run(t, name)
+            inner(new)
+
+        return writes
 
     def _workflow_writes(self, t, input: CompleteInput, transition, repair=False, name=None):
         def writes(new):

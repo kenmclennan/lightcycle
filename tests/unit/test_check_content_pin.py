@@ -56,6 +56,9 @@ class _FlowAdapter:
     def phase_for(self, node):
         return self._flow.step_def(getattr(node, "stage", None)).phase
 
+    def slicing(self, name=None):
+        return None, None
+
     def phase_for_stage(self, stage, name=None):
         return "code"
 

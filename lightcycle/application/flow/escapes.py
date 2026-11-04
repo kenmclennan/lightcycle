@@ -17,7 +17,7 @@ class EscapeRecorder:
 
     def record_change_request(self, flow, step, note):
         phase = flow.step_def(step.stage).phase
-        run = self._store.current_run(step.item, phase)
+        run = self._store.current_run(step.item, phase, step.slice)
         self._record(flow, step.id, step.item, run, VIA_CHANGE_REQUEST, note, (), frozenset())
 
     def record_pr_comment(self, flow, feedback_step_id, item, run, keys, authors, trusted):

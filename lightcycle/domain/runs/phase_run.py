@@ -12,8 +12,10 @@ class RunState:
 _ROUND_SUFFIX = re.compile(r"\.r(\d+)$")
 
 
-def run_id(pass_id: str, phase: Optional[str], round: int = 1) -> str:
+def run_id(pass_id: str, phase: Optional[str], round: int = 1, slice: int = 0) -> str:
     base = "%s.%s" % (pass_id, phase or "-")
+    if slice > 0:
+        base = "%s.s%d" % (base, slice)
     return base if round == 1 else "%s.r%d" % (base, round)
 
 
@@ -36,6 +38,9 @@ class PhaseRun:
     state: str = RunState.OPEN
     opened_at: Optional[str] = None
     closed_at: Optional[str] = None
+    slice: int = 0
+    slice_name: Optional[str] = None
+    base_slice: Optional[int] = None
 
     @property
     def is_open(self) -> bool:
@@ -53,4 +58,5 @@ class PhaseRun:
             "comments_dispatched_through": self.comments_dispatched_through,
             "comments_handled_through": self.comments_handled_through,
             "state": self.state, "opened_at": self.opened_at, "closed_at": self.closed_at,
+            "slice": self.slice, "slice_name": self.slice_name, "base_slice": self.base_slice,
         }

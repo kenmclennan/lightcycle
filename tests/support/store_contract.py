@@ -1401,6 +1401,47 @@ class StoreContractBase:
         self.assertEqual(s.open_run(item, pid, "amend"), first)
         self.assertEqual(len(s.runs_of(item, pid)), 1)
 
+    def test_open_run_with_a_slice_records_the_slice_fields_and_id(self):
+        s = self.make_store()
+        item = s.create_item("t", "a description", shortcode="GRID")
+        pid = s.open_pass(item)
+        rid = s.open_run(item, pid, "code", 2, "write-service", 1)
+
+        run = s.get_run(rid)
+
+        self.assertEqual(rid, "%s.code.s2" % pid)
+        self.assertEqual((run.slice, run.slice_name, run.base_slice), (2, "write-service", 1))
+
+    def test_current_run_is_keyed_by_slice(self):
+        s = self.make_store()
+        item = s.create_item("t", "a description", shortcode="GRID")
+        pid = s.open_pass(item)
+        one = s.open_run(item, pid, "code", 1, "a", None)
+        two = s.open_run(item, pid, "code", 2, "b", 1)
+
+        self.assertEqual(s.current_run(item, "code", 1).id, one)
+        self.assertEqual(s.current_run(item, "code", 2).id, two)
+        self.assertIsNone(s.current_run(item, "code"))
+
+    def test_a_closed_slice_run_opens_its_second_round_in_the_same_slice(self):
+        s = self.make_store()
+        item = s.create_item("t", "a description", shortcode="GRID")
+        pid = s.open_pass(item)
+        first = s.open_run(item, pid, "code", 2, "b", 1)
+        s.close_run(first, "merged")
+
+        self.assertEqual(s.open_run(item, pid, "code", 2, "b", 1), first + ".r2")
+
+    def test_create_step_records_its_slice(self):
+        s = self.make_store()
+        item = s.create_item("t", "a description", shortcode="GRID")
+        step = s.create_step(stage="write", role="agent", item=item, slice=2)
+
+        self.assertEqual(s.get_node(step).slice, 2)
+        s.set_step_slice(step, 3)
+        self.assertEqual(s.get_node(step).slice, 3)
+        self.assertEqual(s.get_node(s.create_step(stage="x", role="agent", item=item)).slice, 0)
+
     def test_a_new_round_leaves_another_phase_of_the_pass_alone(self):
         s = self.make_store()
         item = s.create_item("t", "a description", shortcode="GRID")

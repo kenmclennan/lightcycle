@@ -1203,7 +1203,7 @@ class TestDoctorSchedules(unittest.TestCase):
     def test_the_json_category_keys_are_unchanged(self):
         self.assertEqual(
             set(_schedule_doctor({}).problems),
-            {"store", "pins", "contract", "workflows", "config", "orphans", "teardown", "stack", "facets",
+            {"store", "pins", "contract", "workflows", "config", "orphans", "teardown", "stack", "slice", "facets",
              "guidance", "github"})
 
     def test_the_report_has_no_origin_category(self):
