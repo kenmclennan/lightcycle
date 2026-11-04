@@ -1,6 +1,8 @@
-from dataclasses import replace
+from dataclasses import dataclass, replace
+from typing import Optional
 
 from lightcycle.domain.flow.hooks import (
+    CI_FAILED_CAP,
     CONSECUTIVE,
     FAILURES,
     HOOK_MIN_ARITY,
@@ -15,6 +17,12 @@ from lightcycle.domain.work.detail import parse_detail
 GUIDANCE_WORKSPACE = "guidance"
 LEGACY_KNOWLEDGE_WORKSPACE = "knowledge"
 PROJECT_WORKSPACE = "project"
+
+
+@dataclass(frozen=True)
+class RebaseRetry:
+    retry_outcomes: frozenset
+    failure_outcome: Optional[str]
 
 
 def consecutive_outcome_count(history, outcome):
@@ -135,6 +143,18 @@ class Flow:
 
     def step_def(self, stage) -> StepDef:
         return self._steps.get(stage) or StepDef()
+
+    def rebase_retry(self, stage):
+        routes = self.step_def(stage).routes
+        for name, ci in self._steps.items():
+            if ci.ci_failure is None or ci.routes.get(ci.ci_failure) != stage:
+                continue
+            outcomes = frozenset(o for o, target in routes.items() if target == name)
+            if not outcomes:
+                continue
+            cap = self.step_def(stage).caps.get(CI_FAILED_CAP)
+            return RebaseRetry(outcomes, cap.outcome if cap else None)
+        return None
 
     def declared(self, stage):
         return stage in self._steps

@@ -42,6 +42,8 @@ Steps store their state. A **completing step advances the flow first, then closu
 
 A step has at most one open successor: a close that finds an open one adds none, and still leaves the step done.
 
+A **rebase-retry** close is refused when it repeats a check. `lc done` on a rebase-retry stage (the stage a CI stage routes its failure to, with an outcome that routes back to that CI stage) refuses a retry outcome when an earlier step of the same stage, item and slice, inside the current phase run, already closed a retry outcome for any of the same checks; the message names the earlier step, the check and the failure outcome the stage declares with `ci_failed_cap`, which the worker closes instead. The check is read from the note's `rebase-retried: <check>` lines, or from its first `/`-separated field when it has none; a note with neither is never matched. A stage with no `ci_failed_cap` is never refused, and re-driving an already-closed step is a repair, not a close. The refusal parks nothing and writes nothing.
+
 An item's state is derived from its own unresolved dependency first, then its steps (`roll_up`):
 
 | Item's own `blocked_by` | Children                              | State      |
