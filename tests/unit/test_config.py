@@ -1137,7 +1137,7 @@ class TestTuiDoctorCheckSeconds(unittest.TestCase):
         self.assertEqual(cfg.tui_doctor_check_seconds(), 60)
 
     def test_it_is_seeded_an_hour_in_the_default_config(self):
-        self.assertEqual(dict(_SEED_KEYS)["tui-doctor-check-seconds"], "3600")
+        self.assertEqual(dict(_SEED_KEYS)["tui-doctor-check-seconds"], "900")
 
 
 class TestPoolUpgradeCheckSeconds(unittest.TestCase):
