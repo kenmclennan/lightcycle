@@ -23,6 +23,7 @@ class FakeGitHub(GitHubEventsPort):
         self._workflows_by_sha = workflows_by_sha or {}
         self._runs_by_sha = runs_by_sha or {}
         self._failing_calls = set(failing_calls)
+        self.base_edits = []
         self._failing_prs = set(failing_prs)
         self._issue_states = issue_states or {}
         self.issue_state_calls = []
@@ -214,6 +215,15 @@ class FakeGitHub(GitHubEventsPort):
             return ReadFailure(1, "boom")
         if base_key in self._required_by_base:
             return frozenset(self._required_by_base[base_key]) or None
+        return None
+
+    def set_pr_base(self, pr, base):
+        self._record("set_pr_base", pr, base)
+        if "set_pr_base" in self._failing_calls:
+            return ReadFailure(1, "boom")
+        self.base_edits.append((pr, base))
+        key = self._base_keys.get(pr, "acme/widget@main")
+        self._base_keys[pr] = key.partition("@")[0] + "@" + base
         return None
 
     def update_branch(self, pr, expected_head_sha):

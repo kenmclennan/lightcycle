@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Dict, Optional, Tuple
 
 
 class GitReadError(Exception):
@@ -10,6 +11,30 @@ class GitReadError(Exception):
 class GitOutcome:
     ok: bool
     detail: str = ""
+
+
+@dataclass(frozen=True)
+class RestackStep:
+    branch: str
+    lease_sha: str
+    old_base: str
+    onto: str
+    worktree_path: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class RestackOutcome:
+    kind: str
+    branch: Optional[str] = None
+    files: Tuple[str, ...] = ()
+    detail: str = ""
+    tips: Dict[str, str] = field(default_factory=dict)
+
+
+RESTACK_PUSHED = "pushed"
+RESTACK_CONFLICT = "conflict"
+RESTACK_LEASE_LOST = "lease-lost"
+RESTACK_FAILED = "failed"
 
 
 class GitPort(ABC):
@@ -151,4 +176,12 @@ class GitPort(ABC):
 
     @abstractmethod
     def commits_beyond(self, root, base, branch):
+        pass
+
+    @abstractmethod
+    def merge_base(self, root, a, b):
+        pass
+
+    @abstractmethod
+    def restack(self, root, steps):
         pass

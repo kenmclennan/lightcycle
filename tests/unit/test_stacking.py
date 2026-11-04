@@ -256,7 +256,7 @@ class TestStackedWorktreeBase(unittest.TestCase):
         os.makedirs(self.repo)
         self.store.add_project("acme/app", local_path=self.repo)
 
-    def _world(self, remote_branches=(), parent_done=False, pr=PARENT_PR):
+    def _world(self, remote_branches=(), parent_done=False, pr=PARENT_PR, ref_shas=None):
         parent = _item(self.store, "parent story", repo="app")
         plant_pr(self.store, parent, pr, phase="code", branch=PARENT_BRANCH) if pr else None
         child = _item(self.store, "child story", repo="app", workflow=None)
@@ -267,6 +267,7 @@ class TestStackedWorktreeBase(unittest.TestCase):
         git = FakeGit(
             repos={self.repo}, sync_result=True, base="origin/main",
             remote_branches={(self.repo, b) for b in remote_branches},
+            ref_shas=ref_shas,
         )
         svc = WorktreeService(
             self.store, git, FakeFs(), _Cfg(), flow=self.flow, scaffold=ScaffoldAdapter())
@@ -283,6 +284,40 @@ class TestStackedWorktreeBase(unittest.TestCase):
 
         self.assertIn(("remote_branch_exists", self.repo, PARENT_BRANCH), git.calls)
         self.assertEqual(self._base_of(git), "origin/" + PARENT_BRANCH)
+
+    def _stack_base(self, step):
+        item = self.store.get_node(step).item
+        values = [a.value for a in self.store.item_artifacts(item) if a.type == "stack-base"]
+        return values[-1] if values else None
+
+    def test_a_new_stacked_branch_records_the_parent_head_it_was_cut_from(self):
+        step, _git, svc = self._world(
+            remote_branches=[PARENT_BRANCH],
+            ref_shas={(self.repo, "origin/" + PARENT_BRANCH): "parent-head-sha"})
+
+        svc.ensure(self.store.get_node(step))
+
+        self.assertEqual(self._stack_base(step), "parent-head-sha")
+
+    def test_a_branch_that_already_exists_records_no_stack_base(self):
+        step, git, svc = self._world(
+            remote_branches=[PARENT_BRANCH],
+            ref_shas={(self.repo, "origin/" + PARENT_BRANCH): "parent-head-sha"})
+        node = self.store.get_node(step)
+        branch = svc._minted_branch(node)
+        git._branches.add((self.repo, branch))
+
+        svc.ensure(node)
+
+        self.assertIsNone(self._stack_base(step))
+
+    def test_an_unstacked_item_records_no_stack_base(self):
+        step, _git, svc = self._world(remote_branches=[PARENT_BRANCH])
+        self.store.set_stacks_on(self.store.get_node(step).item, None)
+
+        svc.ensure(self.store.get_node(step))
+
+        self.assertIsNone(self._stack_base(step))
 
     def test_a_done_parent_whose_branch_is_gone_falls_back_to_the_default_base(self):
         step, git, svc = self._world(parent_done=True)
