@@ -1,13 +1,14 @@
 import time
 import os
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Optional
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.claim_step import ClaimInput
 from lightcycle.application.flow.complete_step import CompleteInput
 from lightcycle.application.flow.script_result import apply_stage_result
 from lightcycle.application.pool.pr_writes import InlinePrWrites
+from lightcycle.application.workflows.simulate_stack import StackSimulation
 from lightcycle.application.pool.monitor_prs import MonitorPrsUseCase
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.domain.contracts import FlowContracts, StepContract
@@ -67,6 +68,7 @@ class _LiveReads:
 @dataclass(frozen=True)
 class SimulateInput:
     workflow: str
+    slices: Optional[int] = None
 
 
 @dataclass(frozen=True)
@@ -168,8 +170,13 @@ class WorkflowSimulateUseCase:
         return []
 
     def execute(self, input: SimulateInput) -> SimulateResponse:
+        if input.slices is not None and input.slices < 2:
+            raise UseCaseError("--slices takes an integer of at least 2, got %d" % input.slices)
         pin = self._flow.resolve_selection(input.workflow)
         graph = self._flow.load_graph(pin)
+        if input.slices is not None and graph.sliced_phase is None:
+            raise UseCaseError(
+                "workflow %s declares no sliced phase; --slices does not apply" % input.workflow)
         step_metas = self._flow.role_metas(pin)
         dom_flow = self._flow.load_flow(pin)
         contracts = FlowContracts(dom_flow, graph, step_metas)
@@ -198,11 +205,24 @@ class WorkflowSimulateUseCase:
             github = self._github_factory()
             monitor = self._monitor(github)
             violations += self._drive(item_id, pin, graph, walk, github, monitor, trace, index)
+        if input.slices is not None:
+            stack_violations, stack_trace = self._stack_scenario(pin, graph, input.slices)
+            violations += stack_violations
+            trace += stack_trace
         violations += self._ci_skip_probe(pin, graph, dom_flow, trace)
         violations += self._run_script_guards(pin, guards, trace)
         violations += self._run_lifecycle(pin, trace)
         violations += self._check_teardown_invariant()
         return SimulateResponse(ok=not violations, trace=trace, violations=violations)
+
+    def _stack_scenario(self, pin, graph, count):
+        github = self._github_factory()
+        scenario = StackSimulation(
+            self._store, self._flow, self._worktrees, self._claim, self._complete, self._git,
+            github, self._projects_root, self._seed_item, self._synthesize_produces,
+            self._monitor(github), self._terminal_outcome)
+        scenario.run(pin, graph, count)
+        return scenario.violations, scenario.trace
 
     def _monitor(self, github):
         return MonitorPrsUseCase(
@@ -347,20 +367,22 @@ class WorkflowSimulateUseCase:
             return None
         return resp.view.step.id
 
-    def _synthesize_produces(self, item_id, pin, stage):
+    def _synthesize_produces(self, item_id, pin, stage, slice_no=0):
         meta = self._flow.meta_for_step(stage, pin)
         contract = StepContract.from_meta(meta)
         phase = self._flow.load_graph(pin).phase_for(stage)
         present = {a.type for a in self._store.item_artifacts(item_id)}
         for req in contract.produces:
             if req.type in _SIMULATABLE_RUN_FIELDS:
-                run = self._store.current_run(item_id, phase)
+                run = self._store.current_run(item_id, phase, slice_no)
                 if run is None:
                     current = self._store.current_pass(item_id)
                     pid = current.id if current else self._store.open_pass(item_id)
                     run = self._store.get_run(self._store.open_run(item_id, pid, phase))
                 if getattr(run, RUN_FIELDS[req.type]) is None:
                     value = "<simulated-%s-%s>" % (req.type, phase or "-")
+                    if slice_no:
+                        value = "%s-s%d>" % (value[:-1], slice_no)
                     if req.type == "pr":
                         self._store.set_pr(run.id, value)
                     else:
