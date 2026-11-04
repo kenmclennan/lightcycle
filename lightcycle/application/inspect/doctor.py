@@ -645,8 +645,9 @@ class DoctorUseCase:
                 "guidance-budget-bytes (%d); delivery skips: %s" % (
                     o.project, o.step, o.matched_bytes, o.budget, ", ".join(o.skipped)),
                 kind="guidance-budget-overflow",
-                fix="narrow the skipped entries' applies-to (facets or steps), consolidate "
-                "overlapping entries, or deprecate those no longer earning their bytes",
+                fix="narrow the skipped entries' applies-to (facets, steps or projects), consolidate "
+                "overlapping entries, or deprecate those no longer earning their bytes; "
+                "file the change as a guidance-entry item rather than editing by hand",
             )
             for o in overflows(candidates, projects, steps, budget)
         ]
