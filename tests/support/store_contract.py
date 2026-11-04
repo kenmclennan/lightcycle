@@ -402,6 +402,17 @@ class StoreContractBase:
         s.set_stacks_on(child, None)
         self.assertIsNone(s.get_item(child).stacks_on)
 
+    def test_labelled_stack_base_artifacts_replace_only_their_own_label(self):
+        s = self.make_store()
+        item = s.create_item("sliced", "d", shortcode="APP")
+        s.replace_artifact(item, "stack-base", "a1", label="r1", internal=True)
+        s.replace_artifact(item, "stack-base", "b1", label="r2", internal=True)
+        s.replace_artifact(item, "stack-base", "a2", label="r1", internal=True)
+        found = {
+            a.label: a.value for a in s.item_artifacts(item) if a.type == "stack-base"
+        }
+        self.assertEqual(found, {"r1": "a2", "r2": "b1"})
+
     def test_items_stacked_on_lists_children_in_id_order(self):
         s = self.make_store()
         parent = s.create_item("parent", "d", shortcode="APP")

@@ -155,13 +155,7 @@ class WorktreeService:
     def _retained_for_children(self, run):
         if self._flow is None:
             return False
-        if not any(c.state != State.DONE for c in self._stacked_children(run.item)):
-            return False
-        stack_run = StackRuns(self._store, self._flow).run_of(run.item)
-        return stack_run is not None and stack_run.id == run.id
-
-    def _stacked_children(self, item):
-        return self._store.items_stacked_on(item)
+        return StackRuns(self._store, self._flow).has_dependents(run)
 
     def release_interrupted(self, run):
         if run is None or run.state == RunState.OPEN or run.branch is None:
@@ -286,7 +280,10 @@ class WorktreeService:
         if is_new_branch:
             self._git.set_branch_upstream(target, branch)
             if stack_sha:
-                self._store.replace_artifact(item, STACK_BASE, stack_sha, internal=True)
+                run = self._run(node)
+                label = run.id if run is not None and run.slice > 0 else None
+                self._store.replace_artifact(
+                    item, STACK_BASE, stack_sha, label=label, internal=True)
         return path
 
     def context_path(self):
