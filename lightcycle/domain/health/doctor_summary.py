@@ -4,6 +4,7 @@ _PHRASES = {
     "contract": ("workflow the engine rejects", "workflows the engine rejects"),
     "config": ("config problem", "config problems"),
     "orphans": ("worktree with stray processes", "worktrees with stray processes"),
+    "teardown": ("item close refused", "item closes refused"),
     "facets": ("facet problem", "facet problems"),
     "guidance": ("guidance problem", "guidance problems"),
 }

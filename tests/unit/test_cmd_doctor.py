@@ -139,7 +139,7 @@ class TestCmdDoctor(unittest.TestCase):
         rc, out, err = call(cli.cmd_doctor)
         self.assertEqual(rc, 0)
         self.assertIn("healthy", out)
-        for cat in ("store", "pins", "contract", "workflows", "config", "orphans"):
+        for cat in ("store", "pins", "contract", "workflows", "config", "orphans", "teardown"):
             self.assertIn("%s: ok" % cat, out)
 
     def test_text_prints_the_workflows_category_and_no_origin_category(self):
@@ -163,7 +163,8 @@ class TestCmdDoctor(unittest.TestCase):
         self.assertEqual(rc, 0)
         data = json.loads(out)
         self.assertEqual(
-            set(data.keys()), {"store", "pins", "contract", "workflows", "config", "orphans", "facets", "guidance", "github"}
+            set(data.keys()), {"store", "pins", "contract", "workflows", "config", "orphans", "teardown", "facets", "guidance",
+             "github"}
         )
         for probs in data.values():
             self.assertEqual(probs, [])
@@ -179,7 +180,7 @@ class TestCmdDoctor(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertRegex(out, r"github: ok - 4261/5000 remaining, resets at \d\d:\d\d:\d\d")
 
-    def test_open_item_with_a_teardown_refusal_is_listed_under_orphans(self):
+    def test_open_item_with_a_teardown_refusal_is_listed_under_teardown(self):
         store = FakeStore()
         item = store.create_item("stuck", "a description")
         store.add_artifact(item, "teardown-refused", "worktree /w has uncommitted paths: a.py", internal=True)
@@ -189,10 +190,11 @@ class TestCmdDoctor(unittest.TestCase):
 
         data = json.loads(out)
         self.assertEqual(rc, 1)
-        self.assertEqual(len(data["orphans"]), 1)
-        self.assertIn(item, data["orphans"][0]["message"])
-        self.assertIn("a.py", data["orphans"][0]["message"])
-        self.assertIn("close the item again", data["orphans"][0]["fix"])
+        self.assertEqual(data["orphans"], [])
+        self.assertEqual(len(data["teardown"]), 1)
+        self.assertIn(item, data["teardown"][0]["message"])
+        self.assertIn("a.py", data["teardown"][0]["message"])
+        self.assertIn("close the item again", data["teardown"][0]["fix"])
 
     def test_closed_item_with_a_teardown_refusal_artifact_is_not_listed(self):
         store = FakeStore()
@@ -203,7 +205,7 @@ class TestCmdDoctor(unittest.TestCase):
 
         rc, out, err = call(cli.cmd_doctor, "--json")
 
-        self.assertEqual(json.loads(out)["orphans"], [])
+        self.assertEqual(json.loads(out)["teardown"], [])
 
     def test_failing_origin_reports_in_workflows_category(self):
         source = FakeWorkflowSource()
