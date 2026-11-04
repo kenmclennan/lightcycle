@@ -136,6 +136,9 @@ The mutating CLI is a small set of generic primitives over nodes; the read views
 | `lc rm <id> [--force]` | delete a node; refuses on a live worker, a dirty worktree, or a branch with commits not merged into the base (a run recorded `merged` counts as merged); `--force` overrides the dirty worktree, the unmerged branch and stale claims |
 | `lc attach <id> <type> <value> [--label/--replace/--file]` | attach an artifact to an **item** (`spec`, `repo`, `brief`, `blueprint`, ...). `pr`, `branch` and `comments-handled` are not artifacts - they route onto the item's current phase run. `reflection` routes to the retro |
 | `lc dep <id> --needs <id>` | link one node as a blocker of another |
+| `lc advance <step> <outcome>` | route a step's outcome to the next step in its flow and print the new step id; `lc done` does this for you, this is the primitive scripts use |
+| `lc peek <id> <stage>` | print the prompt a worker would receive for `<stage>` of that node's workflow, at its pinned version |
+| `lc search "<text>"` | items whose title, description or notes contain every word, in any state (done included); the duplicate check before filing |
 | `lc claim agent` | (agents) atomically claim the next ready agent step, whatever its stage |
 
 ### See what's happening / run
@@ -155,6 +158,12 @@ The mutating CLI is a small set of generic primitives over nodes; the read views
 | `lc trace <item> [--json]` | an item end to end: artifacts + child steps + logs |
 | `lc workflow check [--json] [--dir <bundle-dir>]` | print + check the assembled flow (stages, routes, contracts, composition); `--dir` checks an uncommitted bundle without pinning it, script stages included (script exists and is executable, fixture has an entry for every declared outcome) |
 | `lc sweep` | release orphaned claims (dead worker -> step reclaimable) |
+| `lc ready-roles` | the roles that have a ready step, one per word (what the pool would spawn next) |
+| `lc spawn <role>` | spawn one worker of that role by hand; exits 1 when none was spawned |
+| `lc worklog [<start> [<end>]]` | items shipped in a period (today by default) with their PRs |
+| `lc restore <snapshot> [--force]` / `lc restore --list` | restore the store from a backup snapshot / list the snapshots with their age |
+| `lc backfill-usage [--repair]` | reconcile usage cost from worker logs into the ledger for steps that missed live capture; `--repair` reclassifies ledger rows |
+| `lc version` | print the engine version |
 
 ## Steps and performers
 
