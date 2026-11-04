@@ -142,6 +142,7 @@ from lightcycle.adapters.tui.hub_render import (
     context_section_title,
     detail_fields,
     detail_row_cells,
+    resolve_detail_file,
     detail_value_is_block,
     display_role,
     escalation_panel_text,
@@ -928,8 +929,9 @@ class NodeHubScreen(HubScreenMarker, LogTabMixin, HierarchyTabMixin, OutputsTabM
         if key_value == "worktree":
             self._open_worktree(value)
             return
-        if key_value == "spec":
-            self._open_worktree(value)
+        file_path = resolve_detail_file(self._last_detail_fields, key_value, self._container.fs)
+        if file_path is not None:
+            self._open_external_output("file", file_path, tab="detail")
             return
         if key_value in ("pr", "spec-pr", "ci-checks") or detail_value_is_url(value):
             url = value.strip()

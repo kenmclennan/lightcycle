@@ -77,3 +77,24 @@ class TestOpenArtifactUseCase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestOpenArtifactFileKind(unittest.TestCase):
+    def test_a_file_is_handed_to_the_system_opener_by_absolute_path(self):
+        launcher = FakeLauncher()
+        fs = FakeFs(files={"/wt/spec.md": "x"})
+        result = OpenArtifactUseCase(fs, launcher).execute(
+            OpenArtifactInput(kind="file", value="/wt/spec.md"))
+
+        self.assertTrue(result.success)
+        self.assertEqual(launcher.opened_paths, ["/wt/spec.md"])
+        self.assertIsNone(launcher.edited_detached)
+
+    def test_a_missing_file_is_refused_naming_its_path(self):
+        launcher = FakeLauncher()
+        result = OpenArtifactUseCase(FakeFs(), launcher).execute(
+            OpenArtifactInput(kind="file", value="/wt/gone.md"))
+
+        self.assertFalse(result.success)
+        self.assertIn("/wt/gone.md", result.message)
+        self.assertEqual(launcher.opened_paths, [])

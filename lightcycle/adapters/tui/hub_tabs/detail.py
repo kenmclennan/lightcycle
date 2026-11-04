@@ -26,6 +26,7 @@ from lightcycle.adapters.tui.hub_render import (
     _detail_field_label,
     detail_fields,
     detail_row_cells,
+    resolve_detail_file,
     detail_value_is_block,
     PARK_PANEL_TITLE,
     park_panel_text,
@@ -91,7 +92,8 @@ class DetailTabMixin:
         rows = []
         for key, value in fields:
             field = (key, shorten_home(value, home) if key == "worktree" else value)
-            rows.extend(detail_row_cells(field, layout, row_budget, titles))
+            is_file = resolve_detail_file(fields, key, self._container.fs) is not None
+            rows.extend(detail_row_cells(field, layout, row_budget, titles, is_file=is_file))
         return rows
 
     def _render_detail_fields(self, fields, initial) -> None:

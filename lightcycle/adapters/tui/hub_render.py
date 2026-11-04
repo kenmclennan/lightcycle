@@ -1,3 +1,4 @@
+import os
 import re
 from dataclasses import dataclass
 from lightcycle.adapters.tui.design_system import (
@@ -767,10 +768,23 @@ def _stacked_block_cell(key_field, indent, body, row_budget, style):
     return cell
 
 
-def detail_row_cells(field, layout=None, row_budget=None, titles=None):
+def resolve_detail_file(fields, key, fs):
+    if key == "worktree":
+        return None
+    values = dict(fields)
+    worktree = values.get("worktree")
+    value = (values.get(key) or "").strip()
+    if not worktree or not value or "\n" in value:
+        return None
+    path = os.path.join(worktree, value)
+    return path if fs.is_file(path) else None
+
+
+def detail_row_cells(field, layout=None, row_budget=None, titles=None, is_file=False):
     key, value = field
     label = _detail_field_label(key)
-    style = COLOURS["cyan"] if key in ("pr", "spec-pr", "worktree", "ci-checks") else COLOURS["text"]
+    linked = is_file or key in ("pr", "spec-pr", "worktree", "ci-checks")
+    style = COLOURS["cyan"] if linked else COLOURS["text"]
     block = detail_value_is_block(value)
     if layout is not None and layout.stacked:
         key_field = pad_field(Text(label, style=COLOURS["dim"]), layout.atomic_widths["key"])
@@ -850,7 +864,7 @@ def toast_text(success, message, kind, value, tab="outputs"):
     main, sub = message, base_caption
     if success and kind == "url":
         sub = "%s - %s" % (base_caption, TOAST_URL_SUB_SUFFIX)
-    elif success and kind in ("filepath", "editor"):
+    elif success and kind in ("filepath", "file", "editor"):
         main = "Opened %s" % value
         destination = TOAST_EDITOR_DESTINATION if kind == "editor" else TOAST_FILEPATH_DESTINATION
         sub = "%s - %s" % (destination, base_caption)

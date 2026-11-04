@@ -153,6 +153,9 @@ class FakeFs(FsPort, WorkflowBundlePort, WorkerLogPort):
     def exists(self, path):
         return path in self._files or path in self._dirs
 
+    def is_file(self, path):
+        return path in self._files
+
     def real_path(self, path):
         return path
 

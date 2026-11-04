@@ -13,7 +13,7 @@ class TestOpeningDetailRows(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("Item", "a description", id="LC-1")
         step = store.create_step(stage="triage", role="human", item=item, id="LC-1.1")
-        self.session = _launch(store, launcher=self.launcher, fs=FakeFs(files={"/tmp/wt": "x"}))
+        self.session = _launch(store, launcher=self.launcher, fs=FakeFs(files={"/tmp/wt": "x", "/tmp/wt/specs/s.md": "x", "/tmp/wt/digest.md": "x"}))
         self.addCleanup(self.session.close)
         self.screen = NodeHubScreen(self.session.app._container, step, lambda: NOW, initial_tab="detail")
         self.session.run(lambda: self.session.app.push_screen(self.screen))
@@ -55,11 +55,36 @@ class TestOpeningDetailRows(unittest.TestCase):
             self.launcher.opened_urls,
             ["https://example.test/pull/2", "https://example.test/pull/1/checks?sha=abc"])
 
-    def test_the_spec_row_opens_as_a_path(self):
-        self._select([("spec", "/tmp/wt")], "spec")
+    def test_a_spec_row_resolving_to_a_file_opens_with_the_system_opener(self):
+        self._select([("worktree", "/tmp/wt"), ("spec", "specs/s.md")], "spec")
 
+        self.assertEqual(self.launcher.opened_paths, ["/tmp/wt/specs/s.md"])
+        self.assertIsNone(self.launcher.edited_detached)
+
+    def test_an_in_digest_row_resolving_to_a_file_opens_with_the_system_opener(self):
+        self._select([("worktree", "/tmp/wt"), ("in:digest", "digest.md")], "in:digest")
+
+        self.assertEqual(self.launcher.opened_paths, ["/tmp/wt/digest.md"])
+
+    def test_a_value_that_is_not_a_file_under_the_worktree_opens_nothing(self):
+        self._select([("worktree", "/tmp/wt"), ("in:note", "nothing.md")], "in:note")
+
+        self.assertEqual(self.launcher.opened_paths, [])
         self.assertEqual(self.launcher.opened_urls, [])
-        self.assertEqual(self.launcher.edited_detached[1], "/tmp/wt")
+
+    def test_file_rows_are_styled_as_links_and_other_rows_are_not(self):
+        from lightcycle.adapters.tui.hub_render import COLOURS, detail_row_cells, resolve_detail_file
+
+        fields = [("worktree", "/tmp/wt"), ("in:digest", "digest.md"), ("in:note", "nothing.md")]
+        fs = self.session.app._container.fs
+
+        def style_of(key, value):
+            is_file = resolve_detail_file(fields, key, fs) is not None
+            (_key, cells), = detail_row_cells((key, value), is_file=is_file)
+            return cells[1].spans[0].style if cells[1].spans else cells[1].style
+
+        self.assertEqual(str(style_of("in:digest", "digest.md")), str(COLOURS["cyan"]))
+        self.assertNotEqual(str(style_of("in:note", "nothing.md")), str(COLOURS["cyan"]))
 
     def test_every_leading_run_row_has_a_label(self):
         from lightcycle.adapters.tui.hub import DETAIL_FIELD_LABELS

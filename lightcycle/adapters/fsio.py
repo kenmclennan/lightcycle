@@ -24,6 +24,10 @@ def exists(path):
     return bool(path) and os.path.exists(path)
 
 
+def is_file(path):
+    return bool(path) and os.path.isfile(path)
+
+
 def is_executable(path):
     return bool(path) and os.path.isfile(path) and os.access(path, os.X_OK)
 
@@ -90,6 +94,9 @@ class FsAdapter(FsPort):
 
     def exists(self, path):
         return exists(path)
+
+    def is_file(self, path):
+        return is_file(path)
 
     def real_path(self, path):
         return os.path.realpath(path)
