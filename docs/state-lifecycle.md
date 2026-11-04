@@ -68,7 +68,7 @@ The `lc status` / `lc inbox` / `lc queue` / `lc active` boards are not stored - 
 | blocked    | queue  |
 | queued     | queue  |
 
-Lanes run over **steps only** - items never appear in a lane (they live in `lc backlog` and the item roll-up). A `blocked` step shows in the `queue` lane alongside runnable steps, not in a lane of its own - nothing is asked of anyone while it waits on its dependency, so it is not treated as an attention signal. It stays distinguishable by its `blocked_by` field, which every reader of the queue (`lc status`, `lc queue`, the priority list) can use to show what it is waiting on.
+Lanes run over **steps only** - items never appear in a lane (they live in `lc backlog` and the item roll-up). A `blocked` step shows in the `queue` lane alongside runnable steps, not in a lane of its own - nothing is asked of anyone while it waits on its dependency, so it is not treated as an attention signal. It stays distinguishable by its `blocked_by` field, which every reader of the queue (`lc status`, `lc queue`, the priority list) can use to show what it is waiting on. A stacked item's first step (`--stacks-on`) is blocked the same way, on its parent item, until the parent's stack run holds a PR; the release sweep then removes that one dependency and every reader shows `[stacked on <parent>]`.
 
 ## A held comment's own lifecycle
 

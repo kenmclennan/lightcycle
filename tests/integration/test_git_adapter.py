@@ -27,6 +27,25 @@ def _make_repo():
     return d
 
 
+class TestGitAdapterRemoteBranchExists(unittest.TestCase):
+    def test_a_branch_known_only_as_a_remote_ref_is_found_and_a_local_only_branch_is_not(self):
+        origin = _make_repo()
+        _git(origin, "branch", "feat/remote-only")
+        clone = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, clone, True)
+        subprocess.run(["git", "clone", "-q", origin, clone], check=True)
+        _git(clone, "branch", "feat/local-only")
+        adapter = GitAdapter()
+
+        self.assertTrue(adapter.remote_branch_exists(clone, "feat/remote-only"))
+        self.assertFalse(adapter.branch_exists(clone, "feat/remote-only"))
+        self.assertFalse(adapter.remote_branch_exists(clone, "feat/local-only"))
+
+    def test_a_non_repo_raises_instead_of_answering_no(self):
+        with self.assertRaises(GitReadError):
+            GitAdapter().remote_branch_exists(tempfile.mkdtemp(), "feat/x")
+
+
 class TestGitAdapterRemoteUrl(unittest.TestCase):
     def test_returns_origin_url_when_configured(self):
         repo = _make_repo()

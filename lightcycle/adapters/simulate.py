@@ -77,6 +77,10 @@ class RecordingGit(GitPort, TeardownLedgerPort):
         self._record("branch_exists", root, branch)
         return (root, branch) in self._branches
 
+    def remote_branch_exists(self, root, branch):
+        self._record("remote_branch_exists", root, branch)
+        return True
+
     def worktree_base(self, root):
         self._record("worktree_base", root)
         return _WORKTREE_BASE

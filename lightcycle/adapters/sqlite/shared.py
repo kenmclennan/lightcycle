@@ -12,7 +12,7 @@ _RAW_STORAGE_STATE = {
 
 _ITEM_COLUMNS = (
     "id", "title", "description", "state", "repo", "workflow", "outcome", "disposition",
-    "note", "project", "created_at", "closed_at",
+    "note", "project", "created_at", "closed_at", "stacks_on",
 )
 
 _STEP_COLUMNS = (

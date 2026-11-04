@@ -63,7 +63,8 @@ CREATE TABLE IF NOT EXISTS items (
     note TEXT,
     project TEXT,
     created_at TEXT,
-    closed_at TEXT
+    closed_at TEXT,
+    stacks_on TEXT
 );
 
 CREATE TABLE IF NOT EXISTS steps (
@@ -514,6 +515,7 @@ class SqliteStore(
         "items": (
             ("disposition", "TEXT"),
             ("note", "TEXT"),
+            ("stacks_on", "TEXT"),
         ),
         "phase_runs": (
             ("comments_dispatched_through", "TEXT"),
@@ -653,6 +655,7 @@ class SqliteStore(
             blocked_by=blocked_by,
             created_at=d["created_at"],
             closed_at=d["closed_at"],
+            stacks_on=d["stacks_on"],
         )
 
     def _unresolved_deps(self, ids):

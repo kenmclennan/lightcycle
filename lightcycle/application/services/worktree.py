@@ -2,8 +2,10 @@ import sys
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.setup.project_registry import ProjectRegistry
+from lightcycle.application.work.stack_runs import StackRuns
 from lightcycle.domain.flow.flow import PROJECT_WORKSPACE
 from lightcycle.domain.runs import RunState, pass_number
+from lightcycle.domain.work import State
 from lightcycle.domain.workspace import Branch, Worktree
 from lightcycle.ports.git import GitReadError
 from lightcycle.ports.store import ProjectResolutionError
@@ -112,6 +114,9 @@ class WorktreeService:
     def _branch_for(self, node):
         return self.item_branch(node) or self._minted_branch(node)
 
+    def target_for_run(self, run):
+        return self._target_for_phase(run.item, run.phase)
+
     def path_for_run(self, run):
         return Worktree(run.item, self._key_for(run)).path_in(self._target_for_phase(run.item, run.phase))
 
@@ -152,6 +157,25 @@ class WorktreeService:
             return
         self._store.set_branch(run.id, branch)
 
+    def _stacked_base(self, node, item, target):
+        if self._flow is None or not self._uses_item_repo(node):
+            return None
+        parent_id = self._item(item).stacks_on
+        if not parent_id:
+            return None
+        parent = self._item(parent_id)
+        if parent.state == State.DONE or parent.repo != self._item(item).repo:
+            return None
+        run = StackRuns(self._store, self._flow).run_of(parent_id)
+        if run is None or not run.pr:
+            return None
+        if not self._git.remote_branch_exists(target, run.branch):
+            raise UseCaseError(
+                "cannot set up workspace for %s: the parent %s's branch %s no longer exists "
+                "on origin" % (item, parent_id, run.branch)
+            )
+        return "origin/" + run.branch
+
     def ensure(self, node):
         item = self._item_of(node)
         if self._uses_item_repo(node) and not self.has_repo(item):
@@ -187,6 +211,7 @@ class WorktreeService:
                 raise UseCaseError(
                     "cannot set up workspace for %s: no base branch found in %s" % (item, target)
                 )
+            base = self._stacked_base(node, item, target) or base
         else:
             base = None
         self._scaffold.make_dir(self._fs.worktrees_dir(target))

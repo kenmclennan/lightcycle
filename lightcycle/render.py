@@ -45,6 +45,8 @@ def node_extra(node, *, show_description=False, description=None, artifacts=None
     extra = "  plan:%s" % plan if plan else ""
     if getattr(node, "blocked_by", None):
         extra += "  [blocked by %s]" % ", ".join(sorted(node.blocked_by))
+    if getattr(node, "stacks_on", None):
+        extra += "  [stacked on %s]" % node.stacks_on
     text = description if description is not None else getattr(node, "description", None)
     if show_description and text:
         extra += "  desc:%s" % _truncate(text)

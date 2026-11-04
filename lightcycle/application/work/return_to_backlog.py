@@ -60,4 +60,5 @@ class ReturnToBacklogUseCase:
                                              for r in reasons))
             for step in open_steps:
                 self._store.delete(step.id)
+            self._store.set_stacks_on(node.id, None)
         return ReturnToBacklogResponse(removed=tuple(s.id for s in open_steps))

@@ -8,6 +8,7 @@ from typing import Dict, List
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.engine_steps import LIFECYCLE_ORIGIN_LABEL
 from lightcycle.application.work.close_item import TEARDOWN_REFUSED_ARTIFACT
+from lightcycle.application.work.stack_runs import StackRuns
 from lightcycle.application.pool.schedule_resolution import ScheduleResolver
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.workflows.engine_requirement_check import bundle_conflict_messages
@@ -28,6 +29,7 @@ from lightcycle.domain.guidance.conventions import (
 )
 from lightcycle.frontmatter import split_frontmatter
 from lightcycle.ports.git import GitReadError
+from lightcycle.ports.store import NodeNotFoundError
 from lightcycle.domain.health import (
     Problem, blank_key_fix, fsck, obsolete_key_fix, schedule_not_enabled_fix,
 )
@@ -106,6 +108,7 @@ class DoctorUseCase:
                 + self._schedule_problems() + self._reload_problems() + lifecycle_config),
             "orphans": self._orphan_problems(),
             "teardown": self._teardown_refusal_problems(),
+            "stack": self._stack_problems(),
             "facets": self._guidance_registration_problems() + self._facet_problems(),
             "guidance": self._guidance_problems() + self._guidance_shortcode_problems(),
             "github": github_problems,
@@ -683,6 +686,40 @@ class DoctorUseCase:
                         "with `lc project set %s --facets <remaining>`"
                         % (project.identity, facet, facet, project.identity),
                     ))
+        return problems
+
+    def _stack_problems(self):
+        problems = []
+        stack_runs = StackRuns(self._store, self._flow)
+        fetched = set()
+        for item in self._store.all_items():
+            parent_id = item.stacks_on
+            if not parent_id:
+                continue
+            try:
+                parent = self._store.get_item(parent_id)
+            except NodeNotFoundError:
+                continue
+            if parent.state == State.DONE:
+                continue
+            run = stack_runs.run_of(parent_id)
+            if run is None:
+                continue
+            target = self._worktrees.target_for_run(run)
+            if not self._git.is_git_repo(target):
+                continue
+            if target not in fetched:
+                fetched.add(target)
+                self._git.fetch_origin(target)
+            if self._git.remote_branch_exists(target, run.branch):
+                continue
+            problems.append(Problem(
+                "stack",
+                "item %s is stacked on %s but its branch %s no longer exists on origin"
+                % (item.id, parent_id, run.branch),
+                node_id=item.id,
+                fix="restack or retarget the item by hand",
+            ))
         return problems
 
     def _teardown_refusal_problems(self):
