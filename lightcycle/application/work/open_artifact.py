@@ -21,6 +21,8 @@ class OpenArtifactUseCase:
         self._launcher = launcher
 
     def execute(self, input: OpenArtifactInput) -> OpenArtifactResult:
+        if input.kind == "file" and not self._fs.is_file(input.value):
+            return OpenArtifactResult(False, "%s no longer exists" % input.value)
         if input.kind in ("filepath", "editor") and not self._fs.exists(input.value):
             return OpenArtifactResult(False, "%s no longer exists" % input.value)
         if input.kind == "url":
