@@ -1309,6 +1309,18 @@ class TestClaimWorkspaceGuard(unittest.TestCase):
         self.assertEqual([n.id for n in wt.ensured], [step])
         self.assertEqual([n.id for n in wt.branched], [step])
 
+    def test_a_fresh_claim_carries_an_empty_workflow_config(self):
+        s, step, uc = self._setup(FakeWorktrees())
+
+        self.assertEqual(uc.execute(ClaimInput(role="agent")).as_dict()["workflow_config"], {})
+
+    def test_a_resumed_claim_carries_an_empty_workflow_config(self):
+        s, step, uc = self._setup(FakeWorktrees(), spawn="sp1")
+        s.update_state(step, State.RUNNING)
+        s.assign(step, "sp1")
+
+        self.assertEqual(uc.execute(ClaimInput(role="agent")).as_dict()["workflow_config"], {})
+
 
 class TestClaimTask(unittest.TestCase):
     def _uc(self, store, config=None):

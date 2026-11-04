@@ -2,6 +2,7 @@ import os
 import unittest
 
 from lightcycle.domain.workflows.lifecycle import (
+    declared_config_values,
     lifecycle_problems,
     missing_required_keys,
     parse_lifecycle,
@@ -169,3 +170,29 @@ class TestEnv(unittest.TestCase):
         self.assertEqual(missing_required_keys(self.lifecycle, {}), ("api-token",))
         self.assertEqual(missing_required_keys(self.lifecycle, {"api-token": " "}), ("api-token",))
         self.assertEqual(missing_required_keys(self.lifecycle, {"api-token": "x"}), ())
+
+
+class TestDeclaredConfigValues(unittest.TestCase):
+    def setUp(self):
+        self.lifecycle = _parse(BINDING)
+
+    def test_an_undeclared_key_is_dropped(self):
+        self.assertEqual(
+            declared_config_values(self.lifecycle, {"api-token": "t", "stray": "x"}),
+            {"api-token": "t"})
+
+    def test_a_blank_value_is_dropped(self):
+        self.assertEqual(declared_config_values(self.lifecycle, {"api-token": "t", "region": ""}), {"api-token": "t"})
+
+    def test_a_whitespace_only_value_is_dropped(self):
+        self.assertEqual(declared_config_values(self.lifecycle, {"region": "   "}), {})
+
+    def test_a_value_is_stringified(self):
+        self.assertEqual(declared_config_values(self.lifecycle, {"region": 100}), {"region": "100"})
+
+    def test_it_matches_the_script_env_entries(self):
+        config = {"api-token": "tok", "region": "  ", "stray": "x"}
+        env = workflow_script_env({}, None, "o", "n", "/d", "/b", "sha", self.lifecycle, config)
+        exported = {k for k in env if k.startswith("LC_WORKFLOW_CONFIG_")}
+        self.assertEqual(exported, {"LC_WORKFLOW_CONFIG_API_TOKEN"})
+        self.assertEqual(declared_config_values(self.lifecycle, config), {"api-token": "tok"})

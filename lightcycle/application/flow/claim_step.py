@@ -12,6 +12,8 @@ from lightcycle.application.work.step_inputs import StepInputs
 from lightcycle.config import ConfigError
 from lightcycle.domain.contracts import StepContract
 from lightcycle.domain.work import NodeView, State
+from lightcycle.domain.workflows.identity import parse_pin
+from lightcycle.domain.workflows.lifecycle import declared_config_values, parse_lifecycle
 from lightcycle.ports.store import ProjectResolutionError
 
 
@@ -37,6 +39,7 @@ class ClaimResponse:
     description: Optional[str] = None
     repo_path: Optional[str] = None
     config: Optional[dict] = None
+    workflow_config: Optional[dict] = None
     phase: Optional[str] = None
     pin: Optional[str] = None
     step_file: Optional[str] = None
@@ -54,6 +57,7 @@ class ClaimResponse:
             out["repo_path"] = self.repo_path
         if self.config:
             out["config"] = self.config
+        out["workflow_config"] = self.workflow_config or {}
         return out
 
 
@@ -152,6 +156,19 @@ class ClaimStepUseCase:
             return self._flow.meta_for_step(stage, pin)
         return self._flow.meta_for_unpinned_step(stage)
 
+    def _workflow_config(self, pin):
+        parsed = parse_pin(pin) if pin else None
+        if parsed is None:
+            return {}
+        try:
+            lifecycle = parse_lifecycle(self._flow.workflow_meta(pin))
+            if lifecycle is None or not lifecycle.config_keys():
+                return {}
+            block = self._config.workflow_config(parsed[0], parsed[1])
+        except (ConfigError, ValueError):
+            return {}
+        return declared_config_values(lifecycle, block)
+
     def _attach_trusted_authors(self, t):
         phase = self._flow.phase_for(t)
         if phase is None:
@@ -223,5 +240,6 @@ class ClaimStepUseCase:
             pr=surface.get("pr"), spec_path=spec_path,
             description=self._store.get_node(item).description,
             repo_path=repo_path, config=config or None,
+            workflow_config=self._workflow_config(pin),
             phase=surface.get("phase"), pin=pin, step_file=step_file,
         )
