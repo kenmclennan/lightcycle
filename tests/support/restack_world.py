@@ -30,6 +30,9 @@ _FLOW = flow_from_metas({
 
 
 class WorldFlow(_FlowAdapter):
+    def merge_outcome(self, stage, name=None):
+        return self._flow.step_def(stage).pr_merge
+
     def workspace_for_phase(self, node, phase):
         return None
 
@@ -39,7 +42,8 @@ class WorldWorktrees:
         return REPO
 
     def path_for_run(self, run):
-        return "%s/.worktrees/%s" % (REPO, run.item)
+        suffix = "-s%d" % run.slice if run.slice > 0 else ""
+        return "%s/.worktrees/%s%s" % (REPO, run.item, suffix)
 
 
 def _pr(n):
@@ -99,6 +103,46 @@ class RestackWorld:
         self.registered.add("%s/.worktrees/%s" % (REPO, item))
         return self.nodes[name]
 
+    def add_slices(self, name, count=3, bases=None, plain=(), unbased=(), commits=("m1",)):
+        item = self.store.create_item(name, "d")
+        pid = self.store.open_pass(item)
+        bases = bases or {}
+        history = list(commits)
+        slices = {}
+        for n in range(1, count + 1):
+            base = bases.get(n, n - 1 if n > 1 else None)
+            rid = self.store.open_run(
+                item, pid, None, slice=n, slice_name="s%d" % n, base_slice=base)
+            branch = "feat/%s-s%d" % (name, n)
+            pr = self._new_pr()
+            self.store.set_branch(rid, branch)
+            self.store.set_pr(rid, pr)
+            own = list(history) + ["%s-s%d-c" % (name, n)]
+            history = own
+            tip = "%s-s%d-tip" % (name, n)
+            step = self.store.create_step(
+                stage="plain-step" if n in plain else GATE, role="agent", item=item, slice=n)
+            entry = {
+                "item": item, "branch": branch, "pr": pr, "step": step, "tip": tip,
+                "head": tip, "run": rid, "slice": n,
+            }
+            slices[n] = entry
+            self.nodes["%s-s%d" % (name, n)] = entry
+            self.remote_tips[branch] = tip
+            self.ref_shas[(REPO, "origin/" + branch)] = tip
+            self.remote_branches.add((REPO, branch))
+            self.remote_commits[branch] = list(own)
+            self.history[tip] = list(own)
+            self.github._head_shas[pr] = tip
+            if base is not None:
+                self.github._base_keys[pr] = "acme/widget@" + slices[base]["branch"]
+                if n not in unbased:
+                    self.store.replace_artifact(
+                        item, "stack-base", slices[base]["tip"], label=rid, internal=True)
+            self.registered.add("%s/.worktrees/%s-s%d" % (REPO, item, n))
+        self.nodes[name] = slices[count]
+        return slices
+
     def sha_for(self, name, commits):
         sha = "%s-sha" % name
         self.history[sha] = list(commits)
@@ -126,6 +170,12 @@ class RestackWorld:
         return RestackStacksUseCase(
             self.store, self.git, self.github, WorldWorktrees(), self.flow, complete,
             self.stale.append)
+
+    def sync_heads(self):
+        for entry in self.nodes.values():
+            tip = self.git.remote_tips.get(entry["branch"])
+            if tip and entry["pr"] in self.github._head_shas:
+                self.github._head_shas[entry["pr"]] = tip
 
     def merge(self, name):
         self.github._merged.add(self.nodes[name]["pr"])
