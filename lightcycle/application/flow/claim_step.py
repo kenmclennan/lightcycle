@@ -81,7 +81,9 @@ class ClaimStepUseCase:
             if sid:
                 node = self._assigned_inflight(sid, spawnid)
                 if node is not None:
-                    return self._context(node)
+                    outputs = ItemOutputs(self._store, self._flow)
+                    with outputs.reading():
+                        return self._context(node, outputs)
                 raise UseCaseError(
                     "spawnid '%s' already claimed step '%s'; refusing a further claim"
                     % (spawnid, sid)
@@ -110,6 +112,11 @@ class ClaimStepUseCase:
             role, spawnid or role, item=item, stage=stage, exclude=exclude)
         if t is None:
             return None
+        outputs = ItemOutputs(self._store, self._flow)
+        with outputs.reading():
+            return self._claimed(t, role, spawnid, outputs)
+
+    def _claimed(self, t, role, spawnid, outputs):
         selection = self._flow.workflow_for(t)
         try:
             pin = self._flow.resolve_selection(selection) if selection else None
@@ -125,7 +132,7 @@ class ClaimStepUseCase:
             return None
         meta = self._meta_for(t.stage, pin)
         missing = StepContract.from_meta(meta).missing_inputs(
-            ItemOutputs(self._store, self._flow).present_types(t))
+            outputs.present_types(t))
         if missing:
             decision = "missing required input(s): %s" % ", ".join(sorted(missing))
             observation = (
@@ -143,8 +150,8 @@ class ClaimStepUseCase:
             if spawnid:
                 self._workers.set_step(spawnid, t.id)
                 self._record_log(spawnid, t.id)
-            StepInputs(self._store, self._flow).freeze(t)
-            return self._context(t, pin, meta)
+            StepInputs(self._store, self._flow, outputs).freeze(t)
+            return self._context(t, outputs, pin, meta)
         except Exception:
             self._store.reclaim(t.id)
             raise
@@ -210,15 +217,14 @@ class ClaimStepUseCase:
         )
         return False
 
-    def _context(self, t, pin=None, meta=None):
+    def _context(self, t, outputs, pin=None, meta=None):
         if pin is None:
             pin = self._flow.workflow_for(t)
         if meta is None:
             meta = self._meta_for(t.stage, pin)
         self._attach_trusted_authors(t)
         view = self._store.node_view(t.id)
-        surface = node_read_surface(self._store, self._flow, view)
-        item = t.item or t.id
+        surface = node_read_surface(self._store, self._flow, view, outputs)
         ws = self._worktrees.ensure(t)
         branch = self._worktrees.item_branch(t)
         if not self._workspace_agrees(t, ws, branch):
@@ -230,7 +236,8 @@ class ClaimStepUseCase:
             spec_path = (
                 spec if os.path.isabs(spec) else os.path.join(self._worktrees.context_path(), spec)
             )
-        repo = self._store.get_item(t.item).repo
+        item_fields = self._store.item_fields(t.item)
+        repo = item_fields.repo
         repo_path = None
         if repo:
             try:
@@ -246,7 +253,7 @@ class ClaimStepUseCase:
         return ClaimResponse(
             view=view, surface=surface, workspace=ws, branch=branch,
             pr=surface.get("pr"), spec_path=spec_path,
-            description=self._store.get_node(item).description,
+            description=item_fields.description,
             repo_path=repo_path, config=config or None,
             workflow_config=self._workflow_config(pin),
             phase=surface.get("phase"), pin=pin, step_file=step_file,

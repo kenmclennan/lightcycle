@@ -16,6 +16,7 @@ from lightcycle.application.work import (
     TraceUseCase,
 )
 from lightcycle.application.services.flow import FlowService
+from lightcycle.application.work.item_outputs import ItemOutputs
 from lightcycle.application.work.node_read_surface import node_read_surface
 from lightcycle.application.work.project_of import short_project_label
 from lightcycle.domain.pool.worker import Worker
@@ -69,7 +70,7 @@ class TestShowNode(unittest.TestCase):
 class TestShowNodeValidOutcomes(unittest.TestCase):
     def _valid(self, s, flow, sid):
         resp = ShowNodeUseCase(s, flow).execute(ShowNodeInput(step=sid))
-        return node_read_surface(s, flow, resp.view)["valid_outcomes"]
+        return node_read_surface(s, flow, resp.view, ItemOutputs(s, flow))["valid_outcomes"]
 
     def test_engine_step_lists_its_declared_outcomes(self):
         s = FakeStore()
@@ -95,7 +96,7 @@ class TestShowNodeValidOutcomes(unittest.TestCase):
 class TestShowNodeRoutes(unittest.TestCase):
     def _surface(self, s, flow, sid):
         resp = ShowNodeUseCase(s, flow).execute(ShowNodeInput(step=sid))
-        return node_read_surface(s, flow, resp.view)
+        return node_read_surface(s, flow, resp.view, ItemOutputs(s, flow))
 
     def test_workflow_step_shows_each_outcome_with_its_target_stage(self):
         s = FakeStore()
@@ -135,7 +136,7 @@ class TestShowNodeRoutes(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("st", "a description")
         resp = ShowNodeUseCase(s, _empty_flow(s)).execute(ShowNodeInput(step=item))
-        self.assertNotIn("routes", node_read_surface(s, _empty_flow(s), resp.view))
+        self.assertNotIn("routes", node_read_surface(s, _empty_flow(s), resp.view, ItemOutputs(s, _empty_flow(s))))
 
 
 class TestTrace(unittest.TestCase):

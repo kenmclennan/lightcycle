@@ -226,6 +226,100 @@ class TestSqliteStoreItemStateMatchesStepRollUp(unittest.TestCase):
         self.assertEqual(s.get_item(item).state, State.BACKLOGGED)
 
 
+class TestSqliteStoreNarrowReads(unittest.TestCase):
+    def _mixed_item(self):
+        s = make_sqlite_store()
+        item = s.create_item("an item", "a description", shortcode="GRID")
+        done = s.create_step(stage="a", role="agent", item=item)
+        s.claim_ready("agent")
+        s.complete_node(done, "done")
+        s.create_step(stage="b", role="agent", item=item)
+        running = s.create_step(stage="c", role="agent", item=item)
+        s.claim_ready("agent")
+        gate = s.create_step(stage="gate", role="agent", item=item)
+        blocked = s.create_step(stage="d", role="agent", item=item)
+        s.dep_add(blocked, gate)
+        s.create_step(stage="e", role="human", item=item)
+        s.add_artifact(item, "repo", "kenmclennan/lightcycle")
+        return s, item, running
+
+    def test_item_fields_equal_the_matching_get_item_fields(self):
+        s, item, _ = self._mixed_item()
+        empty = s.create_item("bare", "no steps", shortcode="BARE")
+        for item_id in (item, empty):
+            with self.subTest(item=item_id):
+                got = s.item_fields(item_id)
+                full = s.get_item(item_id)
+                self.assertEqual(
+                    (got.id, got.title, got.description, got.repo, got.stacks_on, got.workflow),
+                    (full.id, full.title, full.description, full.repo, full.stacks_on,
+                     full.workflow),
+                )
+
+    def test_step_stamps_return_one_stamp_per_step_with_the_closed_or_created_time(self):
+        s, item, _ = self._mixed_item()
+        steps = [st for st in s.children(item) if st.type == "step"]
+        stamps = {st.id: st for st in s.step_stamps(item)}
+
+        self.assertEqual(set(stamps), {st.id for st in steps})
+        for st in steps:
+            self.assertEqual(stamps[st.id].at, st.closed_at or st.created_at)
+            self.assertEqual(stamps[st.id].stage, st.stage)
+            self.assertEqual(stamps[st.id].pass_id, st.pass_id)
+
+    def test_an_item_with_no_steps_has_no_stamps(self):
+        s = make_sqlite_store()
+        item = s.create_item("bare", "no steps", shortcode="BARE")
+
+        self.assertEqual(s.step_stamps(item), [])
+
+    def test_item_fields_on_an_unknown_id_raises_not_found(self):
+        from lightcycle.ports.store import NodeNotFoundError
+
+        with self.assertRaises(NodeNotFoundError):
+            make_sqlite_store().item_fields("NOPE")
+
+
+class TestSqliteStoreCompletionSuccessor(unittest.TestCase):
+    def _spec(self, item, previous):
+        from lightcycle.domain.work.node_spec import NodeSpec
+
+        return NodeSpec(stage="next", role="agent", item=item, previous=previous)
+
+    def test_completing_a_step_with_no_open_successor_creates_the_next_step(self):
+        s = make_sqlite_store()
+        item = s.create_item("an item", "d", shortcode="GRID")
+        first = s.create_step(stage="a", role="agent", item=item)
+
+        ok, new_id = s.complete_step_atomic(first, "done", None, self._spec(item, first))
+
+        self.assertTrue(ok)
+        self.assertIsNotNone(new_id)
+
+    def test_an_open_successor_suppresses_a_second_next_step(self):
+        s = make_sqlite_store()
+        item = s.create_item("an item", "d", shortcode="GRID")
+        first = s.create_step(stage="a", role="agent", item=item)
+        s.create_step(stage="b", role="agent", item=item, previous=first)
+
+        ok, new_id = s.complete_step_atomic(first, "done", None, self._spec(item, first))
+
+        self.assertTrue(ok)
+        self.assertIsNone(new_id)
+
+    def test_a_done_successor_does_not_suppress_the_next_step(self):
+        s = make_sqlite_store()
+        item = s.create_item("an item", "d", shortcode="GRID")
+        first = s.create_step(stage="a", role="agent", item=item)
+        later = s.create_step(stage="b", role="agent", item=item, previous=first)
+        s.complete_node(later, "done")
+
+        ok, new_id = s.complete_step_atomic(first, "done", None, self._spec(item, first))
+
+        self.assertTrue(ok)
+        self.assertIsNotNone(new_id)
+
+
 class TestSqliteStoreRoundtrips(unittest.TestCase):
     def _store(self):
         return make_sqlite_store()

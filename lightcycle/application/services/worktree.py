@@ -25,7 +25,7 @@ class WorktreeService:
         self._scaffold = scaffold
 
     def _item(self, item):
-        return self._store.get_item(item)
+        return self._store.item_fields(item)
 
     def has_repo(self, item):
         return self._item(item).repo is not None
@@ -204,7 +204,7 @@ class WorktreeService:
         parent_id = self._item(item).stacks_on
         if not parent_id:
             return None
-        parent = self._item(parent_id)
+        parent = self._store.get_item(parent_id)
         if parent.state == State.DONE or parent.repo != self._item(item).repo:
             return None
         run = StackRuns(self._store, self._flow).run_of(parent_id)

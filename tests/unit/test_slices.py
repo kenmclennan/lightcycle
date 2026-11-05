@@ -12,6 +12,7 @@ from lightcycle.application.services.flow import FlowService
 from lightcycle.application.services.worktree import WorktreeService
 from lightcycle.application.workflows.bundle_check import check_bundle_references
 from lightcycle.application.work.link_artifact import LinkArtifactInput, LinkArtifactUseCase
+from lightcycle.application.work.item_outputs import ItemOutputs
 from lightcycle.application.work.node_read_surface import node_read_surface
 from lightcycle.domain.flow.graph import parse_graph
 from lightcycle.domain.runs import RunState, parse_slices, run_id, run_round
@@ -370,7 +371,8 @@ class TestReadSurface(unittest.TestCase):
 
     def _surface(self, node_id):
         return node_read_surface(
-            self.w.store, self.w.flow, self.w.store.node_view(node_id))
+            self.w.store, self.w.flow, self.w.store.node_view(node_id),
+            ItemOutputs(self.w.store, self.w.flow))
 
     def test_the_item_lists_its_slices_in_order(self):
         self.w.slice_run(1, "a", None, branch="feat/a", pr="u1")

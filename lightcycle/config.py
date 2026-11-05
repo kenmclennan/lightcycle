@@ -96,6 +96,9 @@ class ResolvedSetting:
     seed: Optional[str]
 
 
+_PROMPTS_ROOT = str(Path(__file__).resolve().parent / "prompts")
+
+
 class ConfigError(Exception):
     pass
 
@@ -174,7 +177,7 @@ class Config:
         return self._engine_root()
 
     def prompts_root(self):
-        return str(Path(__file__).resolve().parent / "prompts")
+        return _PROMPTS_ROOT
 
     def version(self):
         from lightcycle import __version__

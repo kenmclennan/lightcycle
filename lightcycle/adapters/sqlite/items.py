@@ -1,6 +1,8 @@
 from lightcycle.domain.feedback import RETRO_ORIGIN_LABEL, RETROED_LABEL
 from lightcycle.domain.runs import Pass
 from lightcycle.domain.work import Artifact, NodeView, default_kind_for
+from lightcycle.domain.work.item import ItemFields
+from lightcycle.domain.work.outputs import StepStamp
 from lightcycle.ports.store import ItemText, NodeNotFoundError
 from lightcycle.adapters.sqlite.shared import _ITEM_COLUMNS, _STEP_COLUMNS
 
@@ -112,6 +114,23 @@ class ItemsAggregate:
         if not rows:
             raise NodeNotFoundError("unknown item '%s'" % tid)
         return rows[0]
+
+    def item_fields(self, item_id):
+        row = self._conn.execute(
+            "SELECT id, title, description, repo, stacks_on, workflow FROM items WHERE id = ?",
+            (item_id,),
+        ).fetchone()
+        if row is None:
+            raise NodeNotFoundError("unknown item '%s'" % item_id)
+        return ItemFields(*row)
+
+    def step_stamps(self, item_id):
+        rows = self._conn.execute(
+            "SELECT id, stage, pass_id, COALESCE(NULLIF(closed_at, ''), created_at) "
+            "FROM steps WHERE item = ?",
+            (item_id,),
+        ).fetchall()
+        return [StepStamp(*r) for r in rows]
 
     def item_workflow(self, item_id):
         row = self._conn.execute("SELECT workflow FROM items WHERE id = ?", (item_id,)).fetchone()

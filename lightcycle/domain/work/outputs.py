@@ -19,6 +19,14 @@ class ArtifactRecord:
 
 
 @dataclass(frozen=True)
+class StepStamp:
+    id: str
+    stage: Optional[str]
+    pass_id: Optional[str]
+    at: Optional[str]
+
+
+@dataclass(frozen=True)
 class StepFacts:
     id: str
     pass_id: Optional[str]

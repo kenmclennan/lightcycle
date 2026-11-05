@@ -11,6 +11,7 @@ from lightcycle.application.services.flow import FlowService
 from lightcycle.application.services.worktree import WorktreeService
 from lightcycle.application.work.activate_item import ActivateItemInput, ActivateItemUseCase
 from lightcycle.application.work.inbox import InboxInput, InboxUseCase
+from lightcycle.application.work.item_outputs import ItemOutputs
 from lightcycle.application.work.node_read_surface import node_read_surface
 from lightcycle.application.work.return_to_backlog import ReturnToBacklogInput, ReturnToBacklogUseCase
 from lightcycle.domain.work.stack_order import order_stacks
@@ -366,7 +367,9 @@ class TestReadSurface(unittest.TestCase):
         self.step = _activate(self.store, self.flow, self.child, self.parent).step
 
     def _surface(self, node_id):
-        return node_read_surface(self.store, self.flow, self.store.node_view(node_id))
+        return node_read_surface(
+            self.store, self.flow, self.store.node_view(node_id),
+            ItemOutputs(self.store, self.flow))
 
     def test_the_step_reports_its_stack(self):
         self.assertEqual(self._surface(self.step)["stack"], {
