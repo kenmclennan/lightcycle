@@ -1,6 +1,6 @@
 import unittest
 
-from lightcycle.domain.work import State, derive_state, role_state
+from lightcycle.domain.work import State, derive_state, item_blocked_by, role_state
 
 
 class DeriveStepStateTest(unittest.TestCase):
@@ -100,6 +100,41 @@ class RoleStateTest(unittest.TestCase):
 
     def test_any_other_role_is_queued(self):
         self.assertEqual(role_state("reviewer"), State.QUEUED)
+
+
+class ItemBlockedByTest(unittest.TestCase):
+    def test_own_blockers_only_when_children_are_not_blocked(self):
+        self.assertEqual(
+            item_blocked_by("I", ["B"], State.RUNNING, [("I.1", ["X"])]), ["B"]
+        )
+
+    def test_step_blockers_listed_when_rolled_up_state_is_blocked(self):
+        self.assertEqual(item_blocked_by("I", [], State.BLOCKED, [("I.1", ["B"])]), ["B"])
+
+    def test_running_item_lists_nothing_from_a_gated_sibling_step(self):
+        self.assertEqual(item_blocked_by("I", [], State.RUNNING, [("I.2", ["B"])]), [])
+        self.assertEqual(item_blocked_by("I", [], State.QUEUED, [("I.2", ["B"])]), [])
+
+    def test_excludes_the_item_itself_and_its_own_steps(self):
+        self.assertEqual(
+            item_blocked_by("I", [], State.BLOCKED, [("I.2", ["I", "I.1", "B"]), ("I.1", [])]),
+            ["B"],
+        )
+
+    def test_a_step_gated_only_on_the_item_lists_nothing(self):
+        self.assertEqual(item_blocked_by("I", [], State.BLOCKED, [("I.2", ["I"])]), [])
+
+    def test_own_and_step_blockers_naming_the_same_id_appear_once(self):
+        self.assertEqual(
+            item_blocked_by("I", ["B"], State.BLOCKED, [("I.1", ["B"])]), ["B"]
+        )
+
+    def test_output_is_sorted(self):
+        self.assertEqual(
+            item_blocked_by("I", ["Z"], State.BLOCKED, [("I.1", ["M"]), ("I.2", ["A"])]),
+            ["A", "M", "Z"],
+        )
+
 
 
 if __name__ == "__main__":

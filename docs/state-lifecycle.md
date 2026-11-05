@@ -46,16 +46,16 @@ A **rebase-retry** close is refused when it repeats a check. `lc done` on a reba
 
 An item's state is derived from its own unresolved dependency first, then its steps (`roll_up`):
 
-| Item's own `blocked_by` | Children                              | State      |
-| ----------------------- | ------------------------------------- | ---------- |
-| non-empty               | (any)                                 | blocked    |
-| empty                   | none, or all done                     | backlogged |
-| empty                   | any `waiting`                         | waiting    |
-| empty                   | any `running` (no `waiting`)          | running    |
-| empty                   | any `queued` (no `waiting`/`running`) | queued     |
-| empty                   | any `blocked` and the rest `done`     | blocked    |
+| Item's `blocked_by` | Children                              | State      |
+| ------------------- | ------------------------------------- | ---------- |
+| non-empty           | (any)                                 | blocked    |
+| empty               | none, or all done                     | backlogged |
+| empty               | any `waiting`                         | waiting    |
+| empty               | any `running` (no `waiting`)          | running    |
+| empty               | any `queued` (no `waiting`/`running`) | queued     |
+| empty               | any `blocked` and the rest `done`     | blocked    |
 
-The item's own dependency block outranks whatever its children are doing - it does not compete in the child-state precedence race. Within the children themselves, precedence is `waiting > running > queued > blocked`: if any part of the item needs the human, that outranks everything else, because it is the only position where the item stops until they act.
+An item that rolls up to `blocked` lists, in its `blocked_by`, the unresolved blockers of its blocked steps as well as its own, excluding the item itself and its own steps; an item in any other state lists only its own. The item's own dependency block outranks whatever its children are doing - it does not compete in the child-state precedence race. Within the children themselves, precedence is `waiting > running > queued > blocked`: if any part of the item needs the human, that outranks everything else, because it is the only position where the item stops until they act.
 
 ## Slice runs
 

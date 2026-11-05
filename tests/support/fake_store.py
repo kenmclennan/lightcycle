@@ -28,6 +28,7 @@ from lightcycle.domain.work.item import ItemFields
 from lightcycle.domain.work.outputs import ArtifactRecord, StepStamp
 from lightcycle.domain.work import (
     Artifact, DailySummary, Item, NodeView, Park, State, Step, default_kind_for, derive_state,
+    item_blocked_by, roll_up,
     drop_condition_lines,
     merge_condition_note,
 )
@@ -114,17 +115,21 @@ def record_to_step(record, blocked_by=None):
     )
 
 
-def record_to_item(record, blocked_by=None, child_states=()):
+def record_to_item(record, own_blockers=None, child_states=(), step_blockers=()):
     meta = record.get("metadata") or {}
-    blocked_by = list(blocked_by or [])
+    own_blockers = list(own_blockers or [])
+    child_states = list(child_states)
+    blocked_by = item_blocked_by(
+        record["id"], own_blockers, roll_up(child_states), list(step_blockers)
+    )
     return Item(
         id=record["id"],
         artifacts=tuple(Artifact.from_dict(a) for a in (meta.get("artifacts") or [])),
         title=record.get("title", ""),
         description=record.get("description"),
         state=derive_state(
-            "item", record.get("state") == "done", None, bool(blocked_by), None,
-            list(child_states),
+            "item", record.get("state") == "done", None, bool(own_blockers), None,
+            child_states,
         ),
         repo=record.get("repo"),
         project=_label_value(record.get("labels") or [], "project:"),
@@ -132,8 +137,8 @@ def record_to_item(record, blocked_by=None, child_states=()):
         outcome=record.get("outcome"),
         disposition=record.get("disposition"),
         note=record.get("note"),
-        deps=record.get("dep_count") or 0,
-        blocked_by=list(blocked_by or []),
+        deps=len(blocked_by),
+        blocked_by=blocked_by,
         created_at=record.get("created_at"),
         closed_at=record.get("closed_at"),
         stacks_on=record.get("stacks_on"),
@@ -231,12 +236,17 @@ class FakeStore(StorePort):
         return record_to_step(record, self._blocked_by(record["id"]))
 
     def _to_item(self, record):
-        child_states = [
-            self._to_step(r).state
-            for r in self._records.values()
+        steps = [
+            r for r in self._records.values()
             if r.get("parent") == record["id"] and r.get("type") == "step"
         ]
-        return record_to_item(record, self._blocked_by(record["id"]), child_states)
+        child_states = [self._to_step(r).state for r in steps]
+        step_blockers = [
+            (r["id"], self._blocked_by(r["id"])) for r in steps if r.get("state") != "done"
+        ]
+        return record_to_item(
+            record, self._blocked_by(record["id"]), child_states, step_blockers
+        )
 
     def _to_node(self, record):
         if record.get("type") == "item":

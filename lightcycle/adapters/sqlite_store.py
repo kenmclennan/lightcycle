@@ -20,7 +20,7 @@ from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE, LEGACY_KNOWLEDGE_WOR
 from lightcycle.domain.money import Cost
 from lightcycle.domain.work.forwarded_note import parse_forwarded
 from lightcycle.domain.work import (
-    Artifact, Item, Park, Step, derive_state,
+    Artifact, Item, Park, Step, derive_state, item_blocked_by, roll_up,
     format_step_id,
 )
 from lightcycle.domain.workspace.isolation import refuses_live_store
@@ -640,15 +640,18 @@ class SqliteStore(
             slice=d["slice"],
         )
 
-    def _row_to_item(self, row, artifacts, blocked_by, child_states):
+    def _row_to_item(self, row, artifacts, own_blockers, child_states, step_blockers):
         d = dict(zip(_ITEM_COLUMNS, row))
+        blocked_by = item_blocked_by(
+            d["id"], own_blockers, roll_up(child_states), step_blockers
+        )
         return Item(
             id=d["id"],
             artifacts=tuple(artifacts),
             title=d["title"],
             description=d["description"],
             state=derive_state(
-                "item", d["state"] == "done", None, bool(blocked_by), None, child_states
+                "item", d["state"] == "done", None, bool(own_blockers), None, child_states
             ),
             repo=d["repo"],
             project=d["project"],
@@ -690,9 +693,12 @@ class SqliteStore(
         deps = self._unresolved_deps([r[0] for r in rows])
         out = {}
         for step_id, item, state, assignee, role in rows:
-            out.setdefault(item, []).append(
+            states, blockers = out.setdefault(item, ([], []))
+            states.append(
                 derive_state("step", state == "done", assignee, len(deps.get(step_id, [])), role, [])
             )
+            if state != "done":
+                blockers.append((step_id, deps.get(step_id, [])))
         return out
 
     def _rows_to_steps(self, rows):
@@ -720,7 +726,7 @@ class SqliteStore(
         return [
             self._row_to_item(
                 row, artifacts_by_id.get(row[0], []), deps.get(row[0], []),
-                children.get(row[0], []),
+                *children.get(row[0], ([], [])),
             )
             for row in rows
         ]

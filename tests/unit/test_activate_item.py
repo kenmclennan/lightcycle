@@ -154,6 +154,49 @@ class TestActivateItem(unittest.TestCase):
         s.complete_node(blocker, "done")
         self.assertIn(resp.step, [t.id for t in s.ready_steps()])
 
+    def test_the_item_names_the_dep_that_gates_its_entry_step_until_it_closes(self):
+        s = FakeStore()
+        blocker = create_owned_step(s, "blocker", role="agent")
+        item = s.create_item("add refunds", "a description")
+        ActivateItemUseCase(s, _flow(s), None, None).execute(
+            ActivateItemInput(item=item, workflow="standard", deps=[blocker])
+        )
+        node = s.get_node(item)
+        self.assertEqual(node.state, "blocked")
+        self.assertEqual(node.blocked_by, [blocker])
+        self.assertEqual(node.deps, 1)
+        s.complete_node(blocker, "done")
+        node = s.get_node(item)
+        self.assertEqual(node.blocked_by, [])
+        self.assertEqual(node.deps, 0)
+
+    def test_with_two_blockers_one_closed_the_item_counts_one(self):
+        s = FakeStore()
+        b1 = create_owned_step(s, "b1", role="agent")
+        b2 = create_owned_step(s, "b2", role="agent")
+        item = s.create_item("add refunds", "a description")
+        ActivateItemUseCase(s, _flow(s), None, None).execute(
+            ActivateItemInput(item=item, workflow="standard", deps=[b1, b2])
+        )
+        s.complete_node(b1, "done")
+        node = s.get_node(item)
+        self.assertEqual(node.blocked_by, [b2])
+        self.assertEqual(node.deps, 1)
+
+    def test_a_stacked_item_names_its_parent_until_the_step_row_is_dropped(self):
+        s = FakeStore()
+        parent = s.create_item("parent", "a description")
+        ActivateItemUseCase(s, _flow(s), None, None).execute(
+            ActivateItemInput(item=parent, workflow="standard")
+        )
+        item = s.create_item("child", "a description")
+        resp = ActivateItemUseCase(s, _flow(s), None, None).execute(
+            ActivateItemInput(item=item, workflow="standard", stacks_on=parent)
+        )
+        self.assertEqual(s.get_node(item).blocked_by, [parent])
+        s.dep_remove(resp.step, parent)
+        self.assertEqual(s.get_node(item).blocked_by, [])
+
     def test_a_clone_failure_leaves_the_pin_unwritten(self):
         s = FakeStore()
         item = s.create_item("add refunds", "a description")

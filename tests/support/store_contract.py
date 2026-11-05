@@ -491,6 +491,38 @@ class StoreContractBase:
         self.assertEqual(node.blocked_by, [])
         self.assertEqual(node.deps, 0)
 
+    def test_an_item_with_a_gated_entry_step_names_the_blocker(self):
+        s = self.make_store()
+        blocker = self._step(s, "blocker", role="agent")
+        item = s.create_item("gated", "a description", shortcode="GRID")
+        gated = s.create_step(stage="build", role="agent", item=item)
+        s.dep_add(gated, blocker)
+        node = s.get_node(item)
+        self.assertEqual(node.blocked_by, [blocker])
+        self.assertEqual(node.deps, 1)
+
+    def test_an_item_with_a_running_step_lists_no_step_blockers(self):
+        s = self.make_store()
+        blocker = self._step(s, "blocker", role="agent")
+        item = s.create_item("busy", "a description", shortcode="GRID")
+        running = s.create_step(stage="build", role="agent", item=item)
+        gated = s.create_step(stage="review", role="agent", item=item)
+        s.dep_add(gated, blocker)
+        self.assertEqual(s.claim_ready("agent", "w1", item=item).id, running)
+        node = s.get_node(item)
+        self.assertEqual(node.blocked_by, [])
+        self.assertEqual(node.deps, 0)
+
+    def test_a_sliced_item_gated_on_itself_reports_no_blockers(self):
+        s = self.make_store()
+        item = s.create_item("sliced", "a description", shortcode="GRID")
+        s.create_step(stage="build", role="agent", item=item)
+        slice2 = s.create_step(stage="build", role="agent", item=item)
+        s.dep_add(slice2, item)
+        node = s.get_node(item)
+        self.assertEqual(node.blocked_by, [])
+        self.assertEqual(node.deps, 0)
+
     def test_delete_removes_the_items_passes_and_runs_and_leaves_another_items_alone(self):
         s = self.make_store()
         gone = s.create_item("gone", "a description", shortcode="GRID")
