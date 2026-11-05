@@ -339,6 +339,15 @@ class SqliteStore(
         self._enable_wal()
         self._conn.execute("PRAGMA synchronous=NORMAL")
         self._conn.executescript(_SCHEMA)
+        self._conn.execute("BEGIN IMMEDIATE")
+        try:
+            self._run_migrations()
+            self._conn.commit()
+        except BaseException:
+            self._conn.rollback()
+            raise
+
+    def _run_migrations(self):
         self.last_migration = None
         version = self._apply_schema_version_floor()
         self._migrate_add_missing_columns()
@@ -352,7 +361,6 @@ class SqliteStore(
         self._migrate_drop_goal_tables()
         if version in (1, 2):
             self._conn.execute("PRAGMA user_version = %d" % _SCHEMA_VERSION)
-        self._commit()
 
     def close(self):
         self._conn.close()

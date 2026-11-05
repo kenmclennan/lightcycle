@@ -1,10 +1,11 @@
 import multiprocessing
 import os
 import queue
+import sqlite3
 import tempfile
 import unittest
 
-from lightcycle.adapters.sqlite_store import SqliteStore
+from lightcycle.adapters.sqlite_store import SchemaVersionRefused, SqliteStore
 from lightcycle.config import Config
 from lightcycle.domain.work import NodeSpec, State
 from tests.support.barrier_children import BARRIER_TIMEOUT, reap
@@ -270,3 +271,90 @@ class TestConcurrentPassOpening(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _open_worker(root, spawn_id, barrier, q):
+    try:
+        barrier.wait(BARRIER_TIMEOUT)
+        store = _store_for(root, spawn_id)
+        q.put((spawn_id, "ok"))
+        store.release()
+    except Exception as exc:
+        q.put((spawn_id, "ERROR: %s" % exc))
+
+
+def _concurrent_opens(root, n=8):
+    barrier = _CTX.Barrier(n)
+    q = _CTX.Queue()
+    procs = [_CTX.Process(target=_open_worker, args=(root, "w%d" % i, barrier, q)) for i in range(n)]
+    try:
+        for p in procs:
+            p.start()
+        for p in procs:
+            p.join(timeout=120)
+    finally:
+        reap(procs)
+    return _drain(q, n)
+
+
+def _columns(root, table):
+    conn = sqlite3.connect(os.path.join(root, "store.db"))
+    try:
+        return [r[1] for r in conn.execute("PRAGMA table_info(%s)" % table).fetchall()]
+    finally:
+        conn.close()
+
+
+class TestConcurrentMigrations(unittest.TestCase):
+    def test_concurrent_open_of_a_fresh_store_adds_each_column_once(self):
+        root = _make_root()
+
+        results = _concurrent_opens(root)
+
+        self.assertEqual([r[1] for r in results], ["ok"] * 8, results)
+        self.assertEqual(_columns(root, "steps").count("slice"), 1)
+        self.assertEqual(_columns(root, "phase_runs").count("slice"), 1)
+
+    def test_concurrent_open_drops_the_legacy_step_columns(self):
+        root = _make_root()
+        _store_for(root).release()
+        conn = sqlite3.connect(os.path.join(root, "store.db"))
+        conn.execute("ALTER TABLE steps ADD COLUMN reflection TEXT")
+        conn.execute("ALTER TABLE steps ADD COLUMN title TEXT")
+        conn.commit()
+        conn.close()
+
+        results = _concurrent_opens(root)
+
+        self.assertEqual([r[1] for r in results], ["ok"] * 8, results)
+        cols = _columns(root, "steps")
+        self.assertNotIn("reflection", cols)
+        self.assertNotIn("title", cols)
+
+    def test_concurrent_open_of_a_schema_1_store_stamps_it_once(self):
+        root = _make_root()
+        _store_for(root).release()
+        conn = sqlite3.connect(os.path.join(root, "store.db"))
+        conn.execute("PRAGMA user_version = 1")
+        conn.close()
+
+        results = _concurrent_opens(root)
+
+        self.assertEqual([r[1] for r in results], ["ok"] * 8, results)
+        conn = sqlite3.connect(os.path.join(root, "store.db"))
+        try:
+            self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], 3)
+        finally:
+            conn.close()
+
+    def test_refused_open_releases_the_write_lock(self):
+        root = _make_root()
+        conn = sqlite3.connect(os.path.join(root, "store.db"))
+        conn.execute("CREATE TABLE nodes (id TEXT)")
+        conn.execute("PRAGMA user_version = 3")
+        conn.commit()
+        conn.close()
+
+        for _ in range(2):
+            with self.assertRaises(SchemaVersionRefused):
+                _store_for(root)
