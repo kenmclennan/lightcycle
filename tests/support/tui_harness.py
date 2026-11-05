@@ -442,6 +442,7 @@ class TuiSession:
     def pause(self):
         self._run(self.pilot.pause())
         self._run(self.app.workers.wait_for_complete())
+        self._run(self.pilot.pause())
         owners = self._glyph_timer_owners()
         for owner in owners:
             owner._active_glyph_timer.pause()

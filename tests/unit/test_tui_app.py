@@ -3746,6 +3746,33 @@ class TestReportDocumentScrolls(unittest.TestCase):
         self.assertEqual(body.scroll_y, offset)
 
 
+class TestReportMarkdownMountsBeforePauseReturns(unittest.TestCase):
+    def test_a_slow_markdown_parse_is_awaited_by_the_worker(self):
+        import markdown_it
+
+        release = threading.Event()
+        real_parse = markdown_it.MarkdownIt.parse
+
+        def gated(parser, *args, **kwargs):
+            release.wait(timeout=3)
+            return real_parse(parser, *args, **kwargs)
+
+        store = FakeStore()
+        _store_summary(store, "\n\n".join("summary line %02d" % n for n in range(5)))
+        timer = threading.Timer(0.5, release.set)
+        self.addCleanup(timer.cancel)
+        self.addCleanup(release.set)
+        with patch.object(markdown_it.MarkdownIt, "parse", gated):
+            timer.start()
+            session = launch(make_test_container(store=store), size=(100, 40))
+            self.addCleanup(session.close)
+            for _ in range(3):
+                session.press("]")
+            markdown = session.app.query_one("#report-markdown", Markdown)
+
+            self.assertGreater(len(markdown.children), 0)
+
+
 class TestReportDayPicker(unittest.TestCase):
     def _launch_two_days(self):
         store = FakeStore()
@@ -3764,6 +3791,17 @@ class TestReportDayPicker(unittest.TestCase):
         session.press("]")
         self.addCleanup(session.close)
         return session, older, newer
+
+    def test_a_cached_day_has_its_markdown_mounted_once_pause_returns(self):
+        session, _older, _newer = self._launch_two_days()
+        session.press("d")
+        session.press("down")
+        session.press("enter")
+        session.pause()
+
+        markdown = session.app.query_one("#report-markdown", Markdown)
+
+        self.assertGreater(len(markdown.children), 0)
 
     def test_d_opens_the_day_picker_including_today_at_zero_count(self):
         session, _older, _newer = self._launch_two_days()

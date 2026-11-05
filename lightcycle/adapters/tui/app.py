@@ -927,7 +927,9 @@ class LightcycleApp(App):
         view = self.query_one(ReportView)
         cached = self._report_cache.get(day)
         if cached is not None:
-            view.apply_report(cached)
+            pending = view.apply_report(cached)
+            if pending is not None:
+                self.run_worker(pending, group="report-render", exit_on_error=False)
             if day != self._now().date():
                 return
         elif view.shown_day != day:
@@ -950,7 +952,7 @@ class LightcycleApp(App):
         finally:
             self.call_from_thread(self._apply_report_result, day, response)
 
-    def _apply_report_result(self, day, response) -> None:
+    def _apply_report_result(self, day, response):
         if self._report_inflight_day == day:
             self._report_inflight_day = None
         if response is None:
@@ -962,7 +964,7 @@ class LightcycleApp(App):
         self._report_cache[day] = response
         if self._view != "report" or self._selected_report_day() != day:
             return
-        self.query_one(ReportView).apply_report(response)
+        return self.query_one(ReportView).apply_report(response)
 
     def _apply_view_visibility(self) -> None:
         on_priority = self._view == "priority"
