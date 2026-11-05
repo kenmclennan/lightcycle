@@ -1,7 +1,6 @@
 import datetime
 import json
 
-from lightcycle.application.work.item_outputs import ItemOutputs
 from lightcycle.ports.store import NodeNotFoundError
 from lightcycle.domain.work.outputs import OutputEntry, OutputSet
 
@@ -18,14 +17,14 @@ def _entry_dicts_for_step(step, rows):
 
 
 class StepInputs:
-    def __init__(self, store, flow, now=None):
+    def __init__(self, store, flow, outputs, now=None):
         self._store = store
         self._flow = flow
-        self._outputs = ItemOutputs(store, flow)
+        self._outputs = outputs
         self._now = now or (lambda: datetime.datetime.now().astimezone().isoformat())
 
     def build(self, step) -> dict:
-        item = self._store.get_item(step.item)
+        item = self._store.item_fields(step.item)
         outputs: OutputSet = self._outputs.for_reader(step)
         previous = None
         prev = self._previous(step)

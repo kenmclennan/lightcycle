@@ -4,6 +4,7 @@ import unittest
 from lightcycle.application.flow.claim_step import ClaimResponse
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.work import ShowNodeInput, ShowNodeUseCase
+from lightcycle.application.work.item_outputs import ItemOutputs
 from lightcycle.application.work.node_read_surface import node_read_surface
 from lightcycle.domain.contracts.json_surface import READ_SURFACE_EXTRA_KEYS, json_surface
 from tests.support.fake_fs import FakeFs
@@ -46,10 +47,10 @@ class TestDeclaredSurfaceCoversWhatTheEngineEmits(unittest.TestCase):
         keys = set()
         for node in (sid, item):
             view = ShowNodeUseCase(s, flow).execute(ShowNodeInput(step=node)).view
-            keys |= set(node_read_surface(s, flow, view))
+            keys |= set(node_read_surface(s, flow, view, ItemOutputs(s, flow)))
         view = ShowNodeUseCase(s, flow).execute(ShowNodeInput(step=sid)).view
         claim = ClaimResponse(
-            view=view, surface=node_read_surface(s, flow, view), workspace="w", branch="b",
+            view=view, surface=node_read_surface(s, flow, view, ItemOutputs(s, flow)), workspace="w", branch="b",
             spec_path="p", description="d", repo_path="r", config={"k": "v"},
             workflow_config={"k": "v"},
         )

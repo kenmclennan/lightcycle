@@ -1,5 +1,4 @@
 from lightcycle.application.flow.engine_steps import engine_outcomes_for_node
-from lightcycle.application.work.item_outputs import ItemOutputs
 from lightcycle.application.work.step_detail import StepDetail
 from lightcycle.application.work.stack_runs import StackRuns
 from lightcycle.application.work.step_inputs import StepInputs
@@ -52,7 +51,7 @@ def _slice_stack_of(store, step, item_id):
     base = base_runs[-1] if base_runs else None
     if base is None or base.state != RunState.OPEN or not base.branch:
         return None
-    item = store.get_item(item_id)
+    item = store.item_fields(item_id)
     return {
         "parent": item_id,
         "parent_title": "%s - slice %s" % (item.title, base.slice_name),
@@ -66,13 +65,13 @@ def _stack_of(store, flow, step, item_id):
         sliced = _slice_stack_of(store, step, item_id)
         if sliced is not False:
             return sliced
-    parent_id = store.get_item(item_id).stacks_on
+    parent_id = store.item_fields(item_id).stacks_on
     if not parent_id:
         return None
     if (flow.workspace_for_node(step) or PROJECT_WORKSPACE) != PROJECT_WORKSPACE:
         return None
     try:
-        parent = store.get_item(parent_id)
+        parent = store.item_fields(parent_id)
     except NodeNotFoundError:
         return None
     run = StackRuns(store, flow).run_of(parent_id)
@@ -98,18 +97,18 @@ def _slice_name(store, step, item_id):
     )
 
 
-def node_read_surface(store, flow, view):
+def node_read_surface(store, flow, view, outputs):
     step = view.step
     item_id = getattr(step, "item", None) or step.id
     out = view.as_dict()
     if step.type == "step":
         step_artifacts = store.item_artifacts(step.id)
         out["artifacts"] = [a.as_dict() for a in step_artifacts]
-        item_outputs = ItemOutputs(store, flow)
+        item_outputs = outputs
         out["item_artifacts"] = [
             a.as_dict() for a in item_outputs.reader_artifacts(step, item_outputs.for_reader(step))
         ]
-        step_inputs = StepInputs(store, flow)
+        step_inputs = StepInputs(store, flow, outputs)
         inputs = step_inputs.read(step)
         output_entries = step_inputs.entry_dicts_for_step(step)
         _produced, records = item_outputs.step_rows(step)
@@ -136,7 +135,7 @@ def node_read_surface(store, flow, view):
             if artifact_type in artifacts:
                 out[field] = [i for i in artifacts[artifact_type].split("\n") if i]
     if step.type == "item":
-        out["outputs"] = {"artifacts": ItemOutputs(store, flow).for_item(step.id).entry_dicts()}
+        out["outputs"] = {"artifacts": outputs.for_item(step.id).entry_dicts()}
         out["stacked_children"] = [i.id for i in store.items_stacked_on(step.id)]
         out["slices"] = _slices_of(store, step.id)
     out["workflow"] = store.item_workflow(item_id)

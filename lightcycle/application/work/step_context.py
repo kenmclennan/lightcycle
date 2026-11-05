@@ -45,8 +45,8 @@ def _record_value(row):
 class StepContext:
     def __init__(self, store, flow):
         self._store = store
-        self._inputs = StepInputs(store, flow)
         self._outputs = ItemOutputs(store, flow)
+        self._inputs = StepInputs(store, flow, self._outputs)
 
     def read(self, step) -> StepContextView:
         body = self._inputs.read(step)

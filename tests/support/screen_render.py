@@ -5,6 +5,7 @@ import os
 from dataclasses import dataclass, replace
 import sys
 
+from lightcycle.application.work.item_outputs import ItemOutputs
 from lightcycle.application.work.step_inputs import StepInputs
 from lightcycle.application.work.done import CATEGORY_AUTOMATION
 from lightcycle.application.flow.engine_steps import (
@@ -1274,7 +1275,7 @@ def _hub_step_done_context(size):
     container = session.app._container
     real = container.flow_service()
     flow = _PresentsFlowService(real, "audit", None, owner="agent")
-    StepInputs(store, flow, now=lambda: _at(29)).freeze(store.get_node(audit))
+    StepInputs(store, flow, ItemOutputs(store, flow), now=lambda: _at(29)).freeze(store.get_node(audit))
     store.add_artifact(audit, "findings", CONTEXT_FINDINGS)
     store.add_artifact(audit, "reflection", CONTEXT_REFLECTION, internal=True)
     store.add_artifact(audit, "guidance-delivered", "git/commit-subjects\nstyle/hyphens", internal=True)

@@ -66,8 +66,8 @@ class CompleteStepUseCase:
         self._config = config
         self._resolver = NextStepResolver(store, flow)
         self._passes = PassBook(store, flow)
-        self._inputs = StepInputs(store, flow)
         self._outputs = ItemOutputs(store, flow)
+        self._inputs = StepInputs(store, flow, self._outputs)
         self._closer = CloseItemUseCase(store, worktrees)
         self._escapes = EscapeRecorder(store)
 
@@ -216,11 +216,11 @@ class CompleteStepUseCase:
             if transition
             else None
         )
+        with self._outputs.reading():
+            present = self._outputs.present_types(t)
         missing = StepContract.from_meta(
             self._flow.meta_for_step(t.stage, name)
-        ).missing_outputs(
-            self._outputs.present_types(t), target
-        )
+        ).missing_outputs(present, target)
         if missing:
             raise UseCaseError(
                 "cannot close %s: step '%s' must produce %s; none on the item. "

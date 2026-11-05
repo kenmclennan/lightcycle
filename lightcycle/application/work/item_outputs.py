@@ -1,3 +1,5 @@
+from contextlib import contextmanager
+
 from lightcycle.domain.contracts import StepContract
 from lightcycle.domain.runs.pass_record import pass_number
 from lightcycle.domain.work.outputs import StepFacts, classify_step_rows, resolve_outputs
@@ -8,6 +10,20 @@ class ItemOutputs:
         self._store = store
         self._flow = flow
         self._declared_cache = {}
+        self._facts_memo = None
+        self._depth = 0
+
+    @contextmanager
+    def reading(self):
+        if self._depth == 0:
+            self._facts_memo = {}
+        self._depth += 1
+        try:
+            yield self
+        finally:
+            self._depth -= 1
+            if self._depth == 0:
+                self._facts_memo = None
 
     def declared_types(self, step):
         return self._declared(self._flow.workflow_for(step), step.stage)
@@ -26,16 +42,23 @@ class ItemOutputs:
         return getattr(node, "item", None) or node.id
 
     def _facts(self, item_id):
-        steps = [s for s in self._store.children(item_id) if s.type == "step"]
-        if not steps:
+        if self._facts_memo is not None and item_id in self._facts_memo:
+            return self._facts_memo[item_id]
+        facts = self._read_facts(item_id)
+        if self._facts_memo is not None:
+            self._facts_memo[item_id] = facts
+        return facts
+
+    def _read_facts(self, item_id):
+        stamps = self._store.step_stamps(item_id)
+        if not stamps:
             return {}
-        workflow = self._flow.workflow_for(steps[0])
+        workflow = self._store.item_workflow(item_id)
         return {
             s.id: StepFacts(
-                id=s.id, pass_id=s.pass_id, declared=self._declared(workflow, s.stage),
-                at=s.closed_at or s.created_at,
+                id=s.id, pass_id=s.pass_id, declared=self._declared(workflow, s.stage), at=s.at,
             )
-            for s in steps
+            for s in stamps
         }
 
     def _reader_pass(self, node):

@@ -126,7 +126,7 @@ class TestInputs(unittest.TestCase):
         rig.close_build(build)
         rework = rig.first_step()
         rig.store.add_artifact(rework, "X", "v2")
-        outputs = StepInputs(rig.store, rig.flow).build(rig.store.get_node(rework))
+        outputs = StepInputs(rig.store, rig.flow, ItemOutputs(rig.store, rig.flow)).build(rig.store.get_node(rework))
         x = [e for e in outputs["item"] if e["name"] == "X"][0]
         self.assertEqual(x["value"], "v2")
         self.assertEqual([h["value"] for h in x["history"]], ["v1"])

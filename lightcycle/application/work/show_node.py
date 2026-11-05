@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from lightcycle.application.work.item_outputs import ItemOutputs
 from lightcycle.application.work.node_read_surface import node_read_surface
 from lightcycle.domain.work import NodeView
 
@@ -25,4 +26,8 @@ class ShowNodeUseCase:
 
     def execute(self, input: ShowNodeInput) -> ShowNodeResponse:
         view = self._store.node_view(input.step)
-        return ShowNodeResponse(view=view, surface=node_read_surface(self._store, self._flow, view))
+        return ShowNodeResponse(
+            view=view, surface=node_read_surface(
+                self._store, self._flow, view, ItemOutputs(self._store, self._flow)
+            ),
+        )

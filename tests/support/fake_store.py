@@ -24,7 +24,8 @@ from lightcycle.domain.money import Cost
 from lightcycle.domain.pool import ToolUsage
 from lightcycle.domain.runs import Pass, PhaseRun, pass_id, run_id
 from lightcycle.domain.work.open_successors import open_successors
-from lightcycle.domain.work.outputs import ArtifactRecord
+from lightcycle.domain.work.item import ItemFields
+from lightcycle.domain.work.outputs import ArtifactRecord, StepStamp
 from lightcycle.domain.work import (
     Artifact, DailySummary, Item, NodeView, Park, State, Step, default_kind_for, derive_state,
     drop_condition_lines,
@@ -369,6 +370,19 @@ class FakeStore(StorePort):
         if record.get("type") != "item":
             raise NodeNotFoundError("unknown item '%s'" % tid)
         return self._to_item(record)
+
+    def item_fields(self, item_id):
+        item = self.get_item(item_id)
+        return ItemFields(
+            id=item.id, title=item.title, description=item.description, repo=item.repo,
+            stacks_on=item.stacks_on, workflow=item.workflow,
+        )
+
+    def step_stamps(self, item_id):
+        return [
+            StepStamp(id=s.id, stage=s.stage, pass_id=s.pass_id, at=s.closed_at or s.created_at)
+            for s in self.children(item_id) if s.type == "step"
+        ]
 
     def item_workflow(self, item_id):
         try:

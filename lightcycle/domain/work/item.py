@@ -6,6 +6,16 @@ from lightcycle.domain.work.state import State
 
 
 @dataclass(frozen=True)
+class ItemFields:
+    id: str
+    title: str
+    description: Optional[str]
+    repo: Optional[str]
+    stacks_on: Optional[str]
+    workflow: Optional[str]
+
+
+@dataclass(frozen=True)
 class Item:
     id: str
     artifacts: Tuple[Artifact, ...] = ()

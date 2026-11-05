@@ -1,6 +1,5 @@
 from lightcycle.domain.work.outputs import ArtifactRecord
 from lightcycle.domain.work import Artifact, State, drop_condition_lines, merge_condition_note
-from lightcycle.domain.work.open_successors import open_successors
 from lightcycle.ports.store import NodeNotFoundError
 from lightcycle.adapters.sqlite.shared import _PARK_COLUMNS, _RAW_STORAGE_STATE
 
@@ -126,10 +125,12 @@ class StepsAggregate:
         return (True, new_id)
 
     def _has_open_successor(self, step):
-        row = self._conn.execute("SELECT item FROM steps WHERE id = ?", (step,)).fetchone()
-        if row is None:
-            return False
-        return bool(open_successors(step, self.children(row[0])))
+        row = self._conn.execute(
+            "SELECT 1 FROM steps WHERE previous_step = ? AND state != 'done' "
+            "AND item = (SELECT item FROM steps WHERE id = ?) LIMIT 1",
+            (step, step),
+        ).fetchone()
+        return row is not None
 
     def release(self):
         self._conn.close()

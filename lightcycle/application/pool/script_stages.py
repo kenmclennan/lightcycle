@@ -183,7 +183,9 @@ class ScriptStageUseCase:
         if invocation is None:
             self._park_step(step, label, "cannot start: %s" % problem)
             return "parked"
-        StepInputs(self._store, self._flow_service).freeze(step)
+        StepInputs(
+            self._store, self._flow_service, ItemOutputs(self._store, self._flow_service)
+        ).freeze(step)
         log_path = self._runner.start(
             key, invocation.script, invocation.cwd, invocation.env, invocation.stdin_text,
             self._config.script_timeout_seconds(), script_log_label(step.id))

@@ -16,6 +16,7 @@ from lightcycle.application.work import (
     StepRunUseCase,
 )
 from lightcycle.application.work.step_detail import StepDetail
+from lightcycle.application.work.item_outputs import ItemOutputs
 from lightcycle.application.work.step_inputs import StepInputs
 from rich.text import Text
 from textual.widgets import Static
@@ -59,7 +60,7 @@ class DetailTabMixin:
 
     def _fields_for(self, store, step, flow_service):
         run = StepRunUseCase(store, flow_service).execute(StepRunInput(step=step.id))
-        step_inputs = StepInputs(store, flow_service)
+        step_inputs = StepInputs(store, flow_service, ItemOutputs(store, flow_service))
         entries, _presents = StepDetail(store, flow_service).resolve(
             step, step_inputs.read(step), step_inputs.entry_dicts_for_step(step), run=run,
             worktree=self._worktree_path_for(run, flow_service))

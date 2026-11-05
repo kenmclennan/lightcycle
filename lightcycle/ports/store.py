@@ -105,6 +105,14 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def item_fields(self, item_id):
+        pass
+
+    @abstractmethod
+    def step_stamps(self, item_id):
+        pass
+
+    @abstractmethod
     def get_node(self, tid):
         pass
 
