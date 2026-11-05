@@ -1,6 +1,6 @@
 from collections import namedtuple
 
-Fork = namedtuple("Fork", "item phase steps")
+Fork = namedtuple("Fork", "item phase slice steps")
 
 
 def main_path_stages(graph):
@@ -14,13 +14,13 @@ def main_path_stages(graph):
 
 def forks(open_steps, main_stages_of_item):
     groups = {}
-    for item, step_id, stage, phase in open_steps:
+    for item, step_id, stage, phase, slice_no in open_steps:
         main = main_stages_of_item(item)
         if not main or stage not in main:
             continue
-        groups.setdefault((item, phase), []).append((step_id, stage))
+        groups.setdefault((item, phase, slice_no), []).append((step_id, stage))
     return [
-        Fork(item, phase, tuple(steps))
-        for (item, phase), steps in groups.items()
+        Fork(item, phase, slice_no, tuple(steps))
+        for (item, phase, slice_no), steps in groups.items()
         if len(steps) >= 2
     ]
