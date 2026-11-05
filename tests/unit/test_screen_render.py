@@ -558,6 +558,31 @@ def test_report_for_a_historical_day_paints_the_title_and_the_singular_top_line(
     assert "1 item closed" in text
 
 
+def test_a_slow_historical_report_compute_is_painted_once_pause_returns(monkeypatch):
+    import time
+
+    from lightcycle.application.work.report import ReportUseCase
+    from tests.support.screen_render import NOW, _report_historical_day
+
+    real_execute = ReportUseCase.execute
+
+    def slow_for_past_days(self, report_input, *args, **kwargs):
+        if report_input.day != NOW.date():
+            time.sleep(1.0)
+        return real_execute(self, report_input, *args, **kwargs)
+
+    monkeypatch.setattr(ReportUseCase, "execute", slow_for_past_days)
+    session = _report_historical_day((100, 30))
+    try:
+        frame = session.run(
+            lambda: "\n".join(_plain_row(s) for s in session.app.screen._compositor.render_strips())
+        )
+    finally:
+        session.close()
+
+    assert "Wednesday 31 December 2025" in frame
+
+
 PANEL_WIDTHS = [(100, 30), (140, 30)]
 
 

@@ -40,7 +40,7 @@ class ReportView(Vertical):
         loading.update(Text(message, style=COLOURS["dim"]))
         loading.display = True
 
-    def apply_report(self, response) -> None:
+    def apply_report(self, response):
         self._day = response.day
         self.query_one("#report-loading", Static).display = False
         self.query_one("#report-day-filter-left", Static).update(
@@ -49,6 +49,8 @@ class ReportView(Vertical):
         self.query_one("#report-day-filter-right", Static).display = False
         markdown = self.query_one("#report-markdown", Markdown)
         document = report_markdown(response)
+        pending = None
         if document != markdown.source:
-            markdown.update(document)
+            pending = markdown.update(document)
         self.query_one("#report-body", VerticalScroll).display = True
+        return pending
