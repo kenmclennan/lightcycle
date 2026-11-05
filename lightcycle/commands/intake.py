@@ -411,7 +411,7 @@ def cmd_attach(argv):
 def _acting_step_id():
     spawnid = container().config.spawn_id()
     if not spawnid:
-        return None
+        return container().config.stage_step()
     try:
         return container().workers.step_for(spawnid)
     except RegistryUnreadable:

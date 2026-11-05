@@ -132,7 +132,7 @@ class DoctorUseCase:
             if graph is None:
                 continue
             samples.setdefault(n.item, n)
-            open_steps.append((n.item, n.id, n.stage, graph.phase_for(n.stage)))
+            open_steps.append((n.item, n.id, n.stage, graph.phase_for(n.stage), n.slice))
         mains = {
             item: main_path_stages(graphs[item]) for item in samples
         }
@@ -141,8 +141,9 @@ class DoctorUseCase:
             names = ", ".join("%s (%s)" % (sid, stage) for sid, stage in fork.steps)
             problems.append(Problem(
                 "store",
-                "item %s has a fork in phase %s: %d open main-path steps: %s" % (
-                    fork.item, fork.phase or "(none)", len(fork.steps), names),
+                "item %s has a fork in phase %s%s: %d open main-path steps: %s" % (
+                    fork.item, fork.phase or "(none)",
+                    " slice %d" % fork.slice if fork.slice else "", len(fork.steps), names),
                 fork.item,
                 kind="step-fork",
                 fix="remove (lc rm) or close (lc done) all but one of these steps",
