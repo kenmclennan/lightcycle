@@ -2,17 +2,11 @@ import sys
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.setup.project_registry import ProjectRegistry
-from lightcycle.application.work.stack_runs import StackRuns
 from lightcycle.domain.flow.flow import PROJECT_WORKSPACE
 from lightcycle.domain.runs import RunState, pass_number
-from lightcycle.domain.work import State
 from lightcycle.domain.workspace import Branch, Worktree
 from lightcycle.ports.git import GitReadError
 from lightcycle.ports.store import ProjectResolutionError
-
-
-STACK_BASE = "stack-base"
-STACK_BRANCH_RETAINED_LABEL = "stack-branch-retained"
 
 
 class WorktreeService:
@@ -73,15 +67,9 @@ class WorktreeService:
     def _run(self, node, create=False):
         item = self._item_of(node)
         phase = self._phase(node)
-        slice = getattr(node, "slice", 0)
-        run = self._store.current_run(item, phase, slice)
+        run = self._store.current_run(item, phase)
         if run is not None or not create:
             return run
-        if slice > 0:
-            raise UseCaseError(
-                "cannot set up workspace for %s: slice %d has no run in phase %s"
-                % (item, slice, phase)
-            )
         current = self._store.current_pass(item)
         pid = current.id if current else self._store.open_pass(item)
         return self._store.get_run(self._store.open_run(item, pid, phase))
@@ -105,8 +93,6 @@ class WorktreeService:
             return None if run.round <= 1 else "r%d" % run.round
         n = pass_number(run.pass_id)
         key = run.phase if n <= 1 else "%s-%d" % (run.phase, n)
-        if run.slice > 0:
-            key = "%s-s%d" % (key, run.slice)
         return key if run.round <= 1 else "%s-r%d" % (key, run.round)
 
     def worktree_path(self, node):
@@ -126,9 +112,6 @@ class WorktreeService:
     def _branch_for(self, node):
         return self.item_branch(node) or self._minted_branch(node)
 
-    def target_for_run(self, run):
-        return self._target_for_phase(run.item, run.phase)
-
     def path_for_run(self, run):
         return Worktree(run.item, self._key_for(run)).path_in(self._target_for_phase(run.item, run.phase))
 
@@ -141,9 +124,7 @@ class WorktreeService:
         path = self.path_for_run(run)
         self._git.remove_worktree(target, path)
         self._git.delete_branch(target, run.branch)
-        if delete_remote and self._retained_for_children(run):
-            self._store.label_add(run.item, STACK_BRANCH_RETAINED_LABEL)
-        elif delete_remote:
+        if delete_remote:
             outcome = self._git.delete_remote_branch(target, run.branch)
             if outcome is not None and not outcome.ok:
                 print(
@@ -151,11 +132,6 @@ class WorktreeService:
                     % (run.branch, outcome.detail),
                     file=sys.stderr,
                 )
-
-    def _retained_for_children(self, run):
-        if self._flow is None:
-            return False
-        return StackRuns(self._store, self._flow).has_dependents(run)
 
     def release_interrupted(self, run):
         if run is None or run.state == RunState.OPEN or run.branch is None:
@@ -175,55 +151,6 @@ class WorktreeService:
         if run.branch == branch:
             return
         self._store.set_branch(run.id, branch)
-
-    def _slice_base(self, node, item, target):
-        run = self._run(node)
-        if run is None or run.base_slice is None:
-            return False
-        siblings = [
-            r for r in self._store.runs_of(item, run.pass_id)
-            if r.phase == run.phase and r.slice == run.base_slice
-        ]
-        base_run = siblings[-1] if siblings else None
-        if base_run is None or base_run.state == RunState.MERGED or not base_run.branch:
-            return None
-        if not self._git.remote_branch_exists(target, base_run.branch):
-            raise UseCaseError(
-                "cannot set up workspace for %s: the base slice %s's branch %s no longer "
-                "exists on origin" % (item, base_run.slice_name, base_run.branch)
-            )
-        return "origin/" + base_run.branch
-
-    def _stacked_base(self, node, item, target):
-        if self._flow is None or not self._uses_item_repo(node):
-            return None
-        if getattr(node, "slice", 0) > 0:
-            sliced = self._slice_base(node, item, target)
-            if sliced is not False:
-                return sliced
-        parent_id = self._item(item).stacks_on
-        if not parent_id:
-            return None
-        parent = self._store.get_item(parent_id)
-        if parent.state == State.DONE or parent.repo != self._item(item).repo:
-            return None
-        run = StackRuns(self._store, self._flow).run_of(parent_id)
-        if run is None or not run.pr:
-            return None
-        if not self._git.remote_branch_exists(target, run.branch):
-            raise UseCaseError(
-                "cannot set up workspace for %s: the parent %s's branch %s no longer exists "
-                "on origin" % (item, parent_id, run.branch)
-            )
-        return "origin/" + run.branch
-
-    def _stack_sha(self, target, stacked):
-        if not stacked:
-            return None
-        try:
-            return self._git.ref_sha(target, stacked)
-        except GitReadError:
-            return None
 
     def ensure(self, node):
         item = self._item_of(node)
@@ -260,12 +187,8 @@ class WorktreeService:
                 raise UseCaseError(
                     "cannot set up workspace for %s: no base branch found in %s" % (item, target)
                 )
-            stacked = self._stacked_base(node, item, target)
-            base = stacked or base
-            stack_sha = self._stack_sha(target, stacked)
         else:
             base = None
-            stack_sha = None
         self._scaffold.make_dir(self._fs.worktrees_dir(target))
         try:
             common = self._git.common_dir(target)
@@ -279,11 +202,6 @@ class WorktreeService:
             raise UseCaseError("cannot set up workspace for %s: %s" % (item, outcome.detail))
         if is_new_branch:
             self._git.set_branch_upstream(target, branch)
-            if stack_sha:
-                run = self._run(node)
-                label = run.id if run is not None and run.slice > 0 else None
-                self._store.replace_artifact(
-                    item, STACK_BASE, stack_sha, label=label, internal=True)
         return path
 
     def context_path(self):

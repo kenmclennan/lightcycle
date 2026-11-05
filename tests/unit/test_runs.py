@@ -81,7 +81,6 @@ class TestAsDict(unittest.TestCase):
                 "phase": "code", "branch": "b", "pr": "u", "content_pin": "c",
                 "comments_dispatched_through": "d", "comments_handled_through": "h",
                 "state": RunState.MERGED, "opened_at": "o", "closed_at": "x",
-                "slice": 0, "slice_name": None, "base_slice": None,
             },
         )
 

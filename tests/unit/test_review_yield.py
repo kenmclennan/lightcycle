@@ -24,9 +24,6 @@ from tests.unit.test_dispatch_pr_feedback import _FlowAdapter as _BaseFlowAdapte
 
 
 class _FlowAdapter(_BaseFlowAdapter):
-    def graph_for(self, node):
-        return None
-
     def step_declared(self, stage, name=None):
         return self._flow.declared(stage)
 

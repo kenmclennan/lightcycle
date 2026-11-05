@@ -64,7 +64,7 @@ def cmd_workflow(argv):
     if a.sub == "describe":
         return _workflow_describe(a.workflow, a.mermaid)
     if a.sub == "simulate":
-        return _workflow_simulate(a.workflow, a.trace, a.slices)
+        return _workflow_simulate(a.workflow, a.trace)
     c = container()
     try:
         if a.sub == "add":
@@ -362,10 +362,10 @@ def _workflow_describe(selector, as_mermaid=False):
     return 0
 
 
-def _workflow_simulate(selector, trace=False, slices=None):
+def _workflow_simulate(selector, trace=False):
     with container().simulation() as use_case:
         try:
-            resp = use_case.execute(SimulateInput(workflow=selector, slices=slices))
+            resp = use_case.execute(SimulateInput(workflow=selector))
         except (ValueError, UseCaseError) as e:
             sys.stderr.write("%s\n" % e)
             return 1

@@ -3543,20 +3543,6 @@ class TestNodeDTOReadSurface(unittest.TestCase):
             self.assertIn(field, d, "lc claim dropped field: %s" % field)
         self.assertEqual(d["workflow_config"], {})
 
-    def test_show_surfaces_the_stack_fields(self):
-        tid = self._make_task()
-        step = self.store.get_node(tid)
-        parent = self.store.create_item("parent item", "a description")
-        self.store.set_stacks_on(step.item, parent)
-        rc, out, err = call(_cli_mod.cmd_show, tid)
-        self.assertEqual(rc, 0, err)
-        self.assertIn("stack", json.loads(out))
-        rc, out, err = call(_cli_mod.cmd_show, step.item)
-        self.assertEqual(rc, 0, err)
-        d = json.loads(out)
-        self.assertEqual(d["stacks_on"], parent)
-        self.assertEqual(d["stacked_children"], [])
-
     def test_show_surfaces_the_blockers_of_an_item_gated_through_its_entry_step(self):
         blocker = self.store.create_item("blocker", "a description")
         blocker_step = self.store.create_step(stage="build", role="agent", item=blocker)
@@ -3573,31 +3559,6 @@ class TestNodeDTOReadSurface(unittest.TestCase):
         shown = json.loads(out)
         self.assertEqual(shown["blocked_by"], [])
         self.assertEqual(shown["deps"], 0)
-
-    def test_show_surfaces_the_parent_of_an_item_stacked_through_its_entry_step(self):
-        parent = self.store.create_item("parent", "a description")
-        self.store.create_step(stage="build", role="agent", item=parent)
-        item = self.store.create_item("child", "a description")
-        gated = self.store.create_step(stage="build", role="agent", item=item)
-        self.store.set_stacks_on(item, parent)
-        self.store.dep_add(gated, parent)
-        rc, out, err = call(_cli_mod.cmd_show, item)
-        self.assertEqual(rc, 0, err)
-        shown = json.loads(out)
-        self.assertEqual(shown["blocked_by"], [parent])
-        self.assertEqual(shown["deps"], 1)
-
-    def test_show_surfaces_the_slice_fields(self):
-        tid = self._make_task()
-        step = self.store.get_node(tid)
-        rc, out, err = call(_cli_mod.cmd_show, tid)
-        self.assertEqual(rc, 0, err)
-        shown = json.loads(out)
-        self.assertEqual(shown["slice"], 0)
-        self.assertIsNone(shown["slice_name"])
-        rc, out, err = call(_cli_mod.cmd_show, step.item)
-        self.assertEqual(rc, 0, err)
-        self.assertEqual(json.loads(out)["slices"], [])
 
     def test_show_surfaces_the_steps_api_call_count(self):
         tid = self._make_task()

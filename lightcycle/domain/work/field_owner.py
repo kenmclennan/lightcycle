@@ -6,7 +6,7 @@ from lightcycle.domain.work.state import ALIASES, State
 FIELDS_BY_TYPE = {
     "item": frozenset(
         {"title", "description", "project", "workflow", "label", "backlog", "step", "depends",
-         "stacks-on", "caused-by", "found-by"}
+         "caused-by", "found-by"}
     ),
     "step": frozenset({"notes", "needs", "reason", "tried", "label"}),
 }
@@ -31,7 +31,6 @@ ALLOWED_STATES_BY_FLAG = {
     "workflow": (None, "active"),
     "step": ("active",),
     "depends": ("active",),
-    "stacks-on": ("active",),
     "needs": (State.WAITING.value,), "reason": (State.WAITING.value,),
     "tried": (State.WAITING.value,),
     "caused-by": (None,), "found-by": (None,),

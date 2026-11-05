@@ -1,8 +1,8 @@
 import os
 from types import SimpleNamespace
 
-from lightcycle.ports.git import RESTACK_PUSHED, GitOutcome, GitPort, RestackOutcome
-from lightcycle.ports.github import Comment, GitHubEventsPort, PrSync, PrView, ReadFailure
+from lightcycle.ports.git import GitOutcome, GitPort
+from lightcycle.ports.github import Comment, GitHubEventsPort, PrSync, ReadFailure
 from lightcycle.ports.teardown_ledger import TeardownLedgerPort
 from lightcycle.ports.workers import WorkersPort
 
@@ -14,8 +14,6 @@ class RecordingGit(GitPort, TeardownLedgerPort):
         self.calls = []
         self._worktrees = {}
         self._branches = set()
-        self._tips = {}
-        self._tip_counter = 0
 
     def _record(self, method, root, *args):
         self.calls.append((root, method, args))
@@ -79,10 +77,6 @@ class RecordingGit(GitPort, TeardownLedgerPort):
         self._record("branch_exists", root, branch)
         return (root, branch) in self._branches
 
-    def remote_branch_exists(self, root, branch):
-        self._record("remote_branch_exists", root, branch)
-        return True
-
     def worktree_base(self, root):
         self._record("worktree_base", root)
         return _WORKTREE_BASE
@@ -143,14 +137,7 @@ class RecordingGit(GitPort, TeardownLedgerPort):
 
     def ref_sha(self, root, ref):
         self._record("ref_sha", root, ref)
-        branch = ref[len("origin/"):] if ref.startswith("origin/") else ref
-        return self._tips.get(branch, "sim-sha")
-
-    def set_tip(self, branch, sha):
-        self._tips[branch] = sha
-
-    def restack_calls(self):
-        return [args[0] for _root, method, args in self.calls if method == "restack"]
+        return "sim-sha"
 
     def fetch_origin(self, root):
         self._record("fetch_origin", root)
@@ -192,19 +179,6 @@ class RecordingGit(GitPort, TeardownLedgerPort):
         self._record("commits_beyond", root, base, branch)
         return []
 
-    def merge_base(self, root, a, b):
-        self._record("merge_base", root, a, b)
-        return "sim-sha"
-
-    def restack(self, root, steps):
-        self._record("restack", root, tuple(steps))
-        tips = {}
-        for step in steps:
-            self._tip_counter += 1
-            tips[step.branch] = "sim-sha-%d" % self._tip_counter
-        self._tips.update(tips)
-        return RestackOutcome(RESTACK_PUSHED, None, tips=tips)
-
 
 class ScriptedGitHub(GitHubEventsPort):
     def __init__(self, login="reviewer"):
@@ -213,20 +187,6 @@ class ScriptedGitHub(GitHubEventsPort):
         self._conflicted = set()
         self._feedback = {}
         self._check_runs = {}
-        self._persistent_merged = set()
-        self._bases = {}
-        self._heads = {}
-        self.base_edits = []
-
-    def open_pr(self, pr, base, head="sim-sha"):
-        self._bases[pr] = base
-        self._heads.setdefault(pr, head)
-
-    def script_head(self, pr, sha):
-        self._heads[pr] = sha
-
-    def script_merged(self, pr):
-        self._persistent_merged.add(pr)
 
     def script_merge(self, pr):
         self._merged.add(pr)
@@ -249,7 +209,7 @@ class ScriptedGitHub(GitHubEventsPort):
     def is_merged(self, pr):
         hit = pr in self._merged
         self._merged.discard(pr)
-        return hit or pr in self._persistent_merged
+        return hit
 
     def is_closed_unmerged(self, pr):
         return False
@@ -271,7 +231,7 @@ class ScriptedGitHub(GitHubEventsPort):
         return []
 
     def head_sha(self, pr):
-        return self._heads.get(pr, "sim-sha")
+        return "sim-sha"
 
     def changed_files(self, pr, sha, base=None):
         return frozenset()
@@ -286,15 +246,7 @@ class ScriptedGitHub(GitHubEventsPort):
         return "sim-base-tip"
 
     def pr_view(self, pr):
-        if pr not in self._bases:
-            return ReadFailure(-1, "pr views are not simulated")
-        base = self._bases[pr]
-        return PrView(
-            state="OPEN", head_sha=self._heads.get(pr, "sim-sha"), base_ref=base, base_key=base,
-            mergeable="MERGEABLE", merge_state_status="CLEAN", updated_at=0.0)
-
-    def base_of(self, pr):
-        return self._bases.get(pr)
+        return ReadFailure(-1, "pr views are not simulated")
 
     def rate_limit(self):
         return ReadFailure(-1, "the rate limit is not simulated")
@@ -311,7 +263,7 @@ class ScriptedGitHub(GitHubEventsPort):
     def pr_sync_state(self, pr):
         hit = pr in self._conflicted
         self._conflicted.discard(pr)
-        return PrSync(False, hit, self._heads.get(pr, "") if pr in self._bases else "", "sim@main")
+        return PrSync(False, hit, "", "sim@main")
 
     def requires_up_to_date(self, base_key):
         return False
@@ -321,11 +273,6 @@ class ScriptedGitHub(GitHubEventsPort):
 
     def update_branch(self, pr, expected_head_sha):
         return ReadFailure(-1, "branch updates are not simulated")
-
-    def set_pr_base(self, pr, base):
-        self.base_edits.append((pr, base, frozenset(self._persistent_merged)))
-        self._bases[pr] = base
-        return None
 
 
 class NullWorkers(WorkersPort):

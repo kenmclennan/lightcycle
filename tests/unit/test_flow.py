@@ -122,7 +122,6 @@ class TestTransition(unittest.TestCase):
                 "item": "s-9",
                 "deps": ["t-1"],
                 "previous": "t-1",
-                "slice": 0,
             },
         )
 

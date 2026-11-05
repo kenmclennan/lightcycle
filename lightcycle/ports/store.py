@@ -289,11 +289,7 @@ class StorePort(ABC):
 
     @abstractmethod
     def create_step(self, *, stage=None, role=None, item=None, deps=None, id=None,
-                    previous=None, slice=0):
-        pass
-
-    @abstractmethod
-    def set_step_slice(self, step, slice):
+                    previous=None):
         pass
 
     @abstractmethod
@@ -322,14 +318,6 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def set_stacks_on(self, item_id, parent):
-        pass
-
-    @abstractmethod
-    def items_stacked_on(self, parent):
-        pass
-
-    @abstractmethod
     def create_item(self, title, description, *, project=None, workflow=None,
                     id=None, shortcode=None):
         pass
@@ -355,7 +343,7 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def open_run(self, item, pid, phase, slice=0, slice_name=None, base_slice=None):
+    def open_run(self, item, pid, phase):
         pass
 
     @abstractmethod
@@ -363,7 +351,7 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def current_run(self, item, phase, slice=0):
+    def current_run(self, item, phase):
         pass
 
     @abstractmethod

@@ -117,7 +117,7 @@ class ItemsAggregate:
 
     def item_fields(self, item_id):
         row = self._conn.execute(
-            "SELECT id, title, description, repo, stacks_on, workflow FROM items WHERE id = ?",
+            "SELECT id, title, description, repo, workflow FROM items WHERE id = ?",
             (item_id,),
         ).fetchone()
         if row is None:
@@ -146,7 +146,7 @@ class ItemsAggregate:
         t = self.get_node(tid)
         item = getattr(t, "item", None) or t.id
         arts = self.item_artifacts(item)
-        return NodeView(step=t, item_artifacts=list(arts), stacks_on=self.get_item(item).stacks_on)
+        return NodeView(step=t, item_artifacts=list(arts))
 
     def present_types(self, step):
         item = getattr(step, "item", None) or step.id
@@ -209,13 +209,6 @@ class ItemsAggregate:
             )
         self._commit()
         return tid
-
-    def set_stacks_on(self, item_id, parent):
-        self._conn.execute("UPDATE items SET stacks_on = ? WHERE id = ?", (parent, item_id))
-        self._commit()
-
-    def items_stacked_on(self, parent):
-        return self._select_items("stacks_on = ?", (parent,), "ORDER BY id")
 
     def create_item(self, title, description, *, project=None, workflow=None, id=None,
                     shortcode=None):

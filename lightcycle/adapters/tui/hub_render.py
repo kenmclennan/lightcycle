@@ -438,16 +438,10 @@ def _park_escalation_text(node):
     return node.park.needs
 
 
-def _stacks_on_of(store, node):
-    return store.get_item(_owning_id(node)).stacks_on
-
-
-def _dependency_escalation(node, stacks_on=None):
+def _dependency_escalation(node):
     if node.state != State.BLOCKED or not node.blocked_by:
         return None, None
     target = sorted(node.blocked_by)[0]
-    if stacks_on and stacks_on in node.blocked_by:
-        return "Blocked · stacked on %s (waiting for its PR)" % stacks_on, stacks_on
     return "Blocked · depends on %s" % target, target
 
 
@@ -598,14 +592,12 @@ def _item_header(store, node, now, project, flow_service, pool_halted, pool_runn
 
     escalation_text, escalation_target = None, None
     if _has_own_blockers(store, node):
-        escalation_text, escalation_target = _dependency_escalation(
-            node, _stacks_on_of(store, node))
+        escalation_text, escalation_target = _dependency_escalation(node)
     if escalation_text is None and node.state != State.DONE:
         cur = current_step(store, node.id)
         if cur is not None:
             glyph_node, glyph_flow = cur, flow_service.flow_for(cur)
-            escalation_text, escalation_target = _dependency_escalation(
-                cur, _stacks_on_of(store, cur))
+            escalation_text, escalation_target = _dependency_escalation(cur)
             if escalation_text is None and getattr(cur, "role", None) == "human" and cur.needs:
                 escalation_text = _park_escalation_text(cur)
 
@@ -622,7 +614,7 @@ def _item_header(store, node, now, project, flow_service, pool_halted, pool_runn
 
 
 def _step_header(store, node, now, project, flow_service, pool_halted, pool_running):
-    escalation_text, escalation_target = _dependency_escalation(node, _stacks_on_of(store, node))
+    escalation_text, escalation_target = _dependency_escalation(node)
     if escalation_text is None and getattr(node, "role", None) == "human" and getattr(node, "needs", None):
         escalation_text = _park_escalation_text(node)
 
@@ -710,8 +702,7 @@ def _hierarchy_stacked_first_line(
 
 def _hierarchy_label(node, flow_service, multi_pass):
     if node.type != "step":
-        parent = getattr(node, "stacks_on", None)
-        return "%s · Stacked on: %s" % (node.title, parent) if parent else node.title
+        return node.title
     if flow_service is None:
         base, phase = node.stage, None
     else:

@@ -597,14 +597,6 @@ class TestSpawnProtocol(unittest.TestCase):
         self.assertEqual(c.spawn_cmd(), "echo hi")
 
 
-class TestStageStep(unittest.TestCase):
-    def test_stage_step_absent_is_none(self):
-        self.assertIsNone(_cfg().stage_step())
-
-    def test_stage_step_reads_lc_step(self):
-        self.assertEqual(_cfg({"LC_STEP": "LC-1.2"}).stage_step(), "LC-1.2")
-
-
 class TestBackupConfig(unittest.TestCase):
     def test_missing_keys_raise_naming_the_key(self):
         with self.assertRaises(ConfigError) as ctx:

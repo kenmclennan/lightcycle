@@ -5,7 +5,6 @@ from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
 from lightcycle import cli
-from lightcycle.commands import intake
 from lightcycle.domain.work import worker_permitted
 from tests.support.fake_store import FakeStore
 from tests.unit.test_review_yield import _FLOW, _FlowAdapter, _Rig
@@ -29,9 +28,6 @@ class _Config:
         return frozenset()
 
     def spawn_id(self):
-        return None
-
-    def stage_step(self):
         return None
 
 
@@ -153,25 +149,3 @@ class TestReviewYieldCommand(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
-
-class TestActingStepId(unittest.TestCase):
-    def _container(self, spawn_id, stage_step, workers_step=None):
-        c = mock.Mock()
-        c.config.spawn_id.return_value = spawn_id
-        c.config.stage_step.return_value = stage_step
-        c.workers.step_for.return_value = workers_step
-        return c
-
-    def test_a_script_stage_with_no_spawn_id_acts_as_its_lc_step(self):
-        with mock.patch.object(intake, "container", return_value=self._container(None, "LC-1.3")):
-            self.assertEqual(intake._acting_step_id(), "LC-1.3")
-
-    def test_neither_variable_set_names_no_acting_step(self):
-        with mock.patch.object(intake, "container", return_value=self._container(None, None)):
-            self.assertIsNone(intake._acting_step_id())
-
-    def test_the_spawn_id_keeps_precedence_over_lc_step(self):
-        c = self._container("sid", "LC-1.3", workers_step="LC-1.9")
-        with mock.patch.object(intake, "container", return_value=c):
-            self.assertEqual(intake._acting_step_id(), "LC-1.9")

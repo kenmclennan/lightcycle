@@ -11,7 +11,6 @@ class ItemFields:
     title: str
     description: Optional[str]
     repo: Optional[str]
-    stacks_on: Optional[str]
     workflow: Optional[str]
 
 
@@ -32,7 +31,6 @@ class Item:
     blocked_by: List[str] = field(default_factory=list)
     created_at: Optional[str] = None
     closed_at: Optional[str] = None
-    stacks_on: Optional[str] = None
 
     @property
     def type(self):
@@ -77,5 +75,4 @@ class Item:
             "blocked_by": self.blocked_by,
             "created_at": self.created_at,
             "closed_at": self.closed_at,
-            "stacks_on": self.stacks_on,
         }

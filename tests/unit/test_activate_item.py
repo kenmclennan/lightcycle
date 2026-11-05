@@ -183,20 +183,6 @@ class TestActivateItem(unittest.TestCase):
         self.assertEqual(node.blocked_by, [b2])
         self.assertEqual(node.deps, 1)
 
-    def test_a_stacked_item_names_its_parent_until_the_step_row_is_dropped(self):
-        s = FakeStore()
-        parent = s.create_item("parent", "a description")
-        ActivateItemUseCase(s, _flow(s), None, None).execute(
-            ActivateItemInput(item=parent, workflow="standard")
-        )
-        item = s.create_item("child", "a description")
-        resp = ActivateItemUseCase(s, _flow(s), None, None).execute(
-            ActivateItemInput(item=item, workflow="standard", stacks_on=parent)
-        )
-        self.assertEqual(s.get_node(item).blocked_by, [parent])
-        s.dep_remove(resp.step, parent)
-        self.assertEqual(s.get_node(item).blocked_by, [])
-
     def test_a_clone_failure_leaves_the_pin_unwritten(self):
         s = FakeStore()
         item = s.create_item("add refunds", "a description")

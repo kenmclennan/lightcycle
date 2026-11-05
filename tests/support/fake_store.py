@@ -111,7 +111,6 @@ def record_to_step(record, blocked_by=None):
         previous_step=record.get("previous_step"),
         report=record.get("report"),
         log_path=record.get("log_path"),
-        slice=record.get("slice", 0),
     )
 
 
@@ -141,7 +140,6 @@ def record_to_item(record, own_blockers=None, child_states=(), step_blockers=())
         blocked_by=blocked_by,
         created_at=record.get("created_at"),
         closed_at=record.get("closed_at"),
-        stacks_on=record.get("stacks_on"),
     )
 
 
@@ -385,7 +383,7 @@ class FakeStore(StorePort):
         item = self.get_item(item_id)
         return ItemFields(
             id=item.id, title=item.title, description=item.description, repo=item.repo,
-            stacks_on=item.stacks_on, workflow=item.workflow,
+            workflow=item.workflow,
         )
 
     def step_stamps(self, item_id):
@@ -416,7 +414,7 @@ class FakeStore(StorePort):
         t = self.get_node(tid)
         item = getattr(t, "item", None) or t.id
         arts = self.item_artifacts(item)
-        return NodeView(step=t, item_artifacts=list(arts), stacks_on=self.get_item(item).stacks_on)
+        return NodeView(step=t, item_artifacts=list(arts))
 
     def present_types(self, step):
         item = getattr(step, "item", None) or step.id
@@ -820,7 +818,7 @@ class FakeStore(StorePort):
         self._schedule_run_requests.discard(schedule_id)
 
     def create_step(self, *, stage=None, role=None, item=None, deps=None,
-                    id=None, previous=None, slice=0):
+                    id=None, previous=None):
         if item is None:
             raise ValueError("create_step requires an item")
         fields = dict(
@@ -828,7 +826,6 @@ class FakeStore(StorePort):
             parent=item,
             labels=labels_for(role=role, stage=stage),
             previous_step=previous,
-            slice=slice,
         )
         if id is not None:
             fields["id"] = id
@@ -840,9 +837,6 @@ class FakeStore(StorePort):
             for dep in deps:
                 self.dep_add(tid, dep)
         return tid
-
-    def set_step_slice(self, step, slice):
-        self._get(step)["slice"] = slice
 
     def set_report(self, step, text):
         self._get(step)["report"] = text or None
@@ -913,16 +907,6 @@ class FakeStore(StorePort):
         self._records[tid] = b
         return tid
 
-    def set_stacks_on(self, item_id, parent):
-        self._get(item_id)["stacks_on"] = parent
-
-    def items_stacked_on(self, parent):
-        ids = sorted(
-            rid for rid, rec in self._records.items()
-            if rec.get("type") == "item" and rec.get("stacks_on") == parent
-        )
-        return [self.get_item(i) for i in ids]
-
     def open_pass(self, item):
         n = max([p.n for p in self._passes if p.item == item], default=0) + 1
         rec = Pass(pass_id(item, n), item, n, "open", self._now(), None)
@@ -946,27 +930,22 @@ class FakeStore(StorePort):
             for p in self._passes
         ]
 
-    def open_run(self, item, pid, phase, slice=0, slice_name=None, base_slice=None):
-        same = [
-            r for r in self._runs
-            if r.item == item and r.pass_id == pid and r.phase == phase and r.slice == slice
-        ]
+    def open_run(self, item, pid, phase):
+        same = [r for r in self._runs if r.item == item and r.pass_id == pid and r.phase == phase]
         found = next((r for r in reversed(same) if r.is_open), None)
         if found:
             return found.id
-        rid = run_id(pid, phase, len(same) + 1, slice)
-        self._runs.append(PhaseRun(
-            rid, item, pid, phase, opened_at=self._now(),
-            slice=slice, slice_name=slice_name, base_slice=base_slice))
+        rid = run_id(pid, phase, len(same) + 1)
+        self._runs.append(PhaseRun(rid, item, pid, phase, opened_at=self._now()))
         return rid
 
     def get_run(self, rid):
         return next((r for r in self._runs if r.id == rid), None)
 
-    def current_run(self, item, phase, slice=0):
+    def current_run(self, item, phase):
         return next(
             (r for r in reversed(self._runs)
-             if r.item == item and r.phase == phase and r.slice == slice and r.is_open),
+             if r.item == item and r.phase == phase and r.is_open),
             None,
         )
 

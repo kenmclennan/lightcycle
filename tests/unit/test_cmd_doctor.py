@@ -163,7 +163,7 @@ class TestCmdDoctor(unittest.TestCase):
         self.assertEqual(rc, 0)
         data = json.loads(out)
         self.assertEqual(
-            set(data.keys()), {"store", "pins", "contract", "workflows", "config", "orphans", "teardown", "stack", "slice", "facets", "guidance",
+            set(data.keys()), {"store", "pins", "contract", "workflows", "config", "orphans", "teardown", "facets", "guidance",
              "github"}
         )
         for probs in data.values():

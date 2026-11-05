@@ -9,7 +9,6 @@ class NodeSpec:
     item: Optional[str] = None
     deps: Tuple[str, ...] = ()
     previous: Optional[str] = None
-    slice: int = 0
 
     def as_kwargs(self) -> dict:
         return {
@@ -18,5 +17,4 @@ class NodeSpec:
             "item": self.item,
             "deps": list(self.deps),
             "previous": self.previous,
-            "slice": self.slice,
         }

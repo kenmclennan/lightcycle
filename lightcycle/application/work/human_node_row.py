@@ -16,6 +16,3 @@ class HumanNodeRow:
     pr: Optional[str] = None
     title: Optional[str] = None
     behind: Optional[str] = None
-    slice: int = 0
-    slice_name: Optional[str] = None
-    item_title: Optional[str] = None

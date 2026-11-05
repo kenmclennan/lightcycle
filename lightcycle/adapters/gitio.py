@@ -3,18 +3,7 @@ import subprocess
 import sys
 import time
 
-import shutil
-
-from lightcycle.ports.git import (
-    RESTACK_CONFLICT,
-    RESTACK_FAILED,
-    RESTACK_LEASE_LOST,
-    RESTACK_PUSHED,
-    GitOutcome,
-    GitPort,
-    GitReadError,
-    RestackOutcome,
-)
+from lightcycle.ports.git import GitOutcome, GitPort, GitReadError
 
 _GIT_TIMEOUT_SECONDS = 30
 
@@ -69,12 +58,6 @@ def branch_exists(root, branch):
     if not is_git_repo(root):
         raise GitReadError("cannot check branch %r: %s is not a readable git repo" % (branch, root))
     return git_ok(root, "rev-parse", "--verify", "--quiet", "refs/heads/" + branch)
-
-
-def remote_branch_exists(root, branch):
-    if not is_git_repo(root):
-        raise GitReadError("cannot check branch %r: %s is not a readable git repo" % (branch, root))
-    return git_ok(root, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/" + branch)
 
 
 def worktree_base(root):
@@ -243,108 +226,6 @@ def ref_sha(root, ref):
     if proc.returncode == 1 and not proc.stderr.strip():
         return None
     raise GitReadError("git rev-parse failed in %s: %s" % (root, proc.stderr.strip()))
-
-
-def merge_base(root, a, b):
-    proc = git(root, "merge-base", a, b)
-    if proc.returncode == 0:
-        return proc.stdout.strip()
-    if proc.returncode == 1 and not proc.stderr.strip():
-        return None
-    raise GitReadError("git merge-base failed in %s: %s" % (root, proc.stderr.strip()))
-
-
-def _rejected_branch(stderr, branches):
-    for line in stderr.splitlines():
-        if "(stale info)" not in line:
-            continue
-        for branch in branches:
-            if line.rstrip().endswith(" -> %s (stale info)" % branch):
-                return branch
-    return None
-
-
-def _conflicted_files(scratch):
-    proc = git(scratch, "diff", "--name-only", "--diff-filter=U")
-    return tuple(line for line in proc.stdout.splitlines() if line.strip())
-
-
-def _rebase_all(scratch, steps):
-    tips = {}
-    for step in steps:
-        onto = tips.get(step.onto, step.onto)
-        checkout = git(scratch, "checkout", "--detach", step.lease_sha)
-        if checkout.returncode != 0:
-            return None, RestackOutcome(
-                RESTACK_FAILED, step.branch, detail=checkout.stderr.strip())
-        rebase = git(scratch, "rebase", "--onto", onto, step.old_base)
-        if rebase.returncode != 0:
-            files = _conflicted_files(scratch)
-            git(scratch, "rebase", "--abort")
-            if files:
-                return None, RestackOutcome(
-                    RESTACK_CONFLICT, step.branch, files=files, detail=rebase.stderr.strip())
-            return None, RestackOutcome(
-                RESTACK_FAILED, step.branch, detail=rebase.stderr.strip())
-        head = git(scratch, "rev-parse", "HEAD")
-        if head.returncode != 0:
-            return None, RestackOutcome(RESTACK_FAILED, step.branch, detail=head.stderr.strip())
-        tips[step.branch] = head.stdout.strip()
-    return tips, None
-
-
-def _push_all(root, steps, tips):
-    argv = ["push", "--atomic", "origin"]
-    for step in steps:
-        argv.append("--force-with-lease=%s:%s" % (step.branch, step.lease_sha))
-    for step in steps:
-        argv.append("%s:refs/heads/%s" % (tips[step.branch], step.branch))
-    proc = git(root, *argv)
-    if proc.returncode == 0:
-        return None
-    stderr = proc.stderr.strip()
-    rejected = _rejected_branch(stderr, [s.branch for s in steps])
-    if rejected is not None or "stale info" in stderr:
-        return RestackOutcome(
-            RESTACK_LEASE_LOST, rejected or steps[0].branch, detail=stderr)
-    return RestackOutcome(RESTACK_FAILED, steps[0].branch, detail=stderr)
-
-
-def _move_local(root, steps, tips):
-    for step in steps:
-        tip = tips[step.branch]
-        if step.worktree_path:
-            git(step.worktree_path, "reset", "--hard", tip)
-        elif git_ok(root, "rev-parse", "--verify", "--quiet", "refs/heads/" + step.branch):
-            git(root, "branch", "-f", step.branch, tip)
-
-
-def restack(root, steps):
-    if not steps:
-        return RestackOutcome(RESTACK_FAILED, None, detail="nothing to restack")
-    try:
-        common = common_dir(root)
-    except GitReadError as e:
-        return RestackOutcome(RESTACK_FAILED, steps[0].branch, detail=str(e))
-    scratch = os.path.join(common, "lc-restack")
-    shutil.rmtree(scratch, ignore_errors=True)
-    git(root, "worktree", "prune")
-    added = git(root, "worktree", "add", "--detach", scratch, steps[0].lease_sha)
-    if added.returncode != 0:
-        return RestackOutcome(RESTACK_FAILED, steps[0].branch, detail=added.stderr.strip())
-    try:
-        tips, failure = _rebase_all(scratch, steps)
-        if failure is not None:
-            return failure
-        rejected = _push_all(root, steps, tips)
-        if rejected is not None:
-            return rejected
-        _move_local(root, steps, tips)
-        return RestackOutcome(RESTACK_PUSHED, None, tips=tips)
-    finally:
-        git(root, "worktree", "remove", "--force", scratch)
-        shutil.rmtree(scratch, ignore_errors=True)
-        git(root, "worktree", "prune")
 
 
 def prune_worktrees(root):
@@ -525,9 +406,6 @@ class GitAdapter(GitPort):
     def branch_exists(self, root, branch):
         return branch_exists(root, branch)
 
-    def remote_branch_exists(self, root, branch):
-        return remote_branch_exists(root, branch)
-
     def worktree_base(self, root):
         return worktree_base(root)
 
@@ -605,9 +483,3 @@ class GitAdapter(GitPort):
 
     def changed_paths(self, root, base):
         return changed_paths(root, base)
-
-    def merge_base(self, root, a, b):
-        return merge_base(root, a, b)
-
-    def restack(self, root, steps):
-        return restack(root, steps)

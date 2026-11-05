@@ -391,40 +391,6 @@ class StoreContractBase:
         ready_ids = [t.id for t in s.ready_steps()]
         self.assertIn(blocked, ready_ids)
 
-    def test_stacks_on_round_trips_and_clears(self):
-        s = self.make_store()
-        parent = s.create_item("parent", "d", shortcode="APP")
-        child = s.create_item("child", "d", shortcode="APP")
-        self.assertIsNone(s.get_item(child).stacks_on)
-        s.set_stacks_on(child, parent)
-        self.assertEqual(s.get_item(child).stacks_on, parent)
-        self.assertEqual(s.get_item(child).as_dict()["stacks_on"], parent)
-        s.set_stacks_on(child, None)
-        self.assertIsNone(s.get_item(child).stacks_on)
-
-    def test_labelled_stack_base_artifacts_replace_only_their_own_label(self):
-        s = self.make_store()
-        item = s.create_item("sliced", "d", shortcode="APP")
-        s.replace_artifact(item, "stack-base", "a1", label="r1", internal=True)
-        s.replace_artifact(item, "stack-base", "b1", label="r2", internal=True)
-        s.replace_artifact(item, "stack-base", "a2", label="r1", internal=True)
-        found = {
-            a.label: a.value for a in s.item_artifacts(item) if a.type == "stack-base"
-        }
-        self.assertEqual(found, {"r1": "a2", "r2": "b1"})
-
-    def test_items_stacked_on_lists_children_in_id_order(self):
-        s = self.make_store()
-        parent = s.create_item("parent", "d", shortcode="APP")
-        other = s.create_item("other", "d", shortcode="APP")
-        first = s.create_item("first", "d", shortcode="APP")
-        second = s.create_item("second", "d", shortcode="APP")
-        s.set_stacks_on(second, parent)
-        s.set_stacks_on(first, parent)
-        s.set_stacks_on(other, first)
-        self.assertEqual([i.id for i in s.items_stacked_on(parent)], sorted([first, second]))
-        self.assertEqual([i.id for i in s.items_stacked_on(second)], [])
-
     def test_dep_remove_drops_blocker(self):
         s = self.make_store()
         blocker = self._step(s, "blocker", role="agent")
@@ -1443,47 +1409,6 @@ class StoreContractBase:
 
         self.assertEqual(s.open_run(item, pid, "amend"), first)
         self.assertEqual(len(s.runs_of(item, pid)), 1)
-
-    def test_open_run_with_a_slice_records_the_slice_fields_and_id(self):
-        s = self.make_store()
-        item = s.create_item("t", "a description", shortcode="GRID")
-        pid = s.open_pass(item)
-        rid = s.open_run(item, pid, "code", 2, "write-service", 1)
-
-        run = s.get_run(rid)
-
-        self.assertEqual(rid, "%s.code.s2" % pid)
-        self.assertEqual((run.slice, run.slice_name, run.base_slice), (2, "write-service", 1))
-
-    def test_current_run_is_keyed_by_slice(self):
-        s = self.make_store()
-        item = s.create_item("t", "a description", shortcode="GRID")
-        pid = s.open_pass(item)
-        one = s.open_run(item, pid, "code", 1, "a", None)
-        two = s.open_run(item, pid, "code", 2, "b", 1)
-
-        self.assertEqual(s.current_run(item, "code", 1).id, one)
-        self.assertEqual(s.current_run(item, "code", 2).id, two)
-        self.assertIsNone(s.current_run(item, "code"))
-
-    def test_a_closed_slice_run_opens_its_second_round_in_the_same_slice(self):
-        s = self.make_store()
-        item = s.create_item("t", "a description", shortcode="GRID")
-        pid = s.open_pass(item)
-        first = s.open_run(item, pid, "code", 2, "b", 1)
-        s.close_run(first, "merged")
-
-        self.assertEqual(s.open_run(item, pid, "code", 2, "b", 1), first + ".r2")
-
-    def test_create_step_records_its_slice(self):
-        s = self.make_store()
-        item = s.create_item("t", "a description", shortcode="GRID")
-        step = s.create_step(stage="write", role="agent", item=item, slice=2)
-
-        self.assertEqual(s.get_node(step).slice, 2)
-        s.set_step_slice(step, 3)
-        self.assertEqual(s.get_node(step).slice, 3)
-        self.assertEqual(s.get_node(s.create_step(stage="x", role="agent", item=item)).slice, 0)
 
     def test_a_new_round_leaves_another_phase_of_the_pass_alone(self):
         s = self.make_store()

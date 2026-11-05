@@ -26,14 +26,14 @@ def earlier_rebase_retries(store, flows, step):
     phase = flows.phase_for_stage(step.stage, name)
     if retry is None or phase is None:
         return {}
-    run = store.current_run(step.item, phase, step.slice)
+    run = store.current_run(step.item, phase)
     if run is None:
         return {}
     floor = parse_timestamp(run.opened_at)
     earlier = sorted(
         (
             s for s in store.steps_at_step(step.stage)
-            if s.item == step.item and s.slice == step.slice and s.id != step.id
+            if s.item == step.item and s.id != step.id
             and s.state == State.DONE and s.outcome in retry.retry_outcomes
             and (floor is None or parse_timestamp(s.created_at) >= floor)
         ),

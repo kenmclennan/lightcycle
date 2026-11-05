@@ -39,7 +39,6 @@ class Step:
     previous_step: Optional[str] = None
     report: Optional[str] = None
     log_path: Optional[str] = None
-    slice: int = 0
 
     @property
     def type(self):
@@ -90,5 +89,4 @@ class Step:
             "previous_step": self.previous_step,
             "report": self.report,
             "log": self.log_path,
-            "slice": self.slice,
         }

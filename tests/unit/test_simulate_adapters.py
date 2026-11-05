@@ -2,8 +2,7 @@ import unittest
 
 from lightcycle.adapters.simulate import NullWorkers, RecordingGit, ScriptedGitHub, SimulateConfig
 from lightcycle.config import Config
-from lightcycle.ports.git import RESTACK_PUSHED, GitOutcome, RestackStep
-from lightcycle.ports.github import PrView, ReadFailure
+from lightcycle.ports.git import GitOutcome
 
 
 class TestRecordingGit(unittest.TestCase):
@@ -80,71 +79,6 @@ class TestScriptedGitHub(unittest.TestCase):
         self.assertEqual(len(comments), 1)
         self.assertEqual(comments[0].body, "please fix x")
         self.assertEqual(gh.comments_since("pr-1", 0.0), [])
-
-
-class TestScriptedGitHubStack(unittest.TestCase):
-    def test_set_pr_base_is_recorded_and_returns_none(self):
-        gh = ScriptedGitHub()
-        gh.open_pr("pr-2", "feat/s1")
-        gh.script_merged("pr-1")
-
-        result = gh.set_pr_base("pr-2", "main")
-
-        self.assertIsNone(result)
-        self.assertEqual(gh.base_edits, [("pr-2", "main", frozenset({"pr-1"}))])
-        self.assertEqual(gh.pr_view("pr-2").base_ref, "main")
-
-    def test_pr_view_of_an_unopened_pr_is_still_a_read_failure(self):
-        self.assertIsInstance(ScriptedGitHub().pr_view("pr-9"), ReadFailure)
-
-    def test_pr_view_of_an_opened_pr_reports_base_and_head(self):
-        gh = ScriptedGitHub()
-        gh.open_pr("pr-1", "main")
-        gh.script_head("pr-1", "abc")
-
-        view = gh.pr_view("pr-1")
-
-        self.assertEqual(view, PrView("OPEN", "abc", "main", "main", "MERGEABLE", "CLEAN", 0.0))
-        self.assertEqual(gh.head_sha("pr-1"), "abc")
-
-    def test_head_sha_defaults_to_the_constant(self):
-        self.assertEqual(ScriptedGitHub().head_sha("pr-1"), "sim-sha")
-
-    def test_script_merged_persists_while_script_merge_still_fires_once(self):
-        gh = ScriptedGitHub()
-        gh.script_merged("pr-1")
-        gh.script_merge("pr-2")
-
-        self.assertTrue(gh.is_merged("pr-1"))
-        self.assertTrue(gh.is_merged("pr-1"))
-        self.assertTrue(gh.is_merged("pr-2"))
-        self.assertFalse(gh.is_merged("pr-2"))
-
-
-class TestRecordingGitTips(unittest.TestCase):
-    def test_ref_sha_is_the_constant_for_an_unknown_branch(self):
-        self.assertEqual(RecordingGit().ref_sha("/repo", "origin/feat/x"), "sim-sha")
-
-    def test_ref_sha_reads_the_set_tip_with_or_without_origin(self):
-        git = RecordingGit()
-        git.set_tip("feat/x", "tip-1")
-
-        self.assertEqual(git.ref_sha("/repo", "origin/feat/x"), "tip-1")
-        self.assertEqual(git.ref_sha("/repo", "feat/x"), "tip-1")
-
-    def test_restack_records_the_call_sets_fresh_tips_and_returns_them(self):
-        git = RecordingGit()
-        steps = [
-            RestackStep("feat/a", "l1", "b1", "origin/main"),
-            RestackStep("feat/b", "l2", "b2", "feat/a"),
-        ]
-
-        outcome = git.restack("/repo", steps)
-
-        self.assertEqual(outcome.kind, RESTACK_PUSHED)
-        self.assertEqual(outcome.tips, {"feat/a": "sim-sha-1", "feat/b": "sim-sha-2"})
-        self.assertEqual(git.ref_sha("/repo", "origin/feat/b"), "sim-sha-2")
-        self.assertEqual(git.restack_calls(), [tuple(steps)])
 
 
 class TestNullWorkers(unittest.TestCase):

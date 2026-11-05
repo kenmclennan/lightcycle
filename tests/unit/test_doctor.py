@@ -189,20 +189,8 @@ class TestDoctorFork(unittest.TestCase):
         uc._flow = _GraphFlow(text)
         return [p for p in uc.execute(DoctorInput()).problems["store"] if p.kind == "step-fork"]
 
-    def _step(self, stage, slice=0):
-        return self.store.create_step(stage=stage, role="agent", item=self.item, slice=slice)
-
-    def test_one_open_main_path_step_in_each_of_two_slices_is_not_a_fork(self):
-        self._step("build", slice=1)
-        self._step("build", slice=2)
-        self.assertEqual(self._problems(), [])
-
-    def test_two_open_main_path_steps_in_one_slice_report_a_fork_naming_the_slice(self):
-        self._step("build", slice=2)
-        self._step("gate", slice=2)
-        self._step("build", slice=1)
-        (p,) = self._problems()
-        self.assertIn("slice 2", p.message)
+    def _step(self, stage):
+        return self.store.create_step(stage=stage, role="agent", item=self.item)
 
     def test_two_open_main_path_steps_report_a_fork_naming_item_and_steps(self):
         a, b = self._step("build"), self._step("gate")
@@ -1215,7 +1203,7 @@ class TestDoctorSchedules(unittest.TestCase):
     def test_the_json_category_keys_are_unchanged(self):
         self.assertEqual(
             set(_schedule_doctor({}).problems),
-            {"store", "pins", "contract", "workflows", "config", "orphans", "teardown", "stack", "slice", "facets",
+            {"store", "pins", "contract", "workflows", "config", "orphans", "teardown", "facets",
              "guidance", "github"})
 
     def test_the_report_has_no_origin_category(self):

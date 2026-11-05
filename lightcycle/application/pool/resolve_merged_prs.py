@@ -130,12 +130,6 @@ class ResolveMergedPrsUseCase:
                 self._store.label_remove(item, RELEASE_PENDING_LABEL)
         return resp
 
-    def _open_runs_with_pr(self, item_id, phase):
-        return sorted(
-            (r for r in self._store.open_runs_of(item_id) if r.phase == phase and r.pr),
-            key=lambda r: r.slice,
-        )
-
     def execute(self) -> ResolveMergedPrsResponse:
         merged, abandoned, refused = [], [], []
         close = CloseItemUseCase(self._store, self._worktrees)
@@ -151,16 +145,14 @@ class ResolveMergedPrsUseCase:
             flow = flow_for(self._flow_service, item)
             resolved = False
             merged_by_pr = {}
-            candidates = [
-                (stage, run)
-                for stage in flow.merge_stages()
-                for run in self._open_runs_with_pr(item.id, flow.step_def(stage).phase)
-            ]
-            for stage, run in candidates:
+            for stage in flow.merge_stages():
                 sd = flow.step_def(stage)
                 phase = sd.phase
-                pr_value = run.pr
-                self._check_content_pin.execute(item, pr_value, phase, run.slice)
+                run = self._store.current_run(item.id, phase)
+                pr_value = run.pr if run else None
+                if pr_value is None:
+                    continue
+                self._check_content_pin.execute(item, pr_value, phase)
                 merge_outcome = sd.pr_merge
                 close_outcome = sd.pr_close
                 if merge_outcome and pr_value not in merged_by_pr:
@@ -168,7 +160,7 @@ class ResolveMergedPrsUseCase:
                 if merge_outcome and merged_by_pr[pr_value]:
                     nxt = flow.next(stage, merge_outcome)
                     if nxt and nxt.to_stage and not nxt.to_terminal:
-                        step = active_step_at(self._store, item.id, stage, run.slice)
+                        step = active_step_at(self._store, item.id, stage)
                         if step is None:
                             continue
                         resp = self._close_run_and_complete(
@@ -180,7 +172,7 @@ class ResolveMergedPrsUseCase:
                             refused.append((item.id, resp.teardown_refusal))
                         merged.append(item.id)
                     else:
-                        if active_step_at(self._store, item.id, stage, run.slice) is None:
+                        if active_step_at(self._store, item.id, stage) is None:
                             continue
                         disposition = self._disposition_for_close(item, flow, merge_outcome, stage)
                         if disposition is None:
@@ -201,7 +193,7 @@ class ResolveMergedPrsUseCase:
                 elif close_outcome and false_on_failure(self._github.is_closed_unmerged(pr_value)):
                     nxt = flow.next(stage, close_outcome)
                     if nxt and nxt.to_stage and not nxt.to_terminal:
-                        step = active_step_at(self._store, item.id, stage, run.slice)
+                        step = active_step_at(self._store, item.id, stage)
                         if step is None:
                             continue
                         resp = self._close_run_and_complete(
@@ -216,7 +208,7 @@ class ResolveMergedPrsUseCase:
                         if self._at_another_gate(item, flow, stage):
                             continue
                         if active_step_in_phase(
-                            self._store, self._flow_service, item.id, phase, run.slice
+                            self._store, self._flow_service, item.id, phase
                         ) is None:
                             continue
                         disposition = self._disposition_for_close(item, flow, close_outcome, stage)
