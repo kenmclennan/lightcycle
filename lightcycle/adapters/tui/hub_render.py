@@ -356,8 +356,15 @@ def project_label(store, node):
     return short_project_label(project_of(store, _owning_id(node)))
 
 
+def _has_own_blockers(store, node):
+    if not node.blocked_by:
+        return False
+    cur = current_step(store, node.id) if node.state != State.DONE else None
+    return cur is None or not set(node.blocked_by) <= set(cur.blocked_by)
+
+
 def _hierarchy_default_row_id(store, node):
-    if node.type != "item" or node.blocked_by or node.state == State.DONE:
+    if node.type != "item" or _has_own_blockers(store, node) or node.state == State.DONE:
         return node.id
     cur = current_step(store, node.id)
     return cur.id if cur is not None else node.id
@@ -589,7 +596,10 @@ def _item_header(store, node, now, project, flow_service, pool_halted, pool_runn
     glyph_node, glyph_flow = node, None
     children = store.children(node.id)
 
-    escalation_text, escalation_target = _dependency_escalation(node, _stacks_on_of(store, node))
+    escalation_text, escalation_target = None, None
+    if _has_own_blockers(store, node):
+        escalation_text, escalation_target = _dependency_escalation(
+            node, _stacks_on_of(store, node))
     if escalation_text is None and node.state != State.DONE:
         cur = current_step(store, node.id)
         if cur is not None:

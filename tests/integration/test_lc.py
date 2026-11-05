@@ -3557,6 +3557,36 @@ class TestNodeDTOReadSurface(unittest.TestCase):
         self.assertEqual(d["stacks_on"], parent)
         self.assertEqual(d["stacked_children"], [])
 
+    def test_show_surfaces_the_blockers_of_an_item_gated_through_its_entry_step(self):
+        blocker = self.store.create_item("blocker", "a description")
+        blocker_step = self.store.create_step(stage="build", role="agent", item=blocker)
+        item = self.store.create_item("gated", "a description")
+        gated = self.store.create_step(stage="build", role="agent", item=item)
+        self.store.dep_add(gated, blocker_step)
+        rc, out, err = call(_cli_mod.cmd_show, item)
+        self.assertEqual(rc, 0, err)
+        shown = json.loads(out)
+        self.assertEqual(shown["blocked_by"], [blocker_step])
+        self.assertEqual(shown["deps"], 1)
+        self.store.complete_node(blocker_step, "done")
+        rc, out, err = call(_cli_mod.cmd_show, item)
+        shown = json.loads(out)
+        self.assertEqual(shown["blocked_by"], [])
+        self.assertEqual(shown["deps"], 0)
+
+    def test_show_surfaces_the_parent_of_an_item_stacked_through_its_entry_step(self):
+        parent = self.store.create_item("parent", "a description")
+        self.store.create_step(stage="build", role="agent", item=parent)
+        item = self.store.create_item("child", "a description")
+        gated = self.store.create_step(stage="build", role="agent", item=item)
+        self.store.set_stacks_on(item, parent)
+        self.store.dep_add(gated, parent)
+        rc, out, err = call(_cli_mod.cmd_show, item)
+        self.assertEqual(rc, 0, err)
+        shown = json.loads(out)
+        self.assertEqual(shown["blocked_by"], [parent])
+        self.assertEqual(shown["deps"], 1)
+
     def test_show_surfaces_the_slice_fields(self):
         tid = self._make_task()
         step = self.store.get_node(tid)
