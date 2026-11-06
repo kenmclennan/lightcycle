@@ -329,31 +329,6 @@ class TestLinkArtifact(unittest.TestCase):
         )
         self.assertEqual(s.get_run(code_run).pr, "http://x/pull/9")
 
-    def _sliced_item(self):
-        s = FakeStore()
-        sid = s.create_item("st", "a description")
-        pid = s.open_pass(sid)
-        run1 = s.open_run(sid, pid, "code", slice=1, slice_name="one")
-        run2 = s.open_run(sid, pid, "code", slice=2, slice_name="two")
-        step1 = s.create_step(stage="code-open-pr", item=sid, slice=1)
-        s.create_step(stage="code-open-pr", item=sid, slice=2)
-        return s, sid, run1, run2, step1
-
-    def test_attach_pr_from_a_sliced_acting_step_lands_on_its_slice_run_only(self):
-        s, sid, run1, run2, step1 = self._sliced_item()
-        LinkArtifactUseCase(s, _StagePhaseFlow()).execute(
-            LinkArtifactInput(item=sid, atype="pr", value="http://x/pull/9", step=step1)
-        )
-        self.assertEqual(s.get_run(run1).pr, "http://x/pull/9")
-        self.assertIsNone(s.get_run(run2).pr)
-
-    def test_attach_pr_with_no_acting_step_on_a_sliced_item_asks_for_the_acting_step(self):
-        s, sid, run1, run2, step1 = self._sliced_item()
-        with self.assertRaisesRegex(UseCaseError, "pass the acting step"):
-            LinkArtifactUseCase(s, _StagePhaseFlow()).execute(
-                LinkArtifactInput(item=sid, atype="pr", value="http://x/pull/9")
-            )
-
     def test_run_field_empty_pr_raises_and_leaves_run_unchanged(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")

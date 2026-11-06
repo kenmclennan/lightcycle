@@ -63,11 +63,4 @@ class TestDeclaredSurfaceCoversWhatTheEngineEmits(unittest.TestCase):
         self.assertLessEqual({"guidance_delivered", "guidance_skipped"}, json_surface())
 
     def test_the_declared_extra_keys_are_the_scraped_twenty_seven_and_the_guidance_pair(self):
-        self.assertEqual(len(READ_SURFACE_EXTRA_KEYS - {"stack", "stacked_children", "slice_name", "slices"}), 29)
-
-    def test_the_slice_pair_is_declared_beside_them(self):
-        self.assertLessEqual({"slice_name", "slices"}, READ_SURFACE_EXTRA_KEYS)
-
-    def test_the_stack_pair_is_declared_beside_them(self):
-        self.assertLessEqual({"stack", "stacked_children"}, READ_SURFACE_EXTRA_KEYS)
-        self.assertEqual(len(READ_SURFACE_EXTRA_KEYS), 33)
+        self.assertEqual(len(READ_SURFACE_EXTRA_KEYS), 29)

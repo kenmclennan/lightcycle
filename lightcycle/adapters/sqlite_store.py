@@ -63,8 +63,7 @@ CREATE TABLE IF NOT EXISTS items (
     note TEXT,
     project TEXT,
     created_at TEXT,
-    closed_at TEXT,
-    stacks_on TEXT
+    closed_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS steps (
@@ -523,14 +522,10 @@ class SqliteStore(
         "items": (
             ("disposition", "TEXT"),
             ("note", "TEXT"),
-            ("stacks_on", "TEXT"),
         ),
         "phase_runs": (
             ("comments_dispatched_through", "TEXT"),
             ("comments_handled_through", "TEXT"),
-            ("slice", "INTEGER NOT NULL DEFAULT 0"),
-            ("slice_name", "TEXT"),
-            ("base_slice", "INTEGER"),
         ),
         "steps": (
             ("active_seconds", "REAL"),
@@ -548,7 +543,6 @@ class SqliteStore(
             ("previous_step", "TEXT"),
             ("report", "TEXT"),
             ("log_path", "TEXT"),
-            ("slice", "INTEGER NOT NULL DEFAULT 0"),
         ),
         "usage_backfill_log": (
             ("had_result_line", "INTEGER"),
@@ -645,7 +639,6 @@ class SqliteStore(
             previous_step=d["previous_step"],
             report=d["report"],
             log_path=d["log_path"],
-            slice=d["slice"],
         )
 
     def _row_to_item(self, row, artifacts, own_blockers, child_states, step_blockers):
@@ -671,7 +664,6 @@ class SqliteStore(
             blocked_by=blocked_by,
             created_at=d["created_at"],
             closed_at=d["closed_at"],
-            stacks_on=d["stacks_on"],
         )
 
     def _unresolved_deps(self, ids):

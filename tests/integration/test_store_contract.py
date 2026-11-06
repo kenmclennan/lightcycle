@@ -1,7 +1,6 @@
 import contextlib
 import io
 import os
-import shutil
 import sqlite3
 import tempfile
 import unittest
@@ -45,57 +44,6 @@ class TestBusyTimeout(unittest.TestCase):
     def test_the_connection_waits_for_a_lock_for_the_shared_busy_timeout(self):
         s = make_sqlite_store()
         self.assertEqual(s._conn.execute("PRAGMA busy_timeout").fetchone()[0], BUSY_TIMEOUT_MS)
-
-
-class TestItemsStacksOnColumn(unittest.TestCase):
-    def test_a_store_without_the_column_opens_and_gains_it(self):
-        root = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, root, True)
-        config = Config(environ={"LC_HOME": root, "LC_CONFIG": os.path.join(root, "config")})
-        store = SqliteStore(config)
-        db_path = store._db_path
-        store.release()
-        conn = sqlite3.connect(db_path)
-        conn.execute("ALTER TABLE items DROP COLUMN stacks_on")
-        conn.execute("INSERT INTO items (id, title, state) VALUES ('APP-1', 't', 'ready')")
-        conn.commit()
-        conn.close()
-
-        reopened = SqliteStore(config)
-
-        columns = [r[1] for r in reopened._conn.execute("PRAGMA table_info(items)").fetchall()]
-        self.assertIn("stacks_on", columns)
-        self.assertIsNone(reopened.get_item("APP-1").stacks_on)
-
-
-class TestSliceColumns(unittest.TestCase):
-    def test_a_store_without_the_columns_opens_and_gains_them(self):
-        root = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, root, True)
-        config = Config(environ={"LC_HOME": root, "LC_CONFIG": os.path.join(root, "config")})
-        store = SqliteStore(config)
-        db_path = store._db_path
-        store.release()
-        conn = sqlite3.connect(db_path)
-        for column in ("slice", "slice_name", "base_slice"):
-            conn.execute("ALTER TABLE phase_runs DROP COLUMN %s" % column)
-        conn.execute("ALTER TABLE steps DROP COLUMN slice")
-        conn.execute("INSERT INTO items (id, title, state) VALUES ('APP-1', 't', 'ready')")
-        conn.execute(
-            "INSERT INTO phase_runs (id, item, pass_id, phase, state) "
-            "VALUES ('APP-1.p1.code', 'APP-1', 'APP-1.p1', 'code', 'open')")
-        conn.commit()
-        conn.close()
-
-        reopened = SqliteStore(config)
-
-        for table, column in (("phase_runs", "slice"), ("phase_runs", "slice_name"),
-                              ("phase_runs", "base_slice"), ("steps", "slice")):
-            columns = [r[1] for r in reopened._conn.execute(
-                "PRAGMA table_info(%s)" % table).fetchall()]
-            self.assertIn(column, columns)
-        run = reopened.get_run("APP-1.p1.code")
-        self.assertEqual((run.slice, run.slice_name, run.base_slice), (0, None, None))
 
 
 class TestHeldCommentsSchema(unittest.TestCase):
@@ -251,9 +199,8 @@ class TestSqliteStoreNarrowReads(unittest.TestCase):
                 got = s.item_fields(item_id)
                 full = s.get_item(item_id)
                 self.assertEqual(
-                    (got.id, got.title, got.description, got.repo, got.stacks_on, got.workflow),
-                    (full.id, full.title, full.description, full.repo, full.stacks_on,
-                     full.workflow),
+                    (got.id, got.title, got.description, got.repo, got.workflow),
+                    (full.id, full.title, full.description, full.repo, full.workflow),
                 )
 
     def test_step_stamps_return_one_stamp_per_step_with_the_closed_or_created_time(self):

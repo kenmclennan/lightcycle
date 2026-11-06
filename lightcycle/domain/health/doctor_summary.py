@@ -5,8 +5,6 @@ _PHRASES = {
     "config": ("config problem", "config problems"),
     "orphans": ("worktree with stray processes", "worktrees with stray processes"),
     "teardown": ("item close refused", "item closes refused"),
-    "stack": ("stacked item whose parent branch is gone", "stacked items whose parent branch is gone"),
-    "slice": ("slice whose base branch is gone", "slices whose base branch is gone"),
     "facets": ("facet problem", "facet problems"),
     "guidance": ("guidance problem", "guidance problems"),
 }

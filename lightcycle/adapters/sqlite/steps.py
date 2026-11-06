@@ -258,14 +258,14 @@ class StepsAggregate:
         return self.get_node(tid)
 
     def _insert_step_nocommit(self, *, stage=None, role=None, item=None, deps=None,
-                              id=None, previous=None, slice=0):
+                              id=None, previous=None):
         if item is None:
             raise ValueError("create_step requires an item")
         tid = self._mint_or_adopt(id, item)
         self._conn.execute(
-            "INSERT INTO steps (id, item, stage, role, state, created_at, previous_step, slice) "
-            "VALUES (?, ?, ?, ?, 'ready', ?, ?, ?)",
-            (tid, item, stage, role, self._now(), previous, slice),
+            "INSERT INTO steps (id, item, stage, role, state, created_at, previous_step) "
+            "VALUES (?, ?, ?, ?, 'ready', ?, ?)",
+            (tid, item, stage, role, self._now(), previous),
         )
         if deps:
             for dep in deps:
@@ -273,18 +273,11 @@ class StepsAggregate:
         return tid
 
     def create_step(self, *, stage=None, role=None, item=None, deps=None,
-                    id=None, previous=None, slice=0):
+                    id=None, previous=None):
         tid = self._insert_step_nocommit(
-            stage=stage, role=role, item=item, deps=deps, id=id, previous=previous, slice=slice)
+            stage=stage, role=role, item=item, deps=deps, id=id, previous=previous)
         self._commit()
         return tid
-
-    def set_step_slice(self, step, slice):
-        if self._conn.execute(
-            "UPDATE steps SET slice = ? WHERE id = ?", (slice, step)
-        ).rowcount == 0:
-            raise NodeNotFoundError("unknown step '%s'" % step)
-        self._commit()
 
     def set_report(self, step, text):
         if self._conn.execute(

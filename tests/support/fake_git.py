@@ -1,15 +1,6 @@
 import os
 
-from lightcycle.ports.git import (
-    RESTACK_CONFLICT,
-    RESTACK_FAILED,
-    RESTACK_LEASE_LOST,
-    RESTACK_PUSHED,
-    GitOutcome,
-    GitPort,
-    GitReadError,
-    RestackOutcome,
-)
+from lightcycle.ports.git import GitOutcome, GitPort, GitReadError
 from lightcycle.ports.teardown_ledger import TeardownLedgerPort
 
 
@@ -22,9 +13,7 @@ class FakeGit(GitPort, TeardownLedgerPort):
                  missing_identity=(), ref=None, ref_files=None, fetch_ok=True,
                  fetch_detail="boom", added=None, changed=None, ref_shas=None,
                  history=None, approvals=None, uncommitted=None, beyond=None,
-                 remote_delete_fails=False, remote_branches=(), remote_tips=None,
-                 restack_conflicts=None, merge_bases=None, history_of=None,
-                 remote_commits=None, on_restack=None):
+                 remote_delete_fails=False):
         self._repos = set(repos) if repos is not None else None
         self._is_repo = is_repo
         self._origin = origin
@@ -32,7 +21,6 @@ class FakeGit(GitPort, TeardownLedgerPort):
         self.dirty = set(dirty)
         self._events = events
         self._branches = set(branches)
-        self._remote_branches = set(remote_branches)
         self._base = base
         self._raises = set(raises)
         self._remote_unreadable = set(remote_unreadable)
@@ -58,13 +46,6 @@ class FakeGit(GitPort, TeardownLedgerPort):
         self._fetch_ok = fetch_ok
         self._fetch_detail = fetch_detail
         self._remote_delete_fails = remote_delete_fails
-        self.remote_tips = dict(remote_tips or {})
-        self._restack_conflicts = dict(restack_conflicts or {})
-        self._merge_bases = dict(merge_bases or {})
-        self._history_of = {k: list(v) for k, v in (history_of or {}).items()}
-        self.remote_commits = {k: list(v) for k, v in (remote_commits or {}).items()}
-        self._on_restack = on_restack
-        self._restack_count = 0
         self.calls = []
         self.commits = []
         self.remote_deletes = []
@@ -119,11 +100,6 @@ class FakeGit(GitPort, TeardownLedgerPort):
         self.calls.append(("branch_exists", root, branch))
         self._raise_if("branch_exists", root)
         return (root, branch) in self._branches
-
-    def remote_branch_exists(self, root, branch):
-        self.calls.append(("remote_branch_exists", root, branch))
-        self._raise_if("remote_branch_exists", root)
-        return (root, branch) in self._remote_branches
 
     def worktree_base(self, root):
         self.calls.append(("worktree_base", root))
@@ -248,50 +224,6 @@ class FakeGit(GitPort, TeardownLedgerPort):
         self.calls.append(("commits_beyond", root, base, branch))
         self._raise_if("commits_beyond", root)
         return list(self._beyond.get((root, branch), []))
-
-    def merge_base(self, root, a, b):
-        self.calls.append(("merge_base", root, a, b))
-        self._raise_if("merge_base", root)
-        return self._merge_bases.get((a, b))
-
-    def _commits_of(self, root, ref, new_commits):
-        if ref in new_commits:
-            return list(new_commits[ref])
-        sha = self._ref_shas.get((root, ref))
-        return list(self._history_of.get(sha, []))
-
-    def restack(self, root, steps):
-        steps = list(steps)
-        self.calls.append(("restack", root, tuple(steps)))
-        if self._on_restack is not None:
-            self._on_restack(steps)
-        for step in steps:
-            if step.branch in self._restack_conflicts:
-                return RestackOutcome(
-                    RESTACK_CONFLICT, step.branch,
-                    files=tuple(self._restack_conflicts[step.branch]))
-        for step in steps:
-            if step.branch not in self.remote_tips:
-                return RestackOutcome(
-                    RESTACK_FAILED, step.branch, detail="no remote tip seeded for the branch")
-            if self.remote_tips[step.branch] != step.lease_sha:
-                return RestackOutcome(
-                    RESTACK_LEASE_LOST, step.branch,
-                    detail="stale info: %s moved" % step.branch)
-        tips = {}
-        new_commits = {}
-        for step in steps:
-            self._restack_count += 1
-            tips[step.branch] = "restacked-%s-%d" % (step.branch, self._restack_count)
-            old_history = self._history_of.get(step.old_base, [])
-            own = [c for c in self.remote_commits.get(step.branch, []) if c not in old_history]
-            new_commits[step.branch] = self._commits_of(root, step.onto, new_commits) + own
-        for branch, tip in tips.items():
-            self.remote_tips[branch] = tip
-            self._ref_shas[(root, "origin/" + branch)] = tip
-            self.remote_commits[branch] = new_commits[branch]
-            self._history_of[tip] = new_commits[branch]
-        return RestackOutcome(RESTACK_PUSHED, None, tips=tips)
 
     def created_worktrees(self):
         return [

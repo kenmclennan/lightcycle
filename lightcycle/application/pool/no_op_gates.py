@@ -83,16 +83,6 @@ class NoOpStrandedGate:
         return CloseStrandedItemsResponse()
 
 
-class NoOpStackedGate:
-    def execute(self):
-        return []
-
-
-class NoOpRestackGate:
-    def execute(self):
-        return None
-
-
 class NoOpBreakerGate:
     def execute(self, now):
         return BreakerGateResponse(breaker=Breaker())

@@ -644,48 +644,6 @@ def test_an_unparked_step_has_no_park_panel(size):
     assert "REASON" not in frame
 
 
-SLICE_PRS = ["https://github.com/kenmclennan/lightcycle/pull/%d" % n for n in (201, 202, 203)]
-
-
-def test_a_sliced_item_renders_a_header_then_one_gate_row_per_slice_bottom_up():
-    frame = render("priority-list#sliced-attention", size=(140, 30))
-    rows = frame.split("\n")
-
-    header = next(i for i, r in enumerate(rows) if "stack of 3 slices" in r)
-    at = [next(i for i, r in enumerate(rows) if pr in r) for pr in SLICE_PRS]
-
-    assert at == sorted(at) and at[0] > header
-    for number, name in enumerate(("add-schema", "write-service", "wire-cli"), start=1):
-        assert "slice %d/3 %s" % (number, name) in frame
-
-
-def test_an_unsliced_attention_row_is_unchanged():
-    frame = render("priority-list#normal", size=(100, 30))
-
-    assert "slice " not in frame
-    assert "stack of" not in frame
-
-
-def test_selecting_a_slice_gate_row_opens_that_slices_pr_in_detail():
-    from tests.support.screen_render import _sliced_attention_with_pr_detail
-    from lightcycle.adapters.tui.hub import NodeHubScreen
-
-    session = _sliced_attention_with_pr_detail((140, 30))
-    try:
-        session.press("down")
-        session.press("down")
-        session.press("enter")
-        screen = session.app.screen
-        frame = session.run(
-            lambda: "\n".join(_plain_row(s) for s in screen._compositor.render_strips()))
-
-        assert isinstance(screen, NodeHubScreen)
-        assert SLICE_PRS[1] in frame
-        assert SLICE_PRS[0] not in frame
-    finally:
-        session.close()
-
-
 def _row_containing(frame, needle):
     return next(row for row in frame.split("\n") if needle in row)
 

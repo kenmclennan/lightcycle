@@ -189,9 +189,6 @@ class CompleteStepUseCase:
                 t, input, writes=self._workflow_writes(t, input, None, True), repair=True)
         self._refuse_repeated_rebase(t, input, name)
         transition = self._resolver.resolve(t, input.outcome, name)
-        if self._passes.defers_to_last_slice(t, input.outcome, name):
-            return self._complete(
-                t, input, writes=self._deferred_writes(t, input, name))
         declared = self._flow.outcomes_for(t.stage, name)
         if transition is None and declared and input.outcome not in declared:
             raise UseCaseError(
@@ -235,7 +232,7 @@ class CompleteStepUseCase:
 
         def enrol(new):
             if transition:
-                self._passes.enrol(t.item, new, transition.to_stage, name, completing=t)
+                self._passes.enrol(t.item, new, transition.to_stage, name)
 
         fired = transition.escalation if transition else None
         response = self._complete(
@@ -261,15 +258,6 @@ class CompleteStepUseCase:
             "re-runs CI for the same answer. Close it %s instead."
             % (input.step, input.outcome, named, input.outcome, retry.failure_outcome)
         )
-
-    def _deferred_writes(self, t, input: CompleteInput, name):
-        inner = self._workflow_writes(t, input, None, name=name)
-
-        def writes(new):
-            self._passes.close_slice_run(t, name)
-            inner(new)
-
-        return writes
 
     def _workflow_writes(self, t, input: CompleteInput, transition, repair=False, name=None):
         def writes(new):

@@ -135,7 +135,7 @@ COMMAND_GROUPS = [
         ("workflow", "<add|upgrade|set|list|rm|check|describe|simulate> ...", "manage workflow sources and "
          "inspect workflows: check <origin>/<name> validates composition, describe <origin>/<name> "
          "shows its summary/shape, simulate <origin>/<name> dry-runs the bundle through the real "
-         "engine (no LLM/GitHub) to its terminals, --trace also prints the walk taken, --slices N (at least 2, on a workflow that declares a sliced phase) adds a stack scenario that drives N slice runs through build, a rework of the lowest slice and a bottom-up merge, checking each slice's PR base, the retarget and restack order, one merge gate per slice and cleanup running once - separate from `lc upgrade`, which updates the engine"),
+         "engine (no LLM/GitHub) to its terminals, --trace also prints the walk taken - separate from `lc upgrade`, which updates the engine"),
     ]),
     ("Start working", [
         ("start", "[--once] [--detach]", "the agent pool: each tick, sweep stale claims, then fill up to LC_MAX_AGENTS (see `lc config`) workers from the ready queue; --detach spawns it in the background and returns immediately"),

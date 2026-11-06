@@ -67,7 +67,7 @@ class StepDetail:
         phase = self._flow.phase_for(step)
         if phase is None:
             return None
-        runs = [r for r in self._store.runs_of(step.item) if r.phase == phase and r.slice == step.slice and r.pr]
+        runs = [r for r in self._store.runs_of(step.item) if r.phase == phase and r.pr]
         if not runs:
             return None
         return max(runs, key=lambda r: r.opened_at or "").pr

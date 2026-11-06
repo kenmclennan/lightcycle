@@ -312,8 +312,8 @@ class TestConcurrentMigrations(unittest.TestCase):
         results = _concurrent_opens(root)
 
         self.assertEqual([r[1] for r in results], ["ok"] * 8, results)
-        self.assertEqual(_columns(root, "steps").count("slice"), 1)
-        self.assertEqual(_columns(root, "phase_runs").count("slice"), 1)
+        self.assertEqual(_columns(root, "steps").count("log_path"), 1)
+        self.assertEqual(_columns(root, "phase_runs").count("comments_handled_through"), 1)
 
     def test_concurrent_open_drops_the_legacy_step_columns(self):
         root = _make_root()

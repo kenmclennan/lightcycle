@@ -13,7 +13,6 @@ from lightcycle.adapters.simulate import (
     SimulateConfig,
 )
 from lightcycle.adapters.sqlite_store import SqliteStore
-from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.claim_step import ClaimStepUseCase
 from lightcycle.application.flow.complete_step import CompleteStepUseCase
 from lightcycle.application.workflows.script_tooling import WorkflowScripts
@@ -236,8 +235,7 @@ class SimulateTestCase(unittest.TestCase):
         cli.set_container(Container(config=config))
         return "acme/build"
 
-    def _run_direct(self, workflow_text, steps, slices=None, github_factory=ScriptedGitHub,
-                    git_factory=RecordingGit, complete_class=CompleteStepUseCase):
+    def _run_direct(self, workflow_text, steps):
         selector = self._install(workflow_text, steps)
         c = cli._container
         scratch = tempfile.mkdtemp(prefix="lc-simulate-test-")
@@ -254,18 +252,18 @@ class SimulateTestCase(unittest.TestCase):
         store = SqliteStore(store_config)
         store.add_project("specs", local_path=specs_root)
         sim_config = SimulateConfig(c.config, projects_root)
-        git = git_factory()
+        git = RecordingGit()
         flow = make_flow_service(c.workflow_bundle, store, c.config, c.workflow_source)
         worktrees = make_worktrees(store, git, c.fs, sim_config, flow, c.scaffold)
         claim = ClaimStepUseCase(store, flow, worktrees, NullWorkers(), sim_config, NullGithubBudget())
-        complete = complete_class(store, flow, worktrees, sim_config)
+        complete = CompleteStepUseCase(store, flow, worktrees, sim_config)
         use_case = WorkflowSimulateUseCase(
             store, flow, worktrees, claim, complete, projects_root, git,
             lifecycle=c.workflow_lifecycle(),
             scripts=WorkflowScripts(c.workflow_bundle, c.fs, c.config), source=c.workflow_source,
-            scaffold=c.scaffold, github_factory=github_factory, config=sim_config,
+            scaffold=c.scaffold, github_factory=ScriptedGitHub, config=sim_config,
         )
-        resp = use_case.execute(SimulateInput(workflow=selector, slices=slices))
+        resp = use_case.execute(SimulateInput(workflow=selector))
         return resp, store
 
 
@@ -692,211 +690,3 @@ class TestCiSkipProbe(SimulateTestCase):
 
         self.assertTrue(resp.ok, resp.violations)
         self.assertFalse([t for t in resp.trace if "ci-skip probe" in t])
-
-
-_SLICED_WORKFLOW_TEXT = _TWO_PHASE_WORKFLOW_TEXT.replace(
-    "provides: spec\n", "provides: spec\n\nslices: code from slices\n"
-).replace(
-    "  code-await-merge  changes      write-code\n",
-    "  code-await-merge  changes      write-code\n"
-    "  code-await-merge  head-moved   write-code\n",
-).replace(
-    "  pr_merge  code-await-merge  merged\n",
-    "  pr_merge  code-await-merge  merged\n  pr_head_moved  code-await-merge  head-moved\n",
-)
-
-_SLICED_NO_REWORK_TEXT = _SLICED_WORKFLOW_TEXT.replace(
-    "  pr_head_moved  code-await-merge  head-moved\n", "")
-
-
-_PINNED_UNSLICED_TRACE = [
-    "walk 0: spec-writer[done]",
-    "walk 0: -> spec-open-pr",
-    "walk 0: spec-open-pr[done]",
-    "walk 0: -> spec-await-merge",
-    "walk 0: spec-await-merge[spec-merged]",
-    "walk 0: -> write-code",
-    "walk 0: write-code[done]",
-    "walk 0: -> code-open-pr",
-    "walk 0: code-open-pr[done]",
-    "walk 0: -> code-await-merge",
-    "walk 0: code-await-merge[merged]",
-    "walk 0: -> cleanup",
-    "walk 0: cleanup[done] (terminal, item closed)",
-    "walk 1: spec-writer[done]",
-    "walk 1: -> spec-open-pr",
-    "walk 1: spec-open-pr[done]",
-    "walk 1: -> spec-await-merge",
-    "walk 1: spec-await-merge[pr_merge hook]",
-    "walk 1: -> write-code",
-    "walk 1: write-code[done]",
-    "walk 1: -> code-open-pr",
-    "walk 1: code-open-pr[done]",
-    "walk 1: -> code-await-merge",
-    "walk 1: code-await-merge[pr_merge hook]",
-    "walk 1: -> cleanup",
-    "walk 1: cleanup[done] (terminal, item closed)",
-    "walk 2: spec-writer[done]",
-    "walk 2: -> spec-open-pr",
-    "walk 2: spec-open-pr[done]",
-    "walk 2: -> spec-await-merge",
-    "walk 2: spec-await-merge[changes]",
-    "walk 2: -> spec-writer",
-    "walk 2: spec-writer[done]",
-    "walk 2: -> spec-open-pr",
-    "walk 2: spec-open-pr[done]",
-    "walk 2: -> spec-await-merge",
-    "walk 2: spec-await-merge[spec-merged]",
-    "walk 2: -> write-code",
-    "walk 2: write-code[done]",
-    "walk 2: -> code-open-pr",
-    "walk 2: code-open-pr[done]",
-    "walk 2: -> code-await-merge",
-    "walk 2: code-await-merge[changes]",
-    "walk 2: -> write-code",
-    "walk 2: write-code[done]",
-    "walk 2: -> code-open-pr",
-    "walk 2: code-open-pr[done]",
-    "walk 2: -> code-await-merge",
-    "walk 2: code-await-merge[merged]",
-    "walk 2: -> cleanup",
-    "walk 2: cleanup[done] (terminal, item closed)",
-    "pass",
-]
-
-
-class _WrongBaseGitHub(ScriptedGitHub):
-    def open_pr(self, pr, base, head="sim-sha"):
-        if pr.endswith("code-s2>"):
-            base = "sim-base"
-        super().open_pr(pr, base, head)
-
-
-class _EarlyRetargetGitHub(ScriptedGitHub):
-    def open_pr(self, pr, base, head="sim-sha"):
-        super().open_pr(pr, base, head)
-        if pr.endswith("code-s3>"):
-            self.set_pr_base(pr, "sim-base")
-
-
-class _ReversedRestackGit(RecordingGit):
-    def restack(self, root, steps):
-        return super().restack(root, list(reversed(steps)))
-
-
-class _TwiceCleanupComplete(CompleteStepUseCase):
-    def execute(self, input):
-        resp = super().execute(input)
-        step = self._store.get_node(input.step)
-        if step.stage == "code-await-merge" and step.slice == 3 and input.outcome == "merged":
-            self._store.create_step(stage="cleanup", role="agent", item=step.item)
-        return resp
-
-
-class TestSlicedSimulation(SimulateTestCase):
-    def _sliced(self, slices, text=_SLICED_WORKFLOW_TEXT, **doubles):
-        return self._run_direct(text, _TWO_PHASE_STEPS, slices=slices, **doubles)
-
-    def test_three_slices_pass_and_the_trace_lists_the_stack(self):
-        resp, _store = self._sliced(3)
-
-        self.assertEqual(resp.violations, [])
-        stack = [line for line in resp.trace if line.startswith("stack:")]
-        self.assertEqual(len(stack), 7)
-        for k in (1, 2, 3):
-            self.assertRegex(
-                stack[k - 1], r"^stack: slice %d slice-%d branch \S+ base \S+ pr \S+$" % (k, k))
-        self.assertEqual(stack[1].split(" base ")[1].split(" pr ")[0], stack[0].split(" branch ")[1].split(" base ")[0])
-        self.assertEqual(stack[3], "stack: rework slice 1 restacked slices 2..3")
-        self.assertEqual(stack[4], "stack: merge slice 1 retargeted slice 2")
-        self.assertEqual(stack[5], "stack: merge slice 2 retargeted slice 3")
-        self.assertEqual(stack[6], "stack: cleanup ran once")
-
-    def test_two_slices_is_the_exact_bound_and_passes(self):
-        resp, _store = self._sliced(2)
-
-        self.assertEqual(resp.violations, [])
-        self.assertIn("stack: rework slice 1 restacked slices 2..2", resp.trace)
-        self.assertIn("stack: merge slice 1 retargeted slice 2", resp.trace)
-        self.assertNotIn("stack: merge slice 2 retargeted slice 3", resp.trace)
-
-    def test_wrong_base_names_the_slice_and_the_expectation(self):
-        resp, _store = self._sliced(3, github_factory=_WrongBaseGitHub)
-
-        self.assertTrue(any(
-            v.startswith("stack: slice 2 (slice-2): expected its PR opened against")
-            and "it was opened against sim-base" in v for v in resp.violations), resp.violations)
-
-    def test_slice_retargeted_early_names_the_slice_and_the_expectation(self):
-        resp, _store = self._sliced(3, github_factory=_EarlyRetargetGitHub)
-
-        self.assertIn(
-            "stack: slice 3 (slice-3): expected its PR retargeted only after slice 2 merged, "
-            "it was retargeted before slice 2 merged", resp.violations)
-
-    def test_restack_out_of_order_names_the_slice_and_the_expectation(self):
-        resp, _store = self._sliced(3, git_factory=_ReversedRestackGit)
-
-        self.assertTrue(any(
-            v.startswith("stack: slice 3 (slice-3): expected the rework to restack slices [2, 3] "
-                         "bottom-up") for v in resp.violations), resp.violations)
-
-    def test_cleanup_running_twice_fails_the_run(self):
-        resp, _store = self._sliced(3, complete_class=_TwiceCleanupComplete)
-
-        self.assertIn(
-            "stack: expected 'cleanup' to run exactly once, it ran 2 times", resp.violations)
-
-    def test_without_the_head_moved_hook_only_the_slices_above_fail(self):
-        resp, _store = self._sliced(3, text=_SLICED_NO_REWORK_TEXT)
-
-        stack = [v for v in resp.violations if v.startswith("stack:")]
-        self.assertEqual(len(stack), 2, resp.violations)
-        self.assertIn("slice 2 (slice-2)", stack[0])
-        self.assertIn("slice 3 (slice-3)", stack[1])
-        self.assertTrue(any(line.startswith("stack: slice 1 slice-1 branch") for line in resp.trace))
-
-    def test_slices_below_two_is_refused_and_seeds_nothing(self):
-        with self.assertRaises(UseCaseError) as caught:
-            self._sliced(1)
-
-        self.assertIn("at least 2", str(caught.exception))
-
-    def test_slices_on_an_unsliced_workflow_is_refused_naming_the_workflow(self):
-        with self.assertRaises(UseCaseError) as caught:
-            self._run_direct(_TWO_PHASE_WORKFLOW_TEXT, _TWO_PHASE_STEPS, slices=3)
-
-        self.assertEqual(
-            str(caught.exception),
-            "workflow acme/build declares no sliced phase; --slices does not apply")
-
-    def test_cli_refuses_with_exit_one_and_the_message(self):
-        import io
-        from contextlib import redirect_stderr
-
-        selector = self._install(_TWO_PHASE_WORKFLOW_TEXT, _TWO_PHASE_STEPS)
-        err = io.StringIO()
-        with redirect_stderr(err):
-            rc = cli.cmd_workflow(["simulate", selector, "--slices", "3"])
-
-        self.assertEqual(rc, 1)
-        self.assertIn("declares no sliced phase", err.getvalue())
-
-    def test_without_slices_the_trace_is_unchanged_and_has_no_stack_line(self):
-        import io
-        from contextlib import redirect_stdout
-
-        selector = self._install(_TWO_PHASE_WORKFLOW_TEXT, _TWO_PHASE_STEPS)
-        out = io.StringIO()
-        with redirect_stdout(out):
-            rc = cli._workflow_simulate(selector, True)
-
-        self.assertEqual(rc, 0)
-        self.assertEqual(out.getvalue().splitlines(), _PINNED_UNSLICED_TRACE)
-        self.assertFalse(any(line.startswith("stack:") for line in out.getvalue().splitlines()))
-
-    def test_sliced_trace_puts_stack_lines_after_the_walk_lines(self):
-        resp, _store = self._sliced(3)
-
-        first_stack = next(i for i, line in enumerate(resp.trace) if line.startswith("stack:"))
-        self.assertTrue(all(line.startswith("walk") for line in resp.trace[:first_stack]))

@@ -24,15 +24,9 @@ def _key(name, label):
     return "%s:%s" % (name, label) if label else name
 
 
-def _run_label(run):
-    if run.slice > 0:
-        return "%s:%s" % (run.phase, run.slice_name or run.slice)
-    return run.phase
-
-
 def _run_entry(run):
     return OutputEntry(
-        name=PR_NAME, label=_run_label(run), value=run.pr, kind="url", step=run.phase,
+        name=PR_NAME, label=run.phase, value=run.pr, kind="url", step=run.phase,
         pass_id=run.pass_id, at=run.opened_at,
     )
 
@@ -41,11 +35,11 @@ def _pr_rows(runs, taken):
     by_phase = {}
     for run in runs:
         if run.pr:
-            by_phase.setdefault((run.phase, run.slice), []).append(run)
+            by_phase.setdefault(run.phase, []).append(run)
     ordered = []
-    for (phase, _slice), phase_runs in by_phase.items():
+    for phase, phase_runs in by_phase.items():
         newest_first = sorted(phase_runs, key=lambda r: r.opened_at or "", reverse=True)
-        ordered.append((newest_first[0].opened_at or "", _run_label(newest_first[0]), newest_first))
+        ordered.append((newest_first[0].opened_at or "", phase, newest_first))
     ordered.sort(key=lambda c: c[0])
     rows = []
     for _opened, phase, newest_first in ordered:

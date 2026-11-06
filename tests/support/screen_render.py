@@ -120,16 +120,6 @@ def _blocked_store():
     return store, waiting
 
 
-def _stacked_store():
-    store = DemoStore(now=lambda: _at(3))
-    parent = store.item("LC-143.1", REGISTRY_TITLE, workflow=WORKFLOW)
-    store.step("LC-143.1.4", stage="write-code", role="agent", item=parent)
-    child = store.item("LC-143.2", CLONE_TITLE, workflow=WORKFLOW)
-    store.step("LC-143.2.4", stage="write-code", role="agent", item=child, deps=[parent])
-    store.set_stacks_on(child, parent)
-    return store, child
-
-
 def _no_workflow_store():
     store = DemoStore(now=lambda: _at(4))
     item = store.item("LC-561", "Engine-filed item with no workflow pin")
@@ -351,38 +341,6 @@ def _priority_cost_store():
 
 def _priority_cost(size):
     return _launch(_priority_cost_store(), size=size)
-
-
-SLICE_NAMES = ("add-schema", "write-service", "wire-cli")
-
-
-def _sliced_attention_store():
-    store = DemoStore(now=lambda: _at(14))
-    item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
-    pid = store.open_pass(item)
-    for number, name in enumerate(SLICE_NAMES, start=1):
-        rid = store.open_run(item, pid, "code", number, name, number - 1 or None)
-        store.set_branch(rid, "feat/LC-143-%s" % name)
-        store.set_pr(rid, "https://github.com/kenmclennan/lightcycle/pull/%d" % (200 + number))
-        gate = store.step(
-            "LC-143.3.%d" % (10 + number), stage="code-await-merge", role="human",
-            item=item, slice=number)
-        store.set_step_pass(gate, pid)
-    return store
-
-
-def _priority_sliced_attention(size):
-    return _launch(_sliced_attention_store(), size=size)
-
-
-def _sliced_attention_with_pr_detail(size):
-    fs = FakeFs(metas={"code-await-merge": {"step": "code-await-merge", "phase": "code"}})
-    session = _launch(_sliced_attention_store(), size=size, fs=fs)
-    container = session.app._container
-    real = container.flow_service()
-    container.flow_service = lambda: _PresentsFlowService(
-        real, "code-await-merge", "pr", detail=("pr",))
-    return session
 
 
 def _priority_cost_not_recorded_store():
@@ -1144,11 +1102,6 @@ def _hub_blocked_dependency(size):
     return _open_hub(_launch(store, size=size), waiting)
 
 
-def _hub_blocked_stacked(size):
-    store, child = _stacked_store()
-    return _open_hub(_launch(store, size=size), child)
-
-
 def _hub_no_workflow(size):
     store, item = _no_workflow_store()
     return _open_hub(_launch(store, size=size), item)
@@ -1668,7 +1621,6 @@ SCREENS = {
     "priority-list#claude-unavailable": _priority_claude_unavailable,
     "priority-list#stacked": _priority_stacked,
     "priority-list#cost": _priority_cost,
-    "priority-list#sliced-attention": _priority_sliced_attention,
     "priority-list#cost-not-recorded": _priority_cost_not_recorded,
     "priority-list#pool-holding": _priority_pool_holding,
     "priority-list#pool-draining": _priority_pool_draining,
@@ -1731,7 +1683,6 @@ SCREENS = {
     "artifact-viewer#filepath-toast": _artifact_viewer_filepath_toast,
     "hub#done-item": _hub_done_item,
     "hub#blocked-dependency": _hub_blocked_dependency,
-    "hub#blocked-stacked": _hub_blocked_stacked,
     "hub#no-workflow": _hub_no_workflow,
     "hub#running-with-dependency": _hub_running_with_dependency,
     "hub#gate": _hub_gate,

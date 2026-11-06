@@ -81,9 +81,6 @@ class RigFlow:
             return self._phase
         return self._flow.step_def(getattr(node, "stage", None)).phase
 
-    def slicing(self, name=None):
-        return None, None
-
     def phase_for_stage(self, stage, name=None):
         if self._phase is not None:
             return self._phase

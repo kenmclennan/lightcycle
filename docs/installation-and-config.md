@@ -147,8 +147,6 @@ lc workflow rm <origin>       # keeps the workflows' data directories
 lc workflow purge <origin> [<workflow>]  # delete those data directories
 ```
 
-The scaffolded origin carries a `simulate` CI job that checks and simulates every workflow in the bundle; a workflow whose front matter has a `slices:` line is simulated as a stack with `--slices 3 --trace`, and the others without it.
-
 Each item pins `<origin>/<name>@<sha>` at activation, and the loader resolves its flow and steps from that pin. When `lc workflow upgrade` moves an origin it repins each in-flight item of that origin that still has a changed step ahead of it, as `lc set <item> --workflow <origin>/<name>` would, printing one `repinned` line per item, a `held` line for any it could not repin, and a `left N` count of the rest; an item with nothing changed ahead keeps its pin and `lc doctor` does not report it. `--no-repin` keeps every item on its old pin, and `lc doctor` then reports each one that has a changed step ahead. A project customises its workflow by authoring its own source (see the `author-workflow` skill in the plugin), not by dropping override files anywhere. A project's `shortcode` is set when it is registered: `lc project add <owner/name> --shortcode X`. `lc project set <identity> --shortcode X` sets one on a project with none and refuses to change one whose prefix already has items, since ids are immutable.
 
 ## Upgrades

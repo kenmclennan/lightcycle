@@ -98,7 +98,7 @@ COMMANDS = {
             Arg("workflow"), Arg("--mermaid", action="store_true"),
         )),
         "simulate": CommandSpec(prog="lc workflow simulate", args=(
-            Arg("workflow"), Arg("--trace", action="store_true"), Arg("--slices", type=int),
+            Arg("workflow"), Arg("--trace", action="store_true"),
         )),
         "rm": CommandSpec(prog="lc workflow rm", args=(
             Arg("origin"),
@@ -229,7 +229,6 @@ COMMANDS = {
         )),
         Arg("--backlog", action="append"),
         Arg("--depends", action="append", help="item id to gate activation on, not a step"),
-        Arg("--stacks-on", help="item id this item's branch starts from and whose PR it targets, not a step"),
         Arg("--caused-by", action="append", help="item id of the work this item fixes"),
         Arg("--found-by", help="how the defect was found, one token"),
         Arg("--unset", action="append"), Arg("id"),

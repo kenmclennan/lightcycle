@@ -59,11 +59,6 @@ def check_bundle_references(bundle):
         flow = Flow.from_graph(graph, step_metas)
         contracts = FlowContracts(flow, graph, step_metas)
         messages = []
-        if graph.sliced_phase is not None and graph.sliced_phase not in set(graph.phases.values()):
-            messages.append(
-                "slices names phase %r, which is not a value in the phase section"
-                % graph.sliced_phase
-            )
         if contracts.unresolved_steps():
             messages.append(
                 "unresolved step reference(s): %s" % ", ".join(contracts.unresolved_steps())

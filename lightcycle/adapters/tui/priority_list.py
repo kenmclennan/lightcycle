@@ -9,7 +9,7 @@ from lightcycle.application.flow.engine_steps import engine_display_of
 from lightcycle.application.work.behind_reason import behind_reason
 from lightcycle.application.work.priority_rows import select_priority_rows
 from lightcycle.application.work.project_of import project_of, short_project_label
-from lightcycle.domain.work import State, is_human_step, item_active_seconds, row_bucket
+from lightcycle.domain.work import is_human_step, item_active_seconds, row_bucket
 from lightcycle.render import format_elapsed
 
 
@@ -119,68 +119,14 @@ def _rolled_up_time_text(children):
     return format_elapsed(total) if total > 0 else ""
 
 
-def _open_slice_gates(children):
-    return sorted(
-        (c for c in children if c.slice > 0 and c.state != State.DONE and is_human_step(c)),
-        key=lambda c: c.slice,
-    )
-
-
-def _slice_runs(store, owning):
-    pass_record = store.current_pass(owning.id)
-    if pass_record is None:
-        return {}
-    return {r.slice: r for r in store.runs_of(owning.id, pass_record.id) if r.slice > 0}
-
-
-def _gate_row(gate, run, total, project):
-    glyph = STATE_GLYPHS["gate"]
-    label = "slice %d/%d" % (gate.slice, total)
-    if run is not None and run.slice_name:
-        label = "%s %s" % (label, run.slice_name)
-    if run is not None and run.pr:
-        label = "%s  %s" % (label, run.pr)
-    return PriorityRow(
-        id=gate.id,
-        step_id=gate.id,
-        group="attention",
-        icon=glyph.glyph,
-        icon_colour=glyph.colour,
-        dependency_icon="",
-        project=project,
-        title=label,
-        step="",
-        step_colour="amber",
-        cost="",
-        time="",
-    )
-
-
-def _rows_for(store, row_builder, selected):
+def _row_for(store, row_builder, selected):
     row = row_builder(store, selected.node, selected.flow)
     children = store.children(selected.owning_node.id)
-    gates = (
-        _open_slice_gates(children)
-        if row.group == "attention" and getattr(selected.node, "slice", 0) > 0
-        else []
-    )
-    row = replace(
+    return replace(
         row, id=selected.owning_node.id, title=selected.owning_node.title,
         cost=_item_cost_text(children),
         time=_rolled_up_time_text(children),
     )
-    if not gates:
-        return [row]
-    runs = _slice_runs(store, selected.owning_node)
-    total = len(runs) or max(g.slice for g in gates)
-    header = replace(row, step="stack of %d slices" % total)
-    return [header] + [
-        _gate_row(g, runs.get(g.slice), total, row.project) for g in gates
-    ]
-
-
-def _row_for(store, row_builder, selected):
-    return _rows_for(store, row_builder, selected)[0]
 
 
 def build_priority_rows(store, lanes, flow_service, pool_running):
@@ -190,7 +136,7 @@ def build_priority_rows(store, lanes, flow_service, pool_running):
 
 def build_priority_rows_from_selection(store, selection):
     return (
-        [r for s in selection.attention for r in _rows_for(store, _attention_row, s)],
+        [_row_for(store, _attention_row, s) for s in selection.attention],
         [_row_for(store, _active_row, s) for s in selection.active],
         [_row_for(store, _queued_row, s) for s in selection.queued],
     )

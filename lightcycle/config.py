@@ -867,9 +867,6 @@ class Config:
     def spawn_id(self):
         return self._env("LC_SPAWNID")
 
-    def stage_step(self):
-        return self._env("LC_STEP")
-
     def worker_role(self):
         return self._env("LC_ROLE")
 
