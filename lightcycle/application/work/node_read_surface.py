@@ -4,10 +4,11 @@ from lightcycle.application.work.step_inputs import StepInputs
 from lightcycle.domain.work.forwarded_note import shim_notes
 
 
-def node_read_surface(store, flow, view, outputs):
+def node_read_surface(store, flow, view, outputs, stack_layers):
     step = view.step
     item_id = getattr(step, "item", None) or step.id
     out = view.as_dict()
+    stack_url = None
     if step.type == "step":
         step_artifacts = store.item_artifacts(step.id)
         out["artifacts"] = [a.as_dict() for a in step_artifacts]
@@ -77,4 +78,13 @@ def node_read_surface(store, flow, view, outputs):
             run = store.current_run(item_id, phase)
             if run and run.pr:
                 out["pr"] = run.pr
+            if run and run.stack:
+                stack_url = run.stack
+    if stack_url is None and step.type == "item":
+        stacked = [r for r in store.open_runs_of(item_id) if r.stack]
+        if stacked:
+            stack_url = stacked[-1].stack
+    if stack_url:
+        out["stack"] = stack_url
+        out.update(stack_layers.read(stack_url))
     return out

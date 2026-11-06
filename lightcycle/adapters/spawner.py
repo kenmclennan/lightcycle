@@ -32,6 +32,7 @@ def spawn_worker(config, role):
                LC_MAX_AGENTS=str(config.max_agents()))
     pkg_parent = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     env["PYTHONPATH"] = os.pathsep.join(p for p in (pkg_parent, env.get("PYTHONPATH", "")) if p)
+    env["GH_STACK_NO_UPDATE_NOTIFIER"] = "1"
     env["PATH"] = os.pathsep.join([ensure_gh_shim(root), env.get("PATH") or os.defpath])
     override = config.spawn_cmd()
     with open(log, "a") as logf:

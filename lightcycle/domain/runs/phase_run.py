@@ -36,6 +36,7 @@ class PhaseRun:
     state: str = RunState.OPEN
     opened_at: Optional[str] = None
     closed_at: Optional[str] = None
+    stack: Optional[str] = None
 
     @property
     def is_open(self) -> bool:
@@ -53,4 +54,5 @@ class PhaseRun:
             "comments_dispatched_through": self.comments_dispatched_through,
             "comments_handled_through": self.comments_handled_through,
             "state": self.state, "opened_at": self.opened_at, "closed_at": self.closed_at,
+            "stack": self.stack,
         }

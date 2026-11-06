@@ -11,11 +11,30 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 say()  { printf '\n==> %s\n' "$1"; }
 need() { command -v "$1" >/dev/null 2>&1 || { echo "missing prerequisite: $1 - $2"; exit 1; }; }
 
+check_gh_tooling() {
+  local version extensions
+  if version=$(gh --version 2>/dev/null | head -n 1 | sed -E 's/^gh version ([0-9]+\.[0-9]+).*/\1/') && [ -n "$version" ]; then
+    if [ "$(printf '%s\n%s\n' "2.90" "$version" | sort -V | head -n 1)" = "2.90" ]; then
+      echo "ok: gh $version (2.90 or later)"
+    else
+      echo "warn: gh $version is older than 2.90 - stacked delivery needs 2.90 or later"
+    fi
+  else
+    echo "warn: gh is missing - stacked delivery needs gh 2.90 or later"
+  fi
+  if extensions=$(gh extension list 2>/dev/null) && printf '%s\n' "$extensions" | grep -q "github/gh-stack"; then
+    echo "ok: github/gh-stack extension installed"
+  else
+    echo "warn: github/gh-stack extension not installed - run: gh extension install github/gh-stack"
+  fi
+}
+
 say "Checking prerequisites"
 need python3 "install Python >= 3.11"
 need uv      "install uv: https://docs.astral.sh/uv/getting-started/installation/"
 need git     "install git"
 echo "ok: python3, uv, git"
+check_gh_tooling
 
 say "Installing the dev environment (uv sync)"
 uv sync

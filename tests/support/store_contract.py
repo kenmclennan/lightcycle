@@ -1363,6 +1363,19 @@ class StoreContractBase:
         tid = self._step(s, "t", role="agent")
         self.assertEqual(s.history(tid), [])
 
+    def test_set_stack_round_trips_through_every_run_read(self):
+        s = self.make_store()
+        item = s.create_item("t", "a description", shortcode="GRID")
+        pid = s.open_pass(item)
+        rid = s.open_run(item, pid, "code")
+        self.assertIsNone(s.get_run(rid).stack)
+
+        s.set_stack(rid, "https://github.com/acme/widget/stack/3")
+
+        self.assertEqual(s.get_run(rid).stack, "https://github.com/acme/widget/stack/3")
+        self.assertEqual(s.current_run(item, "code").stack, "https://github.com/acme/widget/stack/3")
+        self.assertEqual(s.runs_of(item)[0].stack, "https://github.com/acme/widget/stack/3")
+
     def test_open_run_after_a_merged_close_opens_the_next_round(self):
         s = self.make_store()
         item = s.create_item("t", "a description", shortcode="GRID")

@@ -187,9 +187,13 @@ class ScriptedGitHub(GitHubEventsPort):
         self._conflicted = set()
         self._feedback = {}
         self._check_runs = {}
+        self._stacks = {}
 
     def script_merge(self, pr):
         self._merged.add(pr)
+
+    def script_stack(self, stack_url, layers):
+        self._stacks[stack_url] = tuple(layers)
 
     def script_conflict(self, pr):
         self._conflicted.add(pr)
@@ -247,6 +251,11 @@ class ScriptedGitHub(GitHubEventsPort):
 
     def pr_view(self, pr):
         return ReadFailure(-1, "pr views are not simulated")
+
+    def stack_view(self, stack_url):
+        if stack_url in self._stacks:
+            return self._stacks[stack_url]
+        return ReadFailure(-1, "stacks are not simulated")
 
     def rate_limit(self):
         return ReadFailure(-1, "the rate limit is not simulated")

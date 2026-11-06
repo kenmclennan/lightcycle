@@ -17,6 +17,7 @@ from lightcycle.domain.prose import (
     parse_prose,
     reference_ids,
 )
+from tests.support.fake_github import FakeGitHub
 from tests.support.fake_store import FakeStore
 
 
@@ -129,7 +130,7 @@ class TestCliStaysRaw(unittest.TestCase):
         self.store = FakeStore()
         self.store.add_project("acme/lightcycle")
         self.item = self.store.create_item("an item", "## x\n\nsee [[LC-1]]")
-        cli.set_container(SimpleNamespace(store=self.store, flow_service=lambda: None))
+        cli.set_container(SimpleNamespace(store=self.store, github=FakeGitHub(), flow_service=lambda: None))
 
     def test_show_json_carries_the_description_unchanged(self):
         out = io.StringIO()

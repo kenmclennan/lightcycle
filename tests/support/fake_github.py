@@ -8,8 +8,9 @@ class FakeGitHub(GitHubEventsPort):
                  check_runs_by_sha=None, failing_calls=(), issue_states=None,
                  behind_prs=(), strict_bases=(), base_keys=None, login="operator",
                  updated_ats=None, failing_prs=(), required_by_base=None,
-                 update_pushed_at=None, workflows_by_sha=None, runs_by_sha=None):
+                 update_pushed_at=None, workflows_by_sha=None, runs_by_sha=None, stacks=None):
         self._login = login
+        self._stacks = dict(stacks or {})
         self._update_pushed_at = update_pushed_at
         self._merged = set(merged_prs)
         self._closed = set(closed_prs)
@@ -39,6 +40,14 @@ class FakeGitHub(GitHubEventsPort):
         self._inline_events = []
         self.calls = []
         self.rate_limit_reading = ReadFailure(-1, "no rate limit scripted")
+
+    def stack_view(self, stack_url):
+        self._record("stack_view", stack_url)
+        if "stack_view" in self._failing_calls:
+            return ReadFailure(1, "boom")
+        if stack_url in self._stacks:
+            return tuple(self._stacks[stack_url])
+        return ReadFailure(1, "gh: Not Found (HTTP 404)")
 
     def rate_limit(self):
         self._record("rate_limit")

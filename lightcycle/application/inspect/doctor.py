@@ -31,6 +31,7 @@ from lightcycle.ports.git import GitReadError
 from lightcycle.domain.health import (
     Problem, blank_key_fix, fsck, obsolete_key_fix, schedule_not_enabled_fix,
 )
+from lightcycle.domain.health.gh_tooling import gh_tooling_problems
 from lightcycle.domain.health.fork import forks, main_path_stages
 from lightcycle.domain.schedule.guards import RETIRED_JOB_SCHEDULES
 from lightcycle.domain.schedule.schedule import SOURCE_BUNDLE
@@ -95,7 +96,9 @@ class DoctorUseCase:
             contracts + self._requirement_problems() + self._suggestion_problems()
             + lifecycle_contract)
         github_problems, github_note = self._github_budget_problems()
-        github_problems = github_problems + self._pr_feedback_problems(nodes)
+        github_problems = (
+            github_problems + self._pr_feedback_problems(nodes)
+            + gh_tooling_problems(self._machine.gh_tooling()))
         return DoctorReport(notes=github_note, problems={
             "store": fsck(nodes) + self._fork_problems(nodes),
             "pins": pins,

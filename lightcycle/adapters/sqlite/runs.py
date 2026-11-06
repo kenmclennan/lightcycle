@@ -105,6 +105,10 @@ class RunsAggregate:
         self._conn.execute("UPDATE phase_runs SET pr = ? WHERE id = ?", (pr, rid))
         self._commit()
 
+    def set_stack(self, rid, stack):
+        self._conn.execute("UPDATE phase_runs SET stack = ? WHERE id = ?", (stack, rid))
+        self._commit()
+
     def set_content_pin(self, rid, content_pin):
         self._conn.execute(
             "UPDATE phase_runs SET content_pin = ? WHERE id = ?", (content_pin, rid)

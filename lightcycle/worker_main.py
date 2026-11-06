@@ -8,6 +8,7 @@ from lightcycle.adapters.worker_session import (
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.claim_step import ClaimInput, ClaimStepUseCase
 from lightcycle.application.flow.select_guidance import SelectGuidanceUseCase
+from lightcycle.application.work.stack_layers import StackLayers
 from lightcycle.container import Container
 
 
@@ -25,7 +26,7 @@ def main():
         return 1
     claim = ClaimStepUseCase(
         container.store, container.flow_service(), container.worktrees(),
-        container.workers, config, container.github_budget(),
+        container.workers, config, container.github_budget(), StackLayers(container.github),
     )
     select = SelectGuidanceUseCase(container.store, container.fs, container.git, config)
     try:

@@ -1,3 +1,4 @@
+from lightcycle.application.work.stack_layers import StackLayers
 import contextlib
 import io
 import unittest
@@ -1505,7 +1506,7 @@ class TestMergePathReleaseFinishedByALaterTick(unittest.TestCase):
         flow = self.flow_service
         claim = ClaimStepUseCase(
             store, flow, FakeClaimWorktrees(), ClaimWorkers(), ClaimConfig(),
-            _claim_budget(FakeGithubBudgetStatus(), flow))
+            _claim_budget(FakeGithubBudgetStatus(), flow), StackLayers(FakeGitHub()))
         return claim.execute(ClaimInput(role=role))
 
     def test_the_step_a_merge_enrols_is_not_claimed_until_the_failed_release_is_finished(self):

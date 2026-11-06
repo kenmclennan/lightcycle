@@ -29,6 +29,6 @@ _PARK_COLUMNS = {"needs": "park_needs", "reason": "park_reason", "tried": "park_
 
 _RUN_SELECT = (
     "SELECT id, item, pass_id, phase, branch, pr, content_pin, "
-    "comments_dispatched_through, comments_handled_through, state, opened_at, closed_at "
+    "comments_dispatched_through, comments_handled_through, state, opened_at, closed_at, stack "
     "FROM phase_runs"
 )

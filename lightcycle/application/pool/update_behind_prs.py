@@ -62,6 +62,8 @@ class UpdateBehindPrsUseCase:
             if flow.step_def(step.stage).pr_merge is None:
                 continue
             run = run_of(self._store, self._flow_service, step)
+            if run is not None and run.stack:
+                continue
             pr = run.pr if run else None
             if pr is None:
                 continue

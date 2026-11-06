@@ -64,7 +64,7 @@ class TestWorkerPermittedAttach(unittest.TestCase):
 
     def test_attach_of_every_step_used_type_permitted(self):
         for t in (
-            "spec", "spec-amendment", "comments-handled", "checks-run", "pr", "branch", "reflection",
+            "spec", "spec-amendment", "comments-handled", "checks-run", "pr", "branch", "stack", "reflection",
         ):
             self.assertTrue(worker_permitted("attach", {"type": t}), t)
 

@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 
+from lightcycle.domain.health.gh_tooling import GhTooling
 from lightcycle.domain.pool.machine_headroom import MachineHeadroom
 from lightcycle.ports.machine import MachinePort
 
@@ -258,6 +259,12 @@ class MachineAdapter(MachinePort):
             return int(out.strip())
         except ValueError:
             return None
+
+    def gh_tooling(self):
+        return GhTooling(
+            version_text=_run(["gh", "--version"]),
+            extensions_text=_run(["gh", "extension", "list"]),
+        )
 
     def cwd_pids_under(self, root):
         base = os.path.normpath(root)

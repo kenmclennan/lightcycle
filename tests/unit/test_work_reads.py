@@ -1,3 +1,5 @@
+from lightcycle.application.work.stack_layers import StackLayers
+from tests.support.fake_github import FakeGitHub
 import os
 import unittest
 
@@ -62,15 +64,15 @@ class TestShowNode(unittest.TestCase):
     def test_returns_task_view(self):
         s = FakeStore()
         tid = create_owned_step(s, "build: x", stage="build", role="agent")
-        resp = ShowNodeUseCase(s, _empty_flow(s)).execute(ShowNodeInput(step=tid))
+        resp = ShowNodeUseCase(s, _empty_flow(s), StackLayers(FakeGitHub())).execute(ShowNodeInput(step=tid))
         self.assertEqual(resp.view.step.id, tid)
         self.assertIn("item_artifacts", resp.as_dict())
 
 
 class TestShowNodeValidOutcomes(unittest.TestCase):
     def _valid(self, s, flow, sid):
-        resp = ShowNodeUseCase(s, flow).execute(ShowNodeInput(step=sid))
-        return node_read_surface(s, flow, resp.view, ItemOutputs(s, flow))["valid_outcomes"]
+        resp = ShowNodeUseCase(s, flow, StackLayers(FakeGitHub())).execute(ShowNodeInput(step=sid))
+        return node_read_surface(s, flow, resp.view, ItemOutputs(s, flow), StackLayers(FakeGitHub()))["valid_outcomes"]
 
     def test_engine_step_lists_its_declared_outcomes(self):
         s = FakeStore()
@@ -95,8 +97,8 @@ class TestShowNodeValidOutcomes(unittest.TestCase):
 
 class TestShowNodeRoutes(unittest.TestCase):
     def _surface(self, s, flow, sid):
-        resp = ShowNodeUseCase(s, flow).execute(ShowNodeInput(step=sid))
-        return node_read_surface(s, flow, resp.view, ItemOutputs(s, flow))
+        resp = ShowNodeUseCase(s, flow, StackLayers(FakeGitHub())).execute(ShowNodeInput(step=sid))
+        return node_read_surface(s, flow, resp.view, ItemOutputs(s, flow), StackLayers(FakeGitHub()))
 
     def test_workflow_step_shows_each_outcome_with_its_target_stage(self):
         s = FakeStore()
@@ -135,8 +137,8 @@ class TestShowNodeRoutes(unittest.TestCase):
     def test_non_step_node_carries_no_routes(self):
         s = FakeStore()
         item = s.create_item("st", "a description")
-        resp = ShowNodeUseCase(s, _empty_flow(s)).execute(ShowNodeInput(step=item))
-        self.assertNotIn("routes", node_read_surface(s, _empty_flow(s), resp.view, ItemOutputs(s, _empty_flow(s))))
+        resp = ShowNodeUseCase(s, _empty_flow(s), StackLayers(FakeGitHub())).execute(ShowNodeInput(step=item))
+        self.assertNotIn("routes", node_read_surface(s, _empty_flow(s), resp.view, ItemOutputs(s, _empty_flow(s)), StackLayers(FakeGitHub())))
 
 
 class TestTrace(unittest.TestCase):

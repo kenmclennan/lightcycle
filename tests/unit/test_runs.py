@@ -73,6 +73,7 @@ class TestAsDict(unittest.TestCase):
             "r", "LC-1", "LC-1.p1", phase="code", branch="b", pr="u", content_pin="c",
             comments_dispatched_through="d", comments_handled_through="h",
             state=RunState.MERGED, opened_at="o", closed_at="x",
+            stack="s",
         )
         self.assertEqual(
             r.as_dict(),
@@ -80,7 +81,7 @@ class TestAsDict(unittest.TestCase):
                 "id": "r", "item": "LC-1", "pass_id": "LC-1.p1", "pass": "LC-1.p1",
                 "phase": "code", "branch": "b", "pr": "u", "content_pin": "c",
                 "comments_dispatched_through": "d", "comments_handled_through": "h",
-                "state": RunState.MERGED, "opened_at": "o", "closed_at": "x",
+                "state": RunState.MERGED, "opened_at": "o", "closed_at": "x", "stack": "s",
             },
         )
 

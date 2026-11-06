@@ -4,7 +4,9 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from lightcycle.adapters.github import GitHubEventsAdapter
-from lightcycle.ports.github import CheckRun, PrSync, RateLimit, ReadFailure, WorkflowFile
+from lightcycle.ports.github import (
+    CheckRun, PrSync, RateLimit, ReadFailure, StackLayer, WorkflowFile,
+)
 
 _PR = "https://github.com/x/y/pull/7"
 
@@ -1382,3 +1384,73 @@ class TestWorkflowRuns(unittest.TestCase):
         with patch("lightcycle.adapters.github.subprocess.run", return_value=_proc("", 1, "boom")):
             result = GitHubEventsAdapter().workflow_runs(_PR, "sha1")
         self.assertEqual(result, ReadFailure(1, "boom"))
+
+
+_STACK_URL = "https://github.com/acme/widget/stack/3"
+
+
+def _stack_body(entries, base="main"):
+    return json.dumps({
+        "number": 3, "base": {"ref": base}, "open": True,
+        "pull_requests": [
+            {"number": n, "state": state, "merged_at": merged, "head": {"ref": ref, "sha": "sha-" + ref}}
+            for n, state, merged, ref in entries
+        ],
+    })
+
+
+class TestStackView(unittest.TestCase):
+    def setUp(self):
+        self.adapter = GitHubEventsAdapter()
+
+    def _view(self, entries, **kw):
+        with patch("lightcycle.adapters.github.subprocess.run",
+                   return_value=_proc(_stack_body(entries, **kw))) as run:
+            return self.adapter.stack_view(_STACK_URL), run
+
+    def test_a_merged_bottom_layer_retargets_the_next_to_the_stack_base(self):
+        layers, run = self._view([
+            (4, "closed", "2026-01-01T00:00:00Z", "a"), (5, "open", None, "b"), (6, "open", None, "c"),
+        ])
+
+        self.assertEqual(layers, (
+            StackLayer(4, "https://github.com/acme/widget/pull/4", "a", "main", "sha-a", "merged"),
+            StackLayer(5, "https://github.com/acme/widget/pull/5", "b", "main", "sha-b", "open"),
+            StackLayer(6, "https://github.com/acme/widget/pull/6", "c", "b", "sha-c", "open"),
+        ))
+        self.assertEqual(run.call_args.args[0], ["gh", "api", "repos/acme/widget/stacks/3"])
+
+    def test_with_nothing_merged_each_layer_sits_on_the_one_below(self):
+        layers, _ = self._view([(4, "open", None, "a"), (5, "open", None, "b"), (6, "open", None, "c")])
+
+        self.assertEqual([l.base_ref for l in layers], ["main", "a", "b"])
+
+    def test_a_closed_entry_without_merged_at_is_closed(self):
+        layers, _ = self._view([(4, "closed", None, "a")])
+
+        self.assertEqual(layers[0].state, "closed")
+
+    def test_an_empty_stack_is_an_empty_tuple(self):
+        layers, _ = self._view([])
+
+        self.assertEqual(layers, ())
+
+    def test_a_non_zero_exit_is_a_read_failure(self):
+        with patch("lightcycle.adapters.github.subprocess.run",
+                   return_value=_proc("", returncode=1, stderr="gh: Not Found")):
+            self.assertEqual(self.adapter.stack_view(_STACK_URL), ReadFailure(1, "gh: Not Found"))
+
+    def test_unparseable_json_is_a_read_failure(self):
+        with patch("lightcycle.adapters.github.subprocess.run", return_value=_proc("not json")):
+            self.assertIsInstance(self.adapter.stack_view(_STACK_URL), ReadFailure)
+
+    def test_a_malformed_stack_url_fails_without_running_gh(self):
+        with patch("lightcycle.adapters.github.subprocess.run") as run:
+            result = self.adapter.stack_view("https://github.com/acme/widget/pull/3")
+
+        self.assertEqual(result.returncode, -1)
+        run.assert_not_called()
+
+    def test_a_body_missing_the_expected_fields_is_a_read_failure(self):
+        with patch("lightcycle.adapters.github.subprocess.run", return_value=_proc("{}")):
+            self.assertIsInstance(self.adapter.stack_view(_STACK_URL), ReadFailure)

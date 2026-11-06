@@ -196,6 +196,8 @@ class LinkArtifactUseCase:
             self._set_pr(run, input.value)
         elif input.atype == "branch":
             self._store.set_branch(run.id, input.value)
+        elif input.atype == "stack":
+            self._store.set_stack(run.id, input.value)
         else:
             self._store.set_comments_handled_through(run.id, input.value)
 
