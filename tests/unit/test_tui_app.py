@@ -2457,6 +2457,21 @@ class TestPriorityListShapeGuardUnaffectedByBacklogChanges(unittest.TestCase):
             update.assert_not_called()
 
 
+    def test_row_keys_that_differ_from_the_table_force_rebuild_even_with_unchanged_shape(self):
+        store = FakeStore()
+        create_owned_step(store, "queued", stage="build", role="agent")
+        session = self._launch(store)
+        table = session.app.query_one(PriorityTable)
+        session.run(lambda: table.add_row("x", key="LC-999.7"))
+
+        with patch.object(LightcycleApp, "_update_cells") as update:
+            session.run(session.app._refresh)
+            session.pause()
+            update.assert_not_called()
+
+        self.assertNotIn("LC-999.7", {key.value for key in table.rows})
+
+
 class TestPriorityRebuildGapAtFloorWidth(unittest.TestCase):
     _ITEM = "LC-500"
     _ID = "LC-500.1"

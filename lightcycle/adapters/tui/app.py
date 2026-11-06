@@ -825,6 +825,7 @@ class LightcycleApp(App):
             and shape == self._last_shape
             and not self._priority_needs_rebuild
             and layout.stacked == self._priority_stacked
+            and {row.id for row in rows} == {key.value for key in table.rows}
         ):
             self._update_cells(table, rows)
         else:
