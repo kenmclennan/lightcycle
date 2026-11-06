@@ -920,3 +920,188 @@ class TestResolveCiSkipsAStepAnotherPathClosed(unittest.TestCase):
         self.assertEqual(result.ci_resolved, [])
         successors = [c for c in store.children(item) if c.previous_step == step]
         self.assertEqual(len(successors), 1)
+
+
+def _check(name, conclusion, status="completed"):
+    return CheckRun(name=name, status=status, conclusion=conclusion, url="https://x/%s" % name)
+
+
+class _StackedCiRig:
+    def __init__(self, count=3, checks=None, required=None, views=None, state_by_layer=None):
+        from tests.support.stacked import (
+            STACK_URL, base_keys_for, build_stack, head_shas_for,
+        )
+
+        self.layers = build_stack(count, states=state_by_layer)
+        self.store = FakeStore()
+        item = self.store.create_item("stacked", "a description")
+        self.item = item
+        rid = plant_pr(self.store, item, self.layers[-1].url, branch=_BRANCH)
+        self.store.set_stack(rid, STACK_URL)
+        self.step = self.store.create_step(stage="poll-ci", role="engine", item=item)
+        runs = {}
+        for layer in self.layers:
+            runs[(layer.url, layer.head_sha)] = tuple((checks or {}).get(layer.number, ()))
+        bottom = next(l for l in self.layers if l.state == "open")
+        self.github = FakeGitHub(
+            stacks={STACK_URL: self.layers}, head_shas=head_shas_for(self.layers),
+            base_keys=base_keys_for(self.layers), check_runs_by_sha=runs,
+            required_by_base={"acme/widget@%s" % bottom.base_ref: required} if required else None)
+        flow = _FlowAdapter(_FLOW)
+        self.uc = ResolveCiUseCase(
+            self.store, self.github, flow, CompleteStepUseCase(self.store, flow),
+            clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600,
+            ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60,
+            ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0,
+            views=views or AlwaysConfirmed(), trusted_authors=lambda: frozenset())
+
+    def node(self):
+        return self.store.get_node(self.step)
+
+    def artifacts(self, atype):
+        return [a.value for a in self.store.item_artifacts(self.step) if a.type == atype]
+
+
+class TestResolveCiOverAStack(unittest.TestCase):
+    def test_every_layer_green_completes_success_listing_each_layer(self):
+        rig = _StackedCiRig(checks={n: [_check("build", "success")] for n in (1, 2, 3)})
+
+        result = rig.uc.execute()
+
+        self.assertEqual(result.ci_resolved, [rig.item])
+        node = rig.node()
+        self.assertEqual(node.state, State.DONE)
+        self.assertEqual(node.outcome, "succeeded")
+        for n in (1, 2, 3):
+            self.assertIn("layer %d of 3" % n, node.report)
+            self.assertIn("sha-%d" % n, node.report)
+        self.assertEqual(rig.artifacts("ci-judged-sha"), ["sha-3"])
+        import json
+        self.assertEqual(len(json.loads(rig.artifacts("ci-judged-layers")[0])), 3)
+
+    def test_a_red_layer_two_with_layer_one_pending_fails_naming_layer_two(self):
+        rig = _StackedCiRig(checks={
+            1: [_check("build", None, status="in_progress")],
+            2: [_check("build", "failure")],
+            3: [_check("build", "success")],
+        })
+
+        rig.uc.execute()
+
+        node = rig.node()
+        self.assertEqual(node.outcome, "failed")
+        self.assertIn("layer 2 of 3 (PR https://github.com/acme/widget/pull/2)", node.report)
+        self.assertTrue(node.report.startswith("CI failed on sha-2: check 'build'"))
+
+    def test_a_red_layer_one_names_layer_one(self):
+        rig = _StackedCiRig(checks={
+            1: [_check("build", "failure")],
+            2: [_check("build", "failure")],
+            3: [_check("build", "success")],
+        })
+
+        rig.uc.execute()
+
+        self.assertIn("layer 1 of 3", rig.node().report)
+
+    def test_a_timed_out_layer_fails_the_stack_naming_the_layer(self):
+        rig = _StackedCiRig(checks={
+            1: [_check("build", "success")],
+            2: [_check("build", None, status="in_progress")],
+            3: [_check("build", "success")],
+        })
+        rig.uc._ci_ceiling_seconds = lambda: 1
+        rig.uc._wall_clock = iter([1000.0, 1000.0, 1000.0, 9000.0, 9000.0, 9000.0]).__next__
+
+        rig.uc.execute()
+        rig.uc.execute()
+
+        self.assertEqual(rig.node().outcome, "failed")
+        self.assertIn("CI timed out on sha-2", rig.node().report)
+        self.assertIn("layer 2 of 3", rig.node().report)
+
+    def test_one_unread_layer_continues_without_an_outcome(self):
+        rig = _StackedCiRig(checks={n: [_check("build", "success")] for n in (1, 2, 3)})
+        rig.github._failing_calls = set()
+        original = rig.github.check_runs
+
+        def reading(pr, sha):
+            if pr.endswith("/2"):
+                return NotYetRead()
+            return original(pr, sha)
+
+        rig.github.check_runs = reading
+
+        result = rig.uc.execute()
+
+        self.assertEqual(result.ci_resolved, [])
+        self.assertNotEqual(rig.node().state, State.DONE)
+
+    def test_a_mixed_green_unread_and_pending_stack_has_no_outcome_and_counts_the_unread(self):
+        rig = _StackedCiRig(checks={
+            1: [_check("build", "success")],
+            3: [_check("build", None, status="in_progress")],
+        })
+        original = rig.github.check_runs
+
+        def reading(pr, sha):
+            if pr.endswith("/2"):
+                return NotYetRead()
+            return original(pr, sha)
+
+        rig.github.check_runs = reading
+        clock = iter([0.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0]).__next__
+        rig.uc._clock = clock
+
+        first = rig.uc.execute()
+        second = rig.uc.execute()
+
+        self.assertEqual(first.ci_resolved + second.ci_resolved, [])
+        self.assertNotEqual(rig.node().state, State.DONE)
+        reasons = [u.reason for u in first.ci_unread + second.ci_unread]
+        self.assertEqual(reasons, ["checks-not-yet-read"])
+
+    def test_required_checks_are_read_once_from_the_bottom_open_layer(self):
+        rig = _StackedCiRig(
+            required=["build"], checks={n: [_check("build", "success")] for n in (1, 2, 3)})
+
+        rig.uc.execute()
+
+        required_calls = [c for c in rig.github.calls if c[0] == "required_checks"]
+        self.assertEqual(required_calls, [("required_checks", "acme/widget@main")])
+
+    def test_a_merged_lower_layer_is_not_judged_and_bottom_open_supplies_required(self):
+        rig = _StackedCiRig(
+            state_by_layer={1: "merged"}, required=["build"],
+            checks={2: [_check("build", "success")], 3: [_check("build", "success")]})
+
+        rig.uc.execute()
+
+        judged = [c for c in rig.github.calls if c[0] == "check_runs"]
+        self.assertTrue(all(not c[1].endswith("/1") for c in judged))
+        self.assertEqual(rig.node().outcome, "succeeded")
+
+    def test_the_skip_idle_check_does_not_run_for_a_stacked_run(self):
+        rig = _StackedCiRig(checks={n: [_check("build", "success")] for n in (1, 2, 3)})
+        called = []
+        rig.uc._skip_idle.execute = lambda *a, **k: called.append(a)
+
+        rig.uc.execute()
+
+        self.assertEqual(called, [])
+
+    def test_an_unread_stack_has_no_outcome(self):
+        rig = _StackedCiRig(checks={n: [_check("build", "failure")] for n in (1, 2, 3)})
+        rig.github._failing_calls = {"stack_view"}
+
+        rig.uc.execute()
+
+        self.assertNotEqual(rig.node().state, State.DONE)
+
+    def test_a_stack_with_a_closed_layer_has_no_outcome(self):
+        rig = _StackedCiRig(
+            state_by_layer={2: "closed"}, checks={n: [_check("build", "failure")] for n in (1, 3)})
+
+        rig.uc.execute()
+
+        self.assertNotEqual(rig.node().state, State.DONE)

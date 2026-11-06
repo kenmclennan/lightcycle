@@ -8,9 +8,11 @@ class FakeGitHub(GitHubEventsPort):
                  check_runs_by_sha=None, failing_calls=(), issue_states=None,
                  behind_prs=(), strict_bases=(), base_keys=None, login="operator",
                  updated_ats=None, failing_prs=(), required_by_base=None,
-                 update_pushed_at=None, workflows_by_sha=None, runs_by_sha=None, stacks=None):
+                 update_pushed_at=None, workflows_by_sha=None, runs_by_sha=None, stacks=None,
+                 signatures=None):
         self._login = login
         self._stacks = dict(stacks or {})
+        self._signatures = dict(signatures or {})
         self._update_pushed_at = update_pushed_at
         self._merged = set(merged_prs)
         self._closed = set(closed_prs)
@@ -48,6 +50,17 @@ class FakeGitHub(GitHubEventsPort):
         if stack_url in self._stacks:
             return tuple(self._stacks[stack_url])
         return ReadFailure(1, "gh: Not Found (HTTP 404)")
+
+    def script_stack(self, url, layers):
+        self._stacks[url] = tuple(layers)
+
+    def diff_signature(self, pr, sha, base=None):
+        self._record("diff_signature", pr, sha)
+        if "diff_signature" in self._failing_calls:
+            return ReadFailure(1, "boom")
+        if (pr, sha) not in self._signatures:
+            return ReadFailure(1, "no signature scripted")
+        return self._signatures[(pr, sha)]
 
     def rate_limit(self):
         self._record("rate_limit")

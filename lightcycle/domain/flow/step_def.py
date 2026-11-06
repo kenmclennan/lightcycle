@@ -10,6 +10,7 @@ from lightcycle.domain.flow.hooks import (
     PR_CLOSE,
     PR_CONFLICT,
     PR_HEAD_MOVED,
+    PR_STACK_SHAPE,
     PR_FEEDBACK,
     PR_MERGE,
     parse_caps,
@@ -28,6 +29,7 @@ class StepDef:
     pr_feedback: Optional[str] = None
     pr_conflict: Optional[str] = None
     pr_head_moved: Optional[str] = None
+    pr_stack_shape: Optional[str] = None
     ci_success: Optional[str] = None
     ci_failure: Optional[str] = None
     mention_token: Optional[str] = None
@@ -71,6 +73,7 @@ class StepDef:
             pr_feedback=first(PR_FEEDBACK),
             pr_conflict=first(PR_CONFLICT),
             pr_head_moved=first(PR_HEAD_MOVED),
+            pr_stack_shape=first(PR_STACK_SHAPE),
             ci_success=first(CI_SUCCESS),
             ci_failure=first(CI_FAILURE),
             mention_token=first(MENTION_TOKEN),

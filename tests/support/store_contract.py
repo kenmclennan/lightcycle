@@ -1376,6 +1376,20 @@ class StoreContractBase:
         self.assertEqual(s.current_run(item, "code").stack, "https://github.com/acme/widget/stack/3")
         self.assertEqual(s.runs_of(item)[0].stack, "https://github.com/acme/widget/stack/3")
 
+    def test_set_stack_seen_round_trips_and_set_stack_clears_it(self):
+        s = self.make_store()
+        item = s.create_item("t", "a description", shortcode="GRID")
+        pid = s.open_pass(item)
+        rid = s.open_run(item, pid, "code")
+        self.assertIsNone(s.get_run(rid).stack_seen)
+
+        s.set_stack_seen(rid, "[]")
+        self.assertEqual(s.get_run(rid).stack_seen, "[]")
+        self.assertEqual(s.current_run(item, "code").stack_seen, "[]")
+
+        s.set_stack(rid, "https://github.com/acme/widget/stack/3")
+        self.assertIsNone(s.get_run(rid).stack_seen)
+
     def test_open_run_after_a_merged_close_opens_the_next_round(self):
         s = self.make_store()
         item = s.create_item("t", "a description", shortcode="GRID")

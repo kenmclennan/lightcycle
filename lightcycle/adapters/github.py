@@ -1,4 +1,5 @@
 import datetime
+import hashlib
 import json
 import os
 import re
@@ -236,6 +237,26 @@ class GitHubEventsAdapter(GitHubEventsPort):
             return ReadFailure(-1, "could not parse gh pr view JSON for headRefOid")
         return data.get("headRefOid", "")
 
+    def _resolve_base(self, pr, base):
+        if base is not None:
+            return base or ReadFailure(-1, "gh pr view returned an empty baseRefName for %r" % pr)
+        try:
+            result = subprocess.run(
+                ["gh", "pr", "view", pr, "--json", "baseRefName"],
+                capture_output=True, text=True, timeout=_GH_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired:
+            return _timeout_read_failure()
+        if result.returncode != 0:
+            return ReadFailure(result.returncode, result.stderr)
+        try:
+            resolved = json.loads(result.stdout).get("baseRefName", "")
+        except (json.JSONDecodeError, ValueError):
+            return ReadFailure(-1, "could not parse gh pr view JSON for baseRefName")
+        if not resolved:
+            return ReadFailure(-1, "gh pr view returned an empty baseRefName for %r" % pr)
+        return resolved
+
     def changed_files(
         self, pr: str, sha: str, base: Optional[str] = None
     ) -> Union[frozenset, ReadFailure]:
@@ -243,22 +264,9 @@ class GitHubEventsAdapter(GitHubEventsPort):
         if not parts:
             return ReadFailure(-1, "pr is not a parseable GitHub PR URL: %r" % pr)
         owner, repo, number = parts
-        if base is None:
-            try:
-                result = subprocess.run(
-                    ["gh", "pr", "view", pr, "--json", "baseRefName"],
-                    capture_output=True, text=True, timeout=_GH_TIMEOUT_SECONDS,
-                )
-            except subprocess.TimeoutExpired:
-                return _timeout_read_failure()
-            if result.returncode != 0:
-                return ReadFailure(result.returncode, result.stderr)
-            try:
-                base = json.loads(result.stdout).get("baseRefName", "")
-            except (json.JSONDecodeError, ValueError):
-                return ReadFailure(-1, "could not parse gh pr view JSON for baseRefName")
-        if not base:
-            return ReadFailure(-1, "gh pr view returned an empty baseRefName for %r" % pr)
+        base = self._resolve_base(pr, base)
+        if isinstance(base, ReadFailure):
+            return base
         try:
             r = subprocess.run(
                 [
@@ -277,6 +285,46 @@ class GitHubEventsAdapter(GitHubEventsPort):
         except (json.JSONDecodeError, ValueError):
             return ReadFailure(-1, "could not parse gh api compare JSON for changed filenames")
         return frozenset(f for f in filenames if f)
+
+    def diff_signature(
+        self, pr: str, sha: str, base: Optional[str] = None
+    ) -> Union[str, ReadFailure]:
+        parts = _repo_parts(pr)
+        if not parts:
+            return ReadFailure(-1, "pr is not a parseable GitHub PR URL: %r" % pr)
+        owner, repo, number = parts
+        base = self._resolve_base(pr, base)
+        if isinstance(base, ReadFailure):
+            return base
+        try:
+            r = subprocess.run(
+                [
+                    "gh", "api", "/repos/%s/%s/compare/%s...%s" % (owner, repo, base, sha),
+                    "--jq", "[.files[]? | {filename, patch, sha}]",
+                ],
+                capture_output=True, text=True,
+                timeout=_GH_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired:
+            return _timeout_read_failure()
+        if r.returncode != 0:
+            return ReadFailure(r.returncode, r.stderr)
+        try:
+            files = json.loads(r.stdout)
+            entries = []
+            for f in files:
+                patch = f.get("patch")
+                if patch is None:
+                    body = "blob:" + str(f.get("sha"))
+                else:
+                    body = "\n".join(
+                        line for line in patch.split("\n") if not line.startswith("@@")
+                    )
+                entries.append([f["filename"], body])
+        except (json.JSONDecodeError, ValueError, KeyError, TypeError, AttributeError):
+            return ReadFailure(-1, "could not parse gh api compare JSON for the diff signature")
+        entries.sort()
+        return hashlib.sha256(json.dumps(entries).encode("utf-8")).hexdigest()
 
     def check_runs(self, pr: str, sha: str) -> Union[Tuple[CheckRun, ...], ReadFailure]:
         parts = _repo_parts(pr)

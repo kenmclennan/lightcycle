@@ -200,3 +200,73 @@ class TestSyncReadingSettledAndReadAt(unittest.TestCase):
 
         self.assertFalse(sync.settled)
         self.assertTrue(sync.conflicted)
+
+
+class TestStackView(unittest.TestCase):
+    def setUp(self):
+        from tests.support.stacked import STACK_URL, build_stack
+
+        self.url = STACK_URL
+        self.layers = build_stack(3, states={1: "merged"})
+        self.github = FakeGitHub(stacks={STACK_URL: self.layers})
+        self.snap = PrSnapshot(self.github)
+
+    def test_stack_view_registers_and_is_not_yet_read_until_published(self):
+        self.assertIsInstance(self.snap.stack_view(self.url), NotYetRead)
+
+        self.assertEqual(self.snap.take_wanted().stacks, frozenset([self.url]))
+        self.assertEqual(self.github.calls, [])
+
+    def test_a_published_stack_is_returned_and_a_failure_is_returned_as_is(self):
+        self.snap.publish_stack(self.url, self.layers)
+        self.assertEqual(self.snap.stack_view(self.url), self.layers)
+
+        self.snap.publish_stack(self.url, ReadFailure(1, "gh: Not Found (HTTP 404)"))
+        self.assertEqual(self.snap.stack_view(self.url), ReadFailure(1, "gh: Not Found (HTTP 404)"))
+
+    def test_retain_drops_a_stack_no_longer_wanted(self):
+        self.snap.publish_stack(self.url, self.layers)
+
+        self.snap.retain(frozenset(), frozenset(), frozenset([self.url]))
+        self.assertEqual(self.snap.stack_view(self.url), self.layers)
+
+        self.snap.retain(frozenset(), frozenset(), frozenset())
+        self.assertIsInstance(self.snap.stack_view(self.url), NotYetRead)
+
+    def test_is_upper_layer_is_true_only_above_a_non_merged_layer(self):
+        self.snap.publish_stack(self.url, self.layers)
+
+        self.assertFalse(self.snap.is_upper_layer(self.layers[0].url))
+        self.assertFalse(self.snap.is_upper_layer(self.layers[1].url))
+        self.assertTrue(self.snap.is_upper_layer(self.layers[2].url))
+        self.assertFalse(self.snap.is_upper_layer("https://github.com/acme/widget/pull/99"))
+
+    def test_is_upper_layer_is_false_before_the_stack_is_published(self):
+        self.assertFalse(self.snap.is_upper_layer(self.layers[2].url))
+
+
+class TestDiffSignatureRead(unittest.TestCase):
+    def setUp(self):
+        self.github = FakeGitHub()
+        self.snap = PrSnapshot(self.github)
+
+    def test_it_registers_the_pair_and_is_not_yet_read(self):
+        self.assertIsInstance(self.snap.diff_signature(_PR, "h1"), NotYetRead)
+
+        self.assertEqual(self.snap.take_wanted().signatures, frozenset([(_PR, "h1")]))
+        self.assertEqual(self.github.calls, [])
+
+    def test_a_published_signature_is_returned_and_a_failure_is_final(self):
+        self.snap.publish_signature(_PR, "h1", "sig")
+        self.snap.publish_signature(_PR, "h2", ReadFailure(1, "boom"))
+
+        self.assertEqual(self.snap.diff_signature(_PR, "h1"), "sig")
+        self.assertEqual(self.snap.diff_signature(_PR, "h2"), ReadFailure(1, "boom"))
+        self.assertEqual(self.snap.take_wanted().signatures, frozenset())
+
+    def test_retain_drops_signatures_of_unretained_prs(self):
+        self.snap.publish_signature(_PR, "h1", "sig")
+
+        self.snap.retain(frozenset(), frozenset())
+
+        self.assertIsInstance(self.snap.diff_signature(_PR, "h1"), NotYetRead)

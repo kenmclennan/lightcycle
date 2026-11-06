@@ -9,6 +9,7 @@ from lightcycle.ports.github import Comment
 from tests.support.fake_github import FakeGitHub
 from tests.support.fake_spin import FakeSpinPort
 from tests.support.fake_store import FakeStore
+from tests.support.stacked import layer_url as _layer_url
 
 
 def plant_pr(store, item, url, phase=None, branch=None, n=1, state="open"):
@@ -731,3 +732,87 @@ class TestMonitorPrsContentPin(unittest.TestCase):
 
         self.assertEqual(node.role, "human")
         self.assertIn("b.py", node.notes)
+
+
+class TestContentPinOverAStack(unittest.TestCase):
+    def _setup(self, signatures=None, files=None):
+        import json
+        from tests.support.stacked import STACK_URL, build_stack, head_shas_for
+
+        self.json = json
+        self.layers = build_stack(3)
+        self.github = FakeGitHub(
+            stacks={STACK_URL: self.layers}, head_shas=head_shas_for(self.layers),
+            signatures=signatures or {}, files_by_sha=files or {})
+        self.store = FakeStore()
+        self.item = self.store.create_item("stacked", "a description")
+        self.rid = plant_pr(self.store, self.item, self.layers[-1].url)
+        self.store.set_stack(self.rid, STACK_URL)
+        self.step = self.store.create_step(stage="build", role="agent", item=self.item)
+        self.uc = CheckContentPinUseCase(
+            self.store, self.github, _FlowAdapter(_FLOW),
+            trusted_authors=lambda: frozenset({"review-code"}))
+
+    def _run(self):
+        self.uc.execute(self.store.get_node(self.item), self.layers[-1].url, None)
+
+    def _pins(self):
+        return self.json.loads(self.store.get_run(self.rid).content_pin)
+
+    def test_per_layer_pins_are_recorded_as_a_json_map(self):
+        self._setup()
+
+        self._run()
+
+        self.assertEqual(
+            self._pins(), {_layer_url(n): "sha-%d" % n for n in (1, 2, 3)})
+
+    def test_a_drop_on_layer_two_parks_naming_layer_two(self):
+        two = _layer_url(2)
+        self._setup(files={(two, "sha-2"): frozenset({"a.py", "b.py"}),
+                           (two, "sha-2b"): frozenset({"a.py"})})
+        self._run()
+        self.github._head_shas[two] = "sha-2b"
+
+        self._run()
+
+        node = self.store.get_node(self.step)
+        self.assertEqual(node.state, State.WAITING)
+        self.assertIn("layer 2 of 3 (%s)" % two, node.park.reason)
+        self.assertEqual(self._pins()[two], "sha-2b")
+
+    def test_a_cascaded_head_advances_the_pin_silently(self):
+        two = _layer_url(2)
+        self._setup(
+            signatures={(two, "sha-2"): "same", (two, "sha-2b"): "same"},
+            files={(two, "sha-2"): frozenset({"a.py", "lower.py"}),
+                   (two, "sha-2b"): frozenset({"a.py"})})
+        self._run()
+        self.github._head_shas[two] = "sha-2b"
+
+        self._run()
+
+        self.assertIsNone(self.store.get_node(self.step).notes)
+        self.assertNotEqual(self.store.get_node(self.step).state, State.WAITING)
+        self.assertEqual(self._pins()[two], "sha-2b")
+
+    def test_an_old_plain_sha_pin_counts_as_no_pin(self):
+        self._setup()
+        self.store.set_content_pin(self.rid, "sha-3")
+
+        self._run()
+
+        self.assertEqual(
+            self._pins(), {_layer_url(n): "sha-%d" % n for n in (1, 2, 3)})
+        self.assertIsNone(self.store.get_node(self.step).notes)
+
+    def test_an_unread_stack_leaves_the_pins_untouched(self):
+        self._setup()
+        self._run()
+        before = self.store.get_run(self.rid).content_pin
+        self.github._failing_calls = {"stack_view"}
+        self.github._head_shas[_layer_url(2)] = "moved"
+
+        self._run()
+
+        self.assertEqual(self.store.get_run(self.rid).content_pin, before)

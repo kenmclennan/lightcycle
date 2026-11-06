@@ -28,6 +28,7 @@ hooks:
   pr_feedback           ready-merge  handle-feedback
   pr_conflict           ready-merge  conflicted
   pr_head_moved         ready-merge  head-moved
+  pr_stack_shape        ready-merge  stack-shape
   pr_conflict_cap       ready-merge  3
   pr_conflict_escalate  ready-merge  gave-up
   ci_failed_cap         watch-pr     ci-failed  3  review-ci
@@ -91,6 +92,10 @@ class TestFlowFromGraph(unittest.TestCase):
     def test_pr_head_moved_outcome_is_read_from_the_hook(self):
         self.assertEqual(self.flow.step_def("ready-merge").pr_head_moved, "head-moved")
         self.assertIsNone(self.flow.step_def("watch-pr").pr_head_moved)
+
+    def test_pr_stack_shape_outcome_is_read_from_the_hook(self):
+        self.assertEqual(self.flow.step_def("ready-merge").pr_stack_shape, "stack-shape")
+        self.assertIsNone(self.flow.step_def("watch-pr").pr_stack_shape)
 
     def test_pr_feedback_step_registers_as_a_stage(self):
         self.assertEqual(self.flow.step_def("ready-merge").pr_feedback, "handle-feedback")

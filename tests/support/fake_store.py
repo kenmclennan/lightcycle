@@ -965,7 +965,12 @@ class FakeStore(StorePort):
         self._runs = [replace(r, pr=pr) if r.id == rid else r for r in self._runs]
 
     def set_stack(self, rid, stack):
-        self._runs = [replace(r, stack=stack) if r.id == rid else r for r in self._runs]
+        self._runs = [
+            replace(r, stack=stack, stack_seen=None) if r.id == rid else r for r in self._runs
+        ]
+
+    def set_stack_seen(self, rid, value):
+        self._runs = [replace(r, stack_seen=value) if r.id == rid else r for r in self._runs]
 
     def set_content_pin(self, rid, content_pin):
         self._runs = [

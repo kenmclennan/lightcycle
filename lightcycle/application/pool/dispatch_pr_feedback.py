@@ -10,6 +10,7 @@ from lightcycle.application.pool.pr_lookups import (
     skip_unpinned,
 )
 from lightcycle.application.pool.pr_sync_reads import PrSyncReads
+from lightcycle.application.pool.stack_reads import read_stack
 from lightcycle.application.feedback.hold_comment import HoldCommentUseCase
 from lightcycle.config import ConfigError
 from lightcycle.domain.feedback import (
@@ -62,6 +63,8 @@ class _Feedback:
     admitted: List[HeldComment] = field(default_factory=list)
     approved: List[HeldComment] = field(default_factory=list)
     cutoff: float = 0.0
+    failed: bool = False
+    layer_lines: List[str] = field(default_factory=list)
 
     def __bool__(self):
         return bool(self.admitted or self.approved)
@@ -118,7 +121,7 @@ class DispatchPrFeedbackUseCase:
         if isinstance(since, ReadFailure):
             self._note_gh_read_failure(step.id, since)
             reason = _unread_reason(pr, ["last_push_time"]) if isinstance(since, NotYetRead) else None
-            return _Feedback(), reason
+            return _Feedback(failed=True), reason
         top_level = self._github.comments_since(pr, since)
         inline = self._github.pull_comments(pr, since)
         reviews = self._github.reviews(pr, since)
@@ -127,14 +130,14 @@ class DispatchPrFeedbackUseCase:
         if failure is not None:
             self._note_gh_read_failure(step.id, failure)
             names = [n for n, r in reads if isinstance(r, NotYetRead)]
-            return _Feedback(), (_unread_reason(pr, names) if names else None)
+            return _Feedback(failed=True), (_unread_reason(pr, names) if names else None)
 
         try:
             trusted = self._trusted_authors()
         except ConfigError as e:
             self._store.note_condition(
                 step.id, "feedback not read: config key trusted-authors is unset (%s)" % e)
-            return _Feedback(), None
+            return _Feedback(failed=True), None
 
         step_def = flow.step_def(step.stage)
         mention_token = step_def.mention_token
@@ -171,6 +174,30 @@ class DispatchPrFeedbackUseCase:
         return _Feedback(
             admitted=admitted, approved=self._store.approved_holds(run.id), cutoff=since), None
 
+    def _stacked_feedback(self, step, flow, run):
+        read = read_stack(self._github, run.stack)
+        if not read.layers:
+            return _Feedback(failed=True), None
+        total = len(read.layers)
+        admitted, approved, lines = [], {}, []
+        cutoff = 0.0
+        for position, layer in enumerate(read.layers, start=1):
+            if layer.state != "open":
+                continue
+            found, reason = self._outstanding_feedback(step, layer.url, flow, run)
+            if found.failed or reason is not None:
+                return _Feedback(failed=True), reason
+            admitted += found.admitted
+            for held in found.approved:
+                approved.setdefault(held.key, held)
+            cutoff = found.cutoff
+            if found.admitted:
+                lines.append("%d/%d %s %s" % (
+                    position, total, layer.url, " ".join(h.key for h in found.admitted)))
+        return _Feedback(
+            admitted=admitted, approved=list(approved.values()), cutoff=cutoff,
+            layer_lines=lines), None
+
     def _settle(self, step, reason):
         held = [
             line for line in (step.notes or "").splitlines()
@@ -205,6 +232,9 @@ class DispatchPrFeedbackUseCase:
             self._store.add_artifact(tid, "admitted-comments", "\n".join(keys), internal=True)
             self._store.add_artifact(
                 tid, "feedback-cutoff", str(outstanding.cutoff), internal=True)
+            if outstanding.layer_lines:
+                self._store.add_artifact(
+                    tid, "feedback-layers", "\n".join(outstanding.layer_lines))
             for held in outstanding.approved:
                 self._store.mark_hold_dispatched(run.id, held.key)
             if outstanding.admitted:
@@ -282,7 +312,10 @@ class DispatchPrFeedbackUseCase:
             advanced = False
             reason = None
             if feedback_step:
-                outstanding, reason = self._outstanding_feedback(step, pr_value, flow, run)
+                if run.stack:
+                    outstanding, reason = self._stacked_feedback(step, flow, run)
+                else:
+                    outstanding, reason = self._outstanding_feedback(step, pr_value, flow, run)
                 if outstanding:
                     advanced = True
                     open_step = next(

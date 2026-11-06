@@ -1,3 +1,4 @@
+import json
 import time
 import unittest
 
@@ -69,7 +70,7 @@ class _Harness:
         self.github = FakeGitHub(head_shas=heads)
         self.flow = _FlowAdapter(flow)
         self.complete = CompleteStepUseCase(self.store, self.flow)
-        self.uc = DetectHeadMovedUseCase(self.store, self.flow, self.complete)
+        self.uc = DetectHeadMovedUseCase(self.store, self.github, self.flow, self.complete)
 
     def run(self):
         return self.uc.execute(PrSyncReads(self.github))
@@ -243,7 +244,7 @@ class TestDetection(unittest.TestCase):
         h = _Harness({url: "aaa"})
         item = h.item_with_pr(url)
         h.store.create_step(stage="watch-step", role="agent", item=item)
-        h.uc = DetectHeadMovedUseCase(h.store, h.flow, None)
+        h.uc = DetectHeadMovedUseCase(h.store, h.github, h.flow, None)
 
         self.assertEqual(h.run().head_moved, [])
 
@@ -272,3 +273,167 @@ class TestMonitorWiring(unittest.TestCase):
         self.assertEqual(first.head_moved, [])
         self.assertEqual(second.head_moved, [item])
         self.assertEqual(store.get_node(gate).state, "done")
+
+
+class _StackedHarness:
+    def __init__(self, count=3, signatures=None, with_gate=True):
+        from tests.support.stacked import (
+            STACK_URL, base_keys_for, build_stack, head_shas_for,
+        )
+
+        self.layers = build_stack(count)
+        self.heads = head_shas_for(self.layers)
+        self.signatures = dict(signatures or {})
+        self.base = _Harness({})
+        self.store = self.base.store
+        self.github = FakeGitHub(
+            stacks={STACK_URL: self.layers}, head_shas=self.heads,
+            base_keys=base_keys_for(self.layers), signatures=self.signatures)
+        self.base.github = self.github
+        self.base.uc = DetectHeadMovedUseCase(
+            self.store, self.github, self.base.flow, self.base.complete)
+        self.item = self.store.create_item("feature", "d")
+        rid = plant_pr(self.store, self.item, self.layers[-1].url)
+        self.store.set_stack(rid, STACK_URL)
+        self.gate = (
+            self.store.create_step(stage="watch-step", role="agent", item=self.item)
+            if with_gate else None
+        )
+
+    def run(self):
+        return self.base.run()
+
+    def move(self, number, sha):
+        from tests.support.stacked import layer_url
+
+        self.heads[layer_url(number)] = sha
+
+    def sign(self, number, sha, signature):
+        from tests.support.stacked import layer_url
+
+        self.github._signatures[(layer_url(number), sha)] = signature
+
+    def checks_read(self, number, sha):
+        from tests.support.stacked import layer_url
+
+        return ("check_runs", layer_url(number), sha) in self.github.calls
+
+
+class TestHeadMovedOverAStack(unittest.TestCase):
+    def test_a_cascaded_head_updates_the_record_and_rereads_checks_only(self):
+        h = _StackedHarness()
+        h.sign(2, "sha-2", "same")
+        h.run()
+        h.move(2, "sha-2-rebased")
+        h.sign(2, "sha-2-rebased", "same")
+
+        result = h.run()
+
+        self.assertEqual(result.head_moved, [])
+        self.assertNotEqual(h.base.state(h.gate), "done")
+        self.assertTrue(h.checks_read(2, "sha-2-rebased"))
+        recorded = json.loads(_value(h.store, h.gate, "pr-layer-heads"))
+        self.assertEqual(recorded[_pr_layer(2)], "sha-2-rebased")
+
+    def test_a_pushed_head_fires_naming_the_layer(self):
+        h = _StackedHarness()
+        h.sign(2, "sha-2", "before")
+        h.run()
+        h.move(2, "sha-2-pushed")
+        h.sign(2, "sha-2-pushed", "after")
+
+        result = h.run()
+
+        self.assertEqual(result.head_moved, [h.item])
+        node = h.store.get_node(h.gate)
+        self.assertEqual(node.state, "done")
+        self.assertIn("head of layer 2 of 3 (%s) moved from sha-2 to sha-2-pushed" % _pr_layer(2),
+                      node.report)
+
+    def test_an_unknown_old_signature_fires(self):
+        h = _StackedHarness()
+        h.run()
+        h.move(2, "sha-2-new")
+        h.sign(2, "sha-2-new", "after")
+
+        self.assertEqual(h.run().head_moved, [h.item])
+
+    def test_an_unreadable_new_signature_counts_as_a_push(self):
+        h = _StackedHarness()
+        h.sign(2, "sha-2", "before")
+        h.run()
+        h.move(2, "sha-2-new")
+
+        self.assertEqual(h.run().head_moved, [h.item])
+
+    def test_a_new_signature_not_yet_read_waits_then_resolves(self):
+        from lightcycle.ports.github import NotYetRead
+
+        h = _StackedHarness()
+        h.sign(2, "sha-2", "same")
+        h.run()
+        h.move(2, "sha-2-rebased")
+        h.sign(2, "sha-2-rebased", NotYetRead())
+
+        self.assertEqual(h.run().head_moved, [])
+        recorded = json.loads(_value(h.store, h.gate, "pr-layer-heads"))
+        self.assertEqual(recorded[_pr_layer(2)], "sha-2")
+
+        h.sign(2, "sha-2-rebased", "same")
+
+        self.assertEqual(h.run().head_moved, [])
+        recorded = json.loads(_value(h.store, h.gate, "pr-layer-heads"))
+        self.assertEqual(recorded[_pr_layer(2)], "sha-2-rebased")
+        self.assertNotEqual(h.base.state(h.gate), "done")
+
+    def test_two_moved_layers_fire_once_naming_only_the_pushed_one(self):
+        h = _StackedHarness()
+        h.sign(1, "sha-1", "one")
+        h.sign(3, "sha-3", "three")
+        h.run()
+        h.move(1, "sha-1-rebased")
+        h.sign(1, "sha-1-rebased", "one")
+        h.move(3, "sha-3-pushed")
+        h.sign(3, "sha-3-pushed", "other")
+
+        result = h.run()
+
+        self.assertEqual(result.head_moved, [h.item])
+        report = h.store.get_node(h.gate).report
+        self.assertIn("layer 3 of 3", report)
+        self.assertNotIn("layer 1 of 3", report)
+
+    def test_a_layer_with_no_recorded_head_is_recorded_silently(self):
+        h = _StackedHarness(count=2)
+        h.run()
+        from tests.support.stacked import build_stack, head_shas_for, base_keys_for, STACK_URL
+
+        bigger = build_stack(3)
+        h.heads.update(head_shas_for(bigger))
+        h.github.script_stack(STACK_URL, bigger)
+        h.github._base_keys = base_keys_for(bigger)
+
+        self.assertEqual(h.run().head_moved, [])
+        recorded = json.loads(_value(h.store, h.gate, "pr-layer-heads"))
+        self.assertIn(_pr_layer(3), recorded)
+
+    def test_the_record_is_seeded_from_the_judged_layers_of_the_last_ci_round(self):
+        h = _StackedHarness(with_gate=False)
+        judged = {_pr_layer(n): "sha-%d" % n for n in (1, 2, 3)}
+        judged[_pr_layer(2)] = "older"
+        step = h.store.create_step(stage="ci-step", role="engine", item=h.item)
+        h.store.add_artifact(step, "ci-judged-layers", json.dumps(judged), internal=True)
+        h.base.complete.execute(CompleteInput(step=step, outcome="passed"))
+        gate = h.base.gate(h.item)
+        h.sign(2, "sha-2", "now")
+
+        result = h.run()
+
+        self.assertEqual(result.head_moved, [h.item])
+        self.assertEqual(h.base.state(gate), "done")
+
+
+def _pr_layer(n):
+    from tests.support.stacked import layer_url
+
+    return layer_url(n)

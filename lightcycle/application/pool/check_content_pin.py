@@ -1,13 +1,17 @@
+import json
+
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.application.pool.pr_lookups import (
     active_step_any,
     active_step_in_phase,
     latest_step,
 )
+from lightcycle.application.pool.stack_reads import read_stack
 from lightcycle.config import ConfigError
 from lightcycle.domain.feedback import LC_MARKER, parse_decision, parse_decision_sha
+from lightcycle.domain.pool import stack_shape
 from lightcycle.domain.work import State
-from lightcycle.ports.github import ReadFailure
+from lightcycle.ports.github import NotYetRead, ReadFailure
 
 
 class CheckContentPinUseCase:
@@ -55,6 +59,9 @@ class CheckContentPinUseCase:
         run = self._store.current_run(item.id, phase)
         if run is None:
             return
+        if run.stack:
+            self._execute_stacked(item, run, phase)
+            return
         head = self._github.head_sha(pr_value)
         if isinstance(head, ReadFailure):
             return
@@ -64,10 +71,54 @@ class CheckContentPinUseCase:
         pin = run.content_pin
         if pin == head:
             return
+        if self._review_move(item, pr_value, phase, pin, head, ""):
+            self._store.set_content_pin(run.id, head)
+
+    def _decode_pins(self, text):
+        try:
+            value = json.loads(text) if text else None
+        except (TypeError, ValueError):
+            return {}
+        return value if isinstance(value, dict) else {}
+
+    def _execute_stacked(self, item, run, phase):
+        read = read_stack(self._github, run.stack)
+        if not read.layers:
+            return
+        pins = self._decode_pins(run.content_pin)
+        updated = dict(pins)
+        total = len(read.layers)
+        for position, layer in enumerate(read.layers, start=1):
+            if layer.state != "open":
+                continue
+            head = self._github.head_sha(layer.url)
+            if isinstance(head, ReadFailure):
+                continue
+            pin = pins.get(layer.url)
+            if pin is None:
+                updated[layer.url] = head
+                continue
+            if pin == head:
+                continue
+            fresh = self._github.diff_signature(layer.url, head)
+            if isinstance(fresh, NotYetRead):
+                continue
+            prior = self._github.diff_signature(layer.url, pin)
+            if isinstance(fresh, str) and fresh == prior:
+                updated[layer.url] = head
+                continue
+            prefix = "%s: " % stack_shape.label(position, total, layer.url)
+            if self._review_move(item, layer.url, phase, pin, head, prefix):
+                updated[layer.url] = head
+        encoded = json.dumps(updated, sort_keys=True)
+        if updated and encoded != run.content_pin:
+            self._store.set_content_pin(run.id, encoded)
+
+    def _review_move(self, item, pr_value, phase, pin, head, prefix):
         old_files = self._github.changed_files(pr_value, pin)
         new_files = self._github.changed_files(pr_value, head)
         if isinstance(old_files, ReadFailure) or isinstance(new_files, ReadFailure):
-            return
+            return False
         dropped = old_files - new_files
         if dropped:
             unauthorized, lookup_failed, round_ordered = self._unauthorized_drops(
@@ -80,9 +131,9 @@ class CheckContentPinUseCase:
                 if target is not None:
                     self._store.note_condition(
                         target.id,
-                        "PR head moved from %s to %s and dropped: %s - ordered by the rework "
+                        "%sPR head moved from %s to %s and dropped: %s - ordered by the rework "
                         "decision recorded against %s."
-                        % (pin, head, ", ".join(sorted(dropped)), pin),
+                        % (prefix, pin, head, ", ".join(sorted(dropped)), pin),
                     )
             if lookup_failed:
                 reported = dropped
@@ -94,9 +145,9 @@ class CheckContentPinUseCase:
                 thread_note = ""
             if reported:
                 base_note = (
-                    "PR head moved from %s to %s and dropped: %s - a previously-reviewed change "
+                    "%sPR head moved from %s to %s and dropped: %s - a previously-reviewed change "
                     "may have been lost; verify before merging.%s"
-                    % (pin, head, ", ".join(sorted(reported)), thread_note)
+                    % (prefix, pin, head, ", ".join(sorted(reported)), thread_note)
                 )
                 step = self._step_for_phase(item.id, phase)
                 if step is not None and step.state != State.RUNNING:
@@ -105,11 +156,11 @@ class CheckContentPinUseCase:
                         "restored" % ", ".join(sorted(reported))
                     )
                     observation = (
-                        "PR head moved from %s to %s and dropped: %s.%s A file dropped between "
+                        "%sPR head moved from %s to %s and dropped: %s.%s A file dropped between "
                         "review rounds is commonly review-code ordering its removal in feedback "
                         "and write-code carrying it out - checked the PR's review thread for "
                         "that instruction and did not find one accounting for %s."
-                        % (pin, head, ", ".join(sorted(reported)), thread_note,
+                        % (prefix, pin, head, ", ".join(sorted(reported)), thread_note,
                            ", ".join(sorted(reported)))
                     )
                     ParkStepUseCase(self._store).execute(
@@ -119,4 +170,4 @@ class CheckContentPinUseCase:
                     target = step or latest_step(self._store, item.id)
                     if target is not None:
                         self._store.note_condition(target.id, base_note)
-        self._store.set_content_pin(run.id, head)
+        return True

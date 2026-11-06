@@ -4,6 +4,7 @@ from typing import List, Tuple
 from lightcycle.application.pool.check_content_pin import CheckContentPinUseCase
 from lightcycle.application.pool.dispatch_pr_feedback import DispatchPrFeedbackUseCase
 from lightcycle.application.pool.detect_head_moved import DetectHeadMovedUseCase
+from lightcycle.application.pool.detect_stack_shape import DetectStackShapeUseCase
 from lightcycle.application.pool.update_behind_prs import UpdateBehindPrsUseCase
 from lightcycle.application.pool.pr_sync_reads import PrSyncReads
 from lightcycle.application.pool.resolve_ci import CiUnread, ResolveCiUseCase
@@ -18,6 +19,7 @@ class MonitorPrsResponse:
     conflicted: List[str] = field(default_factory=list)
     ci_resolved: List[str] = field(default_factory=list)
     head_moved: List[str] = field(default_factory=list)
+    shape_changed: List[str] = field(default_factory=list)
     updated: List[str] = field(default_factory=list)
     update_failed: List[str] = field(default_factory=list)
     ci_unread: List[CiUnread] = field(default_factory=list)
@@ -43,7 +45,8 @@ class MonitorPrsUseCase:
             trusted_authors=trusted_authors, held_shortcode=held_shortcode,
             poll_epoch=ci_views.poll_epoch, unread_note_polls=ci_unconfirmed_note_polls,
         )
-        self._detect_head_moved = DetectHeadMovedUseCase(store, flow_service, complete)
+        self._detect_head_moved = DetectHeadMovedUseCase(store, github, flow_service, complete)
+        self._detect_stack_shape = DetectStackShapeUseCase(store, github, flow_service, complete)
         self._update_behind = UpdateBehindPrsUseCase(store, github, flow_service, writes)
         self._resolve_ci = ResolveCiUseCase(
             store, github, flow_service, complete, clock=ci_clock, poll_seconds=ci_poll_seconds,
@@ -55,6 +58,7 @@ class MonitorPrsUseCase:
 
     def execute(self) -> MonitorPrsResponse:
         resolved = self._resolve.execute()
+        shaped = self._detect_stack_shape.execute()
         reads = PrSyncReads(self._github)
         dispatched = self._dispatch.execute(reads)
         moved = self._detect_head_moved.execute(reads)
@@ -63,7 +67,8 @@ class MonitorPrsUseCase:
         return MonitorPrsResponse(
             merged=resolved.merged, abandoned=resolved.abandoned,
             reworked=dispatched.reworked, conflicted=dispatched.conflicted,
-            ci_resolved=ci.ci_resolved, head_moved=moved.head_moved, updated=behind.updated,
+            ci_resolved=ci.ci_resolved, head_moved=moved.head_moved,
+            shape_changed=shaped.shape_changed, updated=behind.updated,
             update_failed=behind.update_failed, ci_unread=ci.ci_unread,
             refused=resolved.refused,
         )

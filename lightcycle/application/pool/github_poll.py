@@ -96,7 +96,7 @@ class GithubPollUseCase:
             return False
         refresh_polls = self._config.github_view_refresh_polls()
         wanted = self._snapshot.take_wanted()
-        if not due and not wanted.prs:
+        if not due and not wanted.prs and not wanted.stacks:
             return False
 
         self._prune()
@@ -104,11 +104,11 @@ class GithubPollUseCase:
 
         def cycle():
             self._publish_budget()
-            if wanted.prs:
+            if wanted.prs or wanted.stacks:
                 self._poll.run(wanted, now, refresh_polls)
 
         if not self._runner.start(cycle):
             return False
         self._last_started = now
-        self._last_was_budget_only = not wanted.prs
+        self._last_was_budget_only = not (wanted.prs or wanted.stacks)
         return True
