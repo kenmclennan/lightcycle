@@ -107,6 +107,8 @@ class ItemCost:
     unpriced_count: int = 0
     stages: Tuple[StageSubtotal, ...] = field(default_factory=tuple)
     api_calls: Optional[int] = None
+    prs: int = 0
+    prs_merged: int = 0
 
 
 def item_cost(steps) -> ItemCost:

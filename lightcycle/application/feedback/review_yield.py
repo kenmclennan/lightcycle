@@ -8,6 +8,7 @@ from lightcycle.application.flow.engine_steps import (
     LIFECYCLE_FAILURE_STEP,
     MATERIAL_AUDIT_STEP,
 )
+from lightcycle.domain.feedback import layers
 from lightcycle.domain.feedback.review_yield import (
     CAUSED_BY,
     FOUND_BY,
@@ -33,6 +34,8 @@ class _Stage:
         self.workflow = workflow
         self.stage = stage
         self.pass_outcome = pass_outcome
+        self.prs = 0
+        self.items = set()
         self.verdict_rows = []
         self.escape_rows = []
 
@@ -43,6 +46,13 @@ class _Stage:
         for row in self.escape_rows:
             key = row["source"] if row["kind"] == REWORK else POST_MERGE
             by_source[key] = by_source.get(key, 0) + 1
+        layer_rejections = 0
+        findings_by_layer = {}
+        for row in self.verdict_rows:
+            for key, n in layers.findings_by_layer(row["findings"]).items():
+                findings_by_layer[key] = findings_by_layer.get(key, 0) + n
+            if row["outcome"] != self.pass_outcome:
+                layer_rejections += sum(layers.layer_rejections(row["findings"]).values())
         cost = Cost()
         for row in self.verdict_rows:
             cost = cost + Cost.from_usd(row["cost_usd"])
@@ -53,6 +63,10 @@ class _Stage:
             "verdicts": len(self.verdict_rows),
             "passes": passes,
             "rejections": len(self.verdict_rows) - passes,
+            "items": len(self.items),
+            "prs": self.prs,
+            "layer_rejections": layer_rejections,
+            "findings_by_layer": findings_by_layer,
             "cost_usd": cost.to_usd(),
             "findings": {
                 "verdicts_with_findings": sum(1 for r in reported if r["findings"]),
@@ -126,11 +140,18 @@ class ReviewYieldUseCase:
 
     def _verdict_row(self, stages, step, definition):
         group = self._group(stages, step, definition)
+        findings = self._findings_of(step)
         group.verdict_rows.append({
             "step": step.id, "item": step.item, "pass": step.pass_id,
             "phase": definition.phase, "outcome": step.outcome, "closed_at": step.closed_at,
-            "cost_usd": step.usage_cost_usd.to_usd(), "findings": self._findings_of(step),
+            "cost_usd": step.usage_cost_usd.to_usd(), "findings": findings,
+            "layers": layers.verdict_layers(findings),
         })
+        if step.item not in group.items:
+            group.items.add(step.item)
+            group.prs += layers.prs_of(
+                r for r in self._store.runs_of(step.item) if r.phase == definition.phase
+            )
 
     def _group_of(self, stages, verdict_step):
         try:

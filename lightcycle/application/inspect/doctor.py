@@ -7,7 +7,7 @@ from typing import Dict, List
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.engine_steps import LIFECYCLE_ORIGIN_LABEL
-from lightcycle.application.work.close_item import TEARDOWN_REFUSED_ARTIFACT
+from lightcycle.application.work.close_item import RELEASE_PENDING_LABEL, TEARDOWN_REFUSED_ARTIFACT
 from lightcycle.application.pool.schedule_resolution import ScheduleResolver
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.workflows.engine_requirement_check import bundle_conflict_messages
@@ -36,6 +36,8 @@ from lightcycle.domain.health.fork import forks, main_path_stages
 from lightcycle.domain.schedule.guards import RETIRED_JOB_SCHEDULES
 from lightcycle.domain.schedule.schedule import SOURCE_BUNDLE
 from lightcycle.application.workflows.script_tooling import WorkflowScripts
+from lightcycle.domain.pool.stack_shape import layer_branches
+from lightcycle.domain.runs import RunState
 from lightcycle.domain.work.state import State
 from lightcycle.domain.workflows.contract import ENGINE_CONTRACT, contract_compatible
 from lightcycle.domain.workflows.identity import format_pin, parse_pin
@@ -107,7 +109,7 @@ class DoctorUseCase:
             "config": (
                 self._config_problems() + self._retired_job_problems()
                 + self._schedule_problems() + self._reload_problems() + lifecycle_config),
-            "orphans": self._orphan_problems(),
+            "orphans": self._orphan_problems() + self._layer_branch_problems(nodes),
             "teardown": self._teardown_refusal_problems(),
             "facets": self._guidance_registration_problems() + self._facet_problems(),
             "guidance": self._guidance_problems() + self._guidance_shortcode_problems(),
@@ -727,6 +729,30 @@ class DoctorUseCase:
             problems += self._existing_orphan_problems(wt_dir, existing, expected, by_worktree, names)
             problems += self._deleted_worktree_problems(
                 wt_dir, existing, expected, by_worktree, names)
+        return problems
+
+    def _layer_branch_problems(self, nodes):
+        problems = []
+        for node in nodes:
+            if node.type != "item":
+                continue
+            if RELEASE_PENDING_LABEL in self._store.labels_of(node.id):
+                continue
+            for run in self._store.runs_of(node.id):
+                if run.state == RunState.OPEN or not layer_branches(run):
+                    continue
+                path, leftover = self._worktrees.leftover_layers(run)
+                if not leftover:
+                    continue
+                where = " (worktree %s still registered)" % path if path else ""
+                problems.append(Problem(
+                    "orphans",
+                    "run %s of item %s left layer branch(es) %s%s"
+                    % (run.id, node.id, ", ".join(leftover), where),
+                    node_id=node.id,
+                    fix="delete the named branches and remove the worktree, or run lc doctor "
+                        "again after the release retries",
+                ))
         return problems
 
     def _orphan_candidates(self, wt_dir, existing, expected, by_worktree):

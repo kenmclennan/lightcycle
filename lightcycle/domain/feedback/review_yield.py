@@ -16,6 +16,7 @@ CAUSED_BY = "caused-by"
 FOUND_BY = "found-by"
 
 FINDING_KEYS = ("severity", "kind", "file", "line", "summary")
+OPTIONAL_FINDING_KEYS = ("layer",)
 FOUND_BY_MAX = 40
 BOT_SUFFIX = "[bot]"
 
@@ -82,7 +83,7 @@ def _finding_problem(element):
         return "must be an object"
     keys = set(element)
     missing = [k for k in FINDING_KEYS if k not in keys]
-    extra = sorted(keys - set(FINDING_KEYS))
+    extra = sorted(keys - set(FINDING_KEYS) - set(OPTIONAL_FINDING_KEYS))
     if missing:
         return "is missing %s" % ", ".join(missing)
     if extra:
@@ -100,6 +101,9 @@ def _finding_problem(element):
         return "line must be a positive integer or null"
     if file is None and line is not None:
         return "line must be null when file is null"
+    layer = element.get("layer")
+    if layer is not None and (isinstance(layer, bool) or not isinstance(layer, int) or layer < 1):
+        return "layer must be a positive integer or null"
     return None
 
 

@@ -93,9 +93,11 @@ def cmd_review_yield(argv):
         return 0
     print("window: since %s" % report["since"] if report["since"] else "window: all steps in the store")
     for g in report["stages"]:
-        print("%s %s: %d verdicts (%d pass, %d reject), %d findings, %d escapes, $%.2f" % (
+        print("%s %s: %d verdicts (%d pass, %d reject), %d findings, %d escapes, $%.2f, "
+              "%d PRs, %d layer rejections" % (
             g["workflow"] or "-", g["stage"], g["verdicts"], g["passes"], g["rejections"],
-            g["findings"]["count"], g["escapes"]["count"], g["cost_usd"]))
+            g["findings"]["count"], g["escapes"]["count"], g["cost_usd"], g["prs"],
+            g["layer_rejections"]))
     print("unattributed escapes: %d" % len(report["unattributed_escapes"]))
     print("undeclared steps: %d" % report["undeclared_steps"])
     return 0
@@ -238,8 +240,8 @@ def _print_retro(resp):
         duration = row.total_duration()
         duration_str = "unknown" if duration is None else format_elapsed(duration)
         print(
-            "  %-20s  %s  (N=%d)  duration=%s"
-            % (row.item.id, sig_str, row.reflections, duration_str)
+            "  %-20s  %s  (N=%d)  duration=%s  prs=%d"
+            % (row.item.id, sig_str, row.reflections, duration_str, row.prs)
         )
         for slow in row.slow_steps:
             print(

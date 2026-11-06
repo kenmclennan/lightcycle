@@ -1,5 +1,6 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
+from lightcycle.domain.feedback import layers
 from lightcycle.domain.work.cost import item_cost, step_cost
 
 
@@ -15,5 +16,9 @@ class CostUseCase:
     def execute(self, input: CostInput):
         node = self._store.get_node(input.node)
         if node.type == "item":
-            return item_cost(self._store.children(node.id))
+            runs = self._store.runs_of(node.id)
+            return replace(
+                item_cost(self._store.children(node.id)),
+                prs=layers.prs_of(runs), prs_merged=layers.prs_merged_of(runs),
+            )
         return step_cost(node, self._store.tool_usage_for(node.id))

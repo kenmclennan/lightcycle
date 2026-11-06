@@ -1,9 +1,16 @@
+import json
 from dataclasses import dataclass, field, replace
 from typing import Dict, List, Optional
 
 from lightcycle.application.feedback.retro_scope import RetroScope
 from lightcycle.domain import feedback as cfeedback
-from lightcycle.domain.work import Item, SlowStep, slow_steps
+from lightcycle.domain.feedback import layers
+from lightcycle.domain.feedback.review_yield import REVIEW_FINDINGS
+from lightcycle.domain.work import Item, SlowStep, State, slow_steps
+
+
+def _layer_order(key):
+    return (1, 0) if key == layers.UNLAYERED else (0, int(key))
 
 
 @dataclass(frozen=True)
@@ -28,6 +35,9 @@ class ItemSignals:
     reflections: int
     durations: Dict[str, Optional[float]] = field(default_factory=dict)
     slow_steps: List[SlowStep] = field(default_factory=list)
+    prs: int = 0
+    prs_merged: int = 0
+    layers: List[Dict[str, object]] = field(default_factory=list)
 
     def total_duration(self) -> Optional[float]:
         known = [v for v in self.durations.values() if v is not None]
@@ -60,10 +70,49 @@ class RetroUseCase:
 
         return resolve
 
+    def _figures_resolver(self):
+        def figures(item, steps):
+            pass_ids = {s.pass_id for s in steps}
+            runs = [r for r in self._store.runs_of(item.id) if r.pass_id in pass_ids]
+            rejections, findings = {}, {}
+            for step in steps:
+                if step.type != "step" or step.state != State.DONE:
+                    continue
+                flow = self._flow.flow_for(step)
+                if not flow.declared(step.stage):
+                    continue
+                review = flow.step_def(step.stage).review
+                if review is None:
+                    continue
+                reported = self._findings_of(step)
+                for key, n in layers.findings_by_layer(reported).items():
+                    findings[key] = findings.get(key, 0) + n
+                if step.outcome != review:
+                    for key, n in layers.layer_rejections(reported).items():
+                        rejections[key] = rejections.get(key, 0) + n
+            keys = sorted(set(rejections) | set(findings), key=_layer_order)
+            return {
+                "prs": layers.prs_of(runs),
+                "prs_merged": layers.prs_merged_of(runs),
+                "layers": [
+                    {"layer": k, "rejections": rejections.get(k, 0), "findings": findings.get(k, 0)}
+                    for k in keys
+                ],
+            }
+
+        return figures
+
+    def _findings_of(self, step):
+        for artifact in self._store.item_artifacts(step.id):
+            if artifact.type == REVIEW_FINDINGS:
+                return json.loads(artifact.value)
+        return None
+
     def execute(self, input: RetroInput) -> RetroResponse:
         signals_for = self._signals_resolver()
         scope = RetroScope.from_input(input)
-        rows, all_refs, all_unreadable = scope.items_and_refs(self._store, signals_for)
+        rows, all_refs, all_unreadable = scope.items_and_refs(
+            self._store, signals_for, self._figures_resolver())
         label = scope.label
 
         slow_by_item = {}

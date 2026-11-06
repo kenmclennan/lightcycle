@@ -130,6 +130,15 @@ class TestParseFindings(unittest.TestCase):
         with self.assertRaises(ValueError):
             parse_findings(json.dumps([broken]))
 
+    def test_layer_accepts_positive_integer_or_null(self):
+        parse_findings(json.dumps([dict(self.good, layer=2)]))
+        parse_findings(json.dumps([dict(self.good, layer=None)]))
+
+    def test_layer_refuses_zero_bool_and_string(self):
+        self._refused(layer=0)
+        self._refused(layer=True)
+        self._refused(layer="2")
+
     def test_not_an_array_or_not_json_is_refused(self):
         with self.assertRaises(ValueError):
             parse_findings("{}")
@@ -396,7 +405,7 @@ class TestReviewYield(unittest.TestCase):
         self.assertEqual(stage["cost_usd"], sum(r["cost_usd"] for r in stage["verdict_rows"]))
         self.assertEqual(
             {k for k in stage["verdict_rows"][0]},
-            {"step", "item", "pass", "phase", "outcome", "closed_at", "cost_usd", "findings"})
+            {"step", "item", "pass", "phase", "outcome", "closed_at", "cost_usd", "findings", "layers"})
 
     def test_cost_is_summed_across_verdict_rows(self):
         rig, rejected, passed = self._setup()
@@ -495,12 +504,82 @@ class TestReviewYield(unittest.TestCase):
         self.assertEqual(
             set(report["stages"][0]),
             {"workflow", "stage", "pass_outcome", "verdicts", "passes", "rejections", "cost_usd",
-             "findings", "escapes", "verdict_rows", "escape_rows"})
+             "findings", "escapes", "verdict_rows", "escape_rows", "items", "prs",
+             "layer_rejections", "findings_by_layer"})
         self.assertEqual(
             set(report["stages"][0]["findings"]),
             {"verdicts_with_findings", "verdicts_reporting_none", "count"})
         self.assertEqual(set(report["stages"][0]["escapes"]), {"count", "by_source"})
         json.dumps(report)
+
+
+def _finding(layer=None, **extra):
+    element = {"severity": "low", "kind": "style", "file": None, "line": None, "summary": "nit"}
+    if layer is not None:
+        element["layer"] = layer
+    return dict(element, **extra)
+
+
+class TestLayerFigures(unittest.TestCase):
+    def _rig(self, layer_count=3, state="merged"):
+        rig = _Rig()
+        record = [
+            {"number": n, "state": "merged", "head_ref": "layer-%d" % n, "base": None}
+            for n in range(1, layer_count + 1)
+        ]
+        rig.store.set_stack_seen(rig.rid, json.dumps(record))
+        rig.store.close_run(rig.rid, state)
+        return rig
+
+    def _verdict(self, rig, outcome, findings):
+        rig.done("done")
+        LinkArtifactUseCase(rig.store, _FlowAdapter(_FLOW)).execute(LinkArtifactInput(
+            item=rig.current, atype="review-findings", value=json.dumps(findings)))
+        rig.done(outcome)
+
+    def _stage(self, rig):
+        report = ReviewYieldUseCase(rig.store, _FlowAdapter(_FLOW)).execute(None)
+        (stage,) = report["stages"]
+        return stage
+
+    def test_three_rejections_on_three_layers_are_three_prs_for_one_item(self):
+        rig = self._rig()
+        for n in (1, 2, 3):
+            self._verdict(rig, "rejected", [_finding(n)])
+        stage = self._stage(rig)
+        self.assertEqual(
+            (stage["rejections"], stage["layer_rejections"], stage["prs"], stage["items"]),
+            (3, 3, 3, 1))
+
+    def test_one_rejection_naming_three_layers_counts_three_layer_rejections(self):
+        rig = self._rig()
+        self._verdict(rig, "rejected", [_finding(1), _finding(2), _finding(3)])
+        stage = self._stage(rig)
+        self.assertEqual((stage["rejections"], stage["layer_rejections"]), (1, 3))
+        self.assertEqual(stage["verdict_rows"][0]["layers"], [1, 2, 3])
+
+    def test_an_unstacked_rejection_without_layer_matches_rejections(self):
+        rig = self._rig(layer_count=0)
+        rig.store.set_stack_seen(rig.rid, None)
+        self._verdict(rig, "rejected", [_finding(), _finding()])
+        stage = self._stage(rig)
+        self.assertEqual((stage["rejections"], stage["layer_rejections"]), (1, 1))
+        self.assertEqual(stage["findings_by_layer"], {"unlayered": 2})
+        self.assertEqual(stage["prs"], 1)
+
+    def test_a_mixed_verdict_counts_against_the_layer_and_unlayered(self):
+        rig = self._rig()
+        self._verdict(rig, "rejected", [_finding(2), _finding()])
+        stage = self._stage(rig)
+        self.assertEqual(stage["layer_rejections"], 2)
+        self.assertEqual(stage["findings_by_layer"], {"2": 1, "unlayered": 1})
+
+    def test_a_passing_verdict_adds_findings_but_no_rejection(self):
+        rig = self._rig()
+        self._verdict(rig, "done", [_finding(1)])
+        stage = self._stage(rig)
+        self.assertEqual((stage["rejections"], stage["layer_rejections"]), (0, 0))
+        self.assertEqual(stage["findings_by_layer"], {"1": 1})
 
 
 if __name__ == "__main__":
