@@ -933,7 +933,7 @@ class NodeHubScreen(HubScreenMarker, LogTabMixin, HierarchyTabMixin, OutputsTabM
         if file_path is not None:
             self._open_external_output("file", file_path, tab="detail")
             return
-        if key_value in ("pr", "spec-pr", "ci-checks") or detail_value_is_url(value):
+        if key_value in ("pr", "stack", "spec-pr", "ci-checks") or detail_value_is_url(value):
             url = value.strip()
             use_case = OpenArtifactUseCase(self._container.fs, self._container.launcher)
             result = use_case.execute(OpenArtifactInput(kind="url", value=url))

@@ -81,6 +81,10 @@ class TestDefaultAndResolution(unittest.TestCase):
             DetailEntry("needs", "field", None),
         ])
 
+    def test_resolve_reads_the_stack_field(self):
+        entries = resolve_detail(("pr", "stack"), {"stack": "http://s"}, {}, {})
+        self.assertEqual(entries[1], DetailEntry("stack", "field", "http://s"))
+
     def test_presents_is_the_declared_key_if_listed_else_the_first(self):
         entries = [DetailEntry("pr", "field"), DetailEntry("report", "field")]
         self.assertEqual(detail_presents("report", entries), "report")
@@ -112,6 +116,9 @@ class TestBundleCheck(unittest.TestCase):
         front = "detail: [pr, report, in:findings]\npresents: pr\n"
         build = "produces:\n  findings: optional\n"
         self.assertEqual(messages_for(front, build), [])
+
+    def test_stack_is_a_known_execution_name(self):
+        self.assertEqual(messages_for("detail: [pr, stack, report]\n"), [])
 
     def test_an_unknown_execution_name_names_the_step(self):
         found = messages_for("detail: [pr, bogus]\n")

@@ -64,3 +64,31 @@ class TestStepDetailPr(unittest.TestCase):
         self.store.set_step_pass(other, self.pid)
 
         self.assertNotIn("pr", keys_and_values(self.store, other, self.flow))
+
+
+STACK = "https://lightcycle.example/stack/1"
+
+
+class TestStepDetailStack(unittest.TestCase):
+    def setUp(self):
+        self.store = FakeStore()
+        self.flow = PhasedFlow({"write-code": "code"}, detail=("pr", "stack"))
+        self.step = create_owned_step(self.store, "s", stage="write-code", role="agent")
+        self.item = self.store.get_node(self.step).item
+        self.pid = self.store.open_pass(self.item)
+        self.store.set_step_pass(self.step, self.pid)
+
+    def test_a_run_with_a_stack_returns_its_url(self):
+        rid = self.store.open_run(self.item, self.pid, "code")
+        self.store.set_pr(rid, PR)
+        self.store.set_stack(rid, STACK)
+
+        self.assertEqual(keys_and_values(self.store, self.step, self.flow)["stack"], STACK)
+
+    def test_a_run_without_a_stack_returns_a_stack_entry_with_no_value(self):
+        self.store.set_pr(self.store.open_run(self.item, self.pid, "code"), PR)
+
+        values = keys_and_values(self.store, self.step, self.flow)
+
+        self.assertIn("stack", values)
+        self.assertIsNone(values["stack"])

@@ -1185,7 +1185,10 @@ def _hub_gate_declares_findings_detail(size):
         size, "review-findings", "artifact:findings", findings=True, detail=("in:findings",))
 
 
-def _hub_gate_merge(size, detail=("pr", "in:report"), report=MERGE_REPORT):
+MERGE_STACK = "https://lightcycle.example/stack/LC-143"
+
+
+def _hub_gate_merge(size, detail=("pr", "in:report"), report=MERGE_REPORT, stack=None):
     store = DemoStore(now=lambda: _at(6))
     item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
     review = store.step("LC-143.3.5", stage="code-review", role="agent", item=item)
@@ -1199,6 +1202,8 @@ def _hub_gate_merge(size, detail=("pr", "in:report"), report=MERGE_REPORT):
     rid = store.open_run(item, pid, "code")
     store.set_branch(rid, "feat/LC-143-scan")
     store.set_pr(rid, MERGE_PR)
+    if stack:
+        store.set_stack(rid, stack)
     fs = FakeFs(metas={"code-await-merge": {"step": "code-await-merge", "phase": "code"}})
     session = _launch(store, size=size, fs=fs)
     container = session.app._container
@@ -1206,6 +1211,14 @@ def _hub_gate_merge(size, detail=("pr", "in:report"), report=MERGE_REPORT):
     container.flow_service = lambda: _PresentsFlowService(
         real, "code-await-merge", "pr", detail=detail)
     return _open_hub(session, gate)
+
+
+def _hub_gate_merge_stacked(size):
+    return _hub_gate_merge(size, detail=("pr", "stack", "in:report"), stack=MERGE_STACK)
+
+
+def _hub_gate_merge_unstacked(size):
+    return _hub_gate_merge(size, detail=("pr", "stack", "in:report"))
 
 
 def _hub_gate_merge_missing_input(size):
@@ -1692,6 +1705,8 @@ SCREENS = {
     "hub#gate-declares-findings-detail": _hub_gate_declares_findings_detail,
     "hub#gate-merge": _hub_gate_merge,
     "hub#gate-merge-missing-input": _hub_gate_merge_missing_input,
+    "hub#gate-merge-stacked": _hub_gate_merge_stacked,
+    "hub#gate-merge-unstacked": _hub_gate_merge_unstacked,
     "hub#step-done-context": _hub_step_done_context,
     "hub#step-done-context-reconstructed": _hub_step_done_context_reconstructed,
     "hub#escalation": _hub_escalation,
