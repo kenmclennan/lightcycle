@@ -11,5 +11,9 @@ class MachinePort(ABC):
         pass
 
     @abstractmethod
+    def gh_tooling(self):
+        pass
+
+    @abstractmethod
     def cwd_pids_under(self, root):
         pass

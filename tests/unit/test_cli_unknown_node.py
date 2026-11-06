@@ -4,6 +4,7 @@ from contextlib import redirect_stderr
 from unittest import mock
 
 from lightcycle import cli
+from tests.support.fake_github import FakeGitHub
 from tests.support.fake_store import FakeStore
 
 
@@ -19,6 +20,7 @@ class _Container:
     def __init__(self):
         self.config = _Cfg()
         self.store = FakeStore()
+        self.github = FakeGitHub()
         self.fs = None
         self.git = None
         self.workflow_source = None

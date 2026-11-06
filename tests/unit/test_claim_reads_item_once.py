@@ -1,3 +1,5 @@
+from lightcycle.application.work.stack_layers import StackLayers
+from tests.support.fake_github import FakeGitHub
 import pathlib
 import unittest
 from unittest import mock
@@ -48,8 +50,7 @@ def _claim_counts(step_count):
     counting = _Counting(store)
     uc = ClaimStepUseCase(
         counting, flow_for(METAS, counting), FakeWorktrees(), FakeWorkers(), FakeConfig(),
-        FakeGithubBudget(),
-    )
+        FakeGithubBudget(), StackLayers(FakeGitHub()))
     uc.execute(ClaimInput(role="agent"))
     return dict(counting.calls)
 
@@ -150,8 +151,7 @@ class TestClaimPaths(unittest.TestCase):
     def _uc(self, store, metas):
         return ClaimStepUseCase(
             store, flow_for(metas, store), FakeWorktrees(), FakeWorkers(), FakeConfig(),
-            FakeGithubBudget(),
-        )
+            FakeGithubBudget(), StackLayers(FakeGitHub()))
 
     def test_a_missing_input_parks_the_step_with_the_scope_open(self):
         store = FakeStore()
@@ -160,8 +160,7 @@ class TestClaimPaths(unittest.TestCase):
         counting = _Counting(store)
         uc = ClaimStepUseCase(
             counting, flow_for(SPEC_METAS, counting), FakeWorktrees(), FakeWorkers(),
-            FakeConfig(), FakeGithubBudget(),
-        )
+            FakeConfig(), FakeGithubBudget(), StackLayers(FakeGitHub()))
 
         resp = uc.execute(ClaimInput(role="agent"))
 

@@ -66,7 +66,8 @@ class ClaimResponse:
 
 
 class ClaimStepUseCase:
-    def __init__(self, store, flow, worktrees, workers, config, github_budget):
+    def __init__(self, store, flow, worktrees, workers, config, github_budget, stack_layers):
+        self._stack_layers = stack_layers
         self._github_budget = github_budget
         self._store = store
         self._flow = flow
@@ -224,7 +225,8 @@ class ClaimStepUseCase:
             meta = self._meta_for(t.stage, pin)
         self._attach_trusted_authors(t)
         view = self._store.node_view(t.id)
-        surface = node_read_surface(self._store, self._flow, view, outputs)
+        surface = node_read_surface(
+            self._store, self._flow, view, outputs, self._stack_layers)
         ws = self._worktrees.ensure(t)
         branch = self._worktrees.item_branch(t)
         if not self._workspace_agrees(t, ws, branch):

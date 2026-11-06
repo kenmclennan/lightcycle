@@ -1,3 +1,5 @@
+from lightcycle.application.work.stack_layers import StackLayers
+from tests.support.fake_github import FakeGitHub
 from lightcycle.adapters.simulate import NullGithubBudget
 import os
 import shutil
@@ -255,7 +257,7 @@ class SimulateTestCase(unittest.TestCase):
         git = RecordingGit()
         flow = make_flow_service(c.workflow_bundle, store, c.config, c.workflow_source)
         worktrees = make_worktrees(store, git, c.fs, sim_config, flow, c.scaffold)
-        claim = ClaimStepUseCase(store, flow, worktrees, NullWorkers(), sim_config, NullGithubBudget())
+        claim = ClaimStepUseCase(store, flow, worktrees, NullWorkers(), sim_config, NullGithubBudget(), StackLayers(FakeGitHub()))
         complete = CompleteStepUseCase(store, flow, worktrees, sim_config)
         use_case = WorkflowSimulateUseCase(
             store, flow, worktrees, claim, complete, projects_root, git,

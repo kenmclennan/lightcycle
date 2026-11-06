@@ -27,6 +27,7 @@ from lightcycle.application.pool.github_budget import GithubBudgetUseCase
 from lightcycle.application.pool.github_poll import GithubPollUseCase
 from lightcycle.application.pool.note_release_holds import NoteReleaseHoldsUseCase
 from lightcycle.application.work.release_holds import ReleaseHolds
+from lightcycle.application.work.stack_layers import StackLayers
 from lightcycle.application.work.report import ReportUseCase
 from lightcycle.application.pool.pr_snapshot import PrSnapshot
 from lightcycle.application.pool.pr_writes import PrWrites
@@ -389,6 +390,7 @@ class SimulationContainer:
             self.store, self.git, container.fs, self.config, self.flow, container.scaffold
         )
         self.claim = ClaimStepUseCase(
-            self.store, self.flow, self.worktrees, NullWorkers(), self.config, NullGithubBudget()
+            self.store, self.flow, self.worktrees, NullWorkers(), self.config, NullGithubBudget(),
+            StackLayers(ScriptedGitHub()),
         )
         self.complete = CompleteStepUseCase(self.store, self.flow, self.worktrees, self.config)

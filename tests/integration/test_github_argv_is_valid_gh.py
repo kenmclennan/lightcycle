@@ -36,6 +36,7 @@ def _captured_argvs():
         adapter.repo_inline_comments("acme/widget", 0.0)
         adapter.branch_tip("acme/widget", "main")
         adapter.pr_view(_PR)
+        adapter.stack_view("https://github.com/acme/widget/stack/3")
         adapter.changed_files(_PR, "deadbeef", "main")
 
     return [c for c in calls if c and c[0] == "gh"]

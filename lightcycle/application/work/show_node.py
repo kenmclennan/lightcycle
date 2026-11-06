@@ -20,14 +20,16 @@ class ShowNodeResponse:
 
 
 class ShowNodeUseCase:
-    def __init__(self, store, flow):
+    def __init__(self, store, flow, stack_layers):
         self._store = store
         self._flow = flow
+        self._stack_layers = stack_layers
 
     def execute(self, input: ShowNodeInput) -> ShowNodeResponse:
         view = self._store.node_view(input.step)
         return ShowNodeResponse(
             view=view, surface=node_read_surface(
-                self._store, self._flow, view, ItemOutputs(self._store, self._flow)
+                self._store, self._flow, view, ItemOutputs(self._store, self._flow),
+                self._stack_layers,
             ),
         )

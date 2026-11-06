@@ -1,3 +1,5 @@
+from lightcycle.application.work.stack_layers import StackLayers
+from tests.support.fake_github import FakeGitHub
 from tests.support.fake_github_budget import FakeGithubBudget
 import json
 import unittest
@@ -34,7 +36,7 @@ class Rig:
 
     def claim_uc(self):
         return ClaimStepUseCase(
-            self.store, self.flow, FakeWorktrees(), self.workers, self.config, FakeGithubBudget())
+            self.store, self.flow, FakeWorktrees(), self.workers, self.config, FakeGithubBudget(), StackLayers(FakeGitHub()))
 
     def first_step(self, stage="build", role="agent"):
         return self.store.create_step(stage=stage, role=role, item=self.item)
@@ -43,7 +45,7 @@ class Rig:
         return self.claim_uc().execute(ClaimInput(role="agent"))
 
     def show(self, step):
-        return ShowNodeUseCase(self.store, self.flow).execute(ShowNodeInput(step=step)).surface
+        return ShowNodeUseCase(self.store, self.flow, StackLayers(FakeGitHub())).execute(ShowNodeInput(step=step)).surface
 
     def close_build(self, step, note="the report", value="v1"):
         self.store.claim_ready("agent")

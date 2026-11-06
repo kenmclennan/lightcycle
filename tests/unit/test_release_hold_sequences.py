@@ -1,3 +1,5 @@
+from lightcycle.application.work.stack_layers import StackLayers
+from tests.support.fake_github import FakeGitHub
 import unittest
 
 from lightcycle.application.flow import ClaimInput, ClaimStepUseCase, CompleteInput, CompleteStepUseCase
@@ -53,7 +55,7 @@ class _FailingWorktrees:
 def _claim(store, flow, role="agent"):
     uc = ClaimStepUseCase(
         store, flow, FakeClaimWorktrees(), ClaimWorkers(), ClaimConfig(),
-        _budget(FakeGithubBudgetStatus(), flow))
+        _budget(FakeGithubBudgetStatus(), flow), StackLayers(FakeGitHub()))
     return uc.execute(ClaimInput(role=role))
 
 

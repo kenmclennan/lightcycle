@@ -211,7 +211,8 @@ CREATE TABLE IF NOT EXISTS phase_runs (
     comments_handled_through    TEXT,
     state       TEXT NOT NULL DEFAULT 'open',
     opened_at   TEXT,
-    closed_at   TEXT
+    closed_at   TEXT,
+    stack       TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_phase_runs_item ON phase_runs(item);
@@ -526,6 +527,7 @@ class SqliteStore(
         "phase_runs": (
             ("comments_dispatched_through", "TEXT"),
             ("comments_handled_through", "TEXT"),
+            ("stack", "TEXT"),
         ),
         "steps": (
             ("active_seconds", "REAL"),

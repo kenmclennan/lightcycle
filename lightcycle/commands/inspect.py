@@ -11,6 +11,7 @@ from lightcycle.render import (
 from lightcycle.domain.work import (
     compose_step_title,
 )
+from lightcycle.application.work.stack_layers import StackLayers
 from lightcycle.application.work.resolve_project_ref import resolve_project_ref
 from lightcycle.application.work import (
     ActiveStepsUseCase,
@@ -45,7 +46,9 @@ from lightcycle.commands.context import container, flow as _flow
 
 def cmd_show(argv):
     a = build_parser(COMMANDS["show"]).parse_args(argv)
-    resp = ShowNodeUseCase(container().store, _flow()).execute(ShowNodeInput(step=a.id))
+    resp = ShowNodeUseCase(
+        container().store, _flow(), StackLayers(container().github)
+    ).execute(ShowNodeInput(step=a.id))
     print(json.dumps(resp.as_dict(), indent=2))
     return 0
 

@@ -1,3 +1,5 @@
+from lightcycle.application.work.stack_layers import StackLayers
+from tests.support.fake_github import FakeGitHub
 import unittest
 
 from lightcycle.application.flow import ClaimInput, ClaimStepUseCase
@@ -228,7 +230,7 @@ class TestClaimHold(unittest.TestCase):
         flow = _HeavyFlow(heavy, store)
         uc = ClaimStepUseCase(
             store, flow, FakeWorktrees(), ClaimWorkers(), ClaimConfig(),
-            _budget(status, flow))
+            _budget(status, flow), StackLayers(FakeGitHub()))
         return uc.execute(ClaimInput(role=role))
 
     def _store(self):

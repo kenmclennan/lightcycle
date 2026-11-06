@@ -7,6 +7,7 @@ from lightcycle.cli_commands import COMMANDS, build_parser
 from lightcycle.domain.work import (
     DONE_FIELDS_BY_TYPE, refuse_fields,
 )
+from lightcycle.application.work.stack_layers import StackLayers
 from lightcycle.application.work.close_item import TeardownRefused
 from lightcycle.application.work import (
     CloseItemInput,
@@ -35,7 +36,7 @@ def cmd_claim(argv):
     try:
         resp = ClaimStepUseCase(
             container().store, _flow(), _worktrees(), container().workers, container().config,
-            container().github_budget(_flow()),
+            container().github_budget(_flow()), StackLayers(container().github),
         ).execute(ClaimInput(role=a.role))
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)

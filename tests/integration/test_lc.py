@@ -3339,7 +3339,7 @@ class TestCadenceStepDTO(unittest.TestCase):
 
 class TestRunReadSurface(unittest.TestCase):
     RUN_FIELDS_A_STEP_READS = (
-        "phase", "pass", "branch", "pr",
+        "phase", "pass", "branch", "pr", "stack",
         "comments_handled_through", "comments_dispatched_through", "state",
     )
 

@@ -629,6 +629,7 @@ class TestSqliteStoreAddsColumnsToTablesThatAlreadyExist(unittest.TestCase):
         cols = {r[1] for r in s._conn.execute("PRAGMA table_info(phase_runs)").fetchall()}
         self.assertIn("comments_dispatched_through", cols)
         self.assertIn("comments_handled_through", cols)
+        self.assertIn("stack", cols)
 
     def test_reading_a_run_works_after_the_columns_are_added(self):
         s = self._store_without_the_ledger_columns()
@@ -636,6 +637,7 @@ class TestSqliteStoreAddsColumnsToTablesThatAlreadyExist(unittest.TestCase):
         pid = s.open_pass(item)
         s.open_run(item, pid, "code")
         self.assertIsNone(s.runs_of(item)[0].comments_handled_through)
+        self.assertIsNone(s.runs_of(item)[0].stack)
 
 
 class TestSqliteStoreAddsTheHistoryIndex(unittest.TestCase):

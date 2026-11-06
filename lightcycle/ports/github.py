@@ -90,6 +90,16 @@ class PrView:
     updated_at: float
 
 
+@dataclass(frozen=True)
+class StackLayer:
+    number: int
+    url: str
+    head_ref: str
+    base_ref: str
+    head_sha: str
+    state: str
+
+
 class GitHubEventsPort(ABC):
     @abstractmethod
     def authenticated_login(self) -> Union[str, ReadFailure]:
@@ -175,6 +185,10 @@ class GitHubEventsPort(ABC):
 
     @abstractmethod
     def pr_view(self, pr: str) -> Union[PrView, ReadFailure]:
+        pass
+
+    @abstractmethod
+    def stack_view(self, stack_url: str) -> Union[Tuple[StackLayer, ...], ReadFailure]:
         pass
 
     @abstractmethod

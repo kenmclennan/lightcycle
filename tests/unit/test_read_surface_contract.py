@@ -1,3 +1,5 @@
+from lightcycle.application.work.stack_layers import StackLayers
+from tests.support.fake_github import FakeGitHub
 import pathlib
 import unittest
 
@@ -46,11 +48,11 @@ class TestDeclaredSurfaceCoversWhatTheEngineEmits(unittest.TestCase):
         s.add_artifact(sid, "session-id", "sess-1")
         keys = set()
         for node in (sid, item):
-            view = ShowNodeUseCase(s, flow).execute(ShowNodeInput(step=node)).view
-            keys |= set(node_read_surface(s, flow, view, ItemOutputs(s, flow)))
-        view = ShowNodeUseCase(s, flow).execute(ShowNodeInput(step=sid)).view
+            view = ShowNodeUseCase(s, flow, StackLayers(FakeGitHub())).execute(ShowNodeInput(step=node)).view
+            keys |= set(node_read_surface(s, flow, view, ItemOutputs(s, flow), StackLayers(FakeGitHub())))
+        view = ShowNodeUseCase(s, flow, StackLayers(FakeGitHub())).execute(ShowNodeInput(step=sid)).view
         claim = ClaimResponse(
-            view=view, surface=node_read_surface(s, flow, view, ItemOutputs(s, flow)), workspace="w", branch="b",
+            view=view, surface=node_read_surface(s, flow, view, ItemOutputs(s, flow), StackLayers(FakeGitHub())), workspace="w", branch="b",
             spec_path="p", description="d", repo_path="r", config={"k": "v"},
             workflow_config={"k": "v"},
         )
@@ -63,4 +65,4 @@ class TestDeclaredSurfaceCoversWhatTheEngineEmits(unittest.TestCase):
         self.assertLessEqual({"guidance_delivered", "guidance_skipped"}, json_surface())
 
     def test_the_declared_extra_keys_are_the_scraped_twenty_seven_and_the_guidance_pair(self):
-        self.assertEqual(len(READ_SURFACE_EXTRA_KEYS), 29)
+        self.assertEqual(len(READ_SURFACE_EXTRA_KEYS), 31)

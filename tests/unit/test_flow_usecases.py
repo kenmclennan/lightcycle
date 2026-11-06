@@ -1,3 +1,5 @@
+from lightcycle.application.work.stack_layers import StackLayers
+from tests.support.fake_github import FakeGitHub
 from tests.support.fake_github_budget import FakeGithubBudget
 import datetime
 import os
@@ -1235,7 +1237,7 @@ class TestClaimWorkspaceGuard(unittest.TestCase):
         s.set_branch(rid, "feat/x")
         flow = _PhasedFlow(phase, FakeFs(METAS), s)
         workers = FakeWorkers(assigned={spawn: step} if spawn else None)
-        uc = ClaimStepUseCase(s, flow, worktrees, workers, FakeConfig(spawn=spawn), FakeGithubBudget())
+        uc = ClaimStepUseCase(s, flow, worktrees, workers, FakeConfig(spawn=spawn), FakeGithubBudget(), StackLayers(FakeGitHub()))
         return s, step, uc
 
     def test_a_workspace_that_disagrees_with_the_phases_run_parks_the_step_and_returns_no_work(self):
@@ -1325,8 +1327,7 @@ class TestClaimWorkspaceGuard(unittest.TestCase):
 class TestClaimTask(unittest.TestCase):
     def _uc(self, store, config=None):
         return ClaimStepUseCase(
-            store, flow_for(METAS, store), FakeWorktrees(), FakeWorkers(), config or FakeConfig(), FakeGithubBudget()
-        )
+            store, flow_for(METAS, store), FakeWorktrees(), FakeWorkers(), config or FakeConfig(), FakeGithubBudget(), StackLayers(FakeGitHub()))
 
     def test_claims_ready_task(self):
         s = FakeStore()
@@ -1362,7 +1363,7 @@ class TestClaimTask(unittest.TestCase):
         bid = s.create_step(stage="audit", role="agent",
                             item=s.create_item("i", "a description", shortcode="GRID"))
         flow = FlowService(FakeFs({"audit": {"model": "sonnet", "step": "audit"}}), s, PromptsConfig())
-        uc = ClaimStepUseCase(s, flow, FakeWorktrees(), FakeWorkers(), FakeConfig(), FakeGithubBudget())
+        uc = ClaimStepUseCase(s, flow, FakeWorktrees(), FakeWorkers(), FakeConfig(), FakeGithubBudget(), StackLayers(FakeGitHub()))
         uc.execute(ClaimInput(role="agent"))
         self.assertEqual(s.get_node(bid).model, "sonnet")
 
@@ -1400,8 +1401,7 @@ class TestClaimTask(unittest.TestCase):
 
     def _idempotent_uc(self, s, workers):
         return ClaimStepUseCase(
-            s, flow_for(METAS, s), FakeWorktrees(), workers, FakeConfig(spawn="sp1"), FakeGithubBudget()
-        )
+            s, flow_for(METAS, s), FakeWorktrees(), workers, FakeConfig(spawn="sp1"), FakeGithubBudget(), StackLayers(FakeGitHub()))
 
     def test_idempotent_returns_assigned_inflight_without_a_fresh_claim(self):
         s = FakeStore()
@@ -1438,7 +1438,7 @@ class TestClaimTask(unittest.TestCase):
         step = create_owned_step(s, "build: x", stage="build", role="agent")
         workers = FakeWorkers()
         uc = ClaimStepUseCase(
-            s, flow_for(METAS, s), FakeWorktrees(), workers, FakeConfig(spawn="sp1"), FakeGithubBudget())
+            s, flow_for(METAS, s), FakeWorktrees(), workers, FakeConfig(spawn="sp1"), FakeGithubBudget(), StackLayers(FakeGitHub()))
         first = uc.execute(ClaimInput(role="agent"))
         self.assertEqual(first.view.step.id, step)
         resume = uc.execute(ClaimInput(role="agent"))
@@ -1461,8 +1461,7 @@ class TestClaimTask(unittest.TestCase):
         uc = ClaimStepUseCase(
             s, flow_for(SPEC_METAS, s),
             FakeWorktrees(sync_specs_error=RuntimeError("net")),
-            FakeWorkers(assigned={"sp1": x}), FakeConfig(spawn="sp1"), FakeGithubBudget(),
-        )
+            FakeWorkers(assigned={"sp1": x}), FakeConfig(spawn="sp1"), FakeGithubBudget(), StackLayers(FakeGitHub()))
         with self.assertRaises(RuntimeError):
             uc.execute(ClaimInput(role="agent"))
         self.assertEqual(s.get_node(x).state, "running")
@@ -1476,8 +1475,7 @@ class TestClaimTask(unittest.TestCase):
         uc = ClaimStepUseCase(
             s, flow_for(SPEC_METAS, s),
             FakeWorktrees(sync_specs_error=RuntimeError("net")),
-            FakeWorkers(), FakeConfig(spawn="sp1"), FakeGithubBudget(),
-        )
+            FakeWorkers(), FakeConfig(spawn="sp1"), FakeGithubBudget(), StackLayers(FakeGitHub()))
         with self.assertRaises(RuntimeError):
             uc.execute(ClaimInput(role="agent"))
         self.assertEqual(s.get_node(x).state, "queued")
@@ -1494,8 +1492,7 @@ class TestClaimTask(unittest.TestCase):
         create_owned_step(s, "build: x", stage="build", role="agent")
         workers = FakeWorkers()
         ClaimStepUseCase(
-            s, flow_for(METAS, s), FakeWorktrees(), workers, FakeConfig(spawn="sp1"), FakeGithubBudget()
-        ).execute(ClaimInput(role="agent"))
+            s, flow_for(METAS, s), FakeWorktrees(), workers, FakeConfig(spawn="sp1"), FakeGithubBudget(), StackLayers(FakeGitHub())).execute(ClaimInput(role="agent"))
         self.assertEqual(len(workers.stamped), 1)
 
     def test_unreadable_registry_on_step_for_propagates_without_claiming(self):
@@ -1503,8 +1500,7 @@ class TestClaimTask(unittest.TestCase):
         bid = create_owned_step(s, "build: x", stage="build", role="agent")
         workers = FakeWorkers(raise_on_step_for=True)
         uc = ClaimStepUseCase(
-            s, flow_for(METAS, s), FakeWorktrees(), workers, FakeConfig(spawn="sp1"), FakeGithubBudget()
-        )
+            s, flow_for(METAS, s), FakeWorktrees(), workers, FakeConfig(spawn="sp1"), FakeGithubBudget(), StackLayers(FakeGitHub()))
         with self.assertRaises(RegistryUnreadable):
             uc.execute(ClaimInput(role="agent"))
         self.assertEqual(s.get_node(bid).state, "queued")
@@ -1514,8 +1510,7 @@ class TestClaimTask(unittest.TestCase):
         bid = create_owned_step(s, "build: x", stage="build", role="agent")
         workers = FakeWorkers(raise_on_set_step=True)
         uc = ClaimStepUseCase(
-            s, flow_for(METAS, s), FakeWorktrees(), workers, FakeConfig(spawn="sp1"), FakeGithubBudget()
-        )
+            s, flow_for(METAS, s), FakeWorktrees(), workers, FakeConfig(spawn="sp1"), FakeGithubBudget(), StackLayers(FakeGitHub()))
         with self.assertRaises(RegistryUnreadable):
             uc.execute(ClaimInput(role="agent"))
         self.assertEqual(s.get_node(bid).state, "queued")
@@ -1526,8 +1521,7 @@ class TestClaimTask(unittest.TestCase):
         bid = s.create_step(stage="build", role="agent",
                             item=s.create_item("i", "a description", workflow="standard", shortcode="GRID"))
         resp = ClaimStepUseCase(
-            s, flow_for(SPEC_METAS, s), FakeWorktrees(), FakeWorkers(), FakeConfig(), FakeGithubBudget()
-        ).execute(ClaimInput(role="agent"))
+            s, flow_for(SPEC_METAS, s), FakeWorktrees(), FakeWorkers(), FakeConfig(), FakeGithubBudget(), StackLayers(FakeGitHub())).execute(ClaimInput(role="agent"))
         self.assertIsNone(resp)
         node = s.get_node(bid)
         self.assertEqual(node.role, "human")
@@ -1540,8 +1534,7 @@ class TestClaimTask(unittest.TestCase):
         bid = s.create_step(stage="build", role="agent",
                             item=s.create_item("i", "a description", workflow="ghost/whatever", shortcode="GRID"))
         resp = ClaimStepUseCase(
-            s, _BrokenSelectorFlow(), FakeWorktrees(), FakeWorkers(), FakeConfig(), FakeGithubBudget()
-        ).execute(ClaimInput(role="agent"))
+            s, _BrokenSelectorFlow(), FakeWorktrees(), FakeWorkers(), FakeConfig(), FakeGithubBudget(), StackLayers(FakeGitHub())).execute(ClaimInput(role="agent"))
         self.assertIsNone(resp)
         node = s.get_node(bid)
         self.assertEqual(node.role, "human")
@@ -1555,8 +1548,7 @@ class TestClaimTask(unittest.TestCase):
         bid = s.create_step(stage="build", role="agent",
                             item=s.create_item("i", "a description", workflow="standard", shortcode="GRID"))
         ClaimStepUseCase(
-            s, flow_for(SPEC_METAS, s), FakeWorktrees(), FakeWorkers(), FakeConfig(), FakeGithubBudget()
-        ).execute(ClaimInput(role="agent"))
+            s, flow_for(SPEC_METAS, s), FakeWorktrees(), FakeWorkers(), FakeConfig(), FakeGithubBudget(), StackLayers(FakeGitHub())).execute(ClaimInput(role="agent"))
         node_before = s.get_node(bid)
         expected_reason = node_before.park.reason
         expected_needs = node_before.park.needs
@@ -1635,8 +1627,7 @@ class TestClaimTask(unittest.TestCase):
         metas = {"coder": {"model": "sonnet", "step": "build", "phase": "spec",
                            "routes": {"done": "review"}}}
         resp = ClaimStepUseCase(
-            s, flow_for(metas, s), FakeWorktrees(), FakeWorkers(), FakeConfig(), FakeGithubBudget()
-        ).execute(ClaimInput(role="agent"))
+            s, flow_for(metas, s), FakeWorktrees(), FakeWorkers(), FakeConfig(), FakeGithubBudget(), StackLayers(FakeGitHub())).execute(ClaimInput(role="agent"))
         self.assertEqual(resp.phase, "spec")
 
     def test_claim_phase_is_none_when_undeclared(self):
@@ -1650,8 +1641,7 @@ class TestClaimTask(unittest.TestCase):
         bid = create_owned_step(s, "build: x", stage="build", role="agent")
         uc = ClaimStepUseCase(
             s, flow_for(METAS, s), FakeWorktrees(ensure_error=RuntimeError("boom")),
-            FakeWorkers(), FakeConfig(), FakeGithubBudget()
-        )
+            FakeWorkers(), FakeConfig(), FakeGithubBudget(), StackLayers(FakeGitHub()))
         with self.assertRaises(RuntimeError):
             uc.execute(ClaimInput(role="agent"))
         t = s.get_node(bid)
@@ -1666,8 +1656,7 @@ class TestClaimTask(unittest.TestCase):
         worktrees = FakeWorktrees()
 
         ClaimStepUseCase(
-            s, flow_for(METAS, s), worktrees, FakeWorkers(), FakeConfig(), FakeGithubBudget()
-        ).execute(ClaimInput(role="agent"))
+            s, flow_for(METAS, s), worktrees, FakeWorkers(), FakeConfig(), FakeGithubBudget(), StackLayers(FakeGitHub())).execute(ClaimInput(role="agent"))
 
         self.assertEqual(worktrees.sync_specs_calls, 1)
 
@@ -1677,8 +1666,7 @@ class TestClaimTask(unittest.TestCase):
         worktrees = FakeWorktrees()
 
         ClaimStepUseCase(
-            s, flow_for(METAS, s), worktrees, FakeWorkers(), FakeConfig(), FakeGithubBudget()
-        ).execute(ClaimInput(role="agent"))
+            s, flow_for(METAS, s), worktrees, FakeWorkers(), FakeConfig(), FakeGithubBudget(), StackLayers(FakeGitHub())).execute(ClaimInput(role="agent"))
 
         self.assertEqual(worktrees.sync_specs_calls, 0)
 
@@ -1689,8 +1677,7 @@ class TestClaimTask(unittest.TestCase):
         bid = s.create_step(stage="build", role="agent", item=item)
         uc = ClaimStepUseCase(
             s, flow_for(METAS, s), FakeWorktrees(sync_specs_error=RuntimeError("boom")),
-            FakeWorkers(), FakeConfig(), FakeGithubBudget()
-        )
+            FakeWorkers(), FakeConfig(), FakeGithubBudget(), StackLayers(FakeGitHub()))
 
         with self.assertRaises(RuntimeError):
             uc.execute(ClaimInput(role="agent"))
@@ -1707,8 +1694,7 @@ class TestClaimConfigWithRealSteps(unittest.TestCase):
             FlowService(_RealFs(), store, _RealConfig()),
             FakeWorktrees(),
             FakeWorkers(),
-            FakeConfig(), FakeGithubBudget(),
-        )
+            FakeConfig(), FakeGithubBudget(), StackLayers(FakeGitHub()))
 
     def test_surfaces_extra_frontmatter_as_config(self):
         s = FakeStore()
@@ -1735,8 +1721,7 @@ class TestClaimConfigOmitsAlwaysRun(unittest.TestCase):
         metas = {"coder": {"model": "sonnet", "step": "build", "always-run": True, "ci-wait": "1m"}}
 
         resp = ClaimStepUseCase(
-            s, flow_for(metas, s), FakeWorktrees(), FakeWorkers(), FakeConfig(), FakeGithubBudget()
-        ).execute(ClaimInput(role="agent"))
+            s, flow_for(metas, s), FakeWorktrees(), FakeWorkers(), FakeConfig(), FakeGithubBudget(), StackLayers(FakeGitHub())).execute(ClaimInput(role="agent"))
 
         self.assertNotIn("always-run", resp.config)
         self.assertEqual(resp.config["ci-wait"], "1m")

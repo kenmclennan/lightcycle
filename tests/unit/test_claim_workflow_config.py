@@ -1,3 +1,5 @@
+from lightcycle.application.work.stack_layers import StackLayers
+from tests.support.fake_github import FakeGitHub
 import unittest
 
 from lightcycle.application.flow.claim_step import ClaimStepUseCase
@@ -40,7 +42,7 @@ class CountingConfig(LifecycleFakeConfig):
 
 
 def _uc(text, config):
-    return ClaimStepUseCase(None, StubFlow(text), None, None, config, None)
+    return ClaimStepUseCase(None, StubFlow(text), None, None, config, None, StackLayers(FakeGitHub()))
 
 
 class TestClaimWorkflowConfig(unittest.TestCase):

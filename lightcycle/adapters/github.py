@@ -7,10 +7,11 @@ from typing import Optional, Tuple, Union
 
 from lightcycle.ports.github import (
     CheckRun, Comment, GitHubEventsPort, ListedPr, PrSync, PrView, RateLimit, ReadFailure, Review,
-    WorkflowFile,
+    StackLayer, WorkflowFile,
 )
 
 _PR_URL_RE = re.compile(r"https://github\.com/([^/]+)/([^/]+)/pull/(\d+)")
+_STACK_URL_RE = re.compile(r"https://github\.com/([^/]+)/([^/]+)/stack/(\d+)$")
 _GH_TIMEOUT_SECONDS = 30
 _ACTIONS_RUN_URL = re.compile(r"/actions/runs/(\d+)/")
 
@@ -492,6 +493,35 @@ class GitHubEventsAdapter(GitHubEventsPort):
             return json.loads(result.stdout)
         except (json.JSONDecodeError, ValueError):
             return ReadFailure(-1, "could not parse gh api JSON for %s" % path)
+
+    def stack_view(self, stack_url: str) -> Union[Tuple[StackLayer, ...], ReadFailure]:
+        m = _STACK_URL_RE.match(stack_url)
+        if not m:
+            return ReadFailure(-1, "stack is not a parseable GitHub stack URL: %r" % stack_url)
+        owner, repo, number = m.groups()
+        data = self._gh_api_json("repos/%s/%s/stacks/%s" % (owner, repo, number))
+        if isinstance(data, ReadFailure):
+            return data
+        try:
+            stack_base = data["base"]["ref"]
+            entries = data["pull_requests"]
+            layers = []
+            below_head = None
+            for entry in entries:
+                state = "merged" if entry.get("merged_at") else entry["state"]
+                layers.append(StackLayer(
+                    number=entry["number"],
+                    url="https://github.com/%s/%s/pull/%s" % (owner, repo, entry["number"]),
+                    head_ref=entry["head"]["ref"],
+                    base_ref=below_head if below_head is not None else stack_base,
+                    head_sha=entry["head"]["sha"],
+                    state=state,
+                ))
+                if state != "merged":
+                    below_head = entry["head"]["ref"]
+        except (KeyError, TypeError, AttributeError):
+            return ReadFailure(-1, "could not parse gh stack JSON for %s" % stack_url)
+        return tuple(layers)
 
     def rate_limit(self) -> Union[RateLimit, ReadFailure]:
         data = self._gh_api_json("rate_limit")
