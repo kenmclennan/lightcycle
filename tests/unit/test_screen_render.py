@@ -331,6 +331,20 @@ def test_a_merge_gate_detail_shows_the_pr_and_the_reviews_report():
     assert "IN:REPORT" in frame
 
 
+def test_a_stacked_merge_gate_detail_shows_a_stack_row_with_the_url():
+    frame = render("hub#gate-merge-stacked", size=(140, 30))
+
+    assert "STACK" in frame
+    assert "https://lightcycle.example/stack/LC-143" in frame
+
+
+def test_an_unstacked_merge_gate_detail_shows_no_stack_row():
+    frame = render("hub#gate-merge-unstacked", size=(140, 30))
+
+    assert "STACK" not in frame
+    assert MERGE_PR in frame
+
+
 def test_a_merge_gate_listing_an_input_it_lacks_leaves_that_row_out_beside_the_valued_ones():
     rows = render("hub#gate-merge-missing-input", size=(100, 30)).split("\n")
 

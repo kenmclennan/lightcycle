@@ -6,7 +6,7 @@ SPEC_ROW = "spec"
 SPEC_PR_ROW = "spec-pr"
 CI_CHECKS_ROW = "ci-checks"
 EXECUTION_FIELDS = (
-    "pr", SPEC_PR_ROW, "branch", "worktree", SPEC_ROW, CI_CHECKS_ROW, "outcome", "report",
+    "pr", "stack", SPEC_PR_ROW, "branch", "worktree", SPEC_ROW, CI_CHECKS_ROW, "outcome", "report",
     "claimed_by", "model", "session", "needs", "reason",
 )
 CI_JUDGED_SHA = "ci-judged-sha"

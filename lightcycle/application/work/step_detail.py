@@ -26,7 +26,9 @@ class StepDetail:
             run = StepRunUseCase(self._store, self._flow).execute(StepRunInput(step=step.id))
         step_def = self._flow.flow_for(step).step_def(step.stage)
         parked = bool(step.park.reason or step.park.needs)
-        pr = run.pr or self._phase_pr(step)
+        phase_run = self._phase_run(step)
+        pr = run.pr or (phase_run.pr if phase_run else None)
+        stack = phase_run.stack if phase_run else None
         has_run = bool(pr or run.branch)
         names = step_def.detail or default_detail(has_run, step_def.presents)
         spec_run = self._spec_run(run)
@@ -44,6 +46,7 @@ class StepDetail:
         session = self._latest_artifact(step.id, "session-id")
         fields = {
             "pr": pr,
+            "stack": stack,
             SPEC_PR_ROW: spec_run.pr if spec_run is not None else None,
             "branch": run.branch,
             "worktree": worktree,
@@ -63,14 +66,14 @@ class StepDetail:
         )
         return entries, detail_presents(step_def.presents, entries)
 
-    def _phase_pr(self, step):
+    def _phase_run(self, step):
         phase = self._flow.phase_for(step)
         if phase is None:
             return None
         runs = [r for r in self._store.runs_of(step.item) if r.phase == phase and r.pr]
         if not runs:
             return None
-        return max(runs, key=lambda r: r.opened_at or "").pr
+        return max(runs, key=lambda r: r.opened_at or "")
 
     def _spec_run(self, run):
         if not run.pass_id or run.phase == SPEC_PHASE:

@@ -197,7 +197,7 @@ CONTEXT_NONE_TEXT = "none"
 
 
 DETAIL_FIELD_LABELS = {
-    "pr": "PR", "spec-pr": "SPEC PR", "branch": "BRANCH", "worktree": "WORKTREE",
+    "pr": "PR", "stack": "STACK", "spec-pr": "SPEC PR", "branch": "BRANCH", "worktree": "WORKTREE",
     "spec": "SPEC", "ci-checks": "CI CHECKS",
     "model": "MODEL", "claimed_by": "CLAIMED_BY", "session": "SESSION",
     "outcome": "OUTCOME", "report": "REPORT",
@@ -798,7 +798,7 @@ def resolve_detail_file(fields, key, fs):
 def detail_row_cells(field, layout=None, row_budget=None, titles=None, is_file=False):
     key, value = field
     label = _detail_field_label(key)
-    linked = is_file or key in ("pr", "spec-pr", "worktree", "ci-checks")
+    linked = is_file or key in ("pr", "stack", "spec-pr", "worktree", "ci-checks")
     style = COLOURS["cyan"] if linked else COLOURS["text"]
     block = detail_value_is_block(value)
     if layout is not None and layout.stacked:
