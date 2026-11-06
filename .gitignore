@@ -20,3 +20,6 @@ dist/
 *.egg-info/
 mutants/
 .guidance-replay/
+
+.recognizer/*
+!.recognizer/config.yaml
