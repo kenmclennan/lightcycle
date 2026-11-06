@@ -13,6 +13,7 @@ from lightcycle.application.pool.pr_lookups import (
     latest_step,
     skip_unpinned,
 )
+from lightcycle.application.pool.stack_reads import read_stack
 from lightcycle.application.work.close_item import (
     RELEASE_PENDING_LABEL, CloseItemInput, CloseItemUseCase, TeardownRefused,
 )
@@ -155,7 +156,17 @@ class ResolveMergedPrsUseCase:
                 self._check_content_pin.execute(item, pr_value, phase)
                 merge_outcome = sd.pr_merge
                 close_outcome = sd.pr_close
-                if merge_outcome and pr_value not in merged_by_pr:
+                stacked = bool(run.stack)
+                if stacked:
+                    stack = read_stack(self._github, run.stack)
+                    if not stack.layers:
+                        continue
+                    for layer in stack.layers:
+                        if layer.state == "merged":
+                            merged_by_pr[layer.url] = True
+                    if merge_outcome:
+                        merged_by_pr[pr_value] = stack.layers[-1].state == "merged"
+                elif merge_outcome and pr_value not in merged_by_pr:
                     merged_by_pr[pr_value] = false_on_failure(self._github.is_merged(pr_value))
                 if merge_outcome and merged_by_pr[pr_value]:
                     nxt = flow.next(stage, merge_outcome)
@@ -190,7 +201,7 @@ class ResolveMergedPrsUseCase:
                             break
                         resolved = True
                         merged.append(item.id)
-                elif close_outcome and false_on_failure(self._github.is_closed_unmerged(pr_value)):
+                elif close_outcome and not stacked and false_on_failure(self._github.is_closed_unmerged(pr_value)):
                     nxt = flow.next(stage, close_outcome)
                     if nxt and nxt.to_stage and not nxt.to_terminal:
                         step = active_step_at(self._store, item.id, stage)

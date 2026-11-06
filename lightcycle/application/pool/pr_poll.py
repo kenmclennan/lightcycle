@@ -38,6 +38,7 @@ class PrPoll:
     def run(self, wanted, now, refresh_polls):
         self._now = now
         self._writes.perform(self._github)
+        self._read_stacks(wanted.stacks)
         by_repo = {}
         for pr in sorted(wanted.prs):
             repo = pr_repo(pr)
@@ -49,10 +50,15 @@ class PrPoll:
             failed |= repo_failed
             self._snapshot.confirm([pr for pr in prs if pr not in repo_failed], wanted.epoch)
         self._compare_files(wanted.files)
+        self._compare_signatures(wanted.signatures)
         self._read_checks(wanted.checks)
-        self._snapshot.retain(wanted.prs, wanted.checks)
+        self._snapshot.retain(wanted.prs, wanted.checks, wanted.stacks)
         self._writes.retain(wanted.prs)
         self._runs += 1
+
+    def _read_stacks(self, stacks):
+        for url in sorted(stacks):
+            self._snapshot.publish_stack(url, self._github.stack_view(url))
 
     def _poll_repo(self, repo, prs, refresh_polls):
         cutoff = self._cutoffs.get(repo)
@@ -136,6 +142,9 @@ class PrPoll:
                 bases.setdefault(entry.view.base_ref, []).append(pr)
         moved = []
         for base, prs in bases.items():
+            prs = [pr for pr in prs if not self._snapshot.is_upper_layer(pr)]
+            if not prs:
+                continue
             tip = self._github.branch_tip(repo, base)
             if isinstance(tip, ReadFailure):
                 self._log_failure("branch_tip", "%s@%s" % (repo, base), tip)
@@ -235,6 +244,18 @@ class PrPoll:
                 self._log_failure("changed_files", pr, files)
                 continue
             self._snapshot.publish_files(pr, sha, files)
+
+    def _compare_signatures(self, wanted_signatures):
+        for pr, sha in sorted(wanted_signatures):
+            if self._snapshot.known_signature(pr, sha):
+                continue
+            entry = self._snapshot.entry_of(pr)
+            if entry is None or entry.view is None:
+                continue
+            value = self._github.diff_signature(pr, sha, entry.view.base_ref)
+            if isinstance(value, ReadFailure):
+                self._log_failure("diff_signature", pr, value)
+            self._snapshot.publish_signature(pr, sha, value)
 
     def _read_checks(self, wanted_checks):
         for pr in sorted(wanted_checks):

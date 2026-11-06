@@ -375,6 +375,10 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def set_stack_seen(self, rid, value):
+        pass
+
+    @abstractmethod
     def set_content_pin(self, rid, content_pin):
         pass
 

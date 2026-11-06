@@ -24,6 +24,8 @@ class Wanted:
     prs: frozenset = frozenset()
     files: frozenset = frozenset()
     checks: frozenset = frozenset()
+    stacks: frozenset = frozenset()
+    signatures: frozenset = frozenset()
     epoch: int = 0
 
 
@@ -32,6 +34,8 @@ class _Pending:
     prs: set = field(default_factory=set)
     files: set = field(default_factory=set)
     checks: set = field(default_factory=set)
+    stacks: set = field(default_factory=set)
+    signatures: set = field(default_factory=set)
 
 
 class PrSnapshot(GitHubEventsPort):
@@ -41,6 +45,8 @@ class PrSnapshot(GitHubEventsPort):
         self._entries = {}
         self._files = {}
         self._checks = {}
+        self._stacks = {}
+        self._signatures = {}
         self._required = {}
         self._pending = _Pending()
         self._held = frozenset()
@@ -96,7 +102,8 @@ class PrSnapshot(GitHubEventsPort):
             held = self._held
         return Wanted(
             prs=frozenset(pending.prs) | held, files=frozenset(pending.files),
-            checks=frozenset(pending.checks), epoch=epoch,
+            checks=frozenset(pending.checks), stacks=frozenset(pending.stacks),
+            signatures=frozenset(pending.signatures), epoch=epoch,
         )
 
     def poll_epoch(self):
@@ -124,6 +131,18 @@ class PrSnapshot(GitHubEventsPort):
         with self._lock:
             self._checks[(pr, sha)] = runs
 
+    def publish_stack(self, url, value):
+        with self._lock:
+            self._stacks[url] = value
+
+    def publish_signature(self, pr, sha, value):
+        with self._lock:
+            self._signatures[(pr, sha)] = value
+
+    def known_signature(self, pr, sha):
+        with self._lock:
+            return (pr, sha) in self._signatures
+
     def publish_required(self, base_key, value):
         with self._lock:
             self._required[base_key] = value
@@ -140,7 +159,7 @@ class PrSnapshot(GitHubEventsPort):
         with self._lock:
             return (pr, sha) in self._files
 
-    def retain(self, prs, check_prs):
+    def retain(self, prs, check_prs, stacks=frozenset()):
         with self._lock:
             prs = frozenset(prs) | self._held
             self._entries = {pr: e for pr, e in self._entries.items() if pr in prs}
@@ -150,6 +169,8 @@ class PrSnapshot(GitHubEventsPort):
             self._checks = {
                 k: v for k, v in self._checks.items() if k[0] in prs and k[0] in check_prs
             }
+            self._signatures = {k: v for k, v in self._signatures.items() if k[0] in prs}
+            self._stacks = {u: v for u, v in self._stacks.items() if u in stacks}
 
     def authenticated_login(self):
         return self._github.authenticated_login()
@@ -212,7 +233,23 @@ class PrSnapshot(GitHubEventsPort):
         return view if isinstance(view, ReadFailure) else view.head_sha
 
     def stack_view(self, stack_url):
-        return NotYetRead()
+        with self._lock:
+            self._pending.stacks.add(stack_url)
+            return self._stacks.get(stack_url, NotYetRead())
+
+    def is_upper_layer(self, pr):
+        with self._lock:
+            stacks = list(self._stacks.values())
+        for layers in stacks:
+            if isinstance(layers, ReadFailure):
+                continue
+            seen_open = False
+            for layer in layers:
+                if layer.url == pr:
+                    return seen_open
+                if layer.state != "merged":
+                    seen_open = True
+        return False
 
     def rate_limit(self):
         return self._github.rate_limit()
@@ -261,6 +298,14 @@ class PrSnapshot(GitHubEventsPort):
             if (pr, sha) in self._files:
                 return self._files[(pr, sha)]
             self._pending.files.add((pr, sha))
+        return NotYetRead()
+
+    def diff_signature(self, pr, sha, base=None):
+        self._entry(pr)
+        with self._lock:
+            if (pr, sha) in self._signatures:
+                return self._signatures[(pr, sha)]
+            self._pending.signatures.add((pr, sha))
         return NotYetRead()
 
     def check_runs(self, pr, sha):

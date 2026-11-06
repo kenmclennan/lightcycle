@@ -140,6 +140,12 @@ class GitHubEventsPort(ABC):
         pass
 
     @abstractmethod
+    def diff_signature(
+        self, pr: str, sha: str, base: Optional[str] = None
+    ) -> Union[str, ReadFailure]:
+        pass
+
+    @abstractmethod
     def check_runs(self, pr: str, sha: str) -> Union[Tuple[CheckRun, ...], ReadFailure]:
         pass
 

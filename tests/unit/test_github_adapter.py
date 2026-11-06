@@ -461,6 +461,61 @@ class TestLastPushTime(unittest.TestCase):
         self.assertIsInstance(result, ReadFailure)
 
 
+class TestDiffSignature(unittest.TestCase):
+    def setUp(self):
+        self.adapter = GitHubEventsAdapter()
+
+    def _signature(self, files):
+        pr_view = _proc(json.dumps({"baseRefName": "main"}))
+        compare = _proc(json.dumps(files))
+        with patch("lightcycle.adapters.github.subprocess.run",
+                   MagicMock(side_effect=[pr_view, compare])):
+            return self.adapter.diff_signature(_PR, "abc123")
+
+    def test_patches_differing_only_in_hunk_headers_are_equal(self):
+        a = [{"filename": "a.py", "patch": "@@ -1,2 +1,3 @@\n x\n+y", "sha": "b1"}]
+        b = [{"filename": "a.py", "patch": "@@ -40,2 +41,3 @@\n x\n+y", "sha": "b2"}]
+
+        self.assertEqual(self._signature(a), self._signature(b))
+
+    def test_an_extra_added_line_changes_the_signature(self):
+        a = [{"filename": "a.py", "patch": "@@ -1 +1,2 @@\n x\n+y", "sha": "b1"}]
+        b = [{"filename": "a.py", "patch": "@@ -1 +1,3 @@\n x\n+y\n+z", "sha": "b1"}]
+
+        self.assertNotEqual(self._signature(a), self._signature(b))
+
+    def test_a_file_without_a_patch_is_identified_by_its_blob_sha(self):
+        a = [{"filename": "img.png", "patch": None, "sha": "blob1"}]
+        b = [{"filename": "img.png", "patch": None, "sha": "blob2"}]
+
+        self.assertIsInstance(self._signature(a), str)
+        self.assertNotEqual(self._signature(a), self._signature(b))
+        self.assertEqual(self._signature(a), self._signature(a))
+
+    def test_file_order_does_not_change_the_signature(self):
+        x = {"filename": "a.py", "patch": "+1", "sha": "s"}
+        y = {"filename": "b.py", "patch": "+2", "sha": "t"}
+
+        self.assertEqual(self._signature([x, y]), self._signature([y, x]))
+
+    def test_non_zero_exit_is_a_read_failure(self):
+        pr_view = _proc(json.dumps({"baseRefName": "main"}))
+        compare = _proc("", returncode=1, stderr="gh: boom")
+        with patch("lightcycle.adapters.github.subprocess.run",
+                   MagicMock(side_effect=[pr_view, compare])):
+            result = self.adapter.diff_signature(_PR, "abc123")
+
+        self.assertEqual(result, ReadFailure(1, "gh: boom"))
+
+    def test_an_explicit_base_skips_the_base_lookup(self):
+        mock_run = MagicMock(side_effect=[_proc("[]")])
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            self.adapter.diff_signature(_PR, "abc123", "trunk")
+
+        self.assertEqual(mock_run.call_count, 1)
+        self.assertIn("/repos/x/y/compare/trunk...abc123", mock_run.call_args.args[0])
+
+
 class TestChangedFiles(unittest.TestCase):
     def setUp(self):
         self.adapter = GitHubEventsAdapter()

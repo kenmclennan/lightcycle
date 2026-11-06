@@ -630,6 +630,7 @@ class TestSqliteStoreAddsColumnsToTablesThatAlreadyExist(unittest.TestCase):
         self.assertIn("comments_dispatched_through", cols)
         self.assertIn("comments_handled_through", cols)
         self.assertIn("stack", cols)
+        self.assertIn("stack_seen", cols)
 
     def test_reading_a_run_works_after_the_columns_are_added(self):
         s = self._store_without_the_ledger_columns()
@@ -638,6 +639,17 @@ class TestSqliteStoreAddsColumnsToTablesThatAlreadyExist(unittest.TestCase):
         s.open_run(item, pid, "code")
         self.assertIsNone(s.runs_of(item)[0].comments_handled_through)
         self.assertIsNone(s.runs_of(item)[0].stack)
+        self.assertIsNone(s.runs_of(item)[0].stack_seen)
+
+    def test_an_existing_run_row_reads_stack_seen_as_none_after_opening(self):
+        s = self._store_without_the_ledger_columns()
+        s._conn.execute(
+            "INSERT INTO phase_runs (id, item, pass_id, phase) VALUES ('r1', 'GRID-1', 'p1', 'code')"
+        )
+        s._conn.commit()
+        s.release()
+        reopened = SqliteStore(s._config)
+        self.assertIsNone(reopened.get_run("r1").stack_seen)
 
 
 class TestSqliteStoreAddsTheHistoryIndex(unittest.TestCase):

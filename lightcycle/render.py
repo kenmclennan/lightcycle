@@ -179,7 +179,7 @@ def _mermaid_declare(stage, kind):
 def _mermaid_consumed_outcomes(graph, flow, stage):
     sd = flow.step_def(stage)
     consumed = set()
-    for outcome in (sd.pr_merge, sd.pr_close, sd.pr_conflict, sd.pr_head_moved, sd.ci_success, sd.ci_failure):
+    for outcome in (sd.pr_merge, sd.pr_close, sd.pr_conflict, sd.pr_head_moved, sd.pr_stack_shape, sd.ci_success, sd.ci_failure):
         if outcome and graph.target(stage, outcome):
             consumed.add(outcome)
     return consumed
@@ -212,6 +212,13 @@ def _mermaid_hook_edges(graph, flow, stage):
         if target:
             edges.append(
                 "%s -.->|pr_head_moved: %s| %s" % (sid, head_moved_o, _mermaid_node_id(target))
+            )
+    stack_shape_o = sd.pr_stack_shape
+    if stack_shape_o:
+        target = graph.target(stage, stack_shape_o)
+        if target:
+            edges.append(
+                "%s -.->|pr_stack_shape: %s| %s" % (sid, stack_shape_o, _mermaid_node_id(target))
             )
     for cap in sd.caps.values():
         if not cap.escalate_outcome or not cap.limit:

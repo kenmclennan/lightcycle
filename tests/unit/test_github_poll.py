@@ -762,3 +762,105 @@ class TestRunnerAndConfig(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestStacksInThePoll(unittest.TestCase):
+    def _pool(self, count=3, **kw):
+        from tests.support.stacked import STACK_URL, base_keys_for, build_stack, head_shas_for
+
+        self.layers = build_stack(count)
+        self.urls = [l.url for l in self.layers]
+        github = FakeGitHub(
+            updated_ats={u: 100.0 for u in self.urls}, base_keys=base_keys_for(self.layers),
+            head_shas=head_shas_for(self.layers), stacks={STACK_URL: self.layers}, **kw)
+        self.stack_url = STACK_URL
+        return _Pool(github=github)
+
+    def _tick(self, pool, now, with_stack=True):
+        for url in self.urls:
+            pool.snapshot.pr_sync_state(url)
+        if with_stack:
+            pool.snapshot.stack_view(self.stack_url)
+        return pool.gate.execute(now)
+
+    def test_the_poll_reads_each_wanted_stack_once_per_cycle_and_publishes_it(self):
+        pool = self._pool()
+        self.assertIsInstance(pool.snapshot.stack_view(self.stack_url), NotYetRead)
+
+        self._tick(pool, 0)
+
+        self.assertEqual(pool.names().count("stack_view"), 1)
+        self.assertEqual(pool.snapshot.stack_view(self.stack_url), self.layers)
+
+    def test_a_cycle_runs_when_only_a_stack_is_wanted(self):
+        pool = self._pool()
+        pool.snapshot.stack_view(self.stack_url)
+
+        started = pool.gate.execute(0)
+
+        self.assertTrue(started)
+        self.assertEqual(pool.names().count("stack_view"), 1)
+
+    def test_a_stack_nobody_asked_for_again_is_dropped(self):
+        pool = self._pool()
+        self._tick(pool, 0)
+
+        self._tick(pool, 61, with_stack=False)
+
+        self.assertIsInstance(pool.snapshot.stack_view(self.stack_url), NotYetRead)
+
+    def test_a_failed_stack_read_is_published_unchanged(self):
+        pool = self._pool()
+        pool.github._failing_calls = {"stack_view"}
+
+        self._tick(pool, 0)
+
+        self.assertEqual(pool.snapshot.stack_view(self.stack_url), ReadFailure(1, "boom"))
+
+    def test_base_moved_tracks_the_trunk_for_the_bottom_layer_only(self):
+        pool = self._pool()
+        self._tick(pool, 0)
+        pool.reset()
+
+        self._tick(pool, 61)
+
+        tips = [c for c in pool.github.calls if c[0] == "branch_tip"]
+        self.assertEqual(tips, [("branch_tip", "acme/widget", "main")])
+
+    def test_the_bottom_layer_is_rechecked_when_the_trunk_moves(self):
+        pool = self._pool()
+        self._tick(pool, 0)
+        pool.github.advance_base("acme/widget", "main")
+        pool.reset()
+
+        self._tick(pool, 61)
+
+        self.assertIn(("pr_view", self.urls[0]), pool.github.calls)
+
+    def test_a_signature_is_computed_once_against_the_polled_base_and_published(self):
+        pool = self._pool(signatures={})
+        pool.github._signatures[(self.urls[1], "sha-2")] = "sig"
+        self._tick(pool, 0)
+        pool.snapshot.diff_signature(self.urls[1], "sha-2")
+        self._tick(pool, 61)
+
+        self.assertEqual(pool.snapshot.diff_signature(self.urls[1], "sha-2"), "sig")
+        self._tick(pool, 122)
+        pool.snapshot.diff_signature(self.urls[1], "sha-2")
+        self._tick(pool, 183)
+        self.assertEqual(
+            pool.names().count("diff_signature"), 1)
+
+    def test_a_signature_failure_is_final_for_that_sha(self):
+        pool = self._pool()
+        self._tick(pool, 0)
+        pool.snapshot.diff_signature(self.urls[1], "sha-2")
+        self._tick(pool, 61)
+        first = pool.snapshot.diff_signature(self.urls[1], "sha-2")
+        pool.github._signatures[(self.urls[1], "sha-2")] = "late"
+        pool.snapshot.diff_signature(self.urls[1], "sha-2")
+        self._tick(pool, 122)
+
+        self.assertIsInstance(first, ReadFailure)
+        self.assertNotIsInstance(first, NotYetRead)
+        self.assertEqual(pool.snapshot.diff_signature(self.urls[1], "sha-2"), first)

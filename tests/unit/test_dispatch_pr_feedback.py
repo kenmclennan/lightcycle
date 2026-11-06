@@ -10,7 +10,7 @@ from lightcycle.application.pool.dispatch_pr_feedback import (
 from lightcycle.application.pool.resolve_merged_prs import ResolveMergedPrsUseCase
 from lightcycle.domain.feedback import LC_MARKER
 from lightcycle.domain.work import State
-from lightcycle.ports.github import Comment, Review
+from lightcycle.ports.github import Comment, NotYetRead, Review
 from tests.support.fake_fs import flow_from_metas
 from tests.support.fake_github import FakeGitHub
 from tests.support.fake_store import FakeStore
@@ -1130,3 +1130,118 @@ class TestMonitorSkipsAStepAnotherPathClosed(unittest.TestCase):
         self.assertEqual(result.conflicted, [])
         successors = [c for c in store.children(item) if c.previous_step == step]
         self.assertEqual(len(successors), 1)
+
+
+class _PerLayerGitHub(FakeGitHub):
+    def __init__(self, comments_by_pr=None, unread=(), **kw):
+        super().__init__(**kw)
+        self._by_pr = comments_by_pr or {}
+        self._unread = set(unread)
+
+    def _items(self, pr, since):
+        if pr in self._unread:
+            return NotYetRead()
+        return [c for ts, c in self._by_pr.get(pr, []) if ts > since]
+
+    def comments_since(self, pr, since):
+        found = self._items(pr, since)
+        return found if isinstance(found, NotYetRead) else [c for c in found if c.is_top_level]
+
+    def pull_comments(self, pr, since):
+        found = self._items(pr, since)
+        return found if isinstance(found, NotYetRead) else [c for c in found if not c.is_top_level]
+
+
+def _inline_on(ts, cid, author="reviewer", body="please rename this"):
+    return (ts, Comment(author=author, body=body, is_top_level=False, path="src/foo.py",
+                        line=1, id=cid, created_at=ts))
+
+
+class TestFeedbackOverAStack(unittest.TestCase):
+    def _rig(self, comments_by_pr=None, unread=(), count=3):
+        from tests.support.stacked import STACK_URL, build_stack, head_shas_for
+
+        layers = build_stack(count)
+        github = _PerLayerGitHub(
+            comments_by_pr=comments_by_pr, unread=unread, push_time=1000.0,
+            stacks={STACK_URL: layers}, head_shas=head_shas_for(layers))
+        store = FakeStore()
+        item = store.create_item("stacked feature", "a description")
+        rid = plant_pr(store, item, layers[-1].url)
+        store.set_stack(rid, STACK_URL)
+        step = store.create_step(stage="ready-merge", role="human", item=item)
+        uc = DispatchPrFeedbackUseCase(
+            store, github, _FlowAdapter(_FEEDBACK_FLOW), None, **_TRUST)
+        return store, item, step, uc, layers
+
+    def _feedback_steps(self, store):
+        return [n for n in store.all_nodes() if n.type == "step" and n.stage == "handle-feedback"]
+
+    def _artifact(self, store, step_id, atype):
+        found = None
+        for artifact in store.item_artifacts(step_id):
+            if artifact.type == atype:
+                found = artifact.value
+        return found
+
+    def test_a_trusted_comment_on_layer_two_reaches_the_step_marked_as_layer_two(self):
+        from tests.support.stacked import layer_url
+
+        store, item, step, uc, layers = self._rig({layer_url(2): [_inline_on(1500.0, "c2")]})
+
+        result = uc.execute()
+
+        self.assertEqual(result.reworked, [item])
+        (spawned,) = self._feedback_steps(store)
+        lines = self._artifact(store, spawned.id, "feedback-layers").splitlines()
+        self.assertEqual(len(lines), 1)
+        self.assertTrue(lines[0].startswith("2/3 %s " % layer_url(2)))
+        keys = self._artifact(store, spawned.id, "admitted-comments")
+        self.assertTrue(lines[0].endswith(keys))
+
+    def test_comments_on_layers_one_and_three_give_two_lines(self):
+        from tests.support.stacked import layer_url
+
+        store, item, step, uc, layers = self._rig({
+            layer_url(1): [_inline_on(1500.0, "c1")],
+            layer_url(3): [_inline_on(1600.0, "c3")],
+        })
+
+        uc.execute()
+
+        (spawned,) = self._feedback_steps(store)
+        lines = self._artifact(store, spawned.id, "feedback-layers").splitlines()
+        self.assertEqual([l.split()[0] for l in lines], ["1/3", "3/3"])
+        self.assertEqual(self._artifact(store, spawned.id, "feedback-cutoff"), "1000.0")
+
+    def test_one_unread_layer_dispatches_nothing_and_notes_that_layer(self):
+        from tests.support.stacked import layer_url
+
+        store, item, step, uc, layers = self._rig(
+            {layer_url(1): [_inline_on(1500.0, "c1")]}, unread={layer_url(3)})
+
+        epochs = iter(range(10, 100, 10))
+        uc._poll_epoch = lambda: next(epochs)
+        for _ in range(4):
+            result = uc.execute()
+
+        self.assertEqual(result.reworked, [])
+        self.assertEqual(self._feedback_steps(store), [])
+        self.assertIsNone(store.current_run(item, None).comments_dispatched_through)
+        self.assertIn(layer_url(3), store.get_node(step).notes or "")
+        self.assertNotIn(layer_url(1), store.get_node(step).notes or "")
+
+    def test_an_untrusted_comment_on_layer_one_is_held_against_layer_one(self):
+        from tests.support.stacked import layer_url
+
+        held_calls = []
+        store, item, step, uc, layers = self._rig(
+            {layer_url(1): [_inline_on(1500.0, "c1", author="stranger")]})
+        original = uc._hold.execute
+        uc._hold.execute = lambda run, origin, pr, held: held_calls.append(pr) or original(
+            run, origin, pr, held)
+
+        result = uc.execute()
+
+        self.assertEqual(result.reworked, [])
+        self.assertEqual(held_calls, [layer_url(1)])

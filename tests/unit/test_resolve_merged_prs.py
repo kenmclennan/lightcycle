@@ -1549,3 +1549,107 @@ class TestMergePathReleaseFinishedByALaterTick(unittest.TestCase):
         self.assertIn("warning: merge-path release failed for %s" % rid, err.getvalue())
         self.assertIn("release-pending marker kept", err.getvalue())
         self.assertIn(RELEASE_PENDING_LABEL, store.labels_of(item))
+
+
+class TestResolveMergedPrsOverAStack(unittest.TestCase):
+    def _rig(self, layers):
+        from tests.support.stacked import STACK_URL
+
+        store = FakeStore()
+        item = store.create_item("stacked", "a description")
+        rid = plant_pr(store, item, layers[-1].url)
+        store.set_stack(rid, STACK_URL)
+        step = store.create_step(stage="ready-merge", role="human", item=item)
+        github = FakeGitHub(stacks={STACK_URL: layers})
+        flow = _FlowAdapter(_FLOW)
+        uc = ResolveMergedPrsUseCase(
+            store, github, FakeWorktrees(), flow, None,
+            CheckContentPinUseCase(
+                store, github, flow, trusted_authors=lambda: frozenset({"review-code"})),
+        )
+        return store, item, step, github, uc
+
+    def test_a_merged_top_layer_closes_the_run_and_names_every_merged_layer(self):
+        from tests.support.stacked import build_stack
+
+        store, item, step, github, uc = self._rig(
+            build_stack(3, states={1: "merged", 2: "merged", 3: "merged"}))
+
+        result = uc.execute()
+
+        self.assertEqual(result.merged, [item])
+        self.assertEqual(store.get_node(item).state, "done")
+
+    def test_merged_prs_handed_to_the_close_name_every_merged_layer(self):
+        from tests.support.stacked import build_stack, layer_url
+
+        store, item, step, github, uc = self._rig(
+            build_stack(2, states={1: "merged", 2: "merged"}))
+        seen = []
+
+        class _Recording(FakeWorktrees):
+            def teardown_refusals(self, item, merged_prs=frozenset()):
+                seen.append(merged_prs)
+                return []
+
+        uc._worktrees = _Recording()
+
+        uc.execute()
+
+        self.assertEqual(seen, [frozenset({layer_url(1), layer_url(2)})])
+
+    def test_a_lower_merge_with_the_top_open_is_progress_not_a_merge(self):
+        from tests.support.stacked import build_stack
+
+        store, item, step, github, uc = self._rig(build_stack(2, states={1: "merged"}))
+
+        result = uc.execute()
+
+        self.assertEqual(result.merged, [])
+        self.assertNotEqual(store.get_node(step).state, State.DONE)
+
+    def test_the_exact_hit_layer_two_merging_after_layer_one_closes_the_run(self):
+        from tests.support.stacked import build_stack, with_state
+
+        layers = build_stack(2, states={1: "merged"})
+        store, item, step, github, uc = self._rig(layers)
+        self.assertEqual(uc.execute().merged, [])
+
+        github.script_stack(
+            "https://github.com/acme/widget/stack/3", with_state(layers, 2, "merged"))
+
+        self.assertEqual(uc.execute().merged, [item])
+
+    def test_a_closed_unmerged_layer_never_fires_pr_close(self):
+        from tests.support.stacked import build_stack, with_state
+
+        layers = with_state(build_stack(2), 2, "closed")
+        store, item, step, github, uc = self._rig(layers)
+
+        result = uc.execute()
+
+        self.assertEqual(result.abandoned, [])
+        self.assertEqual(result.merged, [])
+        self.assertNotEqual(store.get_node(step).state, State.DONE)
+
+    def test_an_unread_stack_does_nothing(self):
+        from tests.support.stacked import build_stack
+
+        store, item, step, github, uc = self._rig(build_stack(2, states={1: "merged", 2: "merged"}))
+        github._failing_calls = {"stack_view"}
+
+        result = uc.execute()
+
+        self.assertEqual(result.merged, [])
+        self.assertNotEqual(store.get_node(step).state, State.DONE)
+
+    def test_a_dissolved_stack_does_nothing(self):
+        from tests.support.stacked import STACK_URL, build_stack
+
+        store, item, step, github, uc = self._rig(build_stack(2))
+        github._stacks.pop(STACK_URL)
+
+        result = uc.execute()
+
+        self.assertEqual(result.merged, [])
+        self.assertEqual(result.abandoned, [])

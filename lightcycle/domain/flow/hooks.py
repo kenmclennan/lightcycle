@@ -6,6 +6,7 @@ PR_CLOSE = "pr_close"
 PR_FEEDBACK = "pr_feedback"
 PR_CONFLICT = "pr_conflict"
 PR_HEAD_MOVED = "pr_head_moved"
+PR_STACK_SHAPE = "pr_stack_shape"
 PR_CONFLICT_CAP = "pr_conflict_cap"
 PR_CONFLICT_ESCALATE = "pr_conflict_escalate"
 PR_CONFLICT_TOTAL_CAP = "pr_conflict_total_cap"
@@ -21,6 +22,7 @@ HOOK_MIN_ARITY = {
     PR_FEEDBACK: 2,
     PR_CONFLICT: 2,
     PR_HEAD_MOVED: 2,
+    PR_STACK_SHAPE: 2,
     PR_CONFLICT_CAP: 2,
     PR_CONFLICT_ESCALATE: 2,
     PR_CONFLICT_TOTAL_CAP: 2,
