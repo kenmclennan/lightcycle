@@ -377,7 +377,7 @@ def cmd_attach(argv):
         )
         return 0
     try:
-        LinkArtifactUseCase(container().store, _flow()).execute(
+        LinkArtifactUseCase(container().store, container().github, _flow()).execute(
             LinkArtifactInput(
                 item=a.id, atype=a.type, value=value, label=a.label, replace=a.replace,
                 internal=a.internal, kind=a.kind, step=_acting_step_id(),
