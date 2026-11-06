@@ -1,5 +1,6 @@
 import json
 import unittest
+from tests.support.fake_github import FakeGitHub
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.work import (
@@ -207,7 +208,7 @@ class TestLinkArtifact(unittest.TestCase):
     def test_appends_artifact(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="design", value="http://x/1", label="PR 1")
         )
         arts = s.item_artifacts(sid)
@@ -219,7 +220,7 @@ class TestLinkArtifact(unittest.TestCase):
         s = FakeStore()
         sid = s.create_item("st", "a description")
         with self.assertRaises(UseCaseError):
-            LinkArtifactUseCase(s).execute(
+            LinkArtifactUseCase(s, FakeGitHub()).execute(
                 LinkArtifactInput(item=sid, atype="design", value="")
             )
         self.assertEqual(s.item_artifacts(sid), [])
@@ -227,11 +228,11 @@ class TestLinkArtifact(unittest.TestCase):
     def test_replace_empty_value_raises_and_leaves_original(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="spec", value="specs/old.md")
         )
         with self.assertRaises(UseCaseError):
-            LinkArtifactUseCase(s).execute(
+            LinkArtifactUseCase(s, FakeGitHub()).execute(
                 LinkArtifactInput(item=sid, atype="spec", value="", replace=True)
             )
         arts = s.item_artifacts(sid)
@@ -242,7 +243,7 @@ class TestLinkArtifact(unittest.TestCase):
         s = FakeStore()
         sid = s.create_item("st", "a description")
         with self.assertRaises(UseCaseError):
-            LinkArtifactUseCase(s).execute(
+            LinkArtifactUseCase(s, FakeGitHub()).execute(
                 LinkArtifactInput(item=sid, atype="repo", value="")
             )
         self.assertIsNone(s.get_item(sid).repo)
@@ -250,11 +251,11 @@ class TestLinkArtifact(unittest.TestCase):
     def test_repo_empty_value_raises_and_leaves_existing_repo_unchanged(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="repo", value="widget")
         )
         with self.assertRaises(UseCaseError):
-            LinkArtifactUseCase(s).execute(
+            LinkArtifactUseCase(s, FakeGitHub()).execute(
                 LinkArtifactInput(item=sid, atype="repo", value="")
             )
         self.assertEqual(s.get_item(sid).repo, "widget")
@@ -263,7 +264,7 @@ class TestLinkArtifact(unittest.TestCase):
         s = FakeStore()
         s.add_project("kenmclennan/lightcycle", shortcode="LC")
         sid = s.create_item("st", "a description")
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="repo", value="kenmclennan/lightcycle")
         )
         self.assertEqual(s.get_item(sid).project, "lightcycle")
@@ -271,7 +272,7 @@ class TestLinkArtifact(unittest.TestCase):
     def test_repo_unregistered_leaves_project_unset(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="repo", value="ghost/repo")
         )
         self.assertIsNone(s.get_item(sid).project)
@@ -280,7 +281,7 @@ class TestLinkArtifact(unittest.TestCase):
         s = FakeStore()
         s.add_project("kenmclennan/lightcycle", shortcode="LC")
         sid = s.create_item("st", "a description", project="acme/app")
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="repo", value="kenmclennan/lightcycle", replace=True)
         )
         self.assertEqual(s.get_item(sid).project, "acme/app")
@@ -297,7 +298,7 @@ class TestLinkArtifact(unittest.TestCase):
 
     def test_attach_pr_with_an_acting_step_lands_on_that_steps_phase_run(self):
         s, sid, spec_run, code_run, feedback, open_pr = self._two_phase_item()
-        LinkArtifactUseCase(s, _StagePhaseFlow()).execute(
+        LinkArtifactUseCase(s, FakeGitHub(), _StagePhaseFlow()).execute(
             LinkArtifactInput(item=sid, atype="pr", value="http://x/pull/9", step=open_pr)
         )
         self.assertEqual(s.get_run(code_run).pr, "http://x/pull/9")
@@ -307,14 +308,14 @@ class TestLinkArtifact(unittest.TestCase):
         s, sid, spec_run, code_run, feedback, open_pr = self._two_phase_item()
         s.close_run(code_run, "merged")
         with self.assertRaisesRegex(UseCaseError, "%s.*'code'" % sid):
-            LinkArtifactUseCase(s, _StagePhaseFlow()).execute(
+            LinkArtifactUseCase(s, FakeGitHub(), _StagePhaseFlow()).execute(
                 LinkArtifactInput(item=sid, atype="pr", value="http://x/pull/9", step=open_pr)
             )
         self.assertIsNone(s.get_run(spec_run).pr)
 
     def test_attach_pr_with_no_acting_step_keeps_the_first_open_step_rule(self):
         s, sid, spec_run, code_run, feedback, open_pr = self._two_phase_item()
-        LinkArtifactUseCase(s, _StagePhaseFlow()).execute(
+        LinkArtifactUseCase(s, FakeGitHub(), _StagePhaseFlow()).execute(
             LinkArtifactInput(item=sid, atype="pr", value="http://x/pull/9")
         )
         self.assertEqual(s.get_run(spec_run).pr, "http://x/pull/9")
@@ -324,7 +325,7 @@ class TestLinkArtifact(unittest.TestCase):
         s, sid, spec_run, code_run, feedback, open_pr = self._two_phase_item()
         s.update_state(feedback, State.DONE)
         s.update_state(open_pr, State.DONE)
-        LinkArtifactUseCase(s, _StagePhaseFlow()).execute(
+        LinkArtifactUseCase(s, FakeGitHub(), _StagePhaseFlow()).execute(
             LinkArtifactInput(item=sid, atype="pr", value="http://x/pull/9")
         )
         self.assertEqual(s.get_run(code_run).pr, "http://x/pull/9")
@@ -334,7 +335,7 @@ class TestLinkArtifact(unittest.TestCase):
         sid = s.create_item("st", "a description")
         rid = s.open_run(sid, s.open_pass(sid), "spec")
         with self.assertRaises(UseCaseError):
-            LinkArtifactUseCase(s).execute(
+            LinkArtifactUseCase(s, FakeGitHub()).execute(
                 LinkArtifactInput(item=sid, atype="pr", value="")
             )
         self.assertIsNone(s.get_run(rid).pr)
@@ -344,7 +345,7 @@ class TestLinkArtifact(unittest.TestCase):
         sid = s.create_item("st", "a description")
         rid = s.open_run(sid, s.open_pass(sid), "spec")
         s.record_pr_pin(rid, "http://x/pull/1", "sha1")
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="pr", value="http://x/pull/2")
         )
         run = s.get_run(rid)
@@ -356,7 +357,7 @@ class TestLinkArtifact(unittest.TestCase):
         sid = s.create_item("st", "a description")
         rid = s.open_run(sid, s.open_pass(sid), "spec")
         s.record_pr_pin(rid, "http://x/pull/1", "sha1")
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="pr", value="http://x/pull/1")
         )
         run = s.get_run(rid)
@@ -367,7 +368,7 @@ class TestLinkArtifact(unittest.TestCase):
         s = FakeStore()
         sid = s.create_item("st", "a description")
         rid = s.open_run(sid, s.open_pass(sid), "spec")
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="pr", value="http://x/pull/1")
         )
         run = s.get_run(rid)
@@ -378,11 +379,11 @@ class TestLinkArtifact(unittest.TestCase):
         s = FakeStore()
         sid = s.create_item("st", "a description")
         rid = s.open_run(sid, s.open_pass(sid), "spec")
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="branch", value="grid/x")
         )
         with self.assertRaises(UseCaseError):
-            LinkArtifactUseCase(s).execute(
+            LinkArtifactUseCase(s, FakeGitHub()).execute(
                 LinkArtifactInput(item=sid, atype="branch", value="")
             )
         self.assertEqual(s.get_run(rid).branch, "grid/x")
@@ -391,11 +392,11 @@ class TestLinkArtifact(unittest.TestCase):
         s = FakeStore()
         sid = s.create_item("st", "a description")
         rid = s.open_run(sid, s.open_pass(sid), "spec")
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="comments-handled", value="1700000000")
         )
         with self.assertRaises(UseCaseError):
-            LinkArtifactUseCase(s).execute(
+            LinkArtifactUseCase(s, FakeGitHub()).execute(
                 LinkArtifactInput(item=sid, atype="comments-handled", value="")
             )
         self.assertEqual(s.get_run(rid).comments_handled_through, "1700000000")
@@ -404,11 +405,11 @@ class TestLinkArtifact(unittest.TestCase):
         s = FakeStore()
         s.add_project("acme/widget", local_path="/tmp/widget")
         sid = s.create_item("st", "a description")
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="repo", value="widget")
         )
         with self.assertRaises(UseCaseError) as ctx:
-            LinkArtifactUseCase(s).execute(
+            LinkArtifactUseCase(s, FakeGitHub()).execute(
                 LinkArtifactInput(item=sid, atype="spec", value="")
             )
         message = str(ctx.exception)
@@ -417,10 +418,10 @@ class TestLinkArtifact(unittest.TestCase):
     def test_replace_replaces_same_type_artifact(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="spec", value="specs/old.md")
         )
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="spec", value="specs/new.md", replace=True)
         )
         arts = s.item_artifacts(sid)
@@ -430,7 +431,7 @@ class TestLinkArtifact(unittest.TestCase):
     def test_declared_kind_is_persisted(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="design", value="http://x/1", kind="something-explicit")
         )
         self.assertEqual(s.item_artifacts(sid)[0].kind, "something-explicit")
@@ -438,7 +439,7 @@ class TestLinkArtifact(unittest.TestCase):
     def test_undeclared_kind_resolves_from_type_default(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="design", value="http://x/1")
         )
         self.assertEqual(s.item_artifacts(sid)[0].kind, "text")
@@ -446,7 +447,7 @@ class TestLinkArtifact(unittest.TestCase):
     def test_internal_defaults_false(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="design", value="http://x/1")
         )
         self.assertFalse(s.item_artifacts(sid)[0].internal)
@@ -454,7 +455,7 @@ class TestLinkArtifact(unittest.TestCase):
     def test_internal_true_is_persisted(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="design", value="http://x/1", internal=True)
         )
         self.assertTrue(s.item_artifacts(sid)[0].internal)
@@ -463,7 +464,7 @@ class TestLinkArtifact(unittest.TestCase):
         s = FakeStore()
         sid = s.create_item("st", "a description")
         with self.assertRaises(UseCaseError):
-            LinkArtifactUseCase(s).execute(
+            LinkArtifactUseCase(s, FakeGitHub()).execute(
                 LinkArtifactInput(
                     item=sid, atype="spec",
                     value="/home/u/specs/.worktrees/LC-1-spec/widget/LC-1.md",
@@ -475,11 +476,11 @@ class TestLinkArtifact(unittest.TestCase):
         s = FakeStore()
         s.add_project("acme/widget", local_path="/tmp/widget")
         sid = s.create_item("st", "a description")
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="repo", value="widget")
         )
         with self.assertRaises(UseCaseError) as ctx:
-            LinkArtifactUseCase(s).execute(
+            LinkArtifactUseCase(s, FakeGitHub()).execute(
                 LinkArtifactInput(item=sid, atype="spec", value="nowhere/LC-1.md")
             )
         self.assertIn("nowhere", str(ctx.exception))
@@ -489,11 +490,11 @@ class TestLinkArtifact(unittest.TestCase):
         s.add_project("acme/widget", local_path="/tmp/widget")
         s.add_project("acme/gadget", local_path="/tmp/gadget")
         sid = s.create_item("st", "a description")
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="repo", value="widget")
         )
         with self.assertRaises(UseCaseError) as ctx:
-            LinkArtifactUseCase(s).execute(
+            LinkArtifactUseCase(s, FakeGitHub()).execute(
                 LinkArtifactInput(item=sid, atype="spec", value="gadget/LC-1.md")
             )
         message = str(ctx.exception)
@@ -504,10 +505,10 @@ class TestLinkArtifact(unittest.TestCase):
         s = FakeStore()
         s.add_project("acme/lightcycle", local_path="/tmp/lc")
         sid = s.create_item("st", "a description")
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="repo", value="lightcycle")
         )
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="spec", value="lightcycle/LC-1.md")
         )
         self.assertEqual(next(a.value for a in s.item_artifacts(sid) if a.type == "spec"), "lightcycle/LC-1.md")
@@ -516,10 +517,10 @@ class TestLinkArtifact(unittest.TestCase):
         s = FakeStore()
         s.add_project("acme/lightcycle", local_path="/tmp/lc")
         sid = s.create_item("st", "a description")
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="repo", value="acme/lightcycle")
         )
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="spec", value="lightcycle/LC-1.md")
         )
         self.assertEqual(next(a.value for a in s.item_artifacts(sid) if a.type == "spec"), "lightcycle/LC-1.md")
@@ -527,7 +528,7 @@ class TestLinkArtifact(unittest.TestCase):
     def test_spec_on_item_with_no_repo_artifact_succeeds_regardless_of_directory(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="spec", value="anywhere/LC-1.md")
         )
         self.assertEqual(s.item_artifacts(sid)[0].value, "anywhere/LC-1.md")
@@ -535,10 +536,10 @@ class TestLinkArtifact(unittest.TestCase):
     def test_spec_on_item_with_unresolvable_repo_artifact_succeeds_regardless_of_directory(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="repo", value="unregistered")
         )
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="spec", value="anywhere/LC-1.md")
         )
         self.assertEqual(next(a.value for a in s.item_artifacts(sid) if a.type == "spec"), "anywhere/LC-1.md")
@@ -546,11 +547,11 @@ class TestLinkArtifact(unittest.TestCase):
     def test_replace_with_worktrees_segment_raises_and_leaves_original(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="spec", value="specs/old.md")
         )
         with self.assertRaises(UseCaseError):
-            LinkArtifactUseCase(s).execute(
+            LinkArtifactUseCase(s, FakeGitHub()).execute(
                 LinkArtifactInput(
                     item=sid, atype="spec",
                     value="/home/u/specs/.worktrees/LC-1-spec/widget/LC-1.md",
@@ -566,7 +567,7 @@ class TestLinkArtifact(unittest.TestCase):
         sid = s.create_item("st", "a description")
         tid = s.create_step(item=sid)
         with self.assertRaises(UseCaseError):
-            LinkArtifactUseCase(s).execute(
+            LinkArtifactUseCase(s, FakeGitHub()).execute(
                 LinkArtifactInput(item=tid, atype="pr", value="http://x/1")
             )
         self.assertEqual(s.item_artifacts(sid), [])
@@ -576,7 +577,7 @@ class TestLinkArtifact(unittest.TestCase):
         s = FakeStore()
         sid = s.create_item("st", "a description")
         with self.assertRaises(UseCaseError):
-            LinkArtifactUseCase(s).execute(
+            LinkArtifactUseCase(s, FakeGitHub()).execute(
                 LinkArtifactInput(item=sid, atype="branch", value="grid/x")
             )
         self.assertEqual(s.item_artifacts(sid), [])
@@ -585,7 +586,7 @@ class TestLinkArtifact(unittest.TestCase):
         s = FakeStore()
         sid = s.create_item("st", "a description")
         rid = s.open_run(sid, s.open_pass(sid), "spec")
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="comments-handled", value="1700000000")
         )
         self.assertEqual(s.get_run(rid).comments_handled_through, "1700000000")
@@ -594,18 +595,18 @@ class TestLinkArtifact(unittest.TestCase):
     def test_run_field_on_an_unknown_id_raises_node_not_found(self):
         s = FakeStore()
         with self.assertRaises(NodeNotFoundError):
-            LinkArtifactUseCase(s).execute(
+            LinkArtifactUseCase(s, FakeGitHub()).execute(
                 LinkArtifactInput(item="LC-999", atype="pr", value="http://x/1")
             )
 
     def test_plain_second_attach_of_same_type_raises_and_leaves_original(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="design", value="v1")
         )
         with self.assertRaises(UseCaseError):
-            LinkArtifactUseCase(s).execute(
+            LinkArtifactUseCase(s, FakeGitHub()).execute(
                 LinkArtifactInput(item=sid, atype="design", value="v2")
             )
         arts = s.item_artifacts(sid)
@@ -616,14 +617,14 @@ class TestLinkArtifact(unittest.TestCase):
         s = FakeStore()
         s.add_project("acme/widget", local_path="/tmp/widget")
         sid = s.create_item("st", "a description")
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="repo", value="widget")
         )
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="spec", value="widget/LC-1.md")
         )
         with self.assertRaises(UseCaseError):
-            LinkArtifactUseCase(s).execute(
+            LinkArtifactUseCase(s, FakeGitHub()).execute(
                 LinkArtifactInput(item=sid, atype="spec", value="widget/LC-2.md")
             )
         arts = s.item_artifacts(sid)
@@ -633,10 +634,10 @@ class TestLinkArtifact(unittest.TestCase):
     def test_plain_second_attach_with_different_label_succeeds(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="design", value="v1", label="PR 1")
         )
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="design", value="v2", label="PR 2")
         )
         arts = s.item_artifacts(sid)
@@ -645,11 +646,11 @@ class TestLinkArtifact(unittest.TestCase):
     def test_plain_second_attach_with_same_label_raises_and_leaves_original(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")
-        LinkArtifactUseCase(s).execute(
+        LinkArtifactUseCase(s, FakeGitHub()).execute(
             LinkArtifactInput(item=sid, atype="design", value="v1", label="PR 1")
         )
         with self.assertRaises(UseCaseError):
-            LinkArtifactUseCase(s).execute(
+            LinkArtifactUseCase(s, FakeGitHub()).execute(
                 LinkArtifactInput(item=sid, atype="design", value="v2", label="PR 1")
             )
         arts = s.item_artifacts(sid)

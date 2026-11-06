@@ -1,4 +1,5 @@
 import unittest
+from tests.support.fake_github import FakeGitHub
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.work.link_artifact import LinkArtifactInput, LinkArtifactUseCase
@@ -11,7 +12,7 @@ class TestGuidanceCited(unittest.TestCase):
         self.item = self.store.create_item("t", "d")
         self.step = self.store.create_step(stage="build", role="agent", item=self.item)
         self.store.replace_artifact(self.step, "guidance-delivered", "a/x\nb\nc", internal=True)
-        self.use = LinkArtifactUseCase(self.store)
+        self.use = LinkArtifactUseCase(self.store, FakeGitHub())
 
     def _attach(self, value, target=None, **kw):
         self.use.execute(LinkArtifactInput(

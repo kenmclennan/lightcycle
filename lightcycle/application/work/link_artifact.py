@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from lightcycle.application.errors import UseCaseError
+from lightcycle.application.pool.stack_reads import read_stack
 from lightcycle.application.setup.project_registry import ProjectRegistry
 from lightcycle.application.work.resolve_project_ref import resolve_project_ref
 from lightcycle.domain.feedback.review_yield import (
@@ -12,6 +13,7 @@ from lightcycle.domain.feedback.review_yield import (
 )
 from lightcycle.domain.guidance.guidance import parse_citation
 from lightcycle.domain.runs import RUN_FIELDS
+from lightcycle.domain.pool import stack_shape
 from lightcycle.domain.work import State
 from lightcycle.domain.workspace.isolation import has_worktrees_component
 from lightcycle.ports.store import NodeNotFoundError, ProjectResolutionError
@@ -33,8 +35,9 @@ class LinkArtifactInput:
 
 
 class LinkArtifactUseCase:
-    def __init__(self, store, flow=None):
+    def __init__(self, store, github, flow=None):
         self._store = store
+        self._github = github
         self._flow = flow
 
     def execute(self, input: LinkArtifactInput) -> None:
@@ -198,8 +201,16 @@ class LinkArtifactUseCase:
             self._store.set_branch(run.id, input.value)
         elif input.atype == "stack":
             self._store.set_stack(run.id, input.value)
+            self._record_layers(run.id, input.value)
         else:
             self._store.set_comments_handled_through(run.id, input.value)
+
+    def _record_layers(self, run_id, url):
+        read = read_stack(self._github, url)
+        if read.unread or read.dissolved:
+            return
+        record = stack_shape.record_of(read.layers, {}, None)
+        self._store.set_stack_seen(run_id, stack_shape.encode(record))
 
     def _set_pr(self, run, value):
         if run.pr != value:

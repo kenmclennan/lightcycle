@@ -7,6 +7,7 @@ from unittest import mock
 from lightcycle import cli
 from lightcycle.domain.work import worker_permitted
 from tests.support.fake_store import FakeStore
+from tests.support.fake_github import FakeGitHub
 from tests.unit.test_review_yield import _FLOW, _FlowAdapter, _Rig
 
 
@@ -36,6 +37,7 @@ class _Container:
         self.store = store
         self.config = _Config()
         self.git = None
+        self.github = FakeGitHub()
         self.fs = None
         self.workflow_source = None
         self.workflow_bundle = None

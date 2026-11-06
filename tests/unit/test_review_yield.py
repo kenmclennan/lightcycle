@@ -149,7 +149,7 @@ class TestParseFindings(unittest.TestCase):
 class TestAttachFindings(unittest.TestCase):
     def setUp(self):
         self.rig = _Rig()
-        self.uc = LinkArtifactUseCase(self.rig.store, _FlowAdapter(_FLOW))
+        self.uc = LinkArtifactUseCase(self.rig.store, FakeGitHub(), _FlowAdapter(_FLOW))
         self.rig.done("done")
         self.review = self.rig.current
         self.good = json.dumps([{"severity": "low", "kind": "style", "file": None,
@@ -533,7 +533,7 @@ class TestLayerFigures(unittest.TestCase):
 
     def _verdict(self, rig, outcome, findings):
         rig.done("done")
-        LinkArtifactUseCase(rig.store, _FlowAdapter(_FLOW)).execute(LinkArtifactInput(
+        LinkArtifactUseCase(rig.store, FakeGitHub(), _FlowAdapter(_FLOW)).execute(LinkArtifactInput(
             item=rig.current, atype="review-findings", value=json.dumps(findings)))
         rig.done(outcome)
 
