@@ -1,7 +1,11 @@
 import datetime
+import os
+import sys
 import time
 
+from rich.console import Console
 from rich.text import Text
+from rich.traceback import Traceback
 from textual import events
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -220,6 +224,58 @@ def _tui_metric_line(wall_seconds, rss_kb, now):
 
 class MainScreen(Screen, inherit_bindings=False):
     BINDINGS = [b for b in Screen.BINDINGS if b.key != "tab"]
+
+
+CRASH_LOCAL_NAMES = ("row_key", "row", "step", "item", "node", "selected_id")
+
+
+CRASH_PACKAGE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) + os.sep
+
+
+def _innermost_lightcycle_frame(tb):
+    package_dir = CRASH_PACKAGE_DIR
+    found = None
+    while tb is not None:
+        if os.path.abspath(tb.tb_frame.f_code.co_filename).startswith(package_dir):
+            found = tb
+        tb = tb.tb_next
+    return found
+
+
+def _crash_local_ids(frame):
+    ids = []
+    for name in CRASH_LOCAL_NAMES:
+        if name not in frame.f_locals:
+            continue
+        value = frame.f_locals[name]
+        ident = value if isinstance(value, str) else getattr(value, "id", None)
+        if isinstance(ident, str):
+            ids.append("%s=%s" % (name, ident))
+    return ids
+
+
+def write_crash_log(logs_dir, version, now, exc_info):
+    stamp = now.strftime("%Y%m%dT%H%M%SZ")
+    path = os.path.join(logs_dir, "tui-crash-%s.log" % stamp)
+    with open(path, "w") as fh:
+        fh.write("lightcycle %s\ncrashed at %s\n\n" % (version, now.isoformat()))
+        console = Console(file=fh, width=120, color_system=None, force_terminal=False)
+        console.print(Traceback.from_exception(*exc_info, show_locals=True, width=120, locals_max_length=5))
+    return path
+
+
+def crash_report_lines(exc_info, log_path):
+    exc_type, exc, tb = exc_info
+    lines = ["lc tui crashed: %s: %s" % (exc_type.__name__, exc)]
+    node = _innermost_lightcycle_frame(tb)
+    if node is not None:
+        code = node.tb_frame.f_code
+        lines.append("  at %s:%d in %s" % (code.co_filename, node.tb_lineno, code.co_name))
+        ids = _crash_local_ids(node.tb_frame)
+        if ids:
+            lines.append("  locals: %s" % ", ".join(ids))
+    lines.append("  full traceback: %s" % log_path)
+    return lines
 
 
 class LightcycleApp(App):
@@ -580,6 +636,22 @@ class LightcycleApp(App):
         self._report_cache = {}
         self._report_day = None
         self._picker_open = False
+
+    def _fatal_error(self):
+        exc_info = sys.exc_info()
+        if exc_info[0] is None:
+            super()._fatal_error()
+            return
+        now = datetime.datetime.now(datetime.timezone.utc)
+        try:
+            log_path = write_crash_log(
+                self._container.fs.ensure_logs_dir(), self._container.config.version(), now, exc_info)
+        except OSError as err:
+            log_path = "(crash log not written: %s)" % err
+        self.bell()
+        for line in crash_report_lines(exc_info, log_path):
+            self._exit_renderables.append(Text(line))
+        self._close_messages_no_wait()
 
     @property
     def container(self):
