@@ -48,6 +48,20 @@ class TestCiOutcome(unittest.TestCase):
         checks = (_run(conclusion="success"), _run(name="test", conclusion="failure"))
         self.assertEqual(ci_outcome(checks), "failure")
 
+    def test_a_failed_check_beside_a_queued_one_is_failure(self):
+        checks = (_run(conclusion="failure"), _run(name="test", status="queued", conclusion=None))
+        self.assertEqual(ci_outcome(checks), "failure")
+
+    def test_a_failed_check_beside_one_past_the_ceiling_is_failure_naming_the_failed_one(self):
+        failed = _run(name="lint", conclusion="failure")
+        checks = (failed, _running("test", 1.0))
+        self.assertEqual(ci_outcome(checks, now=99999.0, ceiling=3600, since=1.0), "failure")
+        self.assertEqual(failing_check(checks), failed)
+
+    def test_a_passing_check_beside_a_queued_one_is_pending(self):
+        checks = (_run(conclusion="success"), _run(name="test", status="queued", conclusion=None))
+        self.assertEqual(ci_outcome(checks), "pending")
+
     def test_a_cancelled_check_alone_is_cancelled(self):
         checks = (_run(conclusion="cancelled"),)
         self.assertEqual(ci_outcome(checks), "cancelled")
@@ -140,9 +154,9 @@ class TestRequiredAndCeiling(unittest.TestCase):
         checks = (_run("build", conclusion="failure"), _run("test"), _running("codacy", 9900.0))
         self.assertEqual(_outcome(checks), "failure")
 
-    def test_running_required_check_defers_a_failure(self):
+    def test_running_required_check_does_not_defer_a_failure(self):
         checks = (_run("build", conclusion="failure"), _running("test", 9900.0))
-        self.assertEqual(_outcome(checks), "pending")
+        self.assertEqual(_outcome(checks), "failure")
 
     def test_failing_non_required_check_is_not_judged(self):
         checks = (_run("build"), _run("test"), _run("codacy", conclusion="failure"))

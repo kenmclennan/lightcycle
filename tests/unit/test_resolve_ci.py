@@ -562,6 +562,18 @@ class TestRequiredChecksAndCeiling(unittest.TestCase):
 
         self.assertIn("check 'sensors / test'", store.get_node(step).report)
 
+    def test_a_failed_check_beside_a_queued_one_fails_naming_the_failed_check(self):
+        bad = CheckRun(name="lint", status="completed", conclusion="failure", workflow="ruff")
+        queued = CheckRun(name="test", status="queued", conclusion=None, started_at=9999.0, workflow="macos")
+        store, item, step, uc = _ci_setup(_gh([queued, bad]))
+
+        uc.execute()
+
+        node = store.get_node(step)
+        self.assertEqual(node.outcome, "failed")
+        self.assertIn("check 'ruff / lint'", node.report)
+        self.assertNotIn("macos", node.report)
+
     def test_cancelled_park_names_the_check_by_workflow(self):
         cancelled = CheckRun(name="test", status="completed", conclusion="cancelled", workflow="sensors")
         store, item, step, uc = _ci_setup(_gh([cancelled]))

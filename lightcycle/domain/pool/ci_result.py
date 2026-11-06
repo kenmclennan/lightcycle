@@ -78,18 +78,18 @@ def ci_outcome(
     judged = judged_checks(checks, required, since)
     if not judged:
         return _empty_outcome(now, ceiling, since, runs, expected, start_window, quiet_wait)
+    if failing_check(judged):
+        return "failure"
     if timed_out_check(judged, now, ceiling, since) is not None:
         return "timeout"
     if any(not is_concluded(c) for c in judged):
         return "pending"
-    if failing_check(judged):
-        return "failure"
     return "cancelled" if cancelled_check(judged) else "success"
 
 
 def failing_check(checks):
     return next(
-        (c for c in checks if c.conclusion not in _PASSING_CONCLUSIONS and c.conclusion != _CANCELLED),
+        (c for c in checks if is_concluded(c) and c.conclusion not in _PASSING_CONCLUSIONS and c.conclusion != _CANCELLED),
         None,
     )
 
