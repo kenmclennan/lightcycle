@@ -16,6 +16,7 @@ from lightcycle.application.work import (
     ReopenItemUseCase,
 )
 from lightcycle.application.errors import UseCaseError
+from lightcycle.application.flow.advance_feedback_ledger import AdvanceFeedbackLedgerUseCase
 from lightcycle.application.flow import (
     AdvanceInput,
     AdvanceStepUseCase,
@@ -101,6 +102,8 @@ def cmd_done(argv):
                 container().store, _flow(), _worktrees(), container().config).execute(
                 CompleteInput(step=a.id, outcome=a.outcome, note=note)
             )
+            AdvanceFeedbackLedgerUseCase(
+                container().store, _flow(), container().clock).execute(a.id)
             if resp.next_step:
                 print(resp.next_step)
             if resp.teardown_refusal:

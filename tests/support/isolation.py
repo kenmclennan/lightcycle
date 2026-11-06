@@ -60,7 +60,7 @@ def make_syncable_git_repo(path):
     subprocess.run(["git", "-C", path, "remote", "add", "origin", path], check=True)
 
 
-def inject_container(test, *, store, home, config_path, extra_env=None, github=None):
+def inject_container(test, *, store, home, config_path, extra_env=None, github=None, clock=None):
     overrides = {"LC_HOME": home, "LC_CONFIG": config_path}
     if extra_env:
         overrides.update(extra_env)
@@ -68,7 +68,9 @@ def inject_container(test, *, store, home, config_path, extra_env=None, github=N
     if hasattr(store, "bind_config"):
         store.bind_config(config)
     orig = cli._container
-    cli.set_container(Container(store=store, config=config, github=github, gh_shim=FakeGhShim()))
+    extra = {} if clock is None else {"clock": clock}
+    cli.set_container(
+        Container(store=store, config=config, github=github, gh_shim=FakeGhShim(), **extra))
     if hasattr(test, "addCleanup"):
         test.addCleanup(lambda: cli.set_container(orig))
     return config

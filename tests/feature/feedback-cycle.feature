@@ -36,3 +36,17 @@ Feature: The PR-feedback cycle spawns and settles handle-feedback steps
     And the handle-feedback step routes the watched step to "changes" and closes
     Then the watched step is not in the human inbox
     And a fresh await-merge step is in the human inbox
+
+  Scenario: A mention the driver already closed the gate on does not re-trigger rework at the next gate
+    Given the clock reads 1600.0
+    When the watched step is closed by hand with outcome "changes" without a tick
+    And the pool ticks
+    Then there is no handle-feedback step in total
+    And the fresh await-merge step is still waiting
+
+  Scenario: A mention posted after the hand close still routes to handle-feedback
+    Given the clock reads 1600.0
+    When the watched step is closed by hand with outcome "changes" without a tick
+    And the PR gains an "@lc" mention at 1700.0
+    And the pool ticks
+    Then there is one ready agent step at the "handle-feedback" stage
