@@ -50,3 +50,20 @@ Feature: The PR-feedback cycle spawns and settles handle-feedback steps
     And the PR gains an "@lc" mention at 1700.0
     And the pool ticks
     Then there is one ready agent step at the "handle-feedback" stage
+
+  Scenario: A mention posted while handle-feedback runs still routes to handle-feedback after it closes the watched step
+    When the pool ticks
+    And the PR gains an "@lc" mention at 1700.0
+    Given the clock reads 1800.0
+    When the handle-feedback step routes the watched step to "changes" and closes
+    And the pool ticks again
+    Then there is one ready agent step at the "handle-feedback" stage
+
+  Scenario: A hand close after handle-feedback finished without routing still advances the ledger
+    When the pool ticks
+    And the handle-feedback step is marked done without clearing the feedback
+    And the clock reads 1800.0
+    And the PR gains an "@lc" mention at 1700.0
+    And the watched step is closed by hand with outcome "changes" without a tick
+    And the pool ticks again
+    Then there is no ready agent step at the "handle-feedback" stage
