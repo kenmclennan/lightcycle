@@ -1,5 +1,6 @@
 import unittest
 
+from lightcycle.domain.work import State
 from lightcycle.application.flow.advance_feedback_ledger import AdvanceFeedbackLedgerUseCase
 from tests.support.fake_fs import flow_from_metas
 from tests.unit.test_dispatch_pr_feedback import _FEEDBACK_FLOW, _FlowAdapter, plant_pr
@@ -57,3 +58,43 @@ class TestAdvanceFeedbackLedger(unittest.TestCase):
     def test_no_run_is_a_noop(self):
         store, step, _, flow = self._setup(with_run=False)
         self._run(store, step, flow, 3000.0)
+
+    def _watcher(self, store, step, state=None):
+        item = store.get_node(step).item
+        watcher = store.create_step(stage="handle-feedback", role="agent", item=item)
+        store.set_watched_step(watcher, step)
+        if state is not None:
+            store.update_state(watcher, state)
+        return watcher
+
+    def test_open_watcher_leaves_ledger_unchanged(self):
+        store, step, rid, flow = self._setup(stored="1500.0")
+        self._watcher(store, step)
+        self._run(store, step, flow, 3000.0)
+        self.assertEqual(self._ledger(store, rid), "1500.0")
+
+    def test_open_watcher_leaves_none_unchanged(self):
+        store, step, rid, flow = self._setup()
+        self._watcher(store, step)
+        self._run(store, step, flow, 3000.0)
+        self.assertIsNone(self._ledger(store, rid))
+
+    def test_done_watcher_does_not_suppress(self):
+        store, step, rid, flow = self._setup(stored="1500.0")
+        self._watcher(store, step, State.DONE)
+        self._run(store, step, flow, 3000.0)
+        self.assertEqual(self._ledger(store, rid), "3000.0")
+
+    def test_watcher_of_a_different_gate_does_not_suppress(self):
+        store, step, rid, flow = self._setup(stored="1500.0")
+        other = store.create_step(stage="ready-merge", role="human", item=store.get_node(step).item)
+        self._watcher(store, other)
+        self._run(store, step, flow, 3000.0)
+        self.assertEqual(self._ledger(store, rid), "3000.0")
+
+    def test_closing_unwatched_gate_advances_while_another_gate_is_watched(self):
+        store, step, rid, flow = self._setup(stored="1500.0")
+        other = store.create_step(stage="ready-merge", role="human", item=store.get_node(step).item)
+        self._watcher(store, other)
+        self._run(store, step, flow, 3000.0)
+        self.assertEqual(self._ledger(store, rid), "3000.0")

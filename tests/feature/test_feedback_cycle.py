@@ -167,6 +167,7 @@ def _fresh_await_merge_in_inbox(ctx):
 
 
 @given(parsers.parse("the clock reads {now:f}"))
+@when(parsers.parse("the clock reads {now:f}"))
 def _clock_reads(ctx, now):
     ctx["h"].set_clock(lambda: now)
 
