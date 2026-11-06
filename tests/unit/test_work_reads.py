@@ -154,6 +154,23 @@ class TestTrace(unittest.TestCase):
         self.assertEqual(resp.steps[0].id, k)
         self.assertEqual(resp.steps[0].log, "/l/k.log")
 
+    def test_the_trace_json_item_block_carries_prs_and_prs_merged(self):
+        import json
+
+        s = FakeStore()
+        sid = s.create_item("st", "d")
+        pid = s.open_pass(sid)
+        rid = s.open_run(sid, pid, "code")
+        s.set_pr(rid, "https://github.com/a/b/pull/3")
+        s.set_stack_seen(rid, json.dumps([
+            {"number": n, "state": "merged", "head_ref": "l%d" % n, "base": None}
+            for n in (1, 2, 3)
+        ]))
+        s.close_run(rid, "merged")
+        resp = TraceUseCase(s, _Workers([]), FakeFs(), _Config()).execute(TraceInput(item=sid))
+        item = resp.as_dict()["item"]
+        self.assertEqual((item["prs"], item["prs_merged"]), (3, 3))
+
     def test_step_artifacts_appear_under_their_step_in_the_trace(self):
         s = FakeStore()
         sid = s.create_item("st", "d")

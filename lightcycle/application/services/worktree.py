@@ -3,6 +3,7 @@ import sys
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.setup.project_registry import ProjectRegistry
 from lightcycle.domain.flow.flow import PROJECT_WORKSPACE
+from lightcycle.domain.pool.stack_shape import layer_branches
 from lightcycle.domain.runs import RunState, pass_number
 from lightcycle.domain.workspace import Branch, Worktree
 from lightcycle.ports.git import GitReadError
@@ -123,15 +124,31 @@ class WorktreeService:
             return
         path = self.path_for_run(run)
         self._git.remove_worktree(target, path)
-        self._git.delete_branch(target, run.branch)
-        if delete_remote:
-            outcome = self._git.delete_remote_branch(target, run.branch)
-            if outcome is not None and not outcome.ok:
-                print(
-                    "warning: remote branch delete failed for %s: %s"
-                    % (run.branch, outcome.detail),
-                    file=sys.stderr,
-                )
+        for branch in (run.branch,) + layer_branches(run):
+            self._git.delete_branch(target, branch)
+            if delete_remote:
+                outcome = self._git.delete_remote_branch(target, branch)
+                if outcome is not None and not outcome.ok:
+                    print(
+                        "warning: remote branch delete failed for %s: %s"
+                        % (branch, outcome.detail),
+                        file=sys.stderr,
+                    )
+
+    def leftover_layers(self, run):
+        layers = layer_branches(run)
+        if not layers or run.branch is None:
+            return None, ()
+        try:
+            target = self._target_for_phase(run.item, run.phase)
+            if not self._git.is_git_repo(target):
+                return None, ()
+            path = self.path_for_run(run)
+            registered = self._git.worktree_registered(target, path)
+            existing = tuple(b for b in layers if self._git.branch_exists(target, b))
+        except GitReadError:
+            return None, ()
+        return (path if registered else None), existing
 
     def release_interrupted(self, run):
         if run is None or run.state == RunState.OPEN or run.branch is None:
@@ -141,7 +158,8 @@ class WorktreeService:
             return False
         path = self.path_for_run(run)
         if not (self._git.worktree_registered(target, path)
-                or self._git.branch_exists(target, run.branch)):
+                or self._git.branch_exists(target, run.branch)
+                or any(self._git.branch_exists(target, b) for b in layer_branches(run))):
             return False
         self.release_run(run)
         return True
@@ -256,7 +274,9 @@ class WorktreeService:
         if target not in fetched:
             fetched.add(target)
             self._git.fetch_origin(target)
-        return findings + self._unmerged_findings(target, run.branch)
+        for branch in (run.branch,) + layer_branches(run):
+            findings = findings + self._unmerged_findings(target, branch)
+        return findings
 
     def teardown_refusals(self, item, merged_prs=frozenset()):
         return self._refusals(item, merged_prs, check_dirty=True)

@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 from lightcycle.application.errors import UseCaseError
+from lightcycle.domain.feedback import layers
 from lightcycle.domain.work import Artifact, Item, worker_log_filename
 
 
@@ -34,10 +35,13 @@ class TraceResponse:
     item: Item
     artifacts: List[Artifact]
     steps: List[TraceNode]
+    prs: int = 0
+    prs_merged: int = 0
 
     def as_dict(self):
         return {
-            "item": {"id": self.item.id, "title": self.item.title, "state": self.item.state},
+            "item": {"id": self.item.id, "title": self.item.title, "state": self.item.state,
+                     "prs": self.prs, "prs_merged": self.prs_merged},
             "artifacts": [a.as_dict() for a in self.artifacts],
             "steps": [t.as_dict() for t in self.steps],
         }
@@ -79,4 +83,8 @@ class TraceUseCase:
             )
             for kt in self._store.children(input.item)
         ]
-        return TraceResponse(item=item, artifacts=artifacts, steps=steps)
+        runs = self._store.runs_of(input.item)
+        return TraceResponse(
+            item=item, artifacts=artifacts, steps=steps,
+            prs=layers.prs_of(runs), prs_merged=layers.prs_merged_of(runs),
+        )

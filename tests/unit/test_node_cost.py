@@ -47,6 +47,28 @@ class TestCostUseCase(unittest.TestCase):
         self.assertEqual(cost.turn_count, 0)
         self.assertEqual(cost.stages, ())
 
+    def test_item_node_carries_prs_for_a_merged_three_layer_stack_without_changing_cost(self):
+        import json
+
+        store = FakeStore()
+        item = store.create_item("item", "a description")
+        step = store.create_step(stage="write-code", role="agent", item=item)
+        store.record_usage(step, 100, 50, 0, 0, 2.0, "list", None)
+        store.record_attribution(step, 5, {})
+        pid = store.open_pass(item)
+        rid = store.open_run(item, pid, "code")
+        store.set_pr(rid, "https://github.com/a/b/pull/3")
+        store.set_stack_seen(rid, json.dumps([
+            {"number": n, "state": "merged", "head_ref": "l%d" % n, "base": None}
+            for n in (1, 2, 3)
+        ]))
+        store.close_run(rid, "merged")
+
+        cost = CostUseCase(store).execute(CostInput(node=item))
+
+        self.assertEqual((cost.prs, cost.prs_merged), (3, 3))
+        self.assertEqual(cost.cost_usd, Cost.from_usd(2.0))
+
 
 if __name__ == "__main__":
     unittest.main()

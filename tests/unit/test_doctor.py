@@ -742,6 +742,71 @@ class TestDoctorPrFeedbackConditions(unittest.TestCase):
         self.assertEqual(doctor_summary(report.problems), "")
 
 
+class _LayerWorktrees(_Worktrees):
+    def __init__(self, leftover):
+        super().__init__()
+        self._leftover = leftover
+
+    def leftover_layers(self, run):
+        return self._leftover
+
+
+class TestDoctorLayerBranches(unittest.TestCase):
+    RECORD = '[{"number": 1, "state": "open", "head_ref": "a", "base": null},' \
+             ' {"number": 2, "state": "open", "head_ref": "b", "base": null},' \
+             ' {"number": 3, "state": "open", "head_ref": "c", "base": null}]'
+
+    def _report(self, state, leftover=("/wt", ("b", "c")), label=None, record="default"):
+        store = FakeStore()
+        item = store.create_item("stacked", "d")
+        pid = store.open_pass(item)
+        rid = store.open_run(item, pid, "code")
+        store.set_branch(rid, "a")
+        if record == "default":
+            record = self.RECORD
+        if record is not None:
+            store.set_stack_seen(rid, record)
+        if state != "open":
+            store.close_run(rid, state)
+        if label:
+            store.label_add(item, label)
+        source = FakeWorkflowSource()
+        source.add_bundle("acme", "sha1", 1, current=True)
+        report = DoctorUseCase(
+            store, source, _cfg(**_ALL_KEYS), FakeWorkflowBundle(), FakeFs(), FakeMachine(),
+            _LayerWorktrees(leftover), FakeGit(), FakeGuidanceSyncStatus(),
+            FakeConfigReloadStatus(), FakeLock(running=False), FakeGithubBudget(),
+            lambda seconds: None).execute(DoctorInput())
+        return item, report.problems["orphans"]
+
+    def test_an_abandoned_stacked_run_with_leftover_layers_is_one_orphan(self):
+        item, problems = self._report("abandoned")
+        self.assertEqual(len(problems), 1)
+        self.assertIn("layer branch(es) b, c", problems[0].message)
+        self.assertIn("(worktree /wt still registered)", problems[0].message)
+        self.assertEqual(problems[0].node_id, item)
+
+    def test_no_worktree_clause_when_none_is_registered(self):
+        _, problems = self._report("merged", leftover=(None, ("b",)))
+        self.assertNotIn("worktree", problems[0].message)
+
+    def test_a_release_pending_item_yields_none(self):
+        _, problems = self._report("abandoned", label="release-pending")
+        self.assertEqual(problems, [])
+
+    def test_an_open_stacked_run_yields_none(self):
+        _, problems = self._report("open")
+        self.assertEqual(problems, [])
+
+    def test_nothing_left_yields_none(self):
+        _, problems = self._report("abandoned", leftover=(None, ()))
+        self.assertEqual(problems, [])
+
+    def test_a_run_without_a_record_yields_none(self):
+        _, problems = self._report("abandoned", record=None)
+        self.assertEqual(problems, [])
+
+
 class TestDoctorOrphans(unittest.TestCase):
     def _report(self, store, fs, machine, worktrees, sleep=None):
         source = FakeWorkflowSource()

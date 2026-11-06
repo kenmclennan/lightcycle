@@ -1,7 +1,10 @@
+import json
 import os
 import shutil
 import tempfile
+import io
 import unittest
+from unittest import mock
 
 from lightcycle.adapters.scaffold import ScaffoldAdapter
 from lightcycle.application.errors import UseCaseError
@@ -995,3 +998,140 @@ class TestWorktreesOf(unittest.TestCase):
 
         self.assertIn(("delete_branch", "/specs", "spec/x"), git.calls)
         self.assertIn(("delete_branch", "/elsewhere/app", "feat/y"), git.calls)
+
+
+LAYERS = ("a", "b", "c")
+PROJECTS = "/home/u/workspace/projects"
+SAGA = os.path.join(PROJECTS, "saga")
+
+
+class TestStackedRelease(unittest.TestCase):
+    def _build(self, layers=LAYERS, record="default", state="open", **git_kwargs):
+        self.store = FakeStore()
+        self.item = self.store.create_item("stacked", "d")
+        self.store.add_project("acme/saga", local_path=SAGA)
+        self.store.add_artifact(self.item, "repo", "saga")
+        branches = git_kwargs.pop("branches", {(SAGA, b) for b in layers})
+        self.git = FakeGit(repos={SAGA}, branches=branches, **git_kwargs)
+        self.svc = WorktreeService(
+            self.store, git=self.git, fs=None, config=_Cfg(PROJECTS), flow=_FakeFlow(),
+        )
+        self.rid = plant_run(self.store, self.item, "code", "a", state=state)
+        if record == "default":
+            record = json.dumps([
+                {"number": i + 1, "state": "open", "head_ref": b, "base": None}
+                for i, b in enumerate(layers)
+            ])
+        if record is not None:
+            self.store.set_stack_seen(self.rid, record)
+        return self.store.get_run(self.rid)
+
+    def test_release_deletes_every_layer_branch_after_the_worktree(self):
+        run = self._build()
+
+        self.svc.release_run(run)
+
+        self.assertEqual([b for _, b in self.git.remote_deletes], ["a", "b", "c"])
+        kinds = [c[0] for c in self.git.calls]
+        self.assertEqual(kinds[0], "is_git_repo")
+        self.assertEqual(kinds.index("remove_worktree"), 1)
+        deletes = [c[2] for c in self.git.calls if c[0] == "delete_branch"]
+        self.assertEqual(deletes, ["a", "b", "c"])
+        self.assertLess(kinds.index("remove_worktree"), kinds.index("delete_branch"))
+
+    def test_no_remote_delete_when_delete_remote_is_false(self):
+        run = self._build()
+
+        self.svc.release_run(run, delete_remote=False)
+
+        self.assertEqual(self.git.remote_deletes, [])
+        self.assertEqual([c[2] for c in self.git.calls if c[0] == "delete_branch"], ["a", "b", "c"])
+
+    def test_a_failing_remote_delete_warns_per_layer_and_deletes_the_rest(self):
+        run = self._build(remote_delete_fails=True)
+
+        with mock.patch("sys.stderr", new=io.StringIO()) as err:
+            self.svc.release_run(run)
+
+        self.assertEqual([b for _, b in self.git.remote_deletes], ["a", "b", "c"])
+        for branch in ("b", "c"):
+            self.assertIn("remote branch delete failed for %s" % branch, err.getvalue())
+
+    def test_a_null_record_deletes_only_the_run_branch(self):
+        run = self._build(record=None)
+
+        self.svc.release_run(run)
+
+        self.assertEqual([c[2] for c in self.git.calls if c[0] == "delete_branch"], ["a"])
+
+    def test_an_undecodable_record_deletes_only_the_run_branch(self):
+        run = self._build(record="not json")
+
+        self.svc.release_run(run)
+
+        self.assertEqual([c[2] for c in self.git.calls if c[0] == "delete_branch"], ["a"])
+
+    def test_a_layer_missing_locally_is_skipped_silently(self):
+        record = json.dumps([
+            {"number": 2, "state": "open", "head_ref": "b", "base": None},
+            {"number": 3, "state": "open", "head_ref": "c", "base": None},
+        ])
+        run = self._build(record=record, branches={(SAGA, "a"), (SAGA, "b")})
+
+        self.svc.release_run(run)
+
+        self.assertFalse(self.git.branch_exists(SAGA, "b"))
+        self.assertFalse(self.git.branch_exists(SAGA, "c"))
+
+    def test_an_interrupted_run_whose_only_leftover_is_a_layer_is_released(self):
+        run = self._build(state="abandoned", branches={(SAGA, "c")})
+
+        self.assertTrue(self.svc.release_interrupted(run))
+        self.assertFalse(self.git.branch_exists(SAGA, "c"))
+
+    def test_dirty_paths_refuse_with_layers_present_once(self):
+        run = self._build()
+        path = self.svc.path_for_run(run)
+        self.git._registered.add(path)
+        self.git._uncommitted[path] = ["x.py"]
+
+        findings = self.svc.teardown_refusals(self.item)
+
+        dirty = [f for f in findings if "uncommitted paths" in f]
+        self.assertEqual(len(dirty), 1)
+
+    def test_an_unmerged_layer_refuses_and_names_the_layer(self):
+        self._build(beyond={(SAGA, "b"): ["sha1"]}, base="main")
+
+        findings = self.svc.teardown_refusals(self.item)
+
+        self.assertEqual(len(findings), 1)
+        self.assertIn("branch b has 1 commit(s)", findings[0])
+
+    def test_a_proven_merged_run_has_no_layer_finding(self):
+        run = self._build(beyond={(SAGA, "b"): ["sha1"], (SAGA, "a"): ["s"]}, base="main")
+        self.store.set_pr(run.id, "https://x/pull/3")
+
+        findings = self.svc.teardown_refusals(self.item, frozenset({"https://x/pull/3"}))
+
+        self.assertEqual(findings, [])
+
+    def test_lower_layers_merged_but_not_the_top_still_refuses(self):
+        run = self._build(beyond={(SAGA, "a"): ["s"], (SAGA, "b"): ["s2"]}, base="main")
+        self.store.set_pr(run.id, "https://x/pull/3")
+
+        findings = self.svc.teardown_refusals(self.item, frozenset({"https://x/pull/1"}))
+
+        self.assertEqual(len(findings), 2)
+
+    def test_leftover_layers_names_surviving_branches_and_worktree(self):
+        run = self._build(state="abandoned", branches={(SAGA, "b")})
+        path = self.svc.path_for_run(run)
+        self.git._registered.add(path)
+
+        self.assertEqual(self.svc.leftover_layers(run), (path, ("b",)))
+
+    def test_leftover_layers_is_empty_for_a_git_read_error(self):
+        run = self._build(state="abandoned", raises={"branch_exists"})
+
+        self.assertEqual(self.svc.leftover_layers(run), (None, ()))

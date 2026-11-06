@@ -50,6 +50,66 @@ def _add_reflection(store, node_id, feedback):
     )
 
 
+_LAYER_METAS = {
+    "reviewer": {"model": "opus", "step": "review", "review": "done", "phase": "code",
+                 "routes": {"done": "merge", "rejected": "review"}},
+}
+
+
+class TestRetroLayerFigures(unittest.TestCase):
+    def _rig(self, run_state):
+        s = FakeStore()
+        item = s.create_item("stacked", "a description", workflow="standard")
+        pid = s.open_pass(item)
+        rid = s.open_run(item, pid, "code")
+        s.set_pr(rid, "https://github.com/a/b/pull/3")
+        s.set_stack_seen(rid, json.dumps([
+            {"number": n, "state": "merged", "head_ref": "l%d" % n, "base": None}
+            for n in (1, 2, 3)
+        ]))
+        s.close_run(rid, run_state)
+        for n in (1, 2, 3):
+            k = s.create_step(stage="review", role="agent", item=item)
+            s.set_step_pass(k, pid)
+            s.add_artifact(k, "review-findings", json.dumps([{
+                "severity": "low", "kind": "style", "file": None, "line": None,
+                "summary": "nit", "layer": n}]), internal=True)
+            s.complete_node(k, "rejected")
+        return s, item
+
+    def _row(self, s, item):
+        flow = FlowService(FakeFs(_LAYER_METAS), s)
+        return RetroUseCase(s, flow).execute(RetroInput(subject=item)).item_signals[0]
+
+    def test_a_merged_three_layer_stack_is_one_item_with_three_prs(self):
+        s, item = self._rig("merged")
+        row = self._row(s, item)
+        self.assertEqual((row.prs, row.prs_merged), (3, 3))
+        self.assertEqual(
+            row.layers,
+            [{"layer": str(n), "rejections": 1, "findings": 1} for n in (1, 2, 3)])
+
+    def test_an_abandoned_stack_has_prs_but_none_merged(self):
+        s, item = self._rig("abandoned")
+        row = self._row(s, item)
+        self.assertEqual((row.prs, row.prs_merged), (3, 0))
+
+    def test_a_pass_row_counts_only_that_passs_runs(self):
+        s, item = self._rig("merged")
+        second = s.open_pass(item)
+        rid = s.open_run(item, second, "code")
+        s.set_pr(rid, "https://github.com/a/b/pull/9")
+        k = s.create_step(stage="review", role="agent", item=item)
+        s.set_step_pass(k, second)
+        s.complete_node(k, "done")
+        rows = RetroUseCase(s, FlowService(FakeFs(_LAYER_METAS), s)).execute(
+            RetroInput(subject=item)).item_signals
+        self.assertEqual(rows[0].prs, 4)
+        pass_one = [st for st in s.children(item) if st.pass_id != second]
+        figures = RetroUseCase(s, FlowService(FakeFs(_LAYER_METAS), s))._figures_resolver()
+        self.assertEqual(figures(s.get_node(item), pass_one)["prs"], 3)
+
+
 class TestReflect(unittest.TestCase):
     def test_records_reflection_on_the_task_with_spec_hash(self):
         s = FakeStore()

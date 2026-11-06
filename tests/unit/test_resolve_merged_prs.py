@@ -1580,6 +1580,46 @@ class TestResolveMergedPrsOverAStack(unittest.TestCase):
         self.assertEqual(result.merged, [item])
         self.assertEqual(store.get_node(item).state, "done")
 
+    def test_a_merged_stack_with_a_null_record_gets_the_final_record_before_the_run_closes(self):
+        import json
+
+        from tests.support.stacked import build_stack
+
+        store, item, step, github, uc = self._rig(
+            build_stack(3, states={1: "merged", 2: "merged", 3: "merged"}))
+        (run,) = store.runs_of(item)
+        self.assertIsNone(run.stack_seen)
+        released = []
+
+        class _Recording(FakeWorktrees):
+            def release_run(self, run, delete_remote=True):
+                released.append(run.stack_seen)
+
+        uc._worktrees = _Recording()
+
+        uc.execute()
+
+        (stored,) = store.runs_of(item)
+        heads = [e["head_ref"] for e in json.loads(stored.stack_seen)]
+        self.assertEqual(heads, ["layer-1", "layer-2", "layer-3"])
+
+    def test_an_equal_stored_record_is_not_rewritten(self):
+        from lightcycle.domain.pool import stack_shape
+        from tests.support.stacked import build_stack
+
+        layers = build_stack(2, states={1: "merged", 2: "merged"})
+        store, item, step, github, uc = self._rig(layers)
+        (run,) = store.runs_of(item)
+        record = stack_shape.encode(stack_shape.record_of(layers, {}, None))
+        store.set_stack_seen(run.id, record)
+        writes = []
+        original = store.set_stack_seen
+        store.set_stack_seen = lambda rid, value: (writes.append(value), original(rid, value))
+
+        uc.execute()
+
+        self.assertEqual(writes, [])
+
     def test_merged_prs_handed_to_the_close_name_every_merged_layer(self):
         from tests.support.stacked import build_stack, layer_url
 

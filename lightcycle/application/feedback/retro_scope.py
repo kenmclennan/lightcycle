@@ -15,7 +15,7 @@ def _durations_of(store, steps):
     return result
 
 
-def _collect_item_row(store, item, signals_for):
+def _collect_item_row(store, item, signals_for, figures_for):
     from lightcycle.application.feedback.retro import ItemSignals
 
     children = store.children(item.id)
@@ -25,12 +25,12 @@ def _collect_item_row(store, item, signals_for):
     refs, unreadable = parse_reflections(artifacts)
     row = ItemSignals(
         item=item, signals=signals_for(item).tally(steps), reflections=len(refs),
-        durations=_durations_of(store, steps),
+        durations=_durations_of(store, steps), **figures_for(item, steps),
     )
     return row, refs, unreadable
 
 
-def _collect_pending_item_row(store, item, signals_for):
+def _collect_pending_item_row(store, item, signals_for, figures_for):
     from lightcycle.application.feedback.retro import ItemSignals
     from lightcycle.application.work.retroed_passes import retroed_pass_ids
 
@@ -43,17 +43,17 @@ def _collect_pending_item_row(store, item, signals_for):
     included_steps = [s for s in steps if s.pass_id not in excluded]
     row = ItemSignals(
         item=item, signals=signals_for(item).tally(included_steps), reflections=len(refs),
-        durations=_durations_of(store, included_steps),
+        durations=_durations_of(store, included_steps), **figures_for(item, included_steps),
     )
     return row, refs, unreadable
 
 
-def _pass_row(store, item, steps, signals_for, refs):
+def _pass_row(store, item, steps, signals_for, refs, figures_for):
     from lightcycle.application.feedback.retro import ItemSignals
 
     return ItemSignals(
         item=item, signals=signals_for(item).tally(steps), reflections=len(refs),
-        durations=_durations_of(store, steps),
+        durations=_durations_of(store, steps), **figures_for(item, steps),
     )
 
 
@@ -79,9 +79,9 @@ class SubjectScope(RetroScope):
     def label(self):
         return self.subject
 
-    def items_and_refs(self, store, signals_for):
+    def items_and_refs(self, store, signals_for, figures_for):
         subject = store.get_node(self.subject)
-        row, refs, unreadable = _collect_item_row(store, subject, signals_for)
+        row, refs, unreadable = _collect_item_row(store, subject, signals_for, figures_for)
         return [row], list(refs), list(unreadable)
 
 
@@ -93,7 +93,7 @@ class SinceScope(RetroScope):
     def label(self):
         return "since:%s" % self.since
 
-    def items_and_refs(self, store, signals_for):
+    def items_and_refs(self, store, signals_for, figures_for):
         steps = store.nodes_closed_since(self.since)
         item_groups = {}
         orphan_steps = []
@@ -114,7 +114,7 @@ class SinceScope(RetroScope):
             all_refs.extend(refs)
             all_unreadable.extend(unreadable)
             item = store.get_node(item_id)
-            rows.append(_pass_row(store, item, item_steps, signals_for, refs))
+            rows.append(_pass_row(store, item, item_steps, signals_for, refs, figures_for))
         for step in orphan_steps:
             r, u = parse_reflections(store.item_artifacts(step.id))
             all_refs.extend(r)
@@ -130,13 +130,13 @@ class ProjectScope(RetroScope):
     def label(self):
         return "project:%s" % self.project
 
-    def items_and_refs(self, store, signals_for):
+    def items_and_refs(self, store, signals_for, figures_for):
         rows, all_refs, all_unreadable = [], [], []
         for item in store.closed_unretroed_items():
             project = project_of(store, item)
             if project is None or ProjectIdentity.short_name(project) != self.project:
                 continue
-            row, refs, unreadable = _collect_item_row(store, item, signals_for)
+            row, refs, unreadable = _collect_item_row(store, item, signals_for, figures_for)
             rows.append(row)
             all_refs.extend(refs)
             all_unreadable.extend(unreadable)
@@ -149,12 +149,12 @@ class PendingScope(RetroScope):
     def label(self):
         return "pending"
 
-    def items_and_refs(self, store, signals_for):
+    def items_and_refs(self, store, signals_for, figures_for):
         rows, all_refs, all_unreadable = [], [], []
         for item in store.closed_unretroed_items():
             if not has_feedback(store, item):
                 continue
-            row, refs, unreadable = _collect_pending_item_row(store, item, signals_for)
+            row, refs, unreadable = _collect_pending_item_row(store, item, signals_for, figures_for)
             if not refs and not unreadable:
                 continue
             rows.append(row)
@@ -170,7 +170,7 @@ class PendingScope(RetroScope):
             if not refs and not unreadable:
                 continue
             item = store.get_node(pass_record.item)
-            rows.append(_pass_row(store, item, steps, signals_for, refs))
+            rows.append(_pass_row(store, item, steps, signals_for, refs, figures_for))
             all_refs.extend(refs)
             all_unreadable.extend(unreadable)
         return rows, all_refs, all_unreadable
@@ -184,10 +184,10 @@ class LastNScope(RetroScope):
     def label(self):
         return "last:%d" % self.last
 
-    def items_and_refs(self, store, signals_for):
+    def items_and_refs(self, store, signals_for, figures_for):
         rows, all_refs, all_unreadable = [], [], []
         for item in store.last_n_closed_items(self.last):
-            row, refs, unreadable = _collect_item_row(store, item, signals_for)
+            row, refs, unreadable = _collect_item_row(store, item, signals_for, figures_for)
             rows.append(row)
             all_refs.extend(refs)
             all_unreadable.extend(unreadable)

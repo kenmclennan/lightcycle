@@ -23,6 +23,18 @@ def decode(text) -> Optional[list]:
     return value
 
 
+def layer_branches(run) -> tuple:
+    record = decode(getattr(run, "stack_seen", None))
+    if not record:
+        return ()
+    seen = []
+    for entry in record:
+        ref = entry.get("head_ref")
+        if ref and ref != run.branch and ref not in seen:
+            seen.append(ref)
+    return tuple(seen)
+
+
 def label(position, total, url) -> str:
     return "layer %d of %d (%s)" % (position, total, url)
 
