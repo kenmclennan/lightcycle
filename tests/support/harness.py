@@ -64,7 +64,7 @@ def _write_config(root):
 
 
 class Harness:
-    def __init__(self, roles, github=None, extra_steps=None, workflow_text=None):
+    def __init__(self, roles, github=None, extra_steps=None, workflow_text=None, clock=None):
         self.root = tempfile.mkdtemp()
         make_syncable_git_repo(self.root)
         Path(self.root, "store.db").touch()
@@ -74,25 +74,35 @@ class Harness:
         self.store.add_project("specs", local_path=self.root)
         self.store.add_project("acme/app", shortcode="APP", local_path=self.root)
         self._github = github
+        self._clock = clock
         inject_container(
-            self, store=self.store, home=self.root, config_path=self._cfg, github=github
+            self, store=self.store, home=self.root, config_path=self._cfg, github=github,
+            clock=clock,
+        )
+
+    def set_clock(self, clock):
+        self._clock = clock
+        inject_container(
+            self, store=self.store, home=self.root, config_path=self._cfg,
+            github=self._github, clock=clock,
         )
 
     def set_github(self, github):
         self._github = github
         inject_container(
-            self, store=self.store, home=self.root, config_path=self._cfg, github=github
+            self, store=self.store, home=self.root, config_path=self._cfg, github=github,
+            clock=self._clock,
         )
 
     def run_as_worker(self, spawnid, verb, *args):
         inject_container(self, store=self.store, home=self.root, config_path=self._cfg,
-                         extra_env={"LC_SPAWNID": spawnid}, github=self._github)
+                         extra_env={"LC_SPAWNID": spawnid}, github=self._github, clock=self._clock)
         try:
             return self.run(verb, *args)
         finally:
             inject_container(
                 self, store=self.store, home=self.root, config_path=self._cfg,
-                github=self._github,
+                github=self._github, clock=self._clock,
             )
 
     def run(self, verb, *args):

@@ -703,6 +703,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
         self.assertEqual(result.conflicted, [item])
         self.assertEqual(store.get_node(step).state, "done")
         self.assertEqual(store.get_node(step).outcome, "conflicted")
+        self.assertIsNone(store.runs_of(item)[0].comments_dispatched_through)
 
     def test_conflicting_pr_creates_fix_task(self):
         url = "https://github.com/x/y/pull/51"

@@ -164,3 +164,41 @@ def _fresh_await_merge_in_inbox(ctx):
     rc, out, err = ctx["h"].run("inbox")
     assert rc == 0, err
     assert fresh.id in out
+
+
+@given(parsers.parse("the clock reads {now:f}"))
+def _clock_reads(ctx, now):
+    ctx["h"].set_clock(lambda: now)
+
+
+@when(parsers.parse('the watched step is closed by hand with outcome "{outcome}" without a tick'))
+def _closed_by_hand(ctx, outcome):
+    rc, out, err = ctx["h"].run("done", ctx["watched_step"], outcome, "--note", "rework needed")
+    assert rc == 0, err
+
+
+@when(parsers.parse('the PR gains an "{token}" mention at {at:f}'))
+def _gains_mention(ctx, token, at):
+    ctx["gh"]._timed_comments.append((
+        at,
+        Comment(
+            author="reviewer", body="%s again" % token, is_top_level=True,
+            id="mention-2", created_at=at,
+        ),
+    ))
+
+
+@then("there is no handle-feedback step in total")
+def _none_total(ctx):
+    assert ctx["h"].store.steps_at_step("handle-feedback") == []
+
+
+@then("the fresh await-merge step is still waiting")
+def _fresh_waiting(ctx):
+    fresh = [
+        n for n in ctx["h"].store.all_nodes()
+        if n.type == "step" and n.stage == ctx["watched_step_name"]
+        and n.id != ctx["watched_step"]
+    ]
+    assert len(fresh) == 1
+    assert fresh[0].state == State.WAITING
