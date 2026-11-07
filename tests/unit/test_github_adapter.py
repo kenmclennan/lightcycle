@@ -1422,8 +1422,9 @@ class TestBranchTipAndPrView(unittest.TestCase):
             "updatedAt": "2026-01-01T00:00:00Z",
         })
 
-        with patch("lightcycle.adapters.github.subprocess.run",
-                   return_value=_proc(payload)) as run:
+        run = MagicMock(side_effect=[_proc(payload), _proc("", returncode=1)])
+
+        with patch("lightcycle.adapters.github.subprocess.run", run):
             view = self.adapter.pr_view(_PR)
 
         self.assertEqual(view.state, "OPEN")
@@ -1433,10 +1434,68 @@ class TestBranchTipAndPrView(unittest.TestCase):
         self.assertEqual(view.mergeable, "CONFLICTING")
         self.assertEqual(view.merge_state_status, "DIRTY")
         self.assertEqual(view.updated_at, 1767225600.0)
-        self.assertEqual(run.call_count, 1)
+        self.assertEqual(run.call_count, 2)
         self.assertIn(
             "state,headRefOid,baseRefName,mergeable,mergeStateStatus,updatedAt",
-            run.call_args.args[0])
+            run.call_args_list[0].args[0])
+
+    def _view_payload(self, head=_OLD_SHA):
+        return _proc(json.dumps({
+            "state": "OPEN", "headRefOid": head, "baseRefName": "main",
+            "mergeable": "MERGEABLE", "mergeStateStatus": "BEHIND",
+            "updatedAt": "2026-01-01T00:00:00Z",
+        }))
+
+    def _view_with_git(self, git, head=_OLD_SHA):
+        run = MagicMock(side_effect=[self._view_payload(head), git])
+        with patch("lightcycle.adapters.github.subprocess.run", run):
+            return self.adapter.pr_view(_PR), run
+
+    def test_pr_view_takes_the_git_head_and_marks_merge_state_unknown(self):
+        view, _ = self._view_with_git(_ls_remote(_NEW_SHA))
+
+        self.assertEqual(view.head_sha, _NEW_SHA)
+        self.assertEqual(view.mergeable, "UNKNOWN")
+        self.assertEqual(view.merge_state_status, "UNKNOWN")
+        self.assertEqual(view.base_ref, "main")
+
+    def test_pr_view_with_agreeing_heads_keeps_the_api_merge_state(self):
+        view, _ = self._view_with_git(_ls_remote(_OLD_SHA))
+
+        self.assertEqual(view.head_sha, _OLD_SHA)
+        self.assertEqual(view.mergeable, "MERGEABLE")
+        self.assertEqual(view.merge_state_status, "BEHIND")
+
+    def test_pr_view_falls_back_to_the_api_head_when_git_fails(self):
+        failures = {
+            "non-zero exit": _proc("", returncode=128, stderr="fatal"),
+            "timeout": subprocess.TimeoutExpired("git", 1),
+            "empty stdout": _proc(""),
+            "non-sha token": _proc("nothex\trefs/pull/7/head\n"),
+        }
+        for name, git in failures.items():
+            with self.subTest(name):
+                run = MagicMock(side_effect=[self._view_payload(), git])
+                with patch("lightcycle.adapters.github.subprocess.run", run):
+                    view = self.adapter.pr_view(_PR)
+
+                self.assertEqual(view.head_sha, _OLD_SHA)
+                self.assertEqual(view.mergeable, "MERGEABLE")
+                self.assertEqual(view.merge_state_status, "BEHIND")
+
+    def test_pr_view_failure_makes_no_git_call(self):
+        run = MagicMock(side_effect=[_proc("", returncode=1, stderr="boom")])
+
+        with patch("lightcycle.adapters.github.subprocess.run", run):
+            result = self.adapter.pr_view(_PR)
+
+        self.assertIsInstance(result, ReadFailure)
+        self.assertEqual(run.call_count, 1)
+
+    def test_pr_view_with_empty_api_head_carries_the_git_head(self):
+        view, _ = self._view_with_git(_ls_remote(_NEW_SHA), head="")
+
+        self.assertEqual(view.head_sha, _NEW_SHA)
 
     def test_pr_view_with_bad_json_is_a_read_failure(self):
         with patch("lightcycle.adapters.github.subprocess.run", return_value=_proc("{}")):

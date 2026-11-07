@@ -770,7 +770,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
         parts = _repo_parts(pr)
         if not parts:
             return ReadFailure(-1, "pr is not a parseable GitHub PR URL: %r" % pr)
-        owner, repo, _ = parts
+        owner, repo, number = parts
         try:
             result = subprocess.run(
                 [
@@ -788,12 +788,20 @@ class GitHubEventsAdapter(GitHubEventsPort):
         except (json.JSONDecodeError, ValueError, KeyError, TypeError, AttributeError):
             return ReadFailure(-1, "could not parse gh pr view JSON for the shared view")
         base = data.get("baseRefName") or ""
+        api_head = data.get("headRefOid") or ""
+        fresh_head = self._fresh_head_sha(owner, repo, number)
+        head = fresh_head or api_head
+        mergeable = data.get("mergeable") or ""
+        merge_state_status = data.get("mergeStateStatus") or ""
+        if fresh_head and fresh_head != api_head:
+            mergeable = "UNKNOWN"
+            merge_state_status = "UNKNOWN"
         return PrView(
             state=data.get("state") or "",
-            head_sha=data.get("headRefOid") or "",
+            head_sha=head,
             base_ref=base,
             base_key="%s/%s@%s" % (owner, repo, base),
-            mergeable=data.get("mergeable") or "",
-            merge_state_status=data.get("mergeStateStatus") or "",
+            mergeable=mergeable,
+            merge_state_status=merge_state_status,
             updated_at=updated,
         )
