@@ -1,0 +1,7 @@
+components:
+  domain: [lightcycle/domain/**, lightcycle/ports/**]
+  application: [lightcycle/application/**, lightcycle/config.py, lightcycle/config_ranges.py, lightcycle/config_reload.py, lightcycle/config_schedules.py, lightcycle/config_seeds.py, lightcycle/frontmatter.py]
+  adapters: [lightcycle/adapters/**, lightcycle/render.py, lightcycle/commands/**, lightcycle/cli_commands.py]
+  entry: [lightcycle/container.py, lightcycle/cli.py, lightcycle/worker_main.py, lightcycle/__main__.py]
+levels: [domain, application, adapters, entry]
+ignore: [tests/**, scripts/**, lightcycle/__init__.py, "**/fixtures/**"]
