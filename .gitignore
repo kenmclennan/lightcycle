@@ -23,3 +23,5 @@ mutants/
 
 .recognizer/*
 !.recognizer/config.yaml
+!.recognizer/policy.yaml
+!.recognizer/baselines/
