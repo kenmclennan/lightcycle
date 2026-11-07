@@ -149,6 +149,14 @@ class TestBundleCheck(unittest.TestCase):
         self.assertIn("'gate'", found[0])
         self.assertIn("not in the step's detail list", found[0])
 
+    def test_a_wrapped_list_passes(self):
+        self.assertEqual(messages_for("detail:\n  [\n    pr,\n    report,\n  ]\n"), [])
+
+    def test_a_wrapped_list_with_an_unknown_name_names_it(self):
+        found = messages_for("detail:\n  [\n    pr,\n    bogus,\n  ]\n")
+        self.assertEqual(len(found), 1)
+        self.assertIn("bogus", found[0])
+
     def test_a_malformed_list_is_rejected(self):
         for front in ("detail: pr, report\n", "detail:\n  - pr\n", "detail: []\n",
                       "detail: [pr, pr]\n"):

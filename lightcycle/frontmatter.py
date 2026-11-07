@@ -1,15 +1,36 @@
+def _joined_list(block):
+    if not block or not block[0].startswith("["):
+        return None
+    text = " ".join(block)
+    if not text.endswith("]"):
+        return None
+    entries = [e.strip() for e in text[1:-1].split(",")]
+    return "[" + ", ".join(e for e in entries if e) + "]"
+
+
 def parse_frontmatter(text):
     meta = {}
     pending = None
+    block = []
+
+    def settle():
+        joined = _joined_list(block)
+        if joined is not None:
+            meta[pending] = joined
+
     for fl in text.splitlines():
         if not fl.strip():
             continue
         if fl[0] in " \t" and pending is not None:
-            if ":" in fl:
+            block.append(fl.strip())
+            if not block[0].startswith("[") and ":" in fl:
                 k, v = fl.split(":", 1)
                 meta[pending][k.strip()] = v.strip()
             continue
+        if pending is not None:
+            settle()
         pending = None
+        block = []
         if ":" not in fl:
             continue
         k, v = fl.split(":", 1)
@@ -19,6 +40,8 @@ def parse_frontmatter(text):
             pending = k
         else:
             meta[k] = v
+    if pending is not None:
+        settle()
     return meta
 
 
