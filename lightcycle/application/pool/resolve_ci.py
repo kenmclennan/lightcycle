@@ -1,5 +1,5 @@
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, List, Optional
 
 from lightcycle.application.flow.complete_step import CompleteInput
@@ -9,7 +9,7 @@ from lightcycle.application.pool.skip_idle_ci_watch import SkipIdleCiWatchUseCas
 from lightcycle.application.pool.stack_reads import read_stack
 from lightcycle.domain.pool import (
     MISSING_STATUS, cancelled_check, check_label, ci_outcome, failing_check, judged_checks, pr_workflows_expected, status_mismatch,
-    timed_out_check,
+    timed_out_check, unrun_checks,
 )
 from lightcycle.domain.work import State
 from lightcycle.ports.github import NotYetRead, PrSync, ReadFailure
@@ -53,6 +53,7 @@ class _Verdict:
     runs: Optional[int]
     expectation: Any
     base: str
+    unrun: tuple = ()
 
 
 def _reason(call, failure):
@@ -371,10 +372,36 @@ class ResolveCiUseCase:
         self._record_judged(step, verdicts)
         note = "CI succeeded on %s." % "; ".join(
             "%s (%s) %s" % (name, v.pr, v.sha) for name, v in labelled)
+        unrun = [(name, v) for name, v in labelled if v.unrun]
+        if unrun:
+            note += " " + " ".join(
+                "CI not run on %s (%s): %s." % (name, v.pr, ", ".join(v.unrun)) for name, v in unrun)
+            self._store.add_artifact(
+                step.id, "ci-not-run",
+                "\n".join("%s %s: %s" % (name, v.pr, ", ".join(v.unrun)) for name, v in unrun))
         if self._already_closed(step):
             return
         self._complete.execute(CompleteInput(step=step.id, outcome=sd.ci_success, note=note))
         ci_resolved.append(step.item)
+
+    def _mark_unrun(self, labelled, required):
+        bottom = labelled[0][1]
+        if bottom is None:
+            return labelled
+        expected = {
+            check_label(c) for c in bottom.checks if required is None or c.name not in required}
+        window = self._ci_start_window_seconds()
+        marked = [labelled[0]]
+        for name, v in labelled[1:]:
+            if v is not None and v.outcome == "success":
+                unrun = unrun_checks(expected, v.checks)
+                if unrun:
+                    if window is not None and v.now - v.since > window:
+                        v = replace(v, unrun=unrun)
+                    else:
+                        v = replace(v, outcome="pending")
+            marked.append((name, v))
+        return marked
 
     def _judge_stack(self, step, sd, run, ctx, ci_resolved):
         stack = read_stack(self._github, run.stack)
@@ -396,6 +423,7 @@ class ResolveCiUseCase:
             key = "%s@%s" % (step.id, layer.url)
             v = self._judge(step, layer.url, key, required, ctx)
             labelled.append(("layer %d of %d" % (position, total), v))
+        labelled = self._mark_unrun(labelled, required)
         self._finish_stacked(step, sd, labelled, ci_resolved)
 
     def execute(self) -> ResolveCiResponse:

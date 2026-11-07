@@ -1,6 +1,6 @@
 import unittest
 
-from lightcycle.domain.pool import cancelled_check, check_label, ci_outcome, failing_check, judged_checks, timed_out_check
+from lightcycle.domain.pool import cancelled_check, check_label, ci_outcome, failing_check, judged_checks, timed_out_check, unrun_checks
 from lightcycle.ports.github import CheckRun
 
 
@@ -257,3 +257,20 @@ class TestCheckLabel(unittest.TestCase):
             CheckRun(name="test (3.13)", status="queued", conclusion=None, workflow="b"),
         )
         self.assertEqual(judged_checks(checks, frozenset({"test (3.13)"})), checks)
+
+
+class TestUnrunChecks(unittest.TestCase):
+    def test_empty_expected_has_nothing_unrun(self):
+        self.assertEqual(unrun_checks(set(), (CheckRun(name="lint", status="completed", conclusion="success"),)), ())
+
+    def test_all_present_has_nothing_unrun(self):
+        checks = (CheckRun(name="build", status="completed", conclusion="success", workflow="ci"),)
+        self.assertEqual(unrun_checks({"ci / build"}, checks), ())
+
+    def test_partially_present_returns_sorted_missing_labels(self):
+        checks = (CheckRun(name="lint", status="completed", conclusion="success"),)
+        self.assertEqual(
+            unrun_checks({"ci / test", "lint", "ci / build"}, checks), ("ci / build", "ci / test"))
+
+    def test_no_reported_checks_makes_every_label_unrun(self):
+        self.assertEqual(unrun_checks({"b", "a"}, ()), ("a", "b"))

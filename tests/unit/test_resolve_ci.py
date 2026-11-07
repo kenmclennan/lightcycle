@@ -974,6 +974,137 @@ class _StackedCiRig:
         return [a.value for a in self.store.item_artifacts(self.step) if a.type == atype]
 
 
+def _wf(name, workflow="ci", conclusion="success"):
+    return CheckRun(
+        name=name, status="completed", conclusion=conclusion, url="https://x/%s" % name,
+        workflow=workflow)
+
+
+class TestResolveCiNotRunLayers(unittest.TestCase):
+    def _rig(self, checks, required=None):
+        rig = _StackedCiRig(checks=checks, required=required)
+        rig.clock = [10000.0]
+        rig.uc._wall_clock = lambda: rig.clock[0]
+        rig.uc._ci_ceiling_seconds = lambda: 10 ** 9
+        return rig
+
+    def test_every_layer_running_the_same_checks_has_no_clause_and_no_artifact(self):
+        rig = self._rig({n: [_wf("build"), _wf("lint", "lint")] for n in (1, 2, 3)})
+
+        rig.uc.execute()
+        rig.clock[0] += 601
+        rig.uc.execute()
+
+        node = rig.node()
+        self.assertEqual(node.outcome, "succeeded")
+        self.assertNotIn("not run", node.report)
+        self.assertEqual(rig.artifacts("ci-not-run"), [])
+
+    def test_a_layer_lacking_the_build_is_held_inside_the_window_then_reported_not_run(self):
+        checks = {1: [_wf("build"), _wf("lint", "lint")], 2: [_wf("lint", "lint")],
+                  3: [_wf("build"), _wf("lint", "lint")]}
+        rig = self._rig(checks)
+
+        rig.uc.execute()
+        self.assertNotEqual(rig.node().state, State.DONE)
+        rig.clock[0] += 601
+        rig.uc.execute()
+
+        node = rig.node()
+        self.assertEqual(node.outcome, "succeeded")
+        self.assertIn("CI not run on layer 2 of 3 (https://github.com/acme/widget/pull/2): ci / build.", node.report)
+        self.assertEqual(
+            rig.artifacts("ci-not-run"), ["layer 2 of 3 https://github.com/acme/widget/pull/2: ci / build"])
+
+    def test_exactly_at_the_window_the_layer_is_pending_and_one_second_past_it_is_not_run(self):
+        checks = {1: [_wf("build")], 2: [_wf("lint", "lint")], 3: [_wf("build")]}
+        rig = self._rig(checks)
+
+        rig.uc.execute()
+        rig.clock[0] += 600
+        rig.uc.execute()
+        self.assertNotEqual(rig.node().state, State.DONE)
+        rig.clock[0] += 1
+        rig.uc.execute()
+
+        self.assertEqual(rig.node().outcome, "succeeded")
+        self.assertIn("layer 2 of 3", rig.node().report)
+
+    def test_each_affected_layer_is_named_with_exactly_its_own_labels(self):
+        checks = {
+            1: [_wf("build"), _wf("test"), _wf("lint", "lint")],
+            2: [_wf("build"), _wf("lint", "lint")],
+            3: [_wf("lint", "lint")],
+        }
+        rig = self._rig(checks)
+
+        rig.uc.execute()
+        rig.clock[0] += 601
+        rig.uc.execute()
+
+        self.assertEqual(rig.artifacts("ci-not-run"), [
+            "layer 2 of 3 https://github.com/acme/widget/pull/2: ci / test\n"
+            "layer 3 of 3 https://github.com/acme/widget/pull/3: ci / build, ci / test"])
+        self.assertIn("(https://github.com/acme/widget/pull/2): ci / test.", rig.node().report)
+        self.assertIn("(https://github.com/acme/widget/pull/3): ci / build, ci / test.", rig.node().report)
+
+    def test_a_ran_everything_layer_is_not_named(self):
+        checks = {1: [_wf("build")], 2: [_wf("build")], 3: [_wf("lint", "lint")]}
+        rig = self._rig(checks)
+
+        rig.uc.execute()
+        rig.clock[0] += 601
+        rig.uc.execute()
+
+        self.assertEqual(
+            rig.artifacts("ci-not-run"), ["layer 3 of 3 https://github.com/acme/widget/pull/3: ci / build"])
+
+    def test_a_required_label_missing_from_a_layer_follows_the_missing_check_path(self):
+        checks = {1: [_wf("build")], 2: [_wf("lint", "lint")], 3: [_wf("build")]}
+        rig = self._rig(checks, required={"build"})
+
+        rig.uc.execute()
+        rig.clock[0] += 601
+        rig.uc.execute()
+
+        self.assertNotEqual(rig.node().state, State.DONE)
+        self.assertEqual(rig.artifacts("ci-not-run"), [])
+
+    def test_a_failing_layer_routes_failed_with_no_not_run_clause(self):
+        checks = {1: [_wf("build"), _wf("lint", "lint")],
+                  2: [_wf("lint", "lint", conclusion="failure")], 3: [_wf("lint", "lint")]}
+        rig = self._rig(checks)
+
+        rig.uc.execute()
+        rig.clock[0] += 601
+        rig.uc.execute()
+
+        self.assertEqual(rig.node().outcome, "failed")
+        self.assertNotIn("not run", rig.node().report)
+        self.assertEqual(rig.artifacts("ci-not-run"), [])
+
+    def test_a_layer_with_no_checks_is_reported_with_every_expected_label(self):
+        checks = {1: [_wf("build")], 2: [_wf("build")], 3: []}
+        rig = self._rig(checks)
+
+        rig.uc.execute()
+        rig.clock[0] += 601
+        rig.uc.execute()
+
+        self.assertEqual(rig.node().outcome, "succeeded")
+        self.assertEqual(
+            rig.artifacts("ci-not-run"), ["layer 3 of 3 https://github.com/acme/widget/pull/3: ci / build"])
+
+    def test_the_bottom_layer_is_never_judged_against_the_expected_set(self):
+        rig = self._rig({1: [_wf("build")], 2: [_wf("build")], 3: [_wf("build")]})
+
+        rig.uc.execute()
+        rig.clock[0] += 601
+        rig.uc.execute()
+
+        self.assertEqual(rig.artifacts("ci-not-run"), [])
+
+
 class TestResolveCiOverAStack(unittest.TestCase):
     def test_every_layer_green_completes_success_listing_each_layer(self):
         rig = _StackedCiRig(checks={n: [_check("build", "success")] for n in (1, 2, 3)})
