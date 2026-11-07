@@ -16,6 +16,8 @@ def _captured_argvs():
     def _record(argv, *a, **kw):
         calls.append(list(argv))
         stdout = '{"headRefOid": "deadbeef"}' if "headRefOid" in argv else ""
+        if argv[:2] == ["git", "ls-remote"]:
+            stdout = "%s\t%s\n" % ("c" * 40, argv[-1])
         return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
 
     with patch("lightcycle.adapters.github.subprocess.run", side_effect=_record):
