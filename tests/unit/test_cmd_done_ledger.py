@@ -20,6 +20,7 @@ def _call(fn, *args):
 
 class _ClockedContainer(_Container):
     clock = staticmethod(lambda: 1600.0)
+    github = None
 
 
 class TestCmdDoneAdvancesTheLedger(unittest.TestCase):
@@ -31,6 +32,8 @@ class TestCmdDoneAdvancesTheLedger(unittest.TestCase):
     def test_a_refused_step_close_does_not_advance_the_ledger(self):
         step = create_owned_step(self.store, "build: x", stage="build", role="agent")
         with mock.patch.object(
+            flow_cmds, "RecordMergedGateRunUseCase"
+        ), mock.patch.object(
             flow_cmds, "CompleteStepUseCase"
         ) as complete, mock.patch.object(
             flow_cmds, "AdvanceFeedbackLedgerUseCase"
@@ -50,6 +53,8 @@ class TestCmdDoneAdvancesTheLedger(unittest.TestCase):
     def test_a_successful_step_close_advances_the_ledger_once(self):
         step = create_owned_step(self.store, "build: x", stage="build", role="agent")
         with mock.patch.object(
+            flow_cmds, "RecordMergedGateRunUseCase"
+        ), mock.patch.object(
             flow_cmds, "CompleteStepUseCase"
         ) as complete, mock.patch.object(
             flow_cmds, "AdvanceFeedbackLedgerUseCase"
