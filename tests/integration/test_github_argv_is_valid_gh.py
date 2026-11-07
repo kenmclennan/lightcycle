@@ -30,7 +30,6 @@ def _captured_argvs():
         adapter.head_sha(_PR)
         adapter.changed_files(_PR, "deadbeef")
         adapter.check_runs(_PR, "deadbeef")
-        adapter.pr_sync_state(_PR)
         adapter.requires_up_to_date("acme/widget@main")
         adapter.required_checks("acme/widget@main")
         adapter.update_branch(_PR, "deadbeef")
