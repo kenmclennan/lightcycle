@@ -292,14 +292,15 @@ class WorktreeService:
             findings += self._run_findings(item, run, proven, fetched, check_dirty)
         return findings
 
-    def pass_release_refusals(self, item, runs):
+    def pass_release_refusals(self, item, runs, merged_prs=frozenset()):
         releasable = {run.id for run in self._releasable_runs(item)}
         findings = []
         fetched = set()
         for run in runs:
             if run.id not in releasable:
                 continue
-            findings += self._run_findings(item, run, run.state == RunState.MERGED, fetched)
+            proven = run.state == RunState.MERGED or bool(run.pr and run.pr in merged_prs)
+            findings += self._run_findings(item, run, proven, fetched)
         return findings
 
     def phase_release_refusals(self, run):

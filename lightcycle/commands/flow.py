@@ -101,13 +101,14 @@ def cmd_done(argv):
         return rc
     try:
         if node_type == "step":
-            RecordMergedGateRunUseCase(
-                container().store, container().github, _flow()).execute(
-                RecordMergedGateRunInput(step=a.id, outcome=a.outcome)
-            )
+            gate = RecordMergedGateRunUseCase(
+                container().store, container().github, _flow())
+            gate_input = RecordMergedGateRunInput(step=a.id, outcome=a.outcome)
+            gate.execute(gate_input)
+            merged_prs = gate.merged_prs_at_pass_end(gate_input)
             resp = CompleteStepUseCase(
                 container().store, _flow(), _worktrees(), container().config).execute(
-                CompleteInput(step=a.id, outcome=a.outcome, note=note)
+                CompleteInput(step=a.id, outcome=a.outcome, note=note, merged_prs=merged_prs)
             )
             AdvanceFeedbackLedgerUseCase(
                 container().store, _flow(), container().clock).execute(a.id)
