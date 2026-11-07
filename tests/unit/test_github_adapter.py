@@ -948,31 +948,6 @@ class TestIsClosedUnmerged(unittest.TestCase):
         self.assertIsInstance(result, ReadFailure)
 
 
-class TestIsConflicted(unittest.TestCase):
-    def setUp(self):
-        self.adapter = GitHubEventsAdapter()
-
-    def test_is_conflicted_returns_read_failure_on_timeout(self):
-        with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):
-            result = self.adapter.pr_sync_state(_PR)
-
-        self.assertIsInstance(result, ReadFailure)
-
-    def test_non_zero_exit_returns_read_failure(self):
-        mock_run = MagicMock(return_value=_proc("", returncode=1, stderr="gh: auth error"))
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
-            result = self.adapter.pr_sync_state(_PR)
-
-        self.assertEqual(result, ReadFailure(1, "gh: auth error"))
-
-    def test_invalid_json_returns_read_failure(self):
-        mock_run = MagicMock(return_value=_proc("not json", returncode=0))
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
-            result = self.adapter.pr_sync_state(_PR)
-
-        self.assertIsInstance(result, ReadFailure)
-
-
 class TestHeadSha(unittest.TestCase):
     def setUp(self):
         self.adapter = GitHubEventsAdapter()
@@ -1002,29 +977,37 @@ class TestPrSyncState(unittest.TestCase):
     def setUp(self):
         self.adapter = GitHubEventsAdapter()
 
-    def test_behind_payload(self):
-        payload = json.dumps(
-            {"mergeStateStatus": "BEHIND", "headRefOid": "abc123", "baseRefName": "main"}
-        )
-        mock_run = MagicMock(return_value=_proc(payload))
+    def _read(self, data, head=None):
+        view = _proc(json.dumps(data))
+        mock_run = MagicMock(side_effect=[view, _ls_remote(head) if head else _proc("", returncode=1)])
         with patch("lightcycle.adapters.github.subprocess.run", mock_run):
-            result = self.adapter.pr_sync_state(_PR)
+            return self.adapter.pr_sync_state(_PR), mock_run
+
+    def test_behind_payload(self):
+        result, _ = self._read(
+            {"mergeStateStatus": "BEHIND", "headRefOid": "abc123", "baseRefName": "main",
+             "updatedAt": "2024-01-02T00:00:00Z"})
 
         self.assertEqual(result, PrSync(True, False, "abc123", "x/y@main"))
-        self.assertEqual(
-            mock_run.call_args[0][0],
-            ["gh", "pr", "view", _PR, "--json", "mergeable,mergeStateStatus,headRefOid,baseRefName"],
-        )
+
+    def test_head_comes_from_git_ls_remote_not_gh_pr_view(self):
+        result, mock_run = self._read(
+            {"mergeStateStatus": "CLEAN", "mergeable": "MERGEABLE", "headRefOid": "abc123",
+             "baseRefName": "main", "updatedAt": "2024-01-02T00:00:00Z"},
+            head=_NEW_SHA)
+
+        self.assertEqual(result.head_sha, _NEW_SHA)
+        self.assertFalse(result.settled)
+        argvs = [c.args[0] for c in mock_run.call_args_list]
+        self.assertEqual(argvs[1][:2], ["git", "ls-remote"])
 
     def test_unknown_is_not_behind(self):
-        payload = json.dumps(
-            {"mergeStateStatus": "UNKNOWN", "headRefOid": "abc123", "baseRefName": "main"}
-        )
-        with patch("lightcycle.adapters.github.subprocess.run",
-                   MagicMock(return_value=_proc(payload))):
-            result = self.adapter.pr_sync_state(_PR)
+        result, _ = self._read(
+            {"mergeStateStatus": "UNKNOWN", "headRefOid": "abc123", "baseRefName": "main",
+             "updatedAt": "2024-01-02T00:00:00Z"})
 
         self.assertFalse(result.behind)
+        self.assertFalse(result.settled)
 
     def test_failures(self):
         for run in (

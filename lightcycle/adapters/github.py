@@ -528,28 +528,15 @@ class GitHubEventsAdapter(GitHubEventsPort):
         return login
 
     def pr_sync_state(self, pr: str) -> Union[PrSync, ReadFailure]:
-        parts = _repo_parts(pr)
-        if not parts:
-            return ReadFailure(-1, "pr is not a parseable GitHub PR URL: %r" % pr)
-        owner, repo, _ = parts
-        try:
-            result = subprocess.run(
-                ["gh", "pr", "view", pr, "--json", "mergeable,mergeStateStatus,headRefOid,baseRefName"],
-                capture_output=True, text=True, timeout=_GH_TIMEOUT_SECONDS)
-        except subprocess.TimeoutExpired:
-            return _timeout_read_failure()
-        if result.returncode != 0:
-            return ReadFailure(result.returncode, result.stderr)
-        try:
-            data = json.loads(result.stdout)
-        except (json.JSONDecodeError, ValueError):
-            return ReadFailure(-1, "could not parse gh pr view JSON for sync state")
+        view = self.pr_view(pr)
+        if isinstance(view, ReadFailure):
+            return view
         return PrSync(
-            behind=data.get("mergeStateStatus") == "BEHIND",
-            conflicted=(data.get("mergeable") == "CONFLICTING"
-                        or data.get("mergeStateStatus") == "DIRTY"),
-            head_sha=data.get("headRefOid") or "",
-            base_key="%s/%s@%s" % (owner, repo, data.get("baseRefName") or ""),
+            behind=view.merge_state_status == "BEHIND",
+            conflicted=view.mergeable == "CONFLICTING" or view.merge_state_status == "DIRTY",
+            head_sha=view.head_sha,
+            base_key=view.base_key,
+            settled=view.mergeable != "UNKNOWN" and view.merge_state_status != "UNKNOWN",
         )
 
     def _gh_api_json(self, path):
