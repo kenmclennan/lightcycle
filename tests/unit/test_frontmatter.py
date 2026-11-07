@@ -12,6 +12,28 @@ class TestParseFrontmatter(unittest.TestCase):
         m = parse_frontmatter("model: opus\nroutes:\n  done: open-pr\n  rejected: build\n")
         self.assertEqual(m, {"model": "opus", "routes": {"done": "open-pr", "rejected": "build"}})
 
+    def test_one_line_list(self):
+        self.assertEqual(
+            parse_frontmatter("detail: [pr, in:digest]\n"), {"detail": "[pr, in:digest]"})
+
+    def test_wrapped_list_with_trailing_comma_matches_one_line(self):
+        m = parse_frontmatter("detail:\n  [\n    pr,\n    in:digest,\n  ]\n")
+        self.assertEqual(m, {"detail": "[pr, in:digest]"})
+
+    def test_wrapped_list_without_trailing_comma_matches_one_line(self):
+        m = parse_frontmatter("detail:\n  [\n    pr,\n    in:digest\n  ]\n")
+        self.assertEqual(m, {"detail": "[pr, in:digest]"})
+
+    def test_key_after_wrapped_list_still_parses(self):
+        m = parse_frontmatter("detail:\n  [\n    pr,\n  ]\nx: y\n")
+        self.assertEqual(m, {"detail": "[pr]", "x": "y"})
+
+    def test_unclosed_list_block_stays_empty_mapping(self):
+        self.assertEqual(parse_frontmatter("detail:\n  [\n    pr,\n"), {"detail": {}})
+
+    def test_dash_item_block_stays_empty_mapping(self):
+        self.assertEqual(parse_frontmatter("detail:\n  - pr\n"), {"detail": {}})
+
     def test_ignores_blank_and_non_kv_lines(self):
         m = parse_frontmatter("\nmodel: x\nnonsense line\n")
         self.assertEqual(m, {"model": "x"})
