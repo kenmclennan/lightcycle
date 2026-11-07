@@ -17,6 +17,9 @@ from lightcycle.application.work import (
 )
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.advance_feedback_ledger import AdvanceFeedbackLedgerUseCase
+from lightcycle.application.flow.record_merged_gate_run import (
+    RecordMergedGateRunInput, RecordMergedGateRunUseCase,
+)
 from lightcycle.application.flow import (
     AdvanceInput,
     AdvanceStepUseCase,
@@ -98,6 +101,10 @@ def cmd_done(argv):
         return rc
     try:
         if node_type == "step":
+            RecordMergedGateRunUseCase(
+                container().store, container().github, _flow()).execute(
+                RecordMergedGateRunInput(step=a.id, outcome=a.outcome)
+            )
             resp = CompleteStepUseCase(
                 container().store, _flow(), _worktrees(), container().config).execute(
                 CompleteInput(step=a.id, outcome=a.outcome, note=note)
