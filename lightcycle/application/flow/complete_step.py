@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional
+from typing import FrozenSet, Optional
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.escapes import EscapeRecorder
@@ -44,6 +44,7 @@ class CompleteInput:
     step: str
     outcome: str
     note: Optional[str] = None
+    merged_prs: FrozenSet[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -225,7 +226,7 @@ class CompleteStepUseCase:
             )
         ends_pass = self._passes.ends_pass(t.stage, input.outcome, name)
         if ends_pass:
-            findings = self._passes.release_refusals(t.item, self._worktrees)
+            findings = self._passes.release_refusals(t.item, self._worktrees, input.merged_prs)
             if findings:
                 return self._refuse_pass_end(t, input, findings)
         spec = self._resolver.spec_for(t, transition)

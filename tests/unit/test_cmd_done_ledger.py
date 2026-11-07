@@ -64,3 +64,27 @@ class TestCmdDoneAdvancesTheLedger(unittest.TestCase):
             rc, out, err = _call(cli.cmd_done, step, "done")
         self.assertEqual(rc, 0, err)
         ledger.return_value.execute.assert_called_once_with(step)
+
+
+class TestCmdDonePassesMergedPrsToComplete(unittest.TestCase):
+    def setUp(self):
+        self.store = FakeStore()
+        cli.set_container(_ClockedContainer(self.store))
+        self.addCleanup(cli.set_container, None)
+
+    def test_the_pass_end_merged_prs_reach_the_complete_input(self):
+        step = create_owned_step(self.store, "build: x", stage="build", role="agent")
+        with mock.patch.object(
+            flow_cmds, "RecordMergedGateRunUseCase"
+        ) as gate, mock.patch.object(
+            flow_cmds, "CompleteStepUseCase"
+        ) as complete, mock.patch.object(
+            flow_cmds, "AdvanceFeedbackLedgerUseCase"
+        ):
+            gate.return_value.merged_prs_at_pass_end.return_value = frozenset({"https://x/pull/1"})
+            complete.return_value.execute.return_value = mock.Mock(
+                next_step=None, teardown_refusal=None)
+            rc, out, err = _call(cli.cmd_done, step, "done")
+        self.assertEqual(rc, 0, err)
+        sent = complete.return_value.execute.call_args[0][0]
+        self.assertEqual(sent.merged_prs, frozenset({"https://x/pull/1"}))

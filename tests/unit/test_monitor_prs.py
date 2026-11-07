@@ -86,7 +86,7 @@ class FakeWorktrees:
     def teardown_refusals(self, item, merged_prs=frozenset()):
         return []
 
-    def pass_release_refusals(self, item, runs):
+    def pass_release_refusals(self, item, runs, merged_prs=frozenset()):
         return []
 
     def phase_release_refusals(self, run):

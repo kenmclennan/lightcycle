@@ -111,6 +111,17 @@ class _World:
             CompleteInput(step=self.step, outcome=outcome)
         )
 
+    def pass_end(self, outcome="merged"):
+        merged = RecordMergedGateRunUseCase(self.store, self.github, self.flow).merged_prs_at_pass_end(
+            RecordMergedGateRunInput(step=self.step, outcome=outcome)
+        )
+        return CompleteStepUseCase(self.store, self.flow, self.worktrees, _Cfg()).execute(
+            CompleteInput(step=self.step, outcome=outcome, merged_prs=merged)
+        )
+
+    def removed(self):
+        return [c[0] for c in self.git.calls if c[0] in ("remove_worktree", "delete_branch")]
+
     def finish(self, resp):
         return CompleteStepUseCase(self.store, self.flow, self.worktrees, _Cfg()).execute(
             CompleteInput(step=resp.next_step, outcome="done")
@@ -214,3 +225,123 @@ class TestSkips(unittest.TestCase):
 
         self.assertEqual(w.states()[w.run], RunState.MERGED)
         self.assertEqual(w.states()[other], RunState.OPEN)
+
+
+class TestPassEndingGate(unittest.TestCase):
+    URL = "https://github.com/x/y/stack/1"
+
+    def _world(self, github, **kw):
+        return _World(github, gate="pass-gate", **kw)
+
+    def _use_case(self, w):
+        return RecordMergedGateRunUseCase(w.store, w.github, w.flow)
+
+    def _input(self, w, outcome="merged"):
+        return RecordMergedGateRunInput(step=w.step, outcome=outcome)
+
+    def test_squash_merged_pr_passes_the_pass_end_and_releases_the_worktree(self):
+        w = self._world(FakeGitHub(merged_prs={CODE_PR}))
+
+        resp = w.pass_end()
+
+        self.assertIsNone(resp.teardown_refusal)
+        self.assertEqual(w.store.get_node(w.step).state, "done")
+        self.assertEqual(w.states()[w.run], RunState.MERGED)
+        self.assertEqual(w.store.get_pass(w.pass_id).state, "closed")
+        self.assertIn("remove_worktree", w.removed())
+        self.assertIn("delete_branch", w.removed())
+
+    def test_pr_not_merged_keeps_the_refusal_and_removes_nothing(self):
+        w = self._world(FakeGitHub())
+
+        resp = w.pass_end()
+
+        self.assertIn("pass end refused", w.store.get_node(w.step).park.reason)
+        self.assertIn(CODE_BRANCH, resp.teardown_refusal)
+        self.assertEqual(w.removed(), [])
+        self.assertEqual(w.states()[w.run], RunState.OPEN)
+
+    def test_unreadable_merge_state_keeps_the_refusal(self):
+        w = self._world(FakeGitHub(merged_prs={CODE_PR}, failing_calls={"is_merged"}))
+
+        resp = w.pass_end()
+
+        self.assertIn(CODE_BRANCH, resp.teardown_refusal)
+        self.assertEqual(w.removed(), [])
+        self.assertEqual(w.states()[w.run], RunState.OPEN)
+
+    def test_stacked_run_is_proven_only_when_the_last_layer_is_merged(self):
+        for last, refused in (("merged", False), ("open", True)):
+            gh = FakeGitHub()
+            gh.script_stack(self.URL, [_layer(5, "merged"), _layer(7, last)])
+            w = self._world(gh, stack=self.URL)
+
+            resp = w.pass_end()
+
+            self.assertEqual(resp.teardown_refusal is not None, refused, last)
+
+    def test_another_open_run_with_an_unmerged_commit_still_refuses(self):
+        w = self._world(FakeGitHub(merged_prs={CODE_PR}))
+        other = w.store.open_run(w.item, w.pass_id, "spec")
+        w.store.set_branch(other, SPEC_BRANCH)
+        w.git._beyond[(REPO, SPEC_BRANCH)] = ["b1"]
+
+        resp = w.pass_end()
+
+        self.assertIn(SPEC_BRANCH, resp.teardown_refusal)
+        self.assertNotIn(CODE_BRANCH, resp.teardown_refusal)
+        self.assertEqual(w.removed(), [])
+
+    def test_dirty_worktree_of_a_merged_gate_run_is_still_refused(self):
+        w = self._world(FakeGitHub(merged_prs={CODE_PR}))
+        path = w.worktrees.path_for_run(w.store.get_run(w.run))
+        w.git._registered = {path}
+        w.git._uncommitted = {path: ["a.py"]}
+
+        resp = w.pass_end()
+
+        self.assertIn("a.py", resp.teardown_refusal)
+        self.assertEqual(w.removed(), [])
+
+    def test_merged_prs_is_empty_for_a_non_pass_ending_outcome(self):
+        w = _World(FakeGitHub(merged_prs={CODE_PR}))
+
+        self.assertEqual(self._use_case(w).merged_prs_at_pass_end(self._input(w)), frozenset())
+
+    def test_merged_prs_is_empty_when_the_outcome_is_not_the_merge_outcome(self):
+        w = self._world(FakeGitHub(merged_prs={CODE_PR}))
+
+        self.assertEqual(self._use_case(w).merged_prs_at_pass_end(self._input(w, "changes")), frozenset())
+
+    def test_merged_prs_is_empty_for_a_done_step(self):
+        w = self._world(FakeGitHub(merged_prs={CODE_PR}))
+        w.pass_end()
+
+        self.assertEqual(self._use_case(w).merged_prs_at_pass_end(self._input(w)), frozenset())
+
+    def test_merged_prs_names_the_gates_pr_and_closes_no_run(self):
+        w = self._world(FakeGitHub(merged_prs={CODE_PR}))
+
+        merged = self._use_case(w).merged_prs_at_pass_end(self._input(w))
+
+        self.assertEqual(merged, frozenset({CODE_PR}))
+        self.assertEqual(w.states()[w.run], RunState.OPEN)
+
+
+class TestPassReleaseRefusalsDirect(unittest.TestCase):
+    def _run(self, w):
+        return list(w.store.open_runs_of(w.item, w.pass_id))
+
+    def test_a_run_in_merged_prs_skips_the_ancestry_check(self):
+        w = _World(FakeGitHub(), gate="pass-gate")
+
+        self.assertEqual(w.worktrees.pass_release_refusals(w.item, self._run(w), frozenset({CODE_PR})), [])
+        self.assertNotIn("commits_beyond", [c[0] for c in w.git.calls])
+
+    def test_a_run_not_in_merged_prs_keeps_the_ancestry_check(self):
+        w = _World(FakeGitHub(), gate="pass-gate")
+
+        findings = w.worktrees.pass_release_refusals(w.item, self._run(w), frozenset({"other"}))
+
+        self.assertEqual(len(findings), 1)
+        self.assertIn("commits_beyond", [c[0] for c in w.git.calls])

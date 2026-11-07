@@ -33,7 +33,7 @@ class _FailingWorktrees:
     def teardown_refusals(self, item, merged_prs=frozenset()):
         return []
 
-    def pass_release_refusals(self, item, runs):
+    def pass_release_refusals(self, item, runs, merged_prs=frozenset()):
         return []
 
     def release_run(self, run, delete_remote=True):

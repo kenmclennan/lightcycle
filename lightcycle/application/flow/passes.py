@@ -27,13 +27,14 @@ class PassBook:
     def ends_pass(self, stage, outcome, name=None):
         return self._flow.ends_pass(stage, outcome, name)
 
-    def release_refusals(self, item, worktrees):
+    def release_refusals(self, item, worktrees, merged_prs=frozenset()):
         if worktrees is None:
             return []
         pass_record = self._store.current_pass(item)
         if pass_record is None:
             return []
-        return worktrees.pass_release_refusals(item, self._store.open_runs_of(item, pass_record.id))
+        return worktrees.pass_release_refusals(
+            item, self._store.open_runs_of(item, pass_record.id), merged_prs)
 
     def close_in_transaction(self, item):
         pass_record = self._store.current_pass(item)
