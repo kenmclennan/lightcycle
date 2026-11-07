@@ -46,6 +46,11 @@ def judged_checks(checks, required=None, since=0.0):
     return matched + absent
 
 
+def unrun_checks(expected, checks):
+    reported = {check_label(c) for c in checks}
+    return tuple(sorted(label for label in expected if label not in reported))
+
+
 def timed_out_check(checks, now, ceiling, since=0.0):
     if ceiling is None:
         return None
