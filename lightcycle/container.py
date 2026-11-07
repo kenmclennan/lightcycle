@@ -89,7 +89,7 @@ class Container:
         )
         self.worker_log = worker_log if worker_log is not None else WorkerLogAdapter(self.config)
         self.scaffold = scaffold if scaffold is not None else ScaffoldAdapter()
-        self.github = github if github is not None else GitHubEventsAdapter()
+        self.github = github if github is not None else GitHubEventsAdapter(self.config.base_env())
         self.lock = lock if lock is not None else RunLockAdapter(self.config)
         self.drain = drain if drain is not None else PoolDrainAdapter(self.config)
         self.breaker = breaker if breaker is not None else BreakerAdapter(self.config)

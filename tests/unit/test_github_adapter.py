@@ -384,8 +384,23 @@ class TestComments(unittest.TestCase):
         self.assertIsInstance(comments, ReadFailure)
 
 
+_NEW_SHA = "b" * 40
+_OLD_SHA = "a" * 40
+
+
+def _ls_remote(sha=_NEW_SHA, number=7):
+    return _proc("%s\trefs/pull/%d/head\n" % (sha, number))
+
+
 def _head_then(*later):
-    return MagicMock(side_effect=[_proc(json.dumps({"headRefOid": "headsha"})), *later])
+    return MagicMock(side_effect=[_ls_remote(), *later])
+
+
+def _fallback_then(*later):
+    return MagicMock(side_effect=[
+        _proc("", returncode=128, stderr="fatal"),
+        _proc(json.dumps({"headRefOid": "headsha"})), *later,
+    ])
 
 
 class TestLastPushTime(unittest.TestCase):
@@ -403,7 +418,7 @@ class TestLastPushTime(unittest.TestCase):
         self.assertNotIn("-r", args)
 
     def test_reads_the_head_commit_not_the_commits_list(self):
-        mock_run = _head_then(_proc("2024-01-02T00:00:00Z\n"))
+        mock_run = _fallback_then(_proc("2024-01-02T00:00:00Z\n"))
         with patch("lightcycle.adapters.github.subprocess.run", mock_run):
             self.adapter.last_push_time(_PR)
 
@@ -423,6 +438,60 @@ class TestLastPushTime(unittest.TestCase):
             "lightcycle.adapters.github.subprocess.run",
             return_value=_proc("", returncode=1, stderr="gh: auth error"),
         ):
+            result = self.adapter.last_push_time(_PR)
+
+        self.assertEqual(result, ReadFailure(1, "gh: auth error"))
+
+    def test_head_comes_from_git_ls_remote_not_gh_pr_view(self):
+        mock_run = MagicMock(side_effect=[
+            _ls_remote(_NEW_SHA), _proc("2024-01-02T00:00:00Z\n"),
+        ])
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            result = self.adapter.last_push_time(_PR)
+
+        argvs = [c.args[0] for c in mock_run.call_args_list]
+        self.assertGreater(result, 0.0)
+        self.assertIn("/repos/x/y/commits/" + _NEW_SHA, argvs[1])
+        self.assertFalse(any(a[:3] == ["gh", "pr", "view"] for a in argvs))
+
+    def test_git_argv_and_environment(self):
+        mock_run = _head_then(_proc("2024-01-02T00:00:00Z\n"))
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            self.adapter.last_push_time(_PR)
+
+        call = mock_run.call_args_list[0]
+        self.assertEqual(
+            call.args[0],
+            ["git", "ls-remote", "https://github.com/x/y.git", "refs/pull/7/head"],
+        )
+        self.assertEqual(call.kwargs["env"]["GIT_TERMINAL_PROMPT"], "0")
+
+    def test_git_failures_fall_back_to_gh_pr_view(self):
+        failures = {
+            "non-zero exit": _proc("", returncode=128, stderr="fatal"),
+            "timeout": subprocess.TimeoutExpired(cmd=["git"], timeout=30),
+            "empty stdout": _proc(""),
+            "non-sha token": _proc("notasha\trefs/pull/7/head\n"),
+            "other ref only": _proc("%s\trefs/pull/8/head\n" % _OLD_SHA),
+        }
+        for name, failure in failures.items():
+            with self.subTest(name):
+                mock_run = MagicMock(side_effect=[
+                    failure, _proc(json.dumps({"headRefOid": "headsha"})),
+                    _proc("2024-01-02T00:00:00Z\n"),
+                ])
+                with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+                    result = self.adapter.last_push_time(_PR)
+
+                self.assertGreater(result, 0.0)
+                self.assertIn("/repos/x/y/commits/headsha", mock_run.call_args.args[0])
+
+    def test_git_and_gh_both_failing_returns_the_gh_read_failure(self):
+        mock_run = MagicMock(side_effect=[
+            _proc("", returncode=128, stderr="fatal"),
+            _proc("", returncode=1, stderr="gh: auth error"),
+        ])
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
             result = self.adapter.last_push_time(_PR)
 
         self.assertEqual(result, ReadFailure(1, "gh: auth error"))

@@ -14,6 +14,7 @@ from lightcycle.ports.github import (
 _PR_URL_RE = re.compile(r"https://github\.com/([^/]+)/([^/]+)/pull/(\d+)")
 _STACK_URL_RE = re.compile(r"https://github\.com/([^/]+)/([^/]+)/stack/(\d+)$")
 _GH_TIMEOUT_SECONDS = 30
+_SHA_RE = re.compile(r"[0-9a-f]{40}")
 _ACTIONS_RUN_URL = re.compile(r"/actions/runs/(\d+)/")
 
 
@@ -44,6 +45,9 @@ def _repo_parts(pr):
 
 
 class GitHubEventsAdapter(GitHubEventsPort):
+    def __init__(self, base_env=None):
+        self._base_env = dict(base_env) if base_env is not None else {}
+
     def _pr_state(self, pr: str) -> Union[str, ReadFailure]:
         try:
             result = subprocess.run(
@@ -84,12 +88,32 @@ class GitHubEventsAdapter(GitHubEventsPort):
         state = self._pr_state(pr)
         return state if isinstance(state, ReadFailure) else state == "CLOSED"
 
+    def _fresh_head_sha(self, owner: str, repo: str, number: str) -> Optional[str]:
+        ref = "refs/pull/%s/head" % number
+        try:
+            result = subprocess.run(
+                ["git", "ls-remote", "https://github.com/%s/%s.git" % (owner, repo), ref],
+                capture_output=True, text=True, timeout=_GH_TIMEOUT_SECONDS,
+                env={**self._base_env, "GIT_TERMINAL_PROMPT": "0"},
+            )
+        except (OSError, subprocess.SubprocessError):
+            return None
+        if result.returncode != 0:
+            return None
+        for line in result.stdout.splitlines():
+            fields = line.split()
+            if len(fields) >= 2 and fields[1] == ref:
+                return fields[0] if _SHA_RE.fullmatch(fields[0]) else None
+        return None
+
     def last_push_time(self, pr: str) -> Union[float, ReadFailure]:
         parts = _repo_parts(pr)
         if not parts:
             return ReadFailure(-1, "pr is not a parseable GitHub PR URL: %r" % pr)
-        owner, repo, _number = parts
-        sha = self.head_sha(pr)
+        owner, repo, number = parts
+        sha = self._fresh_head_sha(owner, repo, number)
+        if sha is None:
+            sha = self.head_sha(pr)
         if isinstance(sha, ReadFailure):
             return sha
         if not sha:
