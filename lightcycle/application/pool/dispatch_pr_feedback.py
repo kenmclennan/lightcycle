@@ -10,6 +10,7 @@ from lightcycle.application.pool.pr_lookups import (
     skip_unpinned,
 )
 from lightcycle.application.pool.pr_sync_reads import PrSyncReads
+from lightcycle.application.pool.stack_conflict import scan_stack
 from lightcycle.application.pool.stack_reads import read_stack
 from lightcycle.application.feedback.hold_comment import HoldCommentUseCase
 from lightcycle.config import ConfigError
@@ -252,6 +253,8 @@ class DispatchPrFeedbackUseCase:
         return found
 
     def _read_base_tip(self, step, sync):
+        if sync is None or isinstance(sync, ReadFailure):
+            return None
         repo, _, base = sync.base_key.partition("@")
         tip = self._github.branch_tip(repo, base)
         if isinstance(tip, ReadFailure) or not tip:
@@ -277,8 +280,14 @@ class DispatchPrFeedbackUseCase:
             and resolve_routes.get(t.outcome) == escalation
         )
 
-    def _conflict_cap_note(self, fired, failures, prior, stage, step_id):
-        resolve = "rebase the branch onto main, resolve, push, then `lc done %s resolved`" % step_id
+    def _conflict_cap_note(self, fired, failures, prior, stage, step_id, stacked=False):
+        if stacked:
+            resolve = (
+                "rebase the stack from the bottom with `gh stack rebase`, resolve, push with a "
+                "lease, then `lc done %s resolved`" % step_id)
+        else:
+            resolve = (
+                "rebase the branch onto main, resolve, push, then `lc done %s resolved`" % step_id)
         if fired == PR_CONFLICT_CAP:
             return "%s reached: %d failed resolutions in %d conflicts at %s; %s" % (
                 fired, failures, prior + 1, stage, resolve)
@@ -333,8 +342,17 @@ class DispatchPrFeedbackUseCase:
                             % (PR_FEEDBACK_PREFIX, pr_value, feedback_step, open_step.id))
                 self._settle(step, reason)
                 seen.add(step.id)
-            sync = reads.read(pr_value) if not advanced and conflict_outcome else None
-            if sync is not None and _is_conflicted(sync, step):
+            hit, base_sync, note = None, None, None
+            if not advanced and conflict_outcome:
+                if run.stack:
+                    found = scan_stack(self._github, reads, run, step, _is_conflicted)
+                    if found is not None:
+                        hit, base_sync, note = True, found.trunk_sync, found.note()
+                else:
+                    sync = reads.read(pr_value)
+                    if _is_conflicted(sync, step):
+                        hit, base_sync = True, sync
+            if hit:
                 history = [t for t in self._store.steps_at_step(step.stage)
                            if t.item == step.item and t.state == State.DONE]
                 conflicts = sorted(
@@ -343,7 +361,7 @@ class DispatchPrFeedbackUseCase:
                                    node_id_key(t.id)),
                 )
                 prior = total_outcome_count(history, conflict_outcome)
-                current_tip = self._read_base_tip(step, sync)
+                current_tip = self._read_base_tip(step, base_sync)
                 failures = pr_conflict_failures(
                     [self._recorded_tip(t.id) for t in conflicts],
                     current_tip,
@@ -354,11 +372,13 @@ class DispatchPrFeedbackUseCase:
                 outcome = flow.escalated_outcome(step.stage, conflict_outcome, counts)
                 if self._store.get_node(step.id).state == State.DONE:
                     continue
-                done = self._complete.execute(CompleteInput(step=step.id, outcome=outcome))
+                done = self._complete.execute(CompleteInput(step=step.id, outcome=outcome, note=note))
                 if fired is not None and done.next_step:
                     self._store.note_condition(
                         done.next_step,
-                        self._conflict_cap_note(fired.hook, failures, prior, step.stage, done.next_step),
+                        self._conflict_cap_note(
+                            fired.hook, failures, prior, step.stage, done.next_step,
+                            stacked=bool(run.stack)),
                     )
                 conflicted.append(step.item)
         for step_id in [k for k in self._streaks if k not in seen]:
