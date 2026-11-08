@@ -13,6 +13,7 @@ from lightcycle.domain.flow.hooks import (
 from lightcycle.domain.flow.step_def import StepDef
 from lightcycle.domain.flow.transition import Escalation, Transition
 from lightcycle.domain.work.detail import parse_detail
+from lightcycle.domain.workflows.step_config import step_config_keys
 
 GUIDANCE_WORKSPACE = "guidance"
 LEGACY_KNOWLEDGE_WORKSPACE = "knowledge"
@@ -97,6 +98,7 @@ class Flow:
         scripts = {}
         presents = {}
         details = {}
+        config_keys = {}
         for stage in stages:
             meta = step_metas.get(graph.file_for(stage))
             if meta is None:
@@ -113,6 +115,10 @@ class Flow:
             parsed_detail = parse_detail(meta.get("detail"))
             if parsed_detail:
                 details[stage] = parsed_detail
+            try:
+                config_keys[stage] = step_config_keys(meta)
+            except ValueError:
+                config_keys[stage] = ()
             script = meta.get("script")
             if script:
                 scripts[stage] = str(script).strip()
@@ -136,6 +142,7 @@ class Flow:
                 script=scripts.get(stage),
                 presents=presents.get(stage),
                 detail=details.get(stage),
+                config_keys=config_keys.get(stage, ()),
             )
             for stage in step_stages
         }

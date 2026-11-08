@@ -3,6 +3,8 @@ from lightcycle.application.workflows.prompt_check import check_prompt_commands
 from lightcycle.domain.contracts import FlowContracts
 from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
+from lightcycle.domain.workflows.lifecycle import parse_lifecycle
+from lightcycle.domain.workflows.step_config import step_config_problems
 from lightcycle.domain.workflows.step_structure import check_step_structure
 
 
@@ -106,6 +108,13 @@ def check_bundle_references(bundle):
                 "pass-end names an outcome the stage cannot emit (no such edge): %s"
                 % ", ".join(contracts.unreachable_pass_ends())
             )
+        try:
+            lifecycle = parse_lifecycle(frontmatter.split_frontmatter(text)[0])
+        except ValueError:
+            lifecycle = None
+        declared = lifecycle.config_keys() if lifecycle is not None else ()
+        stage_files = [(s, graph.file_for(s)) for s in flow.steps()]
+        messages.extend(step_config_problems(name, stage_files, step_metas, declared))
         if messages:
             problems[name] = messages
     return problems

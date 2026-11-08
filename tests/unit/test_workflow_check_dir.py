@@ -421,6 +421,34 @@ class TestAlwaysRunKeyChecks(unittest.TestCase):
         self.assertIn("declares always-run: but source.toml has no requires-engine", err)
 
 
+class TestStepConfigKeyChecks(TestAlwaysRunKeyChecks):
+    def _build(self, value, requires):
+        root = _bundle(self.tmp)
+        step = os.path.join(root, "steps", "write-code.md")
+        with open(step) as f:
+            text = f.read()
+        with open(step, "w") as f:
+            f.write(text.replace("---\n", "---\nconfig: %s\n" % value, 1))
+        if requires:
+            with open(os.path.join(root, "source.toml"), "a") as f:
+                f.write('requires-engine = ">=0.6.0"\n')
+        return root
+
+    def test_true_with_requires_engine_reports_nothing(self):
+        rc, _out, err = run_check("--dir", self._build("[]", True), "spec-driven")
+        self.assertEqual(rc, 0, err)
+
+    def test_any_other_value_is_reported(self):
+        rc, _out, err = run_check("--dir", self._build("[ghost]", True), "spec-driven")
+        self.assertEqual(rc, 1)
+        self.assertIn("lists config key 'ghost'", err)
+
+    def test_the_key_without_requires_engine_is_reported(self):
+        rc, _out, err = run_check("--dir", self._build("[]", False), "spec-driven")
+        self.assertEqual(rc, 1)
+        self.assertIn("declares config: but source.toml has no requires-engine", err)
+
+
 class TestOutcomeMarkerKeyChecks(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()

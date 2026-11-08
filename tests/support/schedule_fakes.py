@@ -76,13 +76,15 @@ class StubWorkflowSource:
 class StubScriptLifecycle:
     def __init__(self, missing=()):
         self.missing = tuple(missing)
+        self.keys_seen = []
 
-    def script_environment(self, origin, name, sha, bundle_dir, kind, extra):
+    def script_environment(self, origin, name, sha, bundle_dir, kind, extra, keys=None):
         env = {
             "LC_WORKFLOW_ORIGIN": origin, "LC_WORKFLOW_NAME": name,
             "LC_WORKFLOW_SHA": sha, "LC_WORKFLOW_BUNDLE_DIR": bundle_dir,
             "LC_WORKFLOW_SCRIPT": kind}
         env.update(extra)
+        self.keys_seen.append(keys)
         return env, self.missing
 
     def ensure_data_dir(self, origin, name):

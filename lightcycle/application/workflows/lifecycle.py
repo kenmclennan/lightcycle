@@ -176,12 +176,12 @@ class WorkflowLifecycleService:
         self._runner.ensure_data_dir(path)
         return path
 
-    def script_environment(self, origin, name, sha, bundle_dir, kind, extra):
+    def script_environment(self, origin, name, sha, bundle_dir, kind, extra, keys=None):
         declared = self.declared(origin, name, sha) or WorkflowLifecycle()
         config = self._config.workflow_config(origin, name)
         env = workflow_script_env(
             self._config.agent_env(), None, origin, name, self.data_dir(origin, name),
-            bundle_dir, sha, declared, config)
+            bundle_dir, sha, declared, config, keys=keys)
         env["LC_WORKFLOW_SCRIPT"] = kind
         env.update(extra)
         return env, missing_required_keys(declared, config)

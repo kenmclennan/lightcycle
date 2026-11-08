@@ -26,7 +26,7 @@ class ClaimInput:
 
 
 _STRUCTURAL_META_KEYS = ("model", "accepts", "produces", "presents", "detail", "github", "always-run",
-                         "review", "sends-back")
+                         "review", "sends-back", "config")
 
 
 @dataclass(frozen=True)
@@ -168,7 +168,10 @@ class ClaimStepUseCase:
             return self._flow.meta_for_step(stage, pin)
         return self._flow.meta_for_unpinned_step(stage)
 
-    def _workflow_config(self, pin):
+    def _workflow_config(self, pin, stage):
+        keys = self._flow.load_flow(pin).step_def(stage).config_keys if pin else ()
+        if not keys:
+            return {}
         parsed = parse_pin(pin) if pin else None
         if parsed is None:
             return {}
@@ -179,7 +182,7 @@ class ClaimStepUseCase:
             block = self._config.workflow_config(parsed[0], parsed[1])
         except (ConfigError, ValueError):
             return {}
-        return declared_config_values(lifecycle, block)
+        return declared_config_values(lifecycle, block, keys)
 
     def _attach_trusted_authors(self, t):
         phase = self._flow.phase_for(t)
@@ -257,7 +260,7 @@ class ClaimStepUseCase:
             pr=surface.get("pr"), spec_path=spec_path,
             description=item_fields.description,
             repo_path=repo_path, config=config or None,
-            workflow_config=self._workflow_config(pin),
+            workflow_config=self._workflow_config(pin, t.stage),
             phase=surface.get("phase"), pin=pin, step_file=step_file,
             rebase_retried=rebase_retried,
         )
