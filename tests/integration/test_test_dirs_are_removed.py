@@ -6,9 +6,12 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
+_LEAKING_TEST = "import tempfile\n\n\ndef test_makes_a_dir():\n    tempfile.mkdtemp()\n"
 
-def test_a_suite_subset_leaves_no_lc_test_entries_in_tmpdir():
-    with tempfile.TemporaryDirectory() as scratch:
+
+def test_a_suite_subset_leaves_nothing_in_tmpdir():
+    with tempfile.TemporaryDirectory() as scratch, tempfile.TemporaryDirectory(dir="/tmp") as src:
+        (Path(src) / "test_leaky.py").write_text(_LEAKING_TEST)
         env = {k: v for k, v in os.environ.items() if k != "PYTEST_XDIST_WORKER"}
         env["TMPDIR"] = scratch
         result = subprocess.run(
@@ -18,10 +21,14 @@ def test_a_suite_subset_leaves_no_lc_test_entries_in_tmpdir():
                 "pytest",
                 "-p",
                 "no:cacheprovider",
+                "-p",
+                "tests.conftest",
                 "-n",
                 "0",
                 "-q",
-                "tests/unit/test_field_owner.py",
+                "--rootdir",
+                str(REPO_ROOT),
+                str(Path(src) / "test_leaky.py"),
             ],
             cwd=REPO_ROOT,
             env=env,
@@ -29,6 +36,6 @@ def test_a_suite_subset_leaves_no_lc_test_entries_in_tmpdir():
             text=True,
             timeout=300,
         )
-        leftover = sorted(n for n in os.listdir(scratch) if n.startswith("lc-test-"))
+        leftover = sorted(os.listdir(scratch))
         assert result.returncode == 0, result.stdout + result.stderr
         assert leftover == []
