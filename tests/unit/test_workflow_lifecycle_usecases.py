@@ -315,6 +315,39 @@ class TestUpgrade(unittest.TestCase):
         self.assertEqual(h.source.read_registry("one").current, "b")
 
 
+class TestScriptEnvironmentKeys(unittest.TestCase):
+    TEXT = (
+        "---\nconfig:\n  api-token: required\n  region: optional\n"
+        "config-example:\n  api-token: x\n  region: y\n---\nentry: code\n")
+
+    def _env(self, blocks, **kw):
+        h = Harness(blocks=blocks)
+        h.remote("sha1", {"build": self.TEXT}, scripts={})
+        h.add()
+        return h.lifecycle.script_environment("acme", "build", "sha1", "/b", "stage", {}, **kw)
+
+    def _config_vars(self, env):
+        return {k for k in env if k.startswith("LC_WORKFLOW_CONFIG_")}
+
+    BLOCK = {"workflow-acme-build": {"api-token": "tok", "region": "eu"}}
+
+    def test_keys_restrict_the_environment(self):
+        env, _ = self._env(self.BLOCK, keys=("region",))
+        self.assertEqual(self._config_vars(env), {"LC_WORKFLOW_CONFIG_REGION"})
+
+    def test_without_keys_both_are_carried(self):
+        env, _ = self._env(self.BLOCK)
+        self.assertEqual(
+            self._config_vars(env),
+            {"LC_WORKFLOW_CONFIG_API_TOKEN", "LC_WORKFLOW_CONFIG_REGION"})
+
+    def test_a_blank_required_key_outside_keys_is_still_missing(self):
+        env, missing = self._env(
+            {"workflow-acme-build": {"api-token": " ", "region": "eu"}}, keys=("region",))
+        self.assertEqual(missing, ("api-token",))
+        self.assertEqual(self._config_vars(env), {"LC_WORKFLOW_CONFIG_REGION"})
+
+
 class TestRemoveAndPurge(unittest.TestCase):
     def _added(self):
         h = Harness()

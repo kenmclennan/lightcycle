@@ -156,7 +156,7 @@ class ScriptStageUseCase:
         bundle_dir = self._source.pinned_bundle(origin, sha)
         extra = {"LC_ITEM": step.item, "LC_STEP": step.id, "LC_STAGE": step.stage}
         env, missing = self._lifecycle.script_environment(
-            origin, name, sha, bundle_dir, "stage", extra)
+            origin, name, sha, bundle_dir, "stage", extra, keys=sd.config_keys)
         if missing:
             return None, "missing required config key(s) %s in %s" % (
                 ", ".join(missing), self._config.workflow_config_block_name(origin, name))

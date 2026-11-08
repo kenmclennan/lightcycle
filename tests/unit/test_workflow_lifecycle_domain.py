@@ -166,6 +166,25 @@ class TestEnv(unittest.TestCase):
         env = self._env({}, from_sha="old", to_sha="new")
         self.assertEqual((env["LC_WORKFLOW_FROM_SHA"], env["LC_WORKFLOW_TO_SHA"]), ("old", "new"))
 
+    def test_keys_restrict_the_exported_config(self):
+        config = {"api-token": "t", "region": "eu"}
+        only = self._env(config, keys=("region",))
+        self.assertNotIn("LC_WORKFLOW_CONFIG_API_TOKEN", only)
+        self.assertEqual(only["LC_WORKFLOW_CONFIG_REGION"], "eu")
+
+    def test_no_keys_argument_exports_every_declared_key(self):
+        env = self._env({"api-token": "t", "region": "eu"}, keys=None)
+        self.assertEqual(env["LC_WORKFLOW_CONFIG_API_TOKEN"], "t")
+        self.assertEqual(env["LC_WORKFLOW_CONFIG_REGION"], "eu")
+
+    def test_an_empty_keys_tuple_exports_none(self):
+        env = self._env({"api-token": "t", "region": "eu"}, keys=())
+        self.assertFalse([k for k in env if k.startswith("LC_WORKFLOW_CONFIG_")])
+
+    def test_a_listed_key_that_is_not_declared_is_not_exported(self):
+        env = self._env({"api-token": "t", "stray": "x"}, keys=("stray",))
+        self.assertNotIn("LC_WORKFLOW_CONFIG_STRAY", env)
+
     def test_missing_required_keys_names_blank_ones(self):
         self.assertEqual(missing_required_keys(self.lifecycle, {}), ("api-token",))
         self.assertEqual(missing_required_keys(self.lifecycle, {"api-token": " "}), ("api-token",))

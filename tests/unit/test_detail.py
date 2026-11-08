@@ -221,3 +221,35 @@ class TestParkPanelDisplayRules(unittest.TestCase):
             DetailEntry("pr", "field", ""),
         ]
         self.assertEqual(detail_fields(entries), [("outcome", "done")])
+
+
+def _config_bundle(step_front, workflows):
+    steps = {"build": "---\nmodel: sonnet\n%s---\n# Build\n" % step_front}
+    return SimpleNamespace(steps=steps, workflows=workflows)
+
+
+def _config_workflow(declare):
+    block = "config:\n  limit: optional\n" if declare else ""
+    return "---\nentry: build\n%s---\n\nedges:\n  build  done\n" % block
+
+
+class TestStepConfigBundleCheck(unittest.TestCase):
+    def test_a_shared_step_fails_naming_the_workflow_missing_the_key(self):
+        bundle = _config_bundle(
+            "config: [limit]\n", {"one": _config_workflow(True), "two": _config_workflow(False)})
+        found = check_bundle_references(bundle)
+        self.assertNotIn("one", found)
+        self.assertEqual(len(found["two"]), 1)
+        self.assertIn("'build'", found["two"][0])
+        self.assertIn("'limit'", found["two"][0])
+        self.assertIn("workflow 'two'", found["two"][0])
+
+    def test_it_passes_when_both_declare_the_key(self):
+        bundle = _config_bundle(
+            "config: [limit]\n", {"one": _config_workflow(True), "two": _config_workflow(True)})
+        self.assertEqual(check_bundle_references(bundle), {})
+
+    def test_a_malformed_list_fails(self):
+        bundle = _config_bundle("config: [limit\n", {"one": _config_workflow(True)})
+        found = check_bundle_references(bundle)
+        self.assertIn("config:", found["one"][0])

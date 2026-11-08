@@ -118,9 +118,11 @@ def lifecycle_problems(lifecycle, exists, is_executable):
     return problems
 
 
-def declared_config_values(lifecycle, config):
+def declared_config_values(lifecycle, config, keys=None):
     values = {}
     for key in lifecycle.config_keys():
+        if keys is not None and key not in keys:
+            continue
         value = config.get(key)
         if value is None or not str(value).strip():
             continue
@@ -129,7 +131,7 @@ def declared_config_values(lifecycle, config):
 
 
 def workflow_script_env(base_env, hook, origin, name, data_dir, bundle_dir, sha,
-                        lifecycle, config, from_sha=None, to_sha=None):
+                        lifecycle, config, from_sha=None, to_sha=None, keys=None):
     env = dict(base_env)
     if hook is not None:
         env["LC_WORKFLOW_HOOK"] = hook
@@ -142,7 +144,7 @@ def workflow_script_env(base_env, hook, origin, name, data_dir, bundle_dir, sha,
         env["LC_WORKFLOW_FROM_SHA"] = from_sha
     if to_sha is not None:
         env["LC_WORKFLOW_TO_SHA"] = to_sha
-    for key, value in declared_config_values(lifecycle, config).items():
+    for key, value in declared_config_values(lifecycle, config, keys).items():
         env["LC_WORKFLOW_CONFIG_%s" % env_name(key)] = value
     return env
 

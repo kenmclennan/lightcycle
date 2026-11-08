@@ -239,6 +239,28 @@ class TestReapThenStart(unittest.TestCase):
         self.assertEqual(rig.runner.running(), ["guard:weekly"])
 
 
+class TestConfigKeys(unittest.TestCase):
+    def test_the_stage_hands_its_listed_keys_to_the_environment(self):
+        lifecycle = StubScriptLifecycle()
+        rig = Rig(
+            stages={"poll": StepDef(script="scripts/poll.sh", config_keys=("region",))},
+            lifecycle=lifecycle)
+        rig.step()
+
+        rig.gate.execute(0)
+
+        self.assertEqual(lifecycle.keys_seen, [("region",)])
+
+    def test_a_stage_listing_nothing_hands_an_empty_tuple(self):
+        lifecycle = StubScriptLifecycle()
+        rig = Rig(lifecycle=lifecycle)
+        rig.step()
+
+        rig.gate.execute(0)
+
+        self.assertEqual(lifecycle.keys_seen, [()])
+
+
 class TestEnvironment(unittest.TestCase):
     def test_the_script_gets_ids_stdin_artifacts_and_the_data_dir(self):
         rig = Rig()

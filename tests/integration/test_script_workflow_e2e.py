@@ -54,7 +54,8 @@ def script_repo(**kwargs):
     _git(repo, "init", "-q", "-b", "main")
     _git(repo, "config", "user.email", "t@t")
     _git(repo, "config", "user.name", "t")
-    options = {"poll_sh": POLL_SH, "changed_sh": CHANGED_SH, "config_block": True}
+    options = {"poll_sh": POLL_SH, "changed_sh": CHANGED_SH, "config_block": True,
+               "step_extra": "config: [api-token]"}
     options.update(kwargs)
     write_script_bundle(repo, **options)
     _git(repo, "add", "-A")

@@ -161,6 +161,10 @@ class CheckWorkflowDirUseCase:
                     problems.append(
                         "step %s declares github: but source.toml has no requires-engine; "
                         "older engines would ignore it" % role)
+            if "config" in step_meta and manifest.requires_engine is None:
+                problems.append(
+                    "step %s declares config: but source.toml has no requires-engine; "
+                    "older engines would ignore it" % role)
             if "always-run" in step_meta:
                 if str(step_meta["always-run"]).strip().lower() != "true":
                     problems.append(

@@ -46,6 +46,7 @@ class StepDef:
     always_run: bool = False
     review: Optional[str] = None
     sends_back: Tuple[str, ...] = ()
+    config_keys: Tuple[str, ...] = ()
 
     def __post_init__(self):
         object.__setattr__(self, "routes", MappingProxyType(dict(self.routes)))
