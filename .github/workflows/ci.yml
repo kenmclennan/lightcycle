@@ -49,7 +49,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - run: uv sync
-      - run: bash tests/run.sh tests/unit tests/feature
+      - run: uv run python scripts/assert_clean_tmpdir.py -- bash tests/run.sh tests/unit tests/feature
 
   integration:
     needs: changes
@@ -60,7 +60,7 @@ jobs:
       - run: git fetch origin main
       - uses: astral-sh/setup-uv@v5
       - run: uv sync
-      - run: bash tests/run.sh tests/integration
+      - run: uv run python scripts/assert_clean_tmpdir.py -- bash tests/run.sh tests/integration
 
   hermetic-tui:
     runs-on: ubuntu-latest

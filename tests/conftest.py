@@ -32,13 +32,40 @@ def _fresh_test_home():
         os.environ.pop(var, None)
 
 
+_sandbox = {}
+
+
+def _enter_tmp_sandbox():
+    path = tempfile.mkdtemp(prefix="lc-test-tmp-")
+    _sandbox["path"] = path
+    _sandbox["env"] = os.environ.get("TMPDIR")
+    _sandbox["tempdir"] = tempfile.tempdir
+    os.environ["TMPDIR"] = path
+    tempfile.tempdir = path
+
+
+def _leave_tmp_sandbox():
+    path = _sandbox.pop("path", None)
+    if path is None:
+        return
+    previous_env = _sandbox.pop("env")
+    if previous_env is None:
+        os.environ.pop("TMPDIR", None)
+    else:
+        os.environ["TMPDIR"] = previous_env
+    tempfile.tempdir = _sandbox.pop("tempdir")
+    shutil.rmtree(path, ignore_errors=True)
+
+
 def pytest_configure(config):
+    _enter_tmp_sandbox()
     _fresh_test_home()
 
 
 def pytest_unconfigure(config):
     _remove_made_homes()
     hermetic_env.cleanup()
+    _leave_tmp_sandbox()
 
 
 @pytest.fixture(autouse=True)
