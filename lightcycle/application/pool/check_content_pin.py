@@ -108,18 +108,41 @@ class CheckContentPinUseCase:
                 updated[layer.url] = head
                 continue
             prefix = "%s: " % stack_shape.label(position, total, layer.url)
-            if self._review_move(item, layer.url, phase, pin, head, prefix):
+            retained = self._retained_by_others(read.layers, layer.url)
+            if self._review_move(item, layer.url, phase, pin, head, prefix, retained):
                 updated[layer.url] = head
         encoded = json.dumps(updated, sort_keys=True)
         if updated and encoded != run.content_pin:
             self._store.set_content_pin(run.id, encoded)
 
-    def _review_move(self, item, pr_value, phase, pin, head, prefix):
+    def _retained_by_others(self, layers, own_url):
+        def read_others():
+            files = set()
+            for other in layers:
+                if other.url == own_url or other.state != "open":
+                    continue
+                other_head = self._github.head_sha(other.url)
+                if isinstance(other_head, ReadFailure):
+                    return None
+                other_files = self._github.changed_files(other.url, other_head)
+                if isinstance(other_files, ReadFailure):
+                    return None
+                files |= set(other_files)
+            return files
+
+        return read_others
+
+    def _review_move(self, item, pr_value, phase, pin, head, prefix, retained=None):
         old_files = self._github.changed_files(pr_value, pin)
         new_files = self._github.changed_files(pr_value, head)
         if isinstance(old_files, ReadFailure) or isinstance(new_files, ReadFailure):
             return False
         dropped = old_files - new_files
+        if dropped and retained is not None:
+            carried = retained()
+            if carried is None:
+                return False
+            dropped = dropped - carried
         if dropped:
             unauthorized, lookup_failed, round_ordered = self._unauthorized_drops(
                 pr_value, dropped, pin
