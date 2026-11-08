@@ -5,7 +5,7 @@ from lightcycle.application.pool.check_content_pin import CheckContentPinUseCase
 from lightcycle.domain.feedback import LC_MARKER
 from lightcycle.domain.work import State
 from tests.support.fake_fs import flow_from_metas
-from lightcycle.ports.github import Comment
+from lightcycle.ports.github import Comment, NotYetRead, ReadFailure
 from tests.support.fake_github import FakeGitHub
 from tests.support.fake_spin import FakeSpinPort
 from tests.support.fake_store import FakeStore
@@ -816,3 +816,168 @@ class TestContentPinOverAStack(unittest.TestCase):
         self._run()
 
         self.assertEqual(self.store.get_run(self.rid).content_pin, before)
+
+    def _move_layer_two(self, before, after, others=None, states=None):
+        from tests.support.stacked import STACK_URL, build_stack
+
+        one, two = _layer_url(1), _layer_url(2)
+        files = {(two, "sha-2"): frozenset(before), (two, "sha-2b"): frozenset(after)}
+        files.update(others or {})
+        self._setup(files=files)
+        if states:
+            self.layers = build_stack(3, states=states)
+            self.github.script_stack(STACK_URL, self.layers)
+        self._run()
+        self.github._head_shas[two] = "sha-2b"
+        return one, two
+
+    def test_a_file_moved_to_an_earlier_layer_parks_nothing(self):
+        one, two = self._move_layer_two(
+            {"a.py", "moved.py"}, {"a.py"}, {(_layer_url(1), "sha-1"): frozenset({"moved.py"})})
+
+        self._run()
+
+        self.assertNotEqual(self.store.get_node(self.step).state, State.WAITING)
+        self.assertEqual(self._pins()[two], "sha-2b")
+
+    def test_a_file_moved_to_a_later_layer_parks_nothing(self):
+        one, two = self._move_layer_two(
+            {"a.py", "moved.py"}, {"a.py"}, {(_layer_url(3), "sha-3"): frozenset({"moved.py"})})
+
+        self._run()
+
+        self.assertNotEqual(self.store.get_node(self.step).state, State.WAITING)
+        self.assertEqual(self._pins()[two], "sha-2b")
+
+    def test_files_moved_into_two_earlier_layers_park_nothing(self):
+        from tests.support.stacked import STACK_URL, build_stack, head_shas_for
+
+        layers = build_stack(4)
+        urls = [_layer_url(n) for n in (1, 2, 3, 4)]
+        files = {
+            (urls[0], "sha-1"): frozenset({"x.py", "y.py"}),
+            (urls[1], "sha-2"): frozenset({"p.py"}),
+            (urls[2], "sha-3"): frozenset({"q.py", "r.py", "s.py"}),
+            (urls[2], "sha-3b"): frozenset(),
+            (urls[3], "sha-4"): frozenset({"t.py"}),
+            (urls[3], "sha-4b"): frozenset(),
+        }
+        self._setup(files=files)
+        self.layers = layers
+        self.github.script_stack(STACK_URL, layers)
+        self.github._head_shas = head_shas_for(layers)
+        self._run()
+        self.github._files_by_sha[(urls[0], "sha-1")] = frozenset({"x.py", "y.py"})
+        self.github._files_by_sha[(urls[1], "sha-2")] = frozenset({"p.py", "q.py", "r.py"})
+        self.github._files_by_sha[(urls[2], "sha-3b")] = frozenset({"s.py"})
+        self.github._files_by_sha[(urls[3], "sha-4b")] = frozenset()
+        self.github._head_shas[urls[2]] = "sha-3b"
+        self.github._head_shas[urls[3]] = "sha-4b"
+        self.github._files_by_sha[(urls[0], "sha-1")] = frozenset({"x.py", "y.py", "t.py"})
+
+        self._run()
+
+        self.assertNotEqual(self.store.get_node(self.step).state, State.WAITING)
+
+    def test_a_file_removed_from_every_layer_parks_naming_it_and_the_layer(self):
+        one, two = self._move_layer_two({"a.py", "gone.py"}, {"a.py"})
+
+        self._run()
+
+        node = self.store.get_node(self.step)
+        self.assertEqual(node.state, State.WAITING)
+        self.assertIn("layer 2 of 3 (%s)" % two, node.park.reason)
+        self.assertIn("gone.py", node.park.reason)
+
+    def test_a_mixed_recut_parks_naming_only_the_lost_file(self):
+        one, two = self._move_layer_two(
+            {"a.py", "moved.py", "gone.py"}, {"a.py"},
+            {(_layer_url(1), "sha-1"): frozenset({"moved.py"})})
+
+        self._run()
+
+        node = self.store.get_node(self.step)
+        self.assertEqual(node.state, State.WAITING)
+        self.assertIn("gone.py", node.park.reason)
+        self.assertNotIn("moved.py", node.park.reason)
+
+    def test_an_unreadable_other_layer_parks_nothing_and_keeps_the_pin(self):
+        one, two = self._move_layer_two(
+            {"a.py", "moved.py"}, {"a.py"}, {(_layer_url(1), "sha-1"): frozenset({"moved.py"})})
+        real = self.github.changed_files
+        failure = ReadFailure(1, "boom")
+        self.github.changed_files = (
+            lambda pr, sha, base=None: failure if pr == one else real(pr, sha, base))
+
+        self._run()
+
+        self.assertNotEqual(self.store.get_node(self.step).state, State.WAITING)
+        self.assertEqual(self._pins()[two], "sha-2")
+
+    def test_a_not_yet_read_other_layer_keeps_the_pin(self):
+        one, two = self._move_layer_two(
+            {"a.py", "moved.py"}, {"a.py"}, {(_layer_url(1), "sha-1"): frozenset({"moved.py"})})
+        real = self.github.head_sha
+        self.github.head_sha = lambda pr: NotYetRead() if pr == one else real(pr)
+
+        self._run()
+
+        self.assertNotEqual(self.store.get_node(self.step).state, State.WAITING)
+        self.assertEqual(self._pins()[two], "sha-2")
+
+    def test_a_file_moved_into_a_merged_layer_is_still_reported_dropped(self):
+        one, two = self._move_layer_two(
+            {"a.py", "moved.py"}, {"a.py"}, {(_layer_url(1), "sha-1"): frozenset({"moved.py"})},
+            states={1: "merged"})
+
+        self._run()
+
+        node = self.store.get_node(self.step)
+        self.assertEqual(node.state, State.WAITING)
+        self.assertIn("moved.py", node.park.reason)
+
+    def test_a_rework_decision_at_the_pinned_head_notes_only_the_real_drop(self):
+        one, two = _layer_url(1), _layer_url(2)
+        self._setup(files={
+            (two, "pin2"): frozenset({"a.py", "moved.py", "gone.py"}),
+            (two, "sha-2b"): frozenset({"a.py"}),
+            (one, "sha-1"): frozenset({"moved.py"})})
+        self.github._head_shas[two] = "pin2"
+        self._run()
+        self.github._head_shas[two] = "sha-2b"
+        self.github._timed_comments.append((100.0, Comment(
+            author="review-code",
+            body=LC_MARKER + "<!-- lc:sha=pin2 --><!-- lc:decision=rework -->",
+            is_top_level=True,
+            created_at=100.0)))
+
+        self._run()
+
+        node = self.store.get_node(self.step)
+        self.assertNotEqual(node.state, State.WAITING)
+        self.assertIn("ordered by the rework", node.notes)
+        self.assertIn("gone.py", node.notes)
+        self.assertNotIn("moved.py", node.notes)
+        self.assertEqual(self._pins()[two], "sha-2b")
+
+
+class TestContentPinUnstackedMakesNoLayerReads(unittest.TestCase):
+    def test_a_single_pr_drop_parks_without_reading_other_layers(self):
+        url = _layer_url(9)
+        github = FakeGitHub(
+            head_shas={url: "sha-a"},
+            files_by_sha={(url, "sha-a"): frozenset({"a.py", "b.py"}),
+                          (url, "sha-b"): frozenset({"a.py"})})
+        store = FakeStore()
+        item = store.create_item("single", "d")
+        plant_pr(store, item, url)
+        step = store.create_step(stage="build", role="agent", item=item)
+        uc = CheckContentPinUseCase(
+            store, github, _FlowAdapter(_FLOW), trusted_authors=lambda: frozenset())
+        uc.execute(store.get_node(item), url, None)
+        github._head_shas[url] = "sha-b"
+
+        uc.execute(store.get_node(item), url, None)
+
+        self.assertEqual(store.get_node(step).state, State.WAITING)
+        self.assertNotIn("stack_view", [c[0] for c in github.calls])
