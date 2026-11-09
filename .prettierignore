@@ -1,6 +1,10 @@
+# Baseline
 DEVELOPING.md
 USAGE.md
 lightcycle/prompts/steps/audit.md
+
+# Permanent exclusions
+# Test fixture bundle the engine's tests load as written; reformatting it changes what the tests exercise.
 tests/support/library/steps/await-merge.md
 tests/support/library/steps/cleanup.md
 tests/support/library/steps/handle-feedback.md
