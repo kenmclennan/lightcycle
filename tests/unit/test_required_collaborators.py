@@ -3,7 +3,7 @@ import pathlib
 import tempfile
 import unittest
 
-from tests.support.baseline_counts import grown_entries, parse_counts
+from tests.support.baseline_counts import grown_entries, parse_counts, stale_entries, stale_message
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 APPLICATION = REPO_ROOT / "lightcycle" / "application"
@@ -75,6 +75,8 @@ class TestScanOptionalUseCaseConstructorParams(unittest.TestCase):
         self.assertEqual(
             grown, {}, "use cases with optional constructor params grew: %s" % grown
         )
+        stale = stale_entries(before, after_keyed)
+        self.assertEqual(stale, {}, stale_message(stale))
 
     def test_a_class_already_covered_by_the_seeded_baseline_at_its_current_count_is_not_flagged(self):
         before = {"x.py": 1}
@@ -85,6 +87,14 @@ class TestScanOptionalUseCaseConstructorParams(unittest.TestCase):
         before = {"x.py": 1}
         after = {"x.py": 2}
         self.assertEqual(grown_entries(before, after), {"x.py": (1, 2)})
+
+    def test_a_baselined_file_with_fewer_offenders_than_its_entry_is_stale(self):
+        before = {"x.py": 2}
+        after = {"x.py": 1}
+        self.assertEqual(stale_entries(before, after), {"x.py": (2, 1)})
+
+    def test_a_baselined_file_with_no_offenders_is_stale(self):
+        self.assertEqual(stale_entries({"x.py": 1}, {}), {"x.py": (1, 0)})
 
 
 if __name__ == "__main__":
