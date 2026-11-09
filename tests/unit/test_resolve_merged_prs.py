@@ -2,6 +2,7 @@ from lightcycle.application.work.stack_layers import StackLayers
 import contextlib
 import io
 import unittest
+from tests.support.null_collaborators import NoopWorktrees, NoFlow
 
 from tests.support.hold_notes import NoHoldNotes
 from lightcycle.application.flow import ClaimInput, ClaimStepUseCase
@@ -370,7 +371,7 @@ class TestMonitorPrsMergeIntoAHumanStage(unittest.TestCase):
             role="human", item=item)
         _gh = FakeGitHub(merged_prs={url})
         uc = ResolveMergedPrsUseCase(
-            store, _gh, FakeWorktrees(), flow_service, CompleteStepUseCase(store, flow_service, worktrees=None, config=None), CheckContentPinUseCase(store, _gh, flow_service, trusted_authors=lambda: frozenset({"review-code"}))
+            store, _gh, FakeWorktrees(), flow_service, CompleteStepUseCase(store, flow_service, worktrees=NoopWorktrees(), config=None), CheckContentPinUseCase(store, _gh, flow_service, trusted_authors=lambda: frozenset({"review-code"}))
         )
         return store, item, step, uc
 
@@ -482,7 +483,7 @@ class TestMonitorPrsSpecMergeContinuesToCode(unittest.TestCase):
         )
         worktrees = FakeWorktrees()
         github = FakeGitHub(merged_prs={spec_url})
-        complete = CompleteStepUseCase(store, flow_service, worktrees=None, config=None)
+        complete = CompleteStepUseCase(store, flow_service, worktrees=NoopWorktrees(), config=None)
         uc = ResolveMergedPrsUseCase(
             store, github, worktrees, flow_service, complete, CheckContentPinUseCase(store, github, flow_service, trusted_authors=lambda: frozenset({"review-code"}))
         )
@@ -581,7 +582,7 @@ class TestMonitorPrsPhaseBoundarySameRepo(unittest.TestCase):
         store.create_step(stage="feature-await-merge", role="human", item=item
         )
         worktrees = FakeWorktrees()
-        complete = CompleteStepUseCase(store, flow_service, worktrees=None, config=None)
+        complete = CompleteStepUseCase(store, flow_service, worktrees=NoopWorktrees(), config=None)
         _gh = FakeGitHub(merged_prs={url})
         uc = ResolveMergedPrsUseCase(
             store, _gh, worktrees, flow_service, complete, CheckContentPinUseCase(store, _gh, flow_service, trusted_authors=lambda: frozenset({"review-code"}))
@@ -932,7 +933,7 @@ class TestMonitorPrsClosedUnmerged(unittest.TestCase):
         )
         worktrees = FakeWorktrees()
         flow_adapter = _FlowAdapter(_CLOSE_ROUTES_TO_HUMAN_GATE_FLOW)
-        complete = CompleteStepUseCase(store, flow_adapter, worktrees=None, config=None)
+        complete = CompleteStepUseCase(store, flow_adapter, worktrees=NoopWorktrees(), config=None)
         _gh = FakeGitHub(closed_prs={url})
         uc = ResolveMergedPrsUseCase(
             store, _gh, worktrees, flow_adapter, complete, CheckContentPinUseCase(store, _gh, flow_adapter, trusted_authors=lambda: frozenset({"review-code"}))
@@ -1085,7 +1086,7 @@ class TestSharedPhaseGatesResolveOnlyTheGateTheItemIsAt(unittest.TestCase):
         gh = github(url) if github else FakeGitHub(**github_kwargs(url))
         adapter = _FlowAdapter(flow)
         uc = ResolveMergedPrsUseCase(
-            store, gh, FakeWorktrees(), adapter, CompleteStepUseCase(store, adapter, worktrees=None, config=None),
+            store, gh, FakeWorktrees(), adapter, CompleteStepUseCase(store, adapter, worktrees=NoopWorktrees(), config=None),
             CheckContentPinUseCase(store, gh, adapter, trusted_authors=lambda: frozenset({"review-code"})),
         )
         return store, item, step, uc
@@ -1203,7 +1204,7 @@ class TestTeardownRefusalSkipsTheItemForTheTick(unittest.TestCase):
         adapter = _FlowAdapter(flow)
         worktrees = _RefusingWorktrees()
         uc = ResolveMergedPrsUseCase(
-            store, gh, worktrees, adapter, CompleteStepUseCase(store, adapter, worktrees=None, config=None),
+            store, gh, worktrees, adapter, CompleteStepUseCase(store, adapter, worktrees=NoopWorktrees(), config=None),
             CheckContentPinUseCase(store, gh, adapter, trusted_authors=lambda: frozenset({"review-code"})),
         )
 
@@ -1249,10 +1250,10 @@ class TestPhaseReleaseGuard(unittest.TestCase):
         rid = plant_pr(store, item, self.URL, branch=self.BRANCH)
         step = store.create_step(stage="ready-merge", role="human", item=item)
         git = FakeGit(branches={(self.REPO, self.BRANCH)}, ref="origin/main", **git_kwargs)
-        svc = WorktreeService(store, git, fs=None, config=_GuardCfg())
+        svc = WorktreeService(store, git, fs=None, config=_GuardCfg(), flow=NoFlow())
         adapter = _FlowAdapter(flow or _FLOW)
         uc = ResolveMergedPrsUseCase(
-            store, github, svc, adapter, CompleteStepUseCase(store, adapter, worktrees=None, config=None),
+            store, github, svc, adapter, CompleteStepUseCase(store, adapter, worktrees=NoopWorktrees(), config=None),
             CheckContentPinUseCase(store, github, adapter, trusted_authors=lambda: frozenset({"review-code"})),
         )
         path = svc.path_for_run(store.get_run(rid))
@@ -1445,14 +1446,6 @@ class TestMonitorPrsMergePathReleasePendingMarker(unittest.TestCase):
 
         self.assertIn(RELEASE_PENDING_LABEL, store.labels_of(item))
 
-    def test_marker_is_not_added_without_worktrees(self):
-        store, item, step, worktrees, uc = self._setup()
-        uc._worktrees = None
-
-        uc.execute()
-
-        self.assertNotIn(RELEASE_PENDING_LABEL, store.labels_of(item))
-
 
 class _FlakyDeleteGit(FakeGit):
     def __init__(self, *args, **kwargs):
@@ -1496,7 +1489,7 @@ class TestMergePathReleaseFinishedByALaterTick(unittest.TestCase):
         git._branches.add((self.TARGET, self.BRANCH))
         github = FakeGitHub(merged_prs={url})
         uc = ResolveMergedPrsUseCase(
-            store, github, worktrees, flow_service, CompleteStepUseCase(store, flow_service, worktrees=None, config=None),
+            store, github, worktrees, flow_service, CompleteStepUseCase(store, flow_service, worktrees=NoopWorktrees(), config=None),
             CheckContentPinUseCase(store, github, flow_service, trusted_authors=lambda: frozenset({"review-code"})),
         )
         self.flow_service = flow_service

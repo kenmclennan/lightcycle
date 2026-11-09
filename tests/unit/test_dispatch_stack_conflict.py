@@ -1,5 +1,6 @@
 import unittest
 from dataclasses import replace
+from tests.support.null_collaborators import NoopWorktrees
 
 from lightcycle.application.flow import CompleteStepUseCase
 from lightcycle.application.flow.complete_step import CompleteInput
@@ -66,7 +67,7 @@ class _Rig:
         if stacked:
             self.store.set_stack(self.rid, STACK_URL)
         self.flow = flow
-        self.complete = CompleteStepUseCase(self.store, _FlowAdapter(flow), worktrees=None, config=None)
+        self.complete = CompleteStepUseCase(self.store, _FlowAdapter(flow), worktrees=NoopWorktrees(), config=None)
         self.dispatch = DispatchPrFeedbackUseCase(
             self.store, self.github, _FlowAdapter(flow), self.complete, **_TRUST)
         self.step = self.store.create_step(stage="watch-step", role="agent", item=self.item)

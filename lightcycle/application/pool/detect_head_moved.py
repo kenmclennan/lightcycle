@@ -134,8 +134,6 @@ class DetectHeadMovedUseCase:
         return True
 
     def execute(self, reads) -> DetectHeadMovedResponse:
-        if self._complete is None:
-            return DetectHeadMovedResponse()
         head_moved = []
         for step in self._store.all_nodes():
             if step.type != "step" or step.state == State.DONE or not step.item:

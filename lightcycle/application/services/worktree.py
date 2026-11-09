@@ -11,7 +11,7 @@ from lightcycle.ports.store import ProjectResolutionError
 
 
 class WorktreeService:
-    def __init__(self, store, git, fs, config, flow=None, scaffold=None):
+    def __init__(self, store, git, fs, config, flow, scaffold=None):
         self._store = store
         self._git = git
         self._fs = fs
@@ -33,8 +33,6 @@ class WorktreeService:
         return getattr(node, "item", None) or node.id
 
     def _workspace_of(self, node):
-        if self._flow is None:
-            return PROJECT_WORKSPACE
         return self._flow.workspace_for_node(node) or PROJECT_WORKSPACE
 
     def _uses_item_repo(self, node):
@@ -46,8 +44,6 @@ class WorktreeService:
         return self._resolve_repo(workspace)
 
     def _phase(self, node):
-        if self._flow is None:
-            return None
         return self._flow.phase_for(node)
 
     def item_repo(self, item):
@@ -76,8 +72,6 @@ class WorktreeService:
         return self._store.get_run(self._store.open_run(item, pid, phase))
 
     def _workspace_for_phase(self, item, phase):
-        if self._flow is None:
-            return PROJECT_WORKSPACE
         node = self._store.get_node(item)
         return self._flow.workspace_for_phase(node, phase) or PROJECT_WORKSPACE
 

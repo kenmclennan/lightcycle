@@ -1,6 +1,7 @@
 import json
 import unittest
 from tests.support.fake_github import FakeGitHub
+from tests.support.null_collaborators import NoFlow
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.work import (
@@ -750,7 +751,7 @@ class TestCloseItemBacklogResolution(unittest.TestCase):
 
 def _close_item(store, item):
     CloseItemUseCase(
-        store, WorktreeService(store, FakeGit(), FakeFs(), FakeConfig())
+        store, WorktreeService(store, FakeGit(), FakeFs(), FakeConfig(), flow=NoFlow())
     ).execute(CloseItemInput(item=item, reason="done", disposition="completed"))
 
 
@@ -758,7 +759,7 @@ class TestWorktreeServiceItemBranch(unittest.TestCase):
     def test_none_then_the_runs_branch(self):
         s = FakeStore()
         sid = s.create_item("st", "a description")
-        svc = WorktreeService(s, None, None, None)
+        svc = WorktreeService(s, None, None, None, flow=NoFlow())
         self.assertIsNone(svc.item_branch(s.get_node(sid)))
         rid = s.open_run(sid, s.open_pass(sid), None)
         s.set_branch(rid, "feat/x")
@@ -769,7 +770,7 @@ class TestWorktreeServiceBranchFor(unittest.TestCase):
     def test_no_branch_artifact_falls_back_to_id_slug(self):
         s = FakeStore()
         sid = s.create_item("Branch name is the entire item title slugified (100+ chars); use the item id " "or a short truncated slug", "a description")
-        svc = WorktreeService(s, None, None, FakeConfig())
+        svc = WorktreeService(s, None, None, FakeConfig(), flow=NoFlow())
         branch = svc._branch_for(s.get_node(sid))
         self.assertTrue(branch.startswith("feat/%s-" % sid))
         self.assertLessEqual(len(branch), len("feat/%s-" % sid) + 40)
@@ -779,7 +780,7 @@ class TestWorktreeServiceBranchFor(unittest.TestCase):
         sid = s.create_item("st", "a description")
         rid = s.open_run(sid, s.open_pass(sid), None)
         s.set_branch(rid, "feat/custom-branch")
-        svc = WorktreeService(s, None, None, FakeConfig())
+        svc = WorktreeService(s, None, None, FakeConfig(), flow=NoFlow())
         self.assertEqual(svc._branch_for(s.get_node(sid)), "feat/custom-branch")
 
 
@@ -792,7 +793,7 @@ class TestWorktreeServiceRemove(unittest.TestCase):
         rid = s.open_run(sid, s.open_pass(sid), None)
         s.set_branch(rid, "feat/my-branch")
         git = FakeGit(repos={"/projects/app"})
-        svc = WorktreeService(s, git, FakeFs(), FakeConfig("/projects"))
+        svc = WorktreeService(s, git, FakeFs(), FakeConfig("/projects"), flow=NoFlow())
         svc.remove(sid)
         self.assertIn(("/projects/app", "feat/my-branch"), git.remote_deletes)
 
@@ -803,14 +804,14 @@ class TestWorktreeServiceRemove(unittest.TestCase):
         s.add_artifact(sid, "repo", "app")
         s.add_artifact(sid, "branch", "feat/my-branch")
         git = FakeGit(repos=set())
-        svc = WorktreeService(s, git, FakeFs(), FakeConfig("/projects"))
+        svc = WorktreeService(s, git, FakeFs(), FakeConfig("/projects"), flow=NoFlow())
         svc.remove(sid)
         self.assertEqual(git.remote_deletes, [])
 
     def test_remove_is_a_noop_without_a_repo_artifact(self):
         s = FakeStore()
         sid = s.create_item("my item", "a description")
-        svc = WorktreeService(s, git=None, fs=FakeFs(), config=FakeConfig("/projects"))
+        svc = WorktreeService(s, git=None, fs=FakeFs(), config=FakeConfig("/projects"), flow=NoFlow())
         svc.remove(sid)
 
 

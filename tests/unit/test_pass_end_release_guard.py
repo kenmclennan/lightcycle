@@ -1,4 +1,5 @@
 import unittest
+from tests.support.null_collaborators import NoFlow
 
 from lightcycle.application.flow import CompleteInput, CompleteStepUseCase
 from lightcycle.application.services.flow import FlowService
@@ -46,7 +47,7 @@ def _world(git, branches=((BRANCH, "code"),)):
         store.set_branch(rid, branch)
         runs.append(rid)
     step = store.create_step(stage="finalise", role="agent", item=item)
-    svc = WorktreeService(store, git, fs=None, config=_Cfg())
+    svc = WorktreeService(store, git, fs=None, config=_Cfg(), flow=NoFlow())
     return store, svc, item, step, runs, pid
 
 

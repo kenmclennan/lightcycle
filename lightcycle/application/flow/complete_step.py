@@ -140,7 +140,7 @@ class CompleteStepUseCase:
                     return CompleteResponse(next_step=None)
                 if ends_pass:
                     runs = self._passes.close_in_transaction(t.item)
-                    if runs and self._worktrees is not None:
+                    if runs:
                         self._store.label_add(t.item, RELEASE_PENDING_LABEL)
                 if new and enrol:
                     enrol(new)
@@ -164,8 +164,6 @@ class CompleteStepUseCase:
             self._store.set_report(t.id, input.note)
 
     def _release(self, item, runs, closed):
-        if self._worktrees is None:
-            return
         released = self._passes.release_runs(runs, self._worktrees)
         if closed:
             self._closer.release(item)

@@ -1,4 +1,5 @@
 import unittest
+from tests.support.null_collaborators import NoopWorktrees
 
 from lightcycle.application.flow import CompleteStepUseCase
 from lightcycle.application.flow.complete_step import CompleteInput
@@ -690,7 +691,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
         step = store.create_step(stage="watch-step",
                                  role="agent", item=item)
         worktrees = FakeWorktrees()
-        complete = CompleteStepUseCase(store, _FlowAdapter(f), worktrees=None, config=None)
+        complete = CompleteStepUseCase(store, _FlowAdapter(f), worktrees=NoopWorktrees(), config=None)
         uc = DispatchPrFeedbackUseCase(store, github, _FlowAdapter(f), complete, **_TRUST)
         return store, item, step, worktrees, uc
 
@@ -753,7 +754,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
         store.create_step(stage="watch-step",
                            role="agent", item=item)
         gh = FakeGitHub(merged_prs={url}, conflicted_prs={url})
-        complete = CompleteStepUseCase(store, _FlowAdapter(flow), worktrees=None, config=None)
+        complete = CompleteStepUseCase(store, _FlowAdapter(flow), worktrees=NoopWorktrees(), config=None)
         check_content_pin = CheckContentPinUseCase(store, gh, _FlowAdapter(flow), trusted_authors=lambda: frozenset({"review-code"}))
         resolve = ResolveMergedPrsUseCase(
             store, gh, FakeWorktrees(), _FlowAdapter(flow), complete, check_content_pin
@@ -781,7 +782,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
         plant_pr(store, item, url)
         step = store.create_step(stage="await-green",
                                  role="agent", item=item)
-        complete = CompleteStepUseCase(store, _FlowAdapter(arbitrary_flow), worktrees=None, config=None)
+        complete = CompleteStepUseCase(store, _FlowAdapter(arbitrary_flow), worktrees=NoopWorktrees(), config=None)
         uc = DispatchPrFeedbackUseCase(store, FakeGitHub(conflicted_prs={url}), _FlowAdapter(arbitrary_flow), complete, **_TRUST)
 
         result = uc.execute()
@@ -863,7 +864,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
         plant_pr(store, item, url)
         step = store.create_step(stage="watch-pr", role="agent",
                                  item=item)
-        complete = CompleteStepUseCase(store, _FlowAdapter(_READY_MERGE_QUAD_FLOW), worktrees=None, config=None)
+        complete = CompleteStepUseCase(store, _FlowAdapter(_READY_MERGE_QUAD_FLOW), worktrees=NoopWorktrees(), config=None)
         uc = DispatchPrFeedbackUseCase(store, FakeGitHub(conflicted_prs={url}), _FlowAdapter(_READY_MERGE_QUAD_FLOW), complete, **_TRUST)
 
         result = uc.execute()
@@ -885,7 +886,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
                     id="c1", created_at=1500.0),
         )
         gh = FakeGitHub(conflicted_prs={url}, push_time=1000.0, timed_comments=[feedback_comment])
-        complete = CompleteStepUseCase(store, _FlowAdapter(_READY_MERGE_QUAD_FLOW), worktrees=None, config=None)
+        complete = CompleteStepUseCase(store, _FlowAdapter(_READY_MERGE_QUAD_FLOW), worktrees=NoopWorktrees(), config=None)
         uc = DispatchPrFeedbackUseCase(store, gh, _FlowAdapter(_READY_MERGE_QUAD_FLOW), complete, **_TRUST)
 
         result = uc.execute()
@@ -924,7 +925,7 @@ class TestMonitorPrsConflict(unittest.TestCase):
             store.complete_node(old, "conflicted")
         step = store.create_step(stage="watch-step",
                                  role="agent", item=item)
-        complete = CompleteStepUseCase(store, _FlowAdapter(no_cap_flow), worktrees=None, config=None)
+        complete = CompleteStepUseCase(store, _FlowAdapter(no_cap_flow), worktrees=NoopWorktrees(), config=None)
         uc = DispatchPrFeedbackUseCase(store, FakeGitHub(conflicted_prs={url}), _FlowAdapter(no_cap_flow), complete, **_TRUST)
 
         result = uc.execute()
@@ -966,7 +967,7 @@ class TestConflictCapCountsFailuresNotConflicts(unittest.TestCase):
         self.item = self.store.create_item("conflicting feature", "a description")
         plant_pr(self.store, self.item, self.URL)
         self.store.create_step(stage="watch-step", role="agent", item=self.item)
-        self.complete = CompleteStepUseCase(self.store, _FlowAdapter(flow), worktrees=None, config=None)
+        self.complete = CompleteStepUseCase(self.store, _FlowAdapter(flow), worktrees=NoopWorktrees(), config=None)
         self.uc = DispatchPrFeedbackUseCase(
             self.store, self.gh, _FlowAdapter(flow), self.complete, **_TRUST)
 
@@ -1112,7 +1113,7 @@ class TestMonitorSkipsAStepAnotherPathClosed(unittest.TestCase):
         plant_pr(store, item, url)
         step = store.create_step(stage="watch-step", role="agent", item=item)
         flow = _FlowAdapter(_CONFLICT_FLOW)
-        complete = CompleteStepUseCase(store, flow, worktrees=None, config=None)
+        complete = CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None)
         real = complete.execute
         calls = []
         closed = []

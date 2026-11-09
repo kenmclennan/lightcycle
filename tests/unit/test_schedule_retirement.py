@@ -3,6 +3,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from tests.support.null_collaborators import NoopWorktrees
 
 from lightcycle.application.flow import CompleteInput, CompleteStepUseCase
 from lightcycle.application.flow.engine_steps import SCHEDULE_ORIGIN_LABEL
@@ -318,7 +319,7 @@ class TestCompleteStepRunsTheScheduleRule(unittest.TestCase):
         item = s.create_item("run", "d", shortcode="AUD", workflow="spec-driven")
         s.add_artifact(item, "schedule-state", "batch: APP-1", internal=True)
         step = s.create_step(stage="build", role="agent", item=item)
-        CompleteStepUseCase(s, flow_for(METAS, s), worktrees=None, config=None).execute(
+        CompleteStepUseCase(s, flow_for(METAS, s), worktrees=NoopWorktrees(), config=None).execute(
             CompleteInput(step=step, outcome="done"))
         self.assertEqual(s.get_node(step).state, "done")
         self.assertIn(RETROED_LABEL, s.labels_of("APP-1"))

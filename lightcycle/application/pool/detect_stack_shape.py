@@ -35,8 +35,6 @@ class DetectStackShapeUseCase:
 
     def execute(self) -> DetectStackShapeResponse:
         fired = []
-        if self._complete is None:
-            return DetectStackShapeResponse()
         handled = set()
         for step in self._store.all_nodes():
             if step.type != "step" or step.state == State.DONE or not step.item:

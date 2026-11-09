@@ -38,8 +38,6 @@ class CloseItemUseCase:
         self._worktrees = worktrees
 
     def teardown_findings(self, input: CloseItemInput):
-        if self._worktrees is None:
-            return []
         return self._worktrees.teardown_refusals(input.item, input.merged_prs)
 
     def record_refusal(self, item, findings) -> TeardownRefused:
@@ -81,12 +79,9 @@ class CloseItemUseCase:
             self._store.close_pass(current.id)
         retire_resolved(self._store, input.item)
         self._store.remove_artifact(input.item, TEARDOWN_REFUSED_ARTIFACT)
-        if self._worktrees is not None:
-            self._store.label_add(input.item, RELEASE_PENDING_LABEL)
+        self._store.label_add(input.item, RELEASE_PENDING_LABEL)
 
     def release(self, item) -> None:
-        if self._worktrees is None:
-            return
         try:
             self._worktrees.remove(item)
         except GitReadError as e:
