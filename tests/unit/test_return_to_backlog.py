@@ -169,7 +169,7 @@ class TestReturnToBacklogRoundTrip(unittest.TestCase):
             FakeFs(metas, workflow=graph_text_from_metas(metas, entry="build")), store
         )
         item = store.create_item("add refunds", "a description")
-        activate = ActivateItemUseCase(store, flow, None, None)
+        activate = ActivateItemUseCase(store, flow, None, None, scaffold=None)
         first = activate.execute(ActivateItemInput(item=item, workflow="standard")).step
         _backlog(store, item)
         self.assertEqual(store.get_node(item).state, State.BACKLOGGED)

@@ -28,7 +28,7 @@ def ctx():
 @given("a breaker status use case backed by a breaker port")
 def _use_case(ctx):
     ctx["breaker_port"] = FakeBreakerPort()
-    ctx["use_case"] = BreakerStatusUseCase(ctx["breaker_port"])
+    ctx["use_case"] = BreakerStatusUseCase(ctx["breaker_port"], spin_port=None)
 
 
 @given("the breaker's persisted state is closed")

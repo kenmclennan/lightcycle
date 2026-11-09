@@ -471,7 +471,7 @@ class TestWritable(unittest.TestCase):
     def test_list_reports_the_flag_per_origin(self):
         source = self._added(True)
         source.registries["other"] = OriginRegistration("o", "", "s", False)
-        views = {v.name: v for v in ListWorkflowSourcesUseCase(source, FakeStore()).execute().origins}
+        views = {v.name: v for v in ListWorkflowSourcesUseCase(source, FakeStore(), workflow_bundle=None).execute().origins}
         self.assertTrue(views["acme"].writable)
         self.assertFalse(views["other"].writable)
 
@@ -665,7 +665,7 @@ class TestList(unittest.TestCase):
         AddWorkflowSourceUseCase(source, store, cfg, fs, lifecycle_for(source)).execute(url="u", ref="main", name=None)
         source.add_remote("u", 'name = "acme"\ncontract = 1\n', "sha2")
         UpgradeWorkflowSourceUseCase(source, store, cfg, fs, lifecycle_for(source)).execute("acme")
-        resp = ListWorkflowSourcesUseCase(source, store).execute()
+        resp = ListWorkflowSourcesUseCase(source, store, workflow_bundle=None).execute()
         self.assertEqual(len(resp.origins), 1)
         view = resp.origins[0]
         self.assertEqual(view.name, "acme")

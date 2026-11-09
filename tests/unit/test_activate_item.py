@@ -33,7 +33,7 @@ class TestActivateItem(unittest.TestCase):
     def test_activation_files_the_entry_step_and_flips_state(self):
         s = FakeStore()
         item = s.create_item("add refunds", "a description")
-        resp = ActivateItemUseCase(s, _flow(s), None, None).execute(
+        resp = ActivateItemUseCase(s, _flow(s), None, None, scaffold=None).execute(
             ActivateItemInput(item=item, workflow="standard")
         )
         self.assertEqual(s.get_node(item).state, "queued")
@@ -47,16 +47,16 @@ class TestActivateItem(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("x", "a description")
         with self.assertRaises(UseCaseError):
-            ActivateItemUseCase(s, _flow(s), None, None).execute(ActivateItemInput(item=item))
+            ActivateItemUseCase(s, _flow(s), None, None, scaffold=None).execute(ActivateItemInput(item=item))
 
     def test_refuses_to_activate_a_non_todo(self):
         s = FakeStore()
         item = s.create_item("x", "a description")
-        ActivateItemUseCase(s, _flow(s), None, None).execute(
+        ActivateItemUseCase(s, _flow(s), None, None, scaffold=None).execute(
             ActivateItemInput(item=item, workflow="standard")
         )
         with self.assertRaises(UseCaseError):
-            ActivateItemUseCase(s, _flow(s), None, None).execute(
+            ActivateItemUseCase(s, _flow(s), None, None, scaffold=None).execute(
                 ActivateItemInput(item=item, workflow="standard")
             )
 
@@ -64,7 +64,7 @@ class TestActivateItem(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("add refunds", "a description")
         with self.assertRaises(UseCaseError):
-            ActivateItemUseCase(s, _flow(s, requires={"repo"}), None, None).execute(
+            ActivateItemUseCase(s, _flow(s, requires={"repo"}), None, None, scaffold=None).execute(
                 ActivateItemInput(item=item, workflow="standard")
             )
         self.assertEqual(s.get_node(item).state, "backlogged")
@@ -74,7 +74,7 @@ class TestActivateItem(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("add refunds", "a description")
         with self.assertRaises(UseCaseError):
-            ActivateItemUseCase(s, _flow(s), None, None).execute(
+            ActivateItemUseCase(s, _flow(s), None, None, scaffold=None).execute(
                 ActivateItemInput(item=item, workflow="standard", step="not-a-real-step")
             )
         self.assertIsNone(s.get_node(item).workflow)
@@ -90,7 +90,7 @@ class TestActivateItem(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("add refunds", "a description")
         with self.assertRaises(UseCaseError):
-            ActivateItemUseCase(s, FlowService(FakeFs(metas, workflow=workflow), s), None, None).execute(
+            ActivateItemUseCase(s, FlowService(FakeFs(metas, workflow=workflow), s), None, None, scaffold=None).execute(
                 ActivateItemInput(item=item, workflow="standard")
             )
         self.assertIsNone(s.get_node(item).workflow)
@@ -112,7 +112,7 @@ class TestActivateItem(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("add refunds", "a description")
         with self.assertRaises(UseCaseError):
-            ActivateItemUseCase(s, _UnresolvableFlow(), None, None).execute(
+            ActivateItemUseCase(s, _UnresolvableFlow(), None, None, scaffold=None).execute(
                 ActivateItemInput(item=item, workflow="ghost/whatever")
             )
 
@@ -120,7 +120,7 @@ class TestActivateItem(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("add refunds", "a description")
         with self.assertRaises(UseCaseError):
-            ActivateItemUseCase(s, _PinnableButUnloadableFlow(), None, None).execute(
+            ActivateItemUseCase(s, _PinnableButUnloadableFlow(), None, None, scaffold=None).execute(
                 ActivateItemInput(item=item, workflow="lightcycle/does-not-exist")
             )
         self.assertIsNone(s.get_node(item).workflow)
@@ -128,7 +128,7 @@ class TestActivateItem(unittest.TestCase):
     def test_workflow_with_no_required_inputs_activates_repo_less_item(self):
         s = FakeStore()
         item = s.create_item("trend audit", "a description")
-        resp = ActivateItemUseCase(s, _flow(s), None, None).execute(
+        resp = ActivateItemUseCase(s, _flow(s), None, None, scaffold=None).execute(
             ActivateItemInput(item=item, workflow="standard")
         )
         self.assertEqual(s.get_node(item).state, "queued")
@@ -138,7 +138,7 @@ class TestActivateItem(unittest.TestCase):
         s = FakeStore()
         blocker = create_owned_step(s, "blocker", role="agent")
         item = s.create_item("add refunds", "a description")
-        resp = ActivateItemUseCase(s, _flow(s), None, None).execute(
+        resp = ActivateItemUseCase(s, _flow(s), None, None, scaffold=None).execute(
             ActivateItemInput(item=item, workflow="standard", deps=[blocker])
         )
         self.assertEqual(s.get_node(resp.step).blocked_by, [blocker])
@@ -148,7 +148,7 @@ class TestActivateItem(unittest.TestCase):
         s = FakeStore()
         blocker = create_owned_step(s, "blocker", role="agent")
         item = s.create_item("add refunds", "a description")
-        resp = ActivateItemUseCase(s, _flow(s), None, None).execute(
+        resp = ActivateItemUseCase(s, _flow(s), None, None, scaffold=None).execute(
             ActivateItemInput(item=item, workflow="standard", deps=[blocker])
         )
         s.complete_node(blocker, "done")
@@ -158,7 +158,7 @@ class TestActivateItem(unittest.TestCase):
         s = FakeStore()
         blocker = create_owned_step(s, "blocker", role="agent")
         item = s.create_item("add refunds", "a description")
-        ActivateItemUseCase(s, _flow(s), None, None).execute(
+        ActivateItemUseCase(s, _flow(s), None, None, scaffold=None).execute(
             ActivateItemInput(item=item, workflow="standard", deps=[blocker])
         )
         node = s.get_node(item)
@@ -175,7 +175,7 @@ class TestActivateItem(unittest.TestCase):
         b1 = create_owned_step(s, "b1", role="agent")
         b2 = create_owned_step(s, "b2", role="agent")
         item = s.create_item("add refunds", "a description")
-        ActivateItemUseCase(s, _flow(s), None, None).execute(
+        ActivateItemUseCase(s, _flow(s), None, None, scaffold=None).execute(
             ActivateItemInput(item=item, workflow="standard", deps=[b1, b2])
         )
         s.complete_node(b1, "done")
@@ -188,7 +188,7 @@ class TestActivateItem(unittest.TestCase):
         item = s.create_item("add refunds", "a description")
         s.add_artifact(item, "repo", "unregistered")
         with self.assertRaises(UseCaseError):
-            ActivateItemUseCase(s, _flow(s), None, None).execute(
+            ActivateItemUseCase(s, _flow(s), None, None, scaffold=None).execute(
                 ActivateItemInput(item=item, workflow="standard")
             )
         self.assertIsNone(s.get_node(item).workflow)
@@ -196,7 +196,7 @@ class TestActivateItem(unittest.TestCase):
     def test_no_deps_behaves_exactly_as_before(self):
         s = FakeStore()
         item = s.create_item("add refunds", "a description")
-        resp = ActivateItemUseCase(s, _flow(s), None, None).execute(
+        resp = ActivateItemUseCase(s, _flow(s), None, None, scaffold=None).execute(
             ActivateItemInput(item=item, workflow="standard")
         )
         self.assertEqual(s.get_node(resp.step).blocked_by, [])

@@ -1,6 +1,9 @@
 import unittest
 from unittest.mock import patch
 
+from lightcycle import cli
+from lightcycle.cli import _upgrade_notice_check
+
 from lightcycle.application.setup.upgrade import UpgradeResponse
 from lightcycle.ports.upgrade import RemoteVersionUnavailableError
 from lightcycle.application.setup.upgrade_notice import UpgradeNoticeUseCase
@@ -53,15 +56,19 @@ class TestUpgradeNoticeUseCase(unittest.TestCase):
                 pass
 
         fake_port = FakePort()
-        with patch("lightcycle.application.setup.upgrade_notice.upgrade") as fake_upgrade:
+        with patch("lightcycle.cli.upgrade") as fake_upgrade:
             fake_upgrade.return_value = UpgradeResponse(
                 current="0.2.0", remote="0.2.0", available=False, applied=False
             )
 
-            UpgradeNoticeUseCase("0.2.0", port=fake_port).execute()
+            UpgradeNoticeUseCase("0.2.0", check=_upgrade_notice_check(fake_port)).execute()
 
-            fake_upgrade.assert_called_once_with(
-                "0.2.0", check_only=True, fetch=fake_port.fetch_remote_version)
+            self.assertEqual(fake_upgrade.call_count, 1)
+            args, kwargs = fake_upgrade.call_args
+            self.assertEqual(args, (cli.__version__,))
+            self.assertEqual(kwargs["check_only"], True)
+            fake_port.fetch_remote_version = lambda: "9.9.9"
+            self.assertEqual(kwargs["fetch"](), "9.9.9")
 
 
 if __name__ == "__main__":

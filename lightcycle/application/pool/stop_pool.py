@@ -1,4 +1,3 @@
-import time
 from dataclasses import dataclass, field
 from typing import List
 
@@ -17,7 +16,7 @@ class StopPoolResponse:
 
 
 class StopPoolUseCase:
-    def __init__(self, workers, sweep, run_groups, sleep=time.sleep, clock=time.monotonic):
+    def __init__(self, workers, sweep, run_groups, sleep, clock):
         self._workers = workers
         self._sweep = sweep
         self._run_groups = run_groups

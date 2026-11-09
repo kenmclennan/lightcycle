@@ -22,17 +22,17 @@ class FakeBreakerPort(BreakerPort):
 class TestBreakerStatusUseCase(unittest.TestCase):
     def test_closed_state(self):
         breaker_port = FakeBreakerPort(state={"open": False, "reset_at": None})
-        result = BreakerStatusUseCase(breaker_port).execute(0)
+        result = BreakerStatusUseCase(breaker_port, spin_port=None).execute(0)
         self.assertEqual(result, BreakerStatusResponse(is_open=False, reset_at=None, is_probing=False))
 
     def test_open_state(self):
         breaker_port = FakeBreakerPort(state={"open": True, "reset_at": 500})
-        result = BreakerStatusUseCase(breaker_port).execute(0)
+        result = BreakerStatusUseCase(breaker_port, spin_port=None).execute(0)
         self.assertEqual(result, BreakerStatusResponse(is_open=True, reset_at=500, is_probing=False))
 
     def test_not_cached_across_calls(self):
         breaker_port = FakeBreakerPort(state={"open": False, "reset_at": None})
-        use_case = BreakerStatusUseCase(breaker_port)
+        use_case = BreakerStatusUseCase(breaker_port, spin_port=None)
         first = use_case.execute(0)
         self.assertEqual(first, BreakerStatusResponse(is_open=False, reset_at=None, is_probing=False))
 
@@ -42,19 +42,19 @@ class TestBreakerStatusUseCase(unittest.TestCase):
 
     def test_missing_persisted_state_reads_as_closed(self):
         breaker_port = FakeBreakerPort()
-        result = BreakerStatusUseCase(breaker_port).execute(0)
+        result = BreakerStatusUseCase(breaker_port, spin_port=None).execute(0)
         self.assertEqual(result, BreakerStatusResponse(is_open=False, reset_at=None, is_probing=False))
 
     def test_never_saves(self):
         breaker_port = FakeBreakerPort(state={"open": False, "reset_at": None})
         saved = []
         breaker_port.save = lambda state: saved.append(state)
-        BreakerStatusUseCase(breaker_port).execute(0)
+        BreakerStatusUseCase(breaker_port, spin_port=None).execute(0)
         self.assertEqual(saved, [])
 
     def test_no_spin_port_reads_pool_spin_open_as_false(self):
         breaker_port = FakeBreakerPort(state={"open": False, "reset_at": None})
-        result = BreakerStatusUseCase(breaker_port).execute(0)
+        result = BreakerStatusUseCase(breaker_port, spin_port=None).execute(0)
         self.assertFalse(result.pool_spin_open)
 
     def test_pool_wide_spin_tripped_is_reported(self):

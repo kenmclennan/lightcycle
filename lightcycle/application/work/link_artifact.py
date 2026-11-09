@@ -35,7 +35,7 @@ class LinkArtifactInput:
 
 
 class LinkArtifactUseCase:
-    def __init__(self, store, github, flow=None):
+    def __init__(self, store, github, flow):
         self._store = store
         self._github = github
         self._flow = flow

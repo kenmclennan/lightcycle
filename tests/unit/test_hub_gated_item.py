@@ -20,7 +20,7 @@ def _flow(store):
 def _gated_item(store, flow):
     blocker = create_owned_step(store, "blocker", role="agent")
     item = store.create_item("add refunds", "a description")
-    resp = ActivateItemUseCase(store, flow, None, None).execute(
+    resp = ActivateItemUseCase(store, flow, None, None, scaffold=None).execute(
         ActivateItemInput(item=item, workflow="standard", deps=[blocker])
     )
     return item, resp.step, blocker

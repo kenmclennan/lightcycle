@@ -1,3 +1,4 @@
+import time
 import unittest
 
 from lightcycle.application.pool import StopPoolResponse, StopPoolUseCase, SweepUseCase
@@ -57,7 +58,7 @@ class TestStopPool(unittest.TestCase):
             store, workers, worktrees=_Worktrees(), git=git, worker_log=NoOpFs(),
             spin_port=NoOpSpinPort(), spin_cap=3, stream=NoOpStream(),
         )
-        return store, workers, git, step, StopPoolUseCase(workers, sweep, FakeRunGroups())
+        return store, workers, git, step, StopPoolUseCase(workers, sweep, FakeRunGroups(), sleep=lambda s: None, clock=time.monotonic)
 
     def test_a_live_worker_is_stopped(self):
         store, workers, _git, _step, uc = self._pool()
@@ -87,7 +88,7 @@ class TestStopPool(unittest.TestCase):
             store, workers, worktrees=NoOpWorktrees(), git=NoOpGit(), worker_log=NoOpFs(),
             spin_port=NoOpSpinPort(), spin_cap=3, stream=NoOpStream(),
         )
-        resp = StopPoolUseCase(workers, sweep, FakeRunGroups()).execute(100.0, 120, 1800)
+        resp = StopPoolUseCase(workers, sweep, FakeRunGroups(), sleep=lambda s: None, clock=time.monotonic).execute(100.0, 120, 1800)
         self.assertEqual((resp.stopped, resp.reclaimed), ([], []))
 
     def test_wait_for_death_deadline_is_computed_from_the_injected_clock(self):
@@ -128,7 +129,7 @@ class TestStopPool(unittest.TestCase):
             store, workers, worktrees=_Worktrees(), git=_Git(), worker_log=NoOpFs(),
             spin_port=NoOpSpinPort(), spin_cap=3, stream=NoOpStream(),
         )
-        uc = StopPoolUseCase(workers, sweep, FakeRunGroups(), sleep=lambda s: None)
+        uc = StopPoolUseCase(workers, sweep, FakeRunGroups(), sleep=lambda s: None, clock=time.monotonic)
 
         resp = uc.execute(now=100.0, max_boot=120, stall_seconds=1800)
 
@@ -226,7 +227,7 @@ class TestStopPoolRunGroups(unittest.TestCase):
 
         sweep = SimpleNamespace(execute=lambda *a: SimpleNamespace(
             swept=[], preserved=[], capture_failed=[]))
-        return StopPoolUseCase(FakeWorkers(), sweep, run_groups, sleep=lambda s: None)
+        return StopPoolUseCase(FakeWorkers(), sweep, run_groups, sleep=lambda s: None, clock=time.monotonic)
 
     def test_scripts_are_stopped_with_the_shutdown_grace_and_reported(self):
         from lightcycle.ports.run_groups import StoppedRuns

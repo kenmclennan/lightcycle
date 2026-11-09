@@ -132,7 +132,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         )
         fs = FakeFs(files={"/l/1.log": b'{"type":"result"}'})
         breaker_port = FakeBreakerPort()
-        result = BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter()).execute(now=100)
+        result = BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter(), spin_port=None, store=None).execute(now=100)
         self.assertFalse(result.breaker.is_open)
         self.assertFalse(result.opened)
         self.assertEqual(workers.killed, [])
@@ -141,7 +141,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
     def test_registry_unreadable_no_ops_without_raising(self):
         workers = FakeWorkers(raise_workers_state=True)
         breaker_port = FakeBreakerPort({"open": True, "reset_at": 500})
-        result = BreakerGateUseCase(workers, FakeFs(files={}), breaker_port, FakeConfig(), stream=ClaudeStreamAdapter()).execute(
+        result = BreakerGateUseCase(workers, FakeFs(files={}), breaker_port, FakeConfig(), stream=ClaudeStreamAdapter(), spin_port=None, store=None).execute(
             now=100
         )
         self.assertEqual(result.breaker.reset_at, 500)
@@ -163,7 +163,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         )
         fs = FakeFs(files={"/l/dead.log": (_REJECTED % 500).encode()})
         breaker_port = FakeBreakerPort()
-        result = BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter()).execute(now=100)
+        result = BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter(), spin_port=None, store=None).execute(now=100)
         self.assertTrue(result.opened)
         self.assertTrue(result.breaker.is_open)
         self.assertEqual(result.breaker.reset_at, 500)
@@ -176,7 +176,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         )
         fs = FakeFs(files={"/l/probe.log": b'{"type":"result","subtype":"success"}'})
         breaker_port = FakeBreakerPort({"open": True, "reset_at": 500})
-        result = BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter()).execute(now=500)
+        result = BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter(), spin_port=None, store=None).execute(now=500)
         self.assertTrue(result.closed)
         self.assertFalse(result.breaker.is_open)
         self.assertEqual(breaker_port.load(), {"open": False, "reset_at": None, "trips": 0})
@@ -187,7 +187,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         )
         fs = FakeFs(files={"/l/probe.log": (_REJECTED % 900).encode()})
         breaker_port = FakeBreakerPort({"open": True, "reset_at": 500})
-        result = BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter()).execute(now=500)
+        result = BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter(), spin_port=None, store=None).execute(now=500)
         self.assertTrue(result.opened)
         self.assertTrue(result.breaker.is_open)
         self.assertEqual(result.breaker.reset_at, 900)
@@ -206,7 +206,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         )
         fs = FakeFs(files={"/l/old.log": (_REJECTED % 500).encode()})
         breaker_port = FakeBreakerPort()
-        result = BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter()).execute(now=100)
+        result = BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter(), spin_port=None, store=None).execute(now=100)
         self.assertFalse(result.breaker.is_open)
         self.assertEqual(workers.checked, [])
 
@@ -216,7 +216,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         )
         fs = FakeFs(files={})
         breaker_port = FakeBreakerPort()
-        result = BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter()).execute(now=100)
+        result = BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter(), spin_port=None, store=None).execute(now=100)
         self.assertFalse(result.breaker.is_open)
         self.assertEqual(workers.checked, ["sp-1"])
 
@@ -236,7 +236,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         fs = FakeFs(files={}, log_mtimes={"/l/probe.log": 1000 - 1800 - 1})
         breaker_port = FakeBreakerPort({"open": True, "reset_at": 500})
         result = BreakerGateUseCase(
-            workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter()).execute(now=1000)
+            workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter(), spin_port=None, store=None).execute(now=1000)
         self.assertTrue(result.rearmed)
         self.assertFalse(result.closed)
         self.assertFalse(result.opened)
@@ -261,7 +261,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         fs = FakeFs(files={}, log_mtimes={"/l/probe.log": 1000 - 1800 + 1})
         breaker_port = FakeBreakerPort({"open": True, "reset_at": 500})
         result = BreakerGateUseCase(
-            workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter()).execute(now=1000)
+            workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter(), spin_port=None, store=None).execute(now=1000)
         self.assertFalse(result.rearmed)
         self.assertEqual(result.breaker.reset_at, 500)
 
@@ -292,7 +292,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         )
         breaker_port = FakeBreakerPort({"open": True, "reset_at": 500})
         result = BreakerGateUseCase(
-            workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter()).execute(now=1000)
+            workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter(), spin_port=None, store=None).execute(now=1000)
         self.assertTrue(result.closed)
         self.assertFalse(result.rearmed)
 
@@ -303,7 +303,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         )
         fs = FakeFs(files={"/l/probe.log": b'{"type":"result","subtype":"success"}'})
         breaker_port = FakeBreakerPort({"open": True, "reset_at": 500})
-        result = BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter()).execute(now=500)
+        result = BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter(), spin_port=None, store=None).execute(now=500)
         self.assertTrue(result.closed)
         self.assertFalse(result.breaker.is_open)
         self.assertEqual(workers.killed, [])
@@ -326,7 +326,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         fs = FakeFs(files={"/l/probe.log": log.encode()})
         breaker_port = FakeBreakerPort({"open": True, "reset_at": 500})
         result = BreakerGateUseCase(
-            workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter()).execute(now=500)
+            workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter(), spin_port=None, store=None).execute(now=500)
         self.assertFalse(result.closed)
         self.assertFalse(result.opened)
         self.assertFalse(result.rearmed)
@@ -351,7 +351,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         )
         breaker_port = FakeBreakerPort({"open": True, "reset_at": 500})
         result = BreakerGateUseCase(
-            workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter()).execute(now=1000)
+            workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter(), spin_port=None, store=None).execute(now=1000)
         self.assertTrue(result.closed)
         self.assertFalse(result.rearmed)
 
@@ -372,7 +372,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         for state in ({"open": False, "reset_at": None}, {"open": True, "reset_at": 2000}):
             breaker_port = FakeBreakerPort(state)
             result = BreakerGateUseCase(
-                workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter()).execute(now=1000)
+                workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter(), spin_port=None, store=None).execute(now=1000)
             self.assertFalse(result.rearmed)
 
     def test_a_concurrent_rejection_takes_precedence_over_a_stalled_probe(self):
@@ -395,7 +395,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         )
         breaker_port = FakeBreakerPort({"open": True, "reset_at": 500})
         result = BreakerGateUseCase(
-            workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter()).execute(now=1000)
+            workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter(), spin_port=None, store=None).execute(now=1000)
         self.assertTrue(result.opened)
         self.assertEqual(result.breaker.reset_at, 5000)
         self.assertFalse(result.rearmed)
@@ -416,7 +416,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         fs = RecordingFakeFs(files={}, log_mtimes={"/l/probe.log": 1000 - 1800 - 1})
         breaker_port = FakeBreakerPort({"open": False, "reset_at": None})
         result = BreakerGateUseCase(
-            workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter()).execute(now=1000)
+            workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter(), spin_port=None, store=None).execute(now=1000)
         self.assertFalse(result.rearmed)
         self.assertNotIn("/l/probe.log", fs.iter_lines_calls)
 
@@ -440,7 +440,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         )
         breaker_port = FakeBreakerPort({"open": True, "reset_at": 500})
         result = BreakerGateUseCase(
-            workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter()).execute(now=1000)
+            workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter(), spin_port=None, store=None).execute(now=1000)
         self.assertTrue(result.opened)
         self.assertFalse(result.rearmed)
         self.assertIn("/l/dead.log", fs.iter_lines_calls)
@@ -466,7 +466,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         )
         breaker_port = FakeBreakerPort({"open": True, "reset_at": 500})
         result = BreakerGateUseCase(
-            workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter()).execute(now=500)
+            workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter(), spin_port=None, store=None).execute(now=500)
         self.assertTrue(result.closed)
         self.assertFalse(result.breaker.is_open)
         self.assertIn("/l/probe.log", fs.iter_lines_calls)
@@ -478,7 +478,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         )
         fs = FakeFs(files={"/l/probe.log": _NO_WORK_LOG})
         breaker_port = FakeBreakerPort({"open": True, "reset_at": 500})
-        result = BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter()).execute(now=500)
+        result = BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter(), spin_port=None, store=None).execute(now=500)
         self.assertFalse(result.closed)
         self.assertTrue(result.breaker.is_open)
 
@@ -500,7 +500,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         })
         fs = FakeFs(files={"/l/1.log": line.encode()})
         breaker_port = FakeBreakerPort()
-        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store, stream=ClaudeStreamAdapter()).execute(now=100)
+        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store, stream=ClaudeStreamAdapter(), spin_port=None).execute(now=100)
         self.assertEqual(
             store.record_usage_calls,
             [(tid, 68, 16478, 2190437, 72581, 0.893327, "list", 9899, None)],
@@ -513,7 +513,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         )
         fs = FakeFs(files={"/l/1.log": b'{"type":"result","modelUsage":{}}'})
         breaker_port = FakeBreakerPort()
-        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store, stream=ClaudeStreamAdapter()).execute(now=100)
+        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store, stream=ClaudeStreamAdapter(), spin_port=None).execute(now=100)
         self.assertEqual(store.record_usage_calls, [])
 
     def test_a_dead_worker_with_a_step_and_a_log_causes_attribution_to_be_recorded(self):
@@ -538,7 +538,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         ]
         fs = FakeFs(files={"/l/1.log": "\n".join(lines).encode()})
         breaker_port = FakeBreakerPort()
-        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store, stream=ClaudeStreamAdapter()).execute(now=100)
+        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store, stream=ClaudeStreamAdapter(), spin_port=None).execute(now=100)
         self.assertEqual(len(store.record_attribution_calls), 1)
         recorded_tid, turn_count, tool_usage = store.record_attribution_calls[0]
         self.assertEqual(recorded_tid, tid)
@@ -553,7 +553,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         )
         fs = FakeFs(files={"/l/1.log": b'{"type":"result","modelUsage":{}}'})
         breaker_port = FakeBreakerPort()
-        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store, stream=ClaudeStreamAdapter()).execute(now=100)
+        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store, stream=ClaudeStreamAdapter(), spin_port=None).execute(now=100)
         self.assertEqual(store.record_attribution_calls, [])
 
     def test_a_result_line_log_skips_the_model_lookup_entirely(self):
@@ -568,7 +568,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         })
         fs = FakeFs(files={"/l/1.log": line.encode()})
         breaker_port = FakeBreakerPort()
-        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store, stream=ClaudeStreamAdapter()).execute(now=100)
+        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store, stream=ClaudeStreamAdapter(), spin_port=None).execute(now=100)
         self.assertEqual(store.get_node_calls, [])
         self.assertEqual(len(store.record_usage_calls), 1)
 
@@ -591,7 +591,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         })
         fs = FakeFs(files={"/l/1.log": line.encode()})
         breaker_port = FakeBreakerPort()
-        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store, stream=ClaudeStreamAdapter()).execute(now=100)
+        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store, stream=ClaudeStreamAdapter(), spin_port=None).execute(now=100)
         self.assertEqual(store.get_node_calls, [tid])
         self.assertEqual(len(store.record_usage_calls), 1)
         recorded = store.record_usage_calls[0]
@@ -615,7 +615,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         })
         fs = FakeFs(files={"/l/1.log": line.encode()})
         breaker_port = FakeBreakerPort()
-        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store, stream=ClaudeStreamAdapter()).execute(now=100)
+        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store, stream=ClaudeStreamAdapter(), spin_port=None).execute(now=100)
         self.assertEqual(store.get_node_calls, ["gone"])
         self.assertEqual(store.record_usage_calls, [])
         self.assertEqual(store.record_attribution_calls, [])
@@ -641,7 +641,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         ]
         fs = FakeFs(files={"/l/1.log": "\n".join(lines).encode()})
         breaker_port = FakeBreakerPort()
-        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store, stream=ClaudeStreamAdapter()).execute(now=100)
+        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store, stream=ClaudeStreamAdapter(), spin_port=None).execute(now=100)
         self.assertEqual(store.tool_usage_for("gone"), {})
 
     def test_a_dead_worker_with_a_step_and_usage_results_in_one_ledger_entry(self):
@@ -656,7 +656,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         })
         fs = FakeFs(files={"/l/1.log": line.encode()})
         breaker_port = FakeBreakerPort()
-        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store, stream=ClaudeStreamAdapter()).execute(now=100)
+        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store, stream=ClaudeStreamAdapter(), spin_port=None).execute(now=100)
         self.assertEqual(store.usage_backfilled_logs(), {"/l/1.log"})
 
     def test_no_result_line_and_nothing_recoverable_skips_the_model_lookup(self):
@@ -667,7 +667,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         )
         fs = FakeFs(files={"/l/1.log": b'{"type":"assistant","message":{"id":"msg-1","content":[]}}'})
         breaker_port = FakeBreakerPort()
-        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store, stream=ClaudeStreamAdapter()).execute(now=100)
+        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store, stream=ClaudeStreamAdapter(), spin_port=None).execute(now=100)
         self.assertEqual(store.get_node_calls, [])
         self.assertEqual(
             store.record_usage_calls, [(tid, 0, 0, 0, 0, 0.0, None, None, None)],
@@ -679,7 +679,7 @@ class TestBreakerGateUseCase(unittest.TestCase):
         )
         fs = FakeFs(files={"/l/1.log": b'{"type":"result","modelUsage":{}}'})
         breaker_port = FakeBreakerPort()
-        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter()).execute(now=100)
+        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), stream=ClaudeStreamAdapter(), spin_port=None, store=None).execute(now=100)
         self.assertEqual(workers.checked, ["sp-1"])
 
 
@@ -853,7 +853,7 @@ class TestBreakerGatePoolWideSpin(unittest.TestCase):
         )
         fs = FakeFs(files={"/l/1.log": "\n".join(lines).encode()})
         breaker_port = FakeBreakerPort()
-        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store, stream=ClaudeStreamAdapter()).execute(now=100)
+        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store, stream=ClaudeStreamAdapter(), spin_port=None).execute(now=100)
 
         self.assertEqual(
             store.record_usage_calls, [(tid, 60, 30, 6, 3, 0.6, "list", None, None)],
@@ -895,7 +895,7 @@ class TestBreakerGatePoolWideSpin(unittest.TestCase):
         )
         fs = FakeFs(files={"/l/1.log": line.encode()})
         breaker_port = FakeBreakerPort()
-        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store, stream=ClaudeStreamAdapter()).execute(now=100)
+        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store, stream=ClaudeStreamAdapter(), spin_port=None).execute(now=100)
         recorded = store.record_usage_calls[0]
         self.assertEqual(recorded[1], -50)
         self.assertAlmostEqual(recorded[5], -0.4)
@@ -916,7 +916,7 @@ class TestBreakerGatePoolWideSpin(unittest.TestCase):
         })
         fs = FakeFs(files={"/l/1.log": line.encode()})
         breaker_port = FakeBreakerPort()
-        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store, stream=ClaudeStreamAdapter()).execute(now=100)
+        BreakerGateUseCase(workers, fs, breaker_port, FakeConfig(), store=store, stream=ClaudeStreamAdapter(), spin_port=None).execute(now=100)
         self.assertEqual(
             store.record_usage_calls, [(tid, 68, 10, 0, 0, 0.1, "list", None, None)],
         )
@@ -942,7 +942,7 @@ class TestBreakerGateUnparseableLog(unittest.TestCase):
             {"spawnid": "sp-good", "pid": 2, "step": good, "log": "/l/good.log", "started": 0},
         ])
         gate = BreakerGateUseCase(
-            workers, fs, FakeBreakerPort(), FakeConfig(), stream=RaisingOnBadLog(), store=store
+            workers, fs, FakeBreakerPort(), FakeConfig(), stream=RaisingOnBadLog(), store=store, spin_port=None
         )
 
         err = io.StringIO()

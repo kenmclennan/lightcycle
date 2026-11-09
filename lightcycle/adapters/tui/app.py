@@ -869,7 +869,9 @@ class LightcycleApp(App):
         drain = PoolDrainStatusUseCase(
             self._container.drain, self._container.workers, self._container.store
         ).execute(running, self._now().timestamp())
-        breaker = BreakerStatusUseCase(self._container.breaker).execute(self._now().timestamp())
+        breaker = BreakerStatusUseCase(
+            self._container.breaker, self._container.spin
+        ).execute(self._now().timestamp())
         hold = PoolHoldStatusUseCase(
             self._container.memory_gate_status, self._container.workers, self._container.config,
         ).execute(self._container.workers.pid_alive)

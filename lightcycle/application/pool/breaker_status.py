@@ -13,7 +13,7 @@ class BreakerStatusResponse:
 
 
 class BreakerStatusUseCase:
-    def __init__(self, breaker_port, spin_port=None):
+    def __init__(self, breaker_port, spin_port):
         self._breaker_port = breaker_port
         self._spin_port = spin_port
 

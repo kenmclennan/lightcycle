@@ -12,7 +12,7 @@ class TestGuidanceCited(unittest.TestCase):
         self.item = self.store.create_item("t", "d")
         self.step = self.store.create_step(stage="build", role="agent", item=self.item)
         self.store.replace_artifact(self.step, "guidance-delivered", "a/x\nb\nc", internal=True)
-        self.use = LinkArtifactUseCase(self.store, FakeGitHub())
+        self.use = LinkArtifactUseCase(self.store, FakeGitHub(), flow=None)
 
     def _attach(self, value, target=None, **kw):
         self.use.execute(LinkArtifactInput(

@@ -571,6 +571,10 @@ def _advance_tick_state(prev_now, consecutive_failures, now, succeeded, cap):
     return prev_now, consecutive_failures, _tick_failure_action(consecutive_failures, cap)
 
 
+def _upgrade_notice_check(port):
+    return lambda: upgrade(__version__, check_only=True, fetch=lambda: port.fetch_remote_version())
+
+
 def _upgrade_notice_lines(resp):
     if resp.notice:
         return [resp.notice]
@@ -685,7 +689,8 @@ def cmd_start(argv):
         record = RecordTickTimingUseCase(_container.tick_timing_status, _container.config)
         record.started(os.getpid(), time.time())
         upgrade_cadence = UpgradeCadenceUseCase(
-            UpgradeNoticeUseCase(__version__, port=_container.upgrade),
+            UpgradeNoticeUseCase(
+                __version__, _upgrade_notice_check(_container.upgrade)),
             _container.config.pool_upgrade_check_seconds(),
         )
         for line in _upgrade_notice_lines(upgrade_cadence.execute(time.time())):

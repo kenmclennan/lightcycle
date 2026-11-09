@@ -9,7 +9,7 @@ class ListWorkersResponse:
 
 
 class ListWorkersUseCase:
-    def __init__(self, workers, store=None):
+    def __init__(self, workers, store):
         self._workers = workers
         self._store = store
 
