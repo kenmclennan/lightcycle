@@ -85,15 +85,15 @@ def _named_workspaces(graph, context_project):
 
 
 class WorkflowSimulateUseCase:
-    def __init__(self, store, flow, worktrees, claim, complete, projects_root, git,
-                 lifecycle, scripts, source, scaffold=None, github_factory=None, config=None):
+    def __init__(self, store, flow, worktrees, claim, complete, projects_root,
+                 teardown_ledger, lifecycle, scripts, source, scaffold, github_factory, config):
         self._store = store
         self._flow = flow
         self._worktrees = worktrees
         self._claim = claim
         self._complete = complete
         self._projects_root = projects_root
-        self._git = git
+        self._teardown_ledger = teardown_ledger
         self._scaffold = scaffold
         self._github_factory = github_factory
         self._config = config
@@ -596,7 +596,7 @@ class WorkflowSimulateUseCase:
                 % (walk_index, before_pass.id)
             ]
         violations = []
-        torn_branches = {b for _, b in self._git.torn_down_branches()}
+        torn_branches = {b for _, b in self._teardown_ledger.torn_down_branches()}
         for run in self._store.runs_of(item_id, before_pass.id):
             if run.branch and run.branch not in torn_branches:
                 violations.append(
@@ -615,14 +615,14 @@ class WorkflowSimulateUseCase:
 
     def _check_teardown_invariant(self):
         violations = []
-        leaked_worktrees = set(self._git.created_worktrees()) - set(self._git.torn_down_worktrees())
+        leaked_worktrees = set(self._teardown_ledger.created_worktrees()) - set(self._teardown_ledger.torn_down_worktrees())
         for root, path in sorted(leaked_worktrees):
             violations.append("teardown: worktree %s under %s was created but never removed" % (path, root))
-        leaked_branches = set(self._git.created_branches()) - set(self._git.torn_down_branches())
+        leaked_branches = set(self._teardown_ledger.created_branches()) - set(self._teardown_ledger.torn_down_branches())
         for root, branch in sorted(leaked_branches):
             violations.append("teardown: branch %s in %s was created but never deleted" % (branch, root))
         leaked_remote = (
-            set(self._git.created_branches()) - set(self._git.torn_down_remote_branches())
+            set(self._teardown_ledger.created_branches()) - set(self._teardown_ledger.torn_down_remote_branches())
         )
         for root, branch in sorted(leaked_remote):
             violations.append(

@@ -272,7 +272,7 @@ class TestListWorkers(unittest.TestCase):
         workers = FakeWorkers(
             workers=[{"role": "coder", "pid": 1}, {"role": "reviewer", "pid": 2}], alive_pids={1}
         )
-        rows = ListWorkersUseCase(workers).execute().workers
+        rows = ListWorkersUseCase(workers, store=None).execute().workers
         self.assertEqual([r["alive"] for r in rows], [True, False])
 
 

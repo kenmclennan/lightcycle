@@ -2956,10 +2956,11 @@ class TestLogRender(unittest.TestCase):
         with patch.object(
             _cli_mod._container.worker_log, "read_from",
             side_effect=[(self.log.read_bytes(), self.log.stat().st_size), (b"", 0)],
-        ), patch("time.sleep", side_effect=KeyboardInterrupt):
+        ), patch.object(_cli_mod._container, "sleep", side_effect=KeyboardInterrupt) as sleeper:
             rc, out, err = call(_cli_mod.cmd_logs, "coder", "-f")
         self.assertEqual(rc, 0, err)
         self.assertIn("done; banner fixed", out)
+        sleeper.assert_called_once_with(0.3)
 
     def test_corrupt_registry_exits_one_with_a_clean_message(self):
         (Path(self.root) / "logs" / "workers.json").write_text("{not valid json")

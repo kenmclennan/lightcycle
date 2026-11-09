@@ -21,7 +21,7 @@ class ActivateItemResponse:
 
 
 class ActivateItemUseCase:
-    def __init__(self, store, flow, git, config, scaffold=None):
+    def __init__(self, store, flow, git, config, scaffold):
         self._store = store
         self._flow = flow
         self._git = git

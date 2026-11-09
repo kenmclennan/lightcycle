@@ -257,9 +257,9 @@ def cmd_upgrade(argv):
         source = WorkflowSourceAdapter(config, WorkflowBundleAdapter())
     try:
         resp = upgrade(
-            __version__, check_only=a.check, fetch=port.fetch_remote_version,
-            install=port.install_upgrade, installed=port.installed_version,
-            holders=lambda: scan_venv_holders(port.list_processes),
+            __version__, check_only=a.check, fetch=lambda: port.fetch_remote_version(),
+            install=lambda: port.install_upgrade(), installed=lambda: port.installed_version(),
+            holders=lambda: scan_venv_holders(lambda: port.list_processes()),
             bundle_conflicts=lambda target: installed_bundle_conflicts(source, target),
             force=a.force,
         )
@@ -394,7 +394,7 @@ def cmd_logs(argv):
             while True:
                 data, offset = _container.worker_log.read_from(path, offset)
                 if not data:
-                    time.sleep(0.3)
+                    _container.sleep(0.3)
                     continue
                 for ll in parser.feed(data):
                     emit(ll)
@@ -571,6 +571,10 @@ def _advance_tick_state(prev_now, consecutive_failures, now, succeeded, cap):
     return prev_now, consecutive_failures, _tick_failure_action(consecutive_failures, cap)
 
 
+def _upgrade_notice_check(port):
+    return lambda: upgrade(__version__, check_only=True, fetch=lambda: port.fetch_remote_version())
+
+
 def _upgrade_notice_lines(resp):
     if resp.notice:
         return [resp.notice]
@@ -685,7 +689,8 @@ def cmd_start(argv):
         record = RecordTickTimingUseCase(_container.tick_timing_status, _container.config)
         record.started(os.getpid(), time.time())
         upgrade_cadence = UpgradeCadenceUseCase(
-            UpgradeNoticeUseCase(__version__, port=_container.upgrade),
+            UpgradeNoticeUseCase(
+                __version__, _upgrade_notice_check(_container.upgrade)),
             _container.config.pool_upgrade_check_seconds(),
         )
         for line in _upgrade_notice_lines(upgrade_cadence.execute(time.time())):

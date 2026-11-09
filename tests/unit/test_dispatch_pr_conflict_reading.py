@@ -31,7 +31,7 @@ class _Rig:
         self.step = self.store.create_step(stage="watch-step", role="agent", item=self.item)
         self.opened = parse_timestamp(self.store.get_node(self.step).created_at).timestamp()
         self.snapshot = PrSnapshot(FakeGitHub())
-        complete = CompleteStepUseCase(self.store, _FlowAdapter(_CONFLICT_FLOW))
+        complete = CompleteStepUseCase(self.store, _FlowAdapter(_CONFLICT_FLOW), worktrees=None, config=None)
         self.dispatch = DispatchPrFeedbackUseCase(
             self.store, self.snapshot, _FlowAdapter(_CONFLICT_FLOW), complete, **_TRUST)
 
@@ -97,7 +97,7 @@ class TestReadingWithoutATimeStillCounts(unittest.TestCase):
         item = store.create_item("conflicting feature", "a description")
         plant_pr(store, item, _URL)
         step = store.create_step(stage="watch-step", role="agent", item=item)
-        complete = CompleteStepUseCase(store, _FlowAdapter(_CONFLICT_FLOW))
+        complete = CompleteStepUseCase(store, _FlowAdapter(_CONFLICT_FLOW), worktrees=None, config=None)
         uc = DispatchPrFeedbackUseCase(
             store, FakeGitHub(conflicted_prs={_URL}), _FlowAdapter(_CONFLICT_FLOW), complete,
             **_TRUST)

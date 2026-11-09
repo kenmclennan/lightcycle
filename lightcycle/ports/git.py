@@ -18,10 +18,6 @@ class GitPort(ABC):
         pass
 
     @abstractmethod
-    def prune_worktrees(self, root):
-        pass
-
-    @abstractmethod
     def set_branch_upstream(self, root, branch, remote="origin"):
         pass
 

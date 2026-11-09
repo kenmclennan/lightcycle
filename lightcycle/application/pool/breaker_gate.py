@@ -23,7 +23,7 @@ class BreakerGateResponse:
 
 
 class BreakerGateUseCase:
-    def __init__(self, workers, worker_log, breaker_port, config, stream, spin_port=None, store=None):
+    def __init__(self, workers, worker_log, breaker_port, config, stream, spin_port, store):
         self._workers = workers
         self._worker_log = worker_log
         self._breaker_port = breaker_port
@@ -71,7 +71,7 @@ class BreakerGateUseCase:
             now,
             self._config.max_boot_seconds(),
             self._config.stall_seconds(),
-            self._worker_log.log_mtime,
+            lambda path: self._worker_log.log_mtime(path),
         ):
             return "stalled"
         return None

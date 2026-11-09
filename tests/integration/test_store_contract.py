@@ -457,7 +457,7 @@ class TestSqliteStoreRoundtrips(unittest.TestCase):
         flow = FlowService(FakeFs(metas, workflow=workflow), s)
 
         item = s.create_item("add refunds", "a description", shortcode="GRID")
-        resp = ActivateItemUseCase(s, flow, None, None).execute(
+        resp = ActivateItemUseCase(s, flow, None, None, scaffold=None).execute(
             ActivateItemInput(item=item, workflow="standard")
         )
 

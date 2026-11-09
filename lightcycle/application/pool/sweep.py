@@ -109,7 +109,9 @@ class SweepUseCase:
         booting = pool.any_booting(probe, now, max_boot)
         stalled = [
             w
-            for w in pool.stalled(probe, now, max_boot, stall_seconds, self._worker_log.log_mtime)
+            for w in pool.stalled(
+                probe, now, max_boot, stall_seconds, lambda path: self._worker_log.log_mtime(path)
+            )
             if claimed_owner.get(w.step) == w.spawnid
         ]
         stalled_ids = {w.step for w in stalled}

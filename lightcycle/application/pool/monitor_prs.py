@@ -28,7 +28,7 @@ class MonitorPrsResponse:
 
 class MonitorPrsUseCase:
     def __init__(
-        self, store, github, worktrees, flow_service, complete=None, *,
+        self, store, github, worktrees, flow_service, complete, *,
         trusted_authors, held_shortcode, writes, ci_clock, ci_poll_seconds,
         ci_ceiling_seconds, ci_start_window_seconds, ci_no_workflows_wait_seconds, ci_wall_clock,
         ci_views, ci_unconfirmed_note_polls,

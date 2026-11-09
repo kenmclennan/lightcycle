@@ -60,14 +60,18 @@ def pid_alive(pid):
         return False
 
 
+PS_TIMEOUT_SECONDS = 5
+
+
 def process_start_time(pid):
     try:
         out = subprocess.run(
             ["ps", "-o", "lstart=", "-p", str(int(pid))],
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
+            timeout=PS_TIMEOUT_SECONDS,
         )
-    except (OSError, ValueError, TypeError):
+    except (OSError, ValueError, TypeError, subprocess.TimeoutExpired):
         return None
     if out.returncode != 0:
         return None

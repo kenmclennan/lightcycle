@@ -1,7 +1,9 @@
 from dataclasses import dataclass
 
+from lightcycle.application.feedback.item_signals import ItemSignals
 from lightcycle.application.work.has_feedback import has_feedback
 from lightcycle.application.work.project_of import project_of
+from lightcycle.application.work.retroed_passes import retroed_pass_ids
 from lightcycle.domain import feedback as cfeedback
 from lightcycle.domain.feedback import parse_reflections, reflections_of
 from lightcycle.domain.work import ProjectIdentity
@@ -16,8 +18,6 @@ def _durations_of(store, steps):
 
 
 def _collect_item_row(store, item, signals_for, figures_for):
-    from lightcycle.application.feedback.retro import ItemSignals
-
     children = store.children(item.id)
     steps = [c for c in children if c.type == "step"]
     step_pairs = [(s.pass_id, store.item_artifacts(s.id)) for s in steps]
@@ -31,9 +31,6 @@ def _collect_item_row(store, item, signals_for, figures_for):
 
 
 def _collect_pending_item_row(store, item, signals_for, figures_for):
-    from lightcycle.application.feedback.retro import ItemSignals
-    from lightcycle.application.work.retroed_passes import retroed_pass_ids
-
     excluded = retroed_pass_ids(store, item.id)
     children = store.children(item.id)
     steps = [c for c in children if c.type == "step"]
@@ -49,8 +46,6 @@ def _collect_pending_item_row(store, item, signals_for, figures_for):
 
 
 def _pass_row(store, item, steps, signals_for, refs, figures_for):
-    from lightcycle.application.feedback.retro import ItemSignals
-
     return ItemSignals(
         item=item, signals=signals_for(item).tally(steps), reflections=len(refs),
         durations=_durations_of(store, steps), **figures_for(item, steps),

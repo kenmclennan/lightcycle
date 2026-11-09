@@ -19,9 +19,5 @@ class RunLockPort(ABC):
         pass
 
     @abstractmethod
-    def is_running(self):
-        pass
-
-    @abstractmethod
     def holder_pid(self):
         pass

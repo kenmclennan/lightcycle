@@ -245,7 +245,7 @@ class TestCascadePath(unittest.TestCase):
         git = FakeGit(branches={(REPO, BRANCH)}, ref="origin/main", beyond={(REPO, BRANCH): ["a1"]})
         store, svc, item, step = _world(git)
 
-        resp = CompleteStepUseCase(store, FlowService(FakeFs(self.METAS), store), svc).execute(
+        resp = CompleteStepUseCase(store, FlowService(FakeFs(self.METAS), store), svc, config=None).execute(
             CompleteInput(step=step, outcome="done")
         )
 

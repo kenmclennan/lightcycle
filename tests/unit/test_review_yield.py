@@ -49,7 +49,7 @@ class _Rig:
         self.store = FakeStore()
         self.item = self.store.create_item("feature", "d")
         self.rid = plant_pr(self.store, self.item, "https://github.com/x/y/pull/1", phase="code")
-        self.complete = CompleteStepUseCase(self.store, _FlowAdapter(_FLOW))
+        self.complete = CompleteStepUseCase(self.store, _FlowAdapter(_FLOW), worktrees=None, config=None)
         self.current = self.store.create_step(stage="write-code", role="agent", item=self.item)
 
     def done(self, outcome, note=None):
@@ -213,7 +213,7 @@ class TestChangeRequestEscapes(unittest.TestCase):
 
     def test_changes_before_any_pass_records_nothing(self):
         gate = self.rig.store.create_step(stage="await-merge", role="human", item=self.rig.item)
-        CompleteStepUseCase(self.rig.store, _FlowAdapter(_FLOW)).execute(
+        CompleteStepUseCase(self.rig.store, _FlowAdapter(_FLOW), worktrees=None, config=None).execute(
             CompleteInput(step=gate, outcome="changes", note="early"))
         self.assertEqual(self._rows(), [])
 
@@ -237,7 +237,7 @@ class TestChangeRequestEscapes(unittest.TestCase):
         self.rig.to_gate()
         gate = self.rig.current
         self.rig.done("changes", note="one")
-        CompleteStepUseCase(self.rig.store, _FlowAdapter(_FLOW)).execute(
+        CompleteStepUseCase(self.rig.store, _FlowAdapter(_FLOW), worktrees=None, config=None).execute(
             CompleteInput(step=gate, outcome="changes", note="one"))
         self.assertEqual(len(self._rows()), 1)
 
@@ -259,7 +259,7 @@ class TestChangeRequestEscapes(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("f", "d")
         plant_pr(store, item, "https://github.com/x/y/pull/9", phase="code")
-        complete = CompleteStepUseCase(store, _FlowAdapter(flow))
+        complete = CompleteStepUseCase(store, _FlowAdapter(flow), worktrees=None, config=None)
         first = store.create_step(stage="write-code", role="agent", item=item)
         gate = complete.execute(CompleteInput(step=first, outcome="done")).next_step
         complete.execute(CompleteInput(step=gate, outcome="changes"))
@@ -318,7 +318,7 @@ class TestPrCommentEscapes(unittest.TestCase):
         plant_pr(store, item, "https://github.com/x/y/pull/2", phase="code")
         store.create_step(stage="await-merge", role="human", item=item)
         gh = FakeGitHub(push_time=1000.0, timed_comments=[self._mention(1500.0)])
-        complete = CompleteStepUseCase(store, _FlowAdapter(_FLOW))
+        complete = CompleteStepUseCase(store, _FlowAdapter(_FLOW), worktrees=None, config=None)
         DispatchPrFeedbackUseCase(store, gh, _FlowAdapter(_FLOW), complete, **_TRUST).execute()
         self.assertEqual(store.escapes_since(""), [])
         self.assertEqual(

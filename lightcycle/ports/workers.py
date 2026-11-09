@@ -37,7 +37,3 @@ class WorkersPort(ABC):
     @abstractmethod
     def mark_checked(self, spawnid):
         pass
-
-    @abstractmethod
-    def set_pid_started(self, spawnid, pid_started):
-        pass

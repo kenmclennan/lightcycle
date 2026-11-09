@@ -579,7 +579,7 @@ class LightcycleApp(App):
         self._upgrade_check = upgrade_check or (
             lambda: upgrade(
                 self._container.config.version(), check_only=True,
-                fetch=self._container.upgrade.fetch_remote_version)
+                fetch=lambda: self._container.upgrade.fetch_remote_version())
         )
         self._doctor_check = doctor_check or (
             lambda: self._container.doctor_for_current_thread().execute(DoctorInput())
@@ -869,7 +869,9 @@ class LightcycleApp(App):
         drain = PoolDrainStatusUseCase(
             self._container.drain, self._container.workers, self._container.store
         ).execute(running, self._now().timestamp())
-        breaker = BreakerStatusUseCase(self._container.breaker).execute(self._now().timestamp())
+        breaker = BreakerStatusUseCase(
+            self._container.breaker, self._container.spin
+        ).execute(self._now().timestamp())
         hold = PoolHoldStatusUseCase(
             self._container.memory_gate_status, self._container.workers, self._container.config,
         ).execute(self._container.workers.pid_alive)

@@ -337,7 +337,7 @@ class TestBackfillUsageDoesNotDoubleALiveCapturedLog(unittest.TestCase):
         workers = ReapAndBackfillWorkers(workers_state)
         config = FakeConfig()
 
-        BreakerGateUseCase(workers, fs, FakeBreakerPort(), config, store=store, stream=ClaudeStreamAdapter()).execute(now=100)
+        BreakerGateUseCase(workers, fs, FakeBreakerPort(), config, store=store, stream=ClaudeStreamAdapter(), spin_port=None).execute(now=100)
 
         after_reap = store.get_node(tid)
         single_ingest_usage = after_reap.usage_input_tokens

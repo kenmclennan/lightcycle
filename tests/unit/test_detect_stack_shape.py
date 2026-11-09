@@ -40,7 +40,7 @@ class _Rig:
         self.store = FakeStore()
         self.github = self._github(layers)
         self.flow = _FlowAdapter(flow)
-        self.complete = CompleteStepUseCase(self.store, self.flow)
+        self.complete = CompleteStepUseCase(self.store, self.flow, worktrees=None, config=None)
         self.uc = DetectStackShapeUseCase(self.store, self.github, self.flow, self.complete)
         self.item = self.store.create_item("feature", "d")
         self.rid = plant_pr(self.store, self.item, layers[-1].url)
@@ -220,7 +220,7 @@ class TestDetectStackShape(unittest.TestCase):
 
         declaring = _FlowAdapter(_FLOW)
         rig.uc = DetectStackShapeUseCase(
-            rig.store, rig.github, declaring, CompleteStepUseCase(rig.store, declaring))
+            rig.store, rig.github, declaring, CompleteStepUseCase(rig.store, declaring, worktrees=None, config=None))
 
         self.assertEqual(rig.tick().shape_changed, [rig.item])
 
@@ -231,7 +231,7 @@ class TestDetectStackShape(unittest.TestCase):
         store.create_step(stage="watch-step", role="agent", item=item)
         flow = _FlowAdapter(_FLOW)
         github = FakeGitHub()
-        uc = DetectStackShapeUseCase(store, github, flow, CompleteStepUseCase(store, flow))
+        uc = DetectStackShapeUseCase(store, github, flow, CompleteStepUseCase(store, flow, worktrees=None, config=None))
 
         self.assertEqual(uc.execute().shape_changed, [])
         self.assertNotIn("stack_view", [c[0] for c in github.calls])

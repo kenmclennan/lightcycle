@@ -1,6 +1,7 @@
 import contextlib
 import json
 import queue
+import signal
 import sqlite3
 import subprocess
 import sys
@@ -91,6 +92,7 @@ KICKOFF = ("You are the %s step. Claim your next step and complete it per your s
 NUDGE_TEXT = ("Your previous turn ended but your step is not resolved yet. Continue and finish it, "
               "reach your terminal lc outcome, then exit.")
 EXIT_GRACE_SECONDS = 20
+KILL_WAIT_SECONDS = 10
 
 
 def user_message(text):
@@ -215,6 +217,9 @@ def run(add_dir, cwd, stage, model, sysprompt, max_session_seconds, *, open_step
         time.sleep(2)
         if proc.poll() is None:
             proc.kill()
-    rc = proc.wait()
+    try:
+        rc = proc.wait(timeout=KILL_WAIT_SECONDS)
+    except subprocess.TimeoutExpired:
+        rc = -signal.SIGKILL
     reader_thread.join(timeout=5)
     return rc

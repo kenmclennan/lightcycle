@@ -22,7 +22,7 @@ class ListResponse:
 
 
 class ListWorkflowSourcesUseCase:
-    def __init__(self, source, store, workflow_bundle=None):
+    def __init__(self, source, store, workflow_bundle):
         self._source = source
         self._store = store
         self._workflow_bundle = workflow_bundle

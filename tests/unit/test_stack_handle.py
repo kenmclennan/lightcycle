@@ -54,7 +54,7 @@ class TestAttachStack(unittest.TestCase):
         s = FakeStore()
         sid = s.create_item("st", "a description")
         rid = s.open_run(sid, s.open_pass(sid), "code")
-        LinkArtifactUseCase(s, FakeGitHub()).execute(LinkArtifactInput(item=sid, atype="stack", value=_STACK))
+        LinkArtifactUseCase(s, FakeGitHub(), flow=None).execute(LinkArtifactInput(item=sid, atype="stack", value=_STACK))
         self.assertEqual(s.get_run(rid).stack, _STACK)
         self.assertIsNone(s.get_run(rid).pr)
 
@@ -62,7 +62,7 @@ class TestAttachStack(unittest.TestCase):
         s = FakeStore()
         sid = s.create_item("st", "a description")
         with self.assertRaisesRegex(UseCaseError, "no open phase run"):
-            LinkArtifactUseCase(s, FakeGitHub()).execute(LinkArtifactInput(item=sid, atype="stack", value=_STACK))
+            LinkArtifactUseCase(s, FakeGitHub(), flow=None).execute(LinkArtifactInput(item=sid, atype="stack", value=_STACK))
 
     def test_attach_stack_to_a_step_id_refuses(self):
         s = FakeStore()
@@ -70,7 +70,7 @@ class TestAttachStack(unittest.TestCase):
         s.open_run(sid, s.open_pass(sid), "code")
         step = s.create_step(stage="code-open-pr", item=sid)
         with self.assertRaisesRegex(UseCaseError, "is a step"):
-            LinkArtifactUseCase(s, FakeGitHub()).execute(LinkArtifactInput(item=step, atype="stack", value=_STACK))
+            LinkArtifactUseCase(s, FakeGitHub(), flow=None).execute(LinkArtifactInput(item=step, atype="stack", value=_STACK))
 
     def test_attach_stack_records_the_layers_seen(self):
         s = FakeStore()
@@ -78,7 +78,7 @@ class TestAttachStack(unittest.TestCase):
         rid = s.open_run(sid, s.open_pass(sid), "code")
         github = FakeGitHub()
         github.script_stack(_STACK, _LAYERS)
-        LinkArtifactUseCase(s, github).execute(LinkArtifactInput(item=sid, atype="stack", value=_STACK))
+        LinkArtifactUseCase(s, github, flow=None).execute(LinkArtifactInput(item=sid, atype="stack", value=_STACK))
         self.assertEqual(
             [e["head_ref"] for e in json.loads(s.get_run(rid).stack_seen)], ["a", "b"]
         )
@@ -89,7 +89,7 @@ class TestAttachStack(unittest.TestCase):
         rid = s.open_run(sid, s.open_pass(sid), "code")
         github = FakeGitHub(failing_calls={"stack_view"})
         github.script_stack(_STACK, _LAYERS)
-        LinkArtifactUseCase(s, github).execute(LinkArtifactInput(item=sid, atype="stack", value=_STACK))
+        LinkArtifactUseCase(s, github, flow=None).execute(LinkArtifactInput(item=sid, atype="stack", value=_STACK))
         self.assertEqual(s.get_run(rid).stack, _STACK)
         self.assertIsNone(s.get_run(rid).stack_seen)
 
@@ -97,8 +97,8 @@ class TestAttachStack(unittest.TestCase):
         s = FakeStore()
         sid = s.create_item("st", "a description")
         rid = s.open_run(sid, s.open_pass(sid), "code")
-        LinkArtifactUseCase(s, FakeGitHub()).execute(LinkArtifactInput(item=sid, atype="stack", value=_STACK))
-        LinkArtifactUseCase(s, FakeGitHub()).execute(LinkArtifactInput(item=sid, atype="pr", value="http://x/pull/9"))
+        LinkArtifactUseCase(s, FakeGitHub(), flow=None).execute(LinkArtifactInput(item=sid, atype="stack", value=_STACK))
+        LinkArtifactUseCase(s, FakeGitHub(), flow=None).execute(LinkArtifactInput(item=sid, atype="pr", value="http://x/pull/9"))
         self.assertEqual(s.get_run(rid).stack, _STACK)
         self.assertEqual(s.get_run(rid).pr, "http://x/pull/9")
 

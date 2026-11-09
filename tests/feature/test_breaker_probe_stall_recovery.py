@@ -238,7 +238,7 @@ def _no_worker_alive(ctx):
 
 @when("the pool's breaker gate runs")
 def _run_gate(ctx):
-    use_case = BreakerGateUseCase(ctx["workers"], ctx["fs"], ctx["breaker_port"], ctx["config"], stream=ClaudeStreamAdapter())
+    use_case = BreakerGateUseCase(ctx["workers"], ctx["fs"], ctx["breaker_port"], ctx["config"], stream=ClaudeStreamAdapter(), spin_port=None, store=None)
     ctx["result"] = use_case.execute(now=ctx["now"])
 
 

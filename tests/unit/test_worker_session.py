@@ -2,6 +2,8 @@ import ast
 import json
 import pathlib
 import os
+import signal
+import subprocess
 import tempfile
 import types
 import unittest
@@ -383,7 +385,7 @@ class TestRun(unittest.TestCase):
         def kill(self):
             self.kill_calls += 1
 
-        def wait(self):
+        def wait(self, timeout=None):
             return -9
 
     class _CountingClock:
@@ -405,6 +407,23 @@ class TestRun(unittest.TestCase):
                 patch("lightcycle.adapters.worker_session.time.sleep"):
             run("/data/root", "/work/item-1", "coder", "opus", "sys", 0, clock=clock, open_step=_open)
         self.assertEqual(proc.terminate_calls, 2)
+        self.assertEqual(proc.kill_calls, 1)
+
+    class _WaitTimesOutProc(_NeverExitsProc):
+        def wait(self, timeout=None):
+            raise subprocess.TimeoutExpired("claude", timeout)
+
+    def test_closing_wait_timing_out_is_treated_as_the_outcome_of_the_kill(self):
+        proc = self._WaitTimesOutProc()
+
+        def popen(cmd, cwd, **kwargs):
+            return proc
+
+        with patch("lightcycle.adapters.worker_session.subprocess.Popen", popen), \
+                patch("lightcycle.adapters.worker_session.time.sleep"):
+            rc = run("/data/root", "/work/item-1", "coder", "opus", "sys", 0,
+                     clock=self._CountingClock(), open_step=_open)
+        self.assertEqual(rc, -signal.SIGKILL)
         self.assertEqual(proc.kill_calls, 1)
 
     def test_exit_grace_deadline_is_computed_from_the_injected_clock_not_wall_time(self):
@@ -437,7 +456,7 @@ class TestRun(unittest.TestCase):
             self._polls += 1
             return None if self._polls <= 2 else 0
 
-        def wait(self):
+        def wait(self, timeout=None):
             return 0
 
         def terminate(self):

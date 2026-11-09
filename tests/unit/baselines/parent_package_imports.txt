@@ -1,3 +1,0 @@
-lightcycle/adapters/workflow_bundle.py: 1
-lightcycle/application/workflows/bundle_check.py: 1
-lightcycle/config.py: 1

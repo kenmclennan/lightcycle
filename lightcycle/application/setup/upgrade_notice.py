@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from lightcycle.application.setup.upgrade import upgrade
 from lightcycle.ports.upgrade import RemoteVersionUnavailableError
 
 
@@ -13,11 +12,9 @@ class UpgradeNoticeResponse:
 
 
 class UpgradeNoticeUseCase:
-    def __init__(self, current_version, check=None, port=None):
+    def __init__(self, current_version, check):
         self._current_version = current_version
-        self._check = check or (
-            lambda: upgrade(current_version, check_only=True, fetch=port.fetch_remote_version)
-        )
+        self._check = check
 
     def execute(self) -> UpgradeNoticeResponse:
         try:
