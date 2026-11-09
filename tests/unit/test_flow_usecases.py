@@ -212,7 +212,7 @@ class TestCompleteTask(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven", shortcode="GRID")
         bid = s.create_step(stage="build", role="agent", item=item)
-        resp = CompleteStepUseCase(s, flow_for(METAS, s)).execute(
+        resp = CompleteStepUseCase(s, flow_for(METAS, s), worktrees=None, config=None).execute(
             CompleteInput(step=bid, outcome="done")
         )
         self.assertEqual(s.get_node(bid).state, "done")
@@ -222,7 +222,7 @@ class TestCompleteTask(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven", shortcode="GRID")
         bid = s.create_step(stage="build", role="agent", item=item)
-        CompleteStepUseCase(s, flow_for(METAS, s)).execute(
+        CompleteStepUseCase(s, flow_for(METAS, s), worktrees=None, config=None).execute(
             CompleteInput(step=bid, outcome="done")
         )
         self.assertIn("outcome: done", s.get_node(bid).notes or "")
@@ -233,7 +233,7 @@ class TestCompleteTask(unittest.TestCase):
         bid = s.create_step(stage="build", role="agent", item=item)
         s.assign(bid, "w1")
         resp = CompleteStepUseCase(
-            s, flow_for(METAS, s), config=FakeConfig("w2")
+            s, flow_for(METAS, s), config=FakeConfig("w2"), worktrees=None
         ).execute(CompleteInput(step=bid, outcome="done"))
         self.assertIsNone(resp.next_step)
         self.assertEqual(s.get_node(bid).state, "running")
@@ -245,7 +245,7 @@ class TestCompleteTask(unittest.TestCase):
         bid = s.create_step(stage="build", role="agent", item=item)
         s.assign(bid, "w1")
         resp = CompleteStepUseCase(
-            s, flow_for(METAS, s), config=FakeConfig("w1")
+            s, flow_for(METAS, s), config=FakeConfig("w1"), worktrees=None
         ).execute(CompleteInput(step=bid, outcome="done"))
         self.assertIsNotNone(resp.next_step)
         self.assertEqual(s.get_node(bid).state, "done")
@@ -255,7 +255,7 @@ class TestCompleteTask(unittest.TestCase):
         item = s.create_item("st", "a description", workflow="spec-driven", shortcode="GRID")
         bid = s.create_step(stage="build", role="agent", item=item)
         resp = CompleteStepUseCase(
-            s, flow_for(METAS, s), config=FakeConfig("handle-feedback-worker")
+            s, flow_for(METAS, s), config=FakeConfig("handle-feedback-worker"), worktrees=None
         ).execute(CompleteInput(step=bid, outcome="done"))
         self.assertIsNotNone(resp.next_step)
         self.assertEqual(s.get_node(bid).state, "done")
@@ -264,11 +264,11 @@ class TestCompleteTask(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven", shortcode="GRID")
         bid = s.create_step(stage="build", role="agent", item=item)
-        CompleteStepUseCase(s, flow_for(METAS, s)).execute(
+        CompleteStepUseCase(s, flow_for(METAS, s), worktrees=None, config=None).execute(
             CompleteInput(step=bid, outcome="done")
         )
         count_after_first = len(s._records)
-        resp = CompleteStepUseCase(s, flow_for(METAS, s)).execute(
+        resp = CompleteStepUseCase(s, flow_for(METAS, s), worktrees=None, config=None).execute(
             CompleteInput(step=bid, outcome="done")
         )
         self.assertIsNone(resp.next_step)
@@ -278,7 +278,7 @@ class TestCompleteTask(unittest.TestCase):
         s = FakeStore()
         bid = create_owned_step(s, "build: x", stage="build", role="agent")
         with self.assertRaises(UseCaseError):
-            CompleteStepUseCase(s, flow_for(METAS, s)).execute(
+            CompleteStepUseCase(s, flow_for(METAS, s), worktrees=None, config=None).execute(
                 CompleteInput(step=bid, outcome="banana")
             )
 
@@ -287,7 +287,7 @@ class TestCompleteTask(unittest.TestCase):
         item = s.create_item("st", "a description", workflow="spec-driven", shortcode="GRID")
         rid = s.create_step(stage="review", role="agent", item=item)
         with self.assertRaises(UseCaseError):
-            CompleteStepUseCase(s, flow_for(METAS, s)).execute(
+            CompleteStepUseCase(s, flow_for(METAS, s), worktrees=None, config=None).execute(
                 CompleteInput(step=rid, outcome="done")
             )
 
@@ -295,7 +295,7 @@ class TestCompleteTask(unittest.TestCase):
         terminal_metas = {"finaliser": {"model": "sonnet", "step": "finalise"}}
         s = FakeStore()
         tid = create_owned_step(s, "finalise: x", stage="finalise", role="agent")
-        resp = CompleteStepUseCase(s, flow_for(terminal_metas, s)).execute(
+        resp = CompleteStepUseCase(s, flow_for(terminal_metas, s), worktrees=None, config=None).execute(
             CompleteInput(step=tid, outcome="done")
         )
         self.assertEqual(s.get_node(tid).state, "done")
@@ -305,7 +305,7 @@ class TestCompleteTask(unittest.TestCase):
         s = FakeStore()
         bid = create_owned_step(s, "build: x", stage="build", role="agent")
         with self.assertRaises(UseCaseError):
-            CompleteStepUseCase(s, flow_for(METAS, s)).execute(
+            CompleteStepUseCase(s, flow_for(METAS, s), worktrees=None, config=None).execute(
                 CompleteInput(step=bid, outcome="typo")
             )
 
@@ -323,7 +323,7 @@ class TestCompleteTask(unittest.TestCase):
         s = FakeStore()
         flow_svc = FlowService(FakeFs(metas, workflow=graph_text), s)
         bid = create_owned_step(s, "build: x", stage="build", role="agent")
-        resp = CompleteStepUseCase(s, flow_svc).execute(
+        resp = CompleteStepUseCase(s, flow_svc, worktrees=None, config=None).execute(
             CompleteInput(step=bid, outcome="clean")
         )
         self.assertEqual(s.get_node(bid).state, "done")
@@ -332,7 +332,7 @@ class TestCompleteTask(unittest.TestCase):
     def test_unknown_stage_routes_to_human_instead_of_silent_close(self):
         s = FakeStore()
         rid = create_owned_step(s, "review-code: x", stage="review-code", role="agent")
-        resp = CompleteStepUseCase(s, flow_for(METAS, s)).execute(
+        resp = CompleteStepUseCase(s, flow_for(METAS, s), worktrees=None, config=None).execute(
             CompleteInput(step=rid, outcome="done")
         )
         self.assertIsNone(resp.next_step)
@@ -355,11 +355,11 @@ class TestCompleteTask(unittest.TestCase):
         flow_svc = FlowService(FakeFs(metas), s)
         item = s.create_item("st", "a description", workflow="small-change", shortcode="GRID")
         sac = s.create_step(stage="scope-and-code", role="agent", item=item)
-        resp = CompleteStepUseCase(s, flow_svc).execute(
+        resp = CompleteStepUseCase(s, flow_svc, worktrees=None, config=None).execute(
             CompleteInput(step=sac, outcome="too-big")
         )
         rs = resp.next_step
-        resp2 = CompleteStepUseCase(s, flow_svc).execute(
+        resp2 = CompleteStepUseCase(s, flow_svc, worktrees=None, config=None).execute(
             CompleteInput(step=rs, outcome="rescoped")
         )
         self.assertIsNone(resp2.next_step)
@@ -379,7 +379,7 @@ class TestCompleteTask(unittest.TestCase):
         }
         s = FakeStore()
         tid = create_owned_step(s, "finalise: x", stage="finalise", role="agent")
-        resp = CompleteStepUseCase(s, flow_for(terminal_metas, s)).execute(
+        resp = CompleteStepUseCase(s, flow_for(terminal_metas, s), worktrees=None, config=None).execute(
             CompleteInput(step=tid, outcome="done")
         )
         self.assertEqual(s.get_node(tid).state, "done")
@@ -388,7 +388,7 @@ class TestCompleteTask(unittest.TestCase):
 
 class TestCompleteStepEngineAudit(unittest.TestCase):
     def _uc(self, store):
-        return CompleteStepUseCase(store, flow_for(METAS, store), FakeWorktrees())
+        return CompleteStepUseCase(store, flow_for(METAS, store), FakeWorktrees(), config=None)
 
     def _retro_batch(self, store, title="custom batch title"):
         item = store.create_item(title, "a description", shortcode="GRID")
@@ -484,7 +484,7 @@ class TestCompleteStepEngineAudit(unittest.TestCase):
         reviewed = self._reviewed_item(s)
         item = s.create_item("st", "a description", workflow="spec-driven", shortcode="GRID")
         bid = s.create_step(stage="build", role="agent", item=item)
-        CompleteStepUseCase(s, flow_for(METAS, s)).execute(CompleteInput(step=bid, outcome="done"))
+        CompleteStepUseCase(s, flow_for(METAS, s), worktrees=None, config=None).execute(CompleteInput(step=bid, outcome="done"))
         self.assertIn(reviewed, [i.id for i in s.closed_unretroed_items()])
 
     def test_bundle_declared_audit_stage_on_an_ordinary_item_completes_as_a_workflow_step(self):
@@ -495,7 +495,7 @@ class TestCompleteStepEngineAudit(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven", shortcode="GRID")
         aid = s.create_step(stage="audit", role="agent", item=item)
-        resp = CompleteStepUseCase(s, flow_for(metas, s)).execute(
+        resp = CompleteStepUseCase(s, flow_for(metas, s), worktrees=None, config=None).execute(
             CompleteInput(step=aid, outcome="done")
         )
         self.assertIsNotNone(resp.next_step)
@@ -525,7 +525,7 @@ class TestCompleteStepEngineAudit(unittest.TestCase):
 
 class TestCompleteStepDailySummary(unittest.TestCase):
     def _uc(self, store):
-        return CompleteStepUseCase(store, flow_for(METAS, store))
+        return CompleteStepUseCase(store, flow_for(METAS, store), worktrees=None, config=None)
 
     def _summary_step(self, store, day, spawn_count):
         item = store.create_item("Daily summary: %s" % day.isoformat(), "the day's items", shortcode="GRID")
@@ -603,7 +603,7 @@ class TestCompleteStepDailySummary(unittest.TestCase):
 
 class TestEngineStepOutcomes(unittest.TestCase):
     def _uc(self, store):
-        return CompleteStepUseCase(store, flow_for(METAS, store), FakeWorktrees())
+        return CompleteStepUseCase(store, flow_for(METAS, store), FakeWorktrees(), config=None)
 
     def _step(self, store, stage, label):
         item = store.create_item("engine", "a description", shortcode="GRID")
@@ -682,7 +682,7 @@ class TestCompleteStepCascadeClose(unittest.TestCase):
         item = s.create_item("it", "a description", shortcode="GRID")
         tid = s.create_step(stage="finalise", role="agent", item=item)
         wt = FakeWorktrees()
-        CompleteStepUseCase(s, flow_for(self.TERMINAL_METAS, s), wt).execute(
+        CompleteStepUseCase(s, flow_for(self.TERMINAL_METAS, s), wt, config=None).execute(
             CompleteInput(step=tid, outcome="done")
         )
         self.assertEqual(s.get_node(item).state, "done")
@@ -692,7 +692,7 @@ class TestCompleteStepCascadeClose(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("it", "a description", shortcode="GRID")
         bid = s.create_step(stage="build", role="agent", item=item)
-        CompleteStepUseCase(s, flow_for(METAS, s)).execute(
+        CompleteStepUseCase(s, flow_for(METAS, s), worktrees=None, config=None).execute(
             CompleteInput(step=bid, outcome="done")
         )
         self.assertEqual(s.get_node(item).state, "queued")
@@ -702,7 +702,7 @@ class TestCompleteStepCascadeClose(unittest.TestCase):
         item = s.create_item("it", "a description", shortcode="GRID")
         tid = s.create_step(stage="finalise", role="agent", item=item)
         sibling = s.create_item("still open", "a description", shortcode="GRID")
-        CompleteStepUseCase(s, flow_for(self.TERMINAL_METAS, s), FakeWorktrees()).execute(
+        CompleteStepUseCase(s, flow_for(self.TERMINAL_METAS, s), FakeWorktrees(), config=None).execute(
             CompleteInput(step=tid, outcome="done")
         )
         self.assertEqual(s.get_node(item).state, "done")
@@ -725,7 +725,7 @@ class TestCompleteTaskOutcomeScopedProduce(unittest.TestCase):
         s = FakeStore()
         aid = create_owned_step(s, "alpha: x", stage="alpha", role="agent")
         with self.assertRaises(UseCaseError):
-            CompleteStepUseCase(s, flow_for(self.DIVERSION_METAS, s)).execute(
+            CompleteStepUseCase(s, flow_for(self.DIVERSION_METAS, s), worktrees=None, config=None).execute(
                 CompleteInput(step=aid, outcome="forward")
             )
 
@@ -733,7 +733,7 @@ class TestCompleteTaskOutcomeScopedProduce(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven", shortcode="GRID")
         aid = s.create_step(stage="alpha", role="agent", item=item)
-        resp = CompleteStepUseCase(s, flow_for(self.DIVERSION_METAS, s)).execute(
+        resp = CompleteStepUseCase(s, flow_for(self.DIVERSION_METAS, s), worktrees=None, config=None).execute(
             CompleteInput(step=aid, outcome="sideways")
         )
         self.assertEqual(s.get_node(aid).state, "done")
@@ -742,7 +742,7 @@ class TestCompleteTaskOutcomeScopedProduce(unittest.TestCase):
 
 class TestOpenPrConflictRouteWithRealSteps(unittest.TestCase):
     def _uc(self, store):
-        return CompleteStepUseCase(store, FlowService(_RealFs(), store, _RealConfig()))
+        return CompleteStepUseCase(store, FlowService(_RealFs(), store, _RealConfig()), worktrees=None, config=None)
 
     def test_conflicted_outcome_closes_without_a_pr_and_routes_to_resolve(self):
         s = FakeStore()
@@ -783,7 +783,7 @@ class TestCiFailedCapRouting(unittest.TestCase):
 
     def _uc(self, store):
         return CompleteStepUseCase(
-            store, FlowService(FakeFs(self.METAS, workflow=self.GRAPH_TEXT), store)
+            store, FlowService(FakeFs(self.METAS, workflow=self.GRAPH_TEXT), store), worktrees=None, config=None
         )
 
     def _fail_n_times(self, store, item, n):
@@ -856,7 +856,7 @@ class TestCiFailedCapRouting(unittest.TestCase):
         )
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven", shortcode="GRID")
-        uc = CompleteStepUseCase(s, FlowService(FakeFs(no_cap_metas, workflow=no_cap_graph), s))
+        uc = CompleteStepUseCase(s, FlowService(FakeFs(no_cap_metas, workflow=no_cap_graph), s), worktrees=None, config=None)
         for _ in range(5):
             old = s.create_step(stage="watch", role="agent", item=item)
             s.complete_node(old, "ci-failed")
@@ -965,7 +965,7 @@ class TestReviewRoundsCapRouting(unittest.TestCase):
             FlowService(
                 FakeFs(self.METAS, workflow=self.GRAPH_TEXT), store,
                 _ReviewRoundsCapConfig(cap_n),
-            ),
+            ), worktrees=None, config=None,
         )
 
     def _reject_n_times(self, store, item, n):
@@ -1017,7 +1017,7 @@ class TestReviewRoundsCapRouting(unittest.TestCase):
         s = FakeStore()
         item = s.create_item("st", "a description", workflow="spec-driven", shortcode="GRID")
         uc = CompleteStepUseCase(
-            s, FlowService(FakeFs(no_cap_metas, workflow=no_cap_graph), s)
+            s, FlowService(FakeFs(no_cap_metas, workflow=no_cap_graph), s), worktrees=None, config=None
         )
         for _ in range(5):
             old = s.create_step(stage="review", role="agent", item=item)
@@ -1033,7 +1033,7 @@ class TestReviewRoundsCapRouting(unittest.TestCase):
             s, FlowService(
                 FakeFs(TestCiFailedCapRouting.METAS, workflow=TestCiFailedCapRouting.GRAPH_TEXT),
                 s,
-            ),
+            ), worktrees=None, config=None,
         )
         for _ in range(2):
             old = s.create_step(stage="watch", role="agent", item=item)
@@ -1094,7 +1094,7 @@ class TestAdvanceAndCompleteAgreeOnCappedTransitions(unittest.TestCase):
         s, wid, flow = self._setup(prior_failures=1)
         advanced = AdvanceStepUseCase(s, flow).execute(AdvanceInput(step=wid, outcome="ci-failed"))
         s2, wid2, flow2 = self._setup(prior_failures=1)
-        completed = CompleteStepUseCase(s2, flow2).execute(
+        completed = CompleteStepUseCase(s2, flow2, worktrees=None, config=None).execute(
             CompleteInput(step=wid2, outcome="ci-failed")
         )
         self.assertEqual(
@@ -1105,7 +1105,7 @@ class TestAdvanceAndCompleteAgreeOnCappedTransitions(unittest.TestCase):
         s, wid, flow = self._setup(prior_failures=2)
         advanced = AdvanceStepUseCase(s, flow).execute(AdvanceInput(step=wid, outcome="ci-failed"))
         s2, wid2, flow2 = self._setup(prior_failures=2)
-        completed = CompleteStepUseCase(s2, flow2).execute(
+        completed = CompleteStepUseCase(s2, flow2, worktrees=None, config=None).execute(
             CompleteInput(step=wid2, outcome="ci-failed")
         )
         self.assertEqual(s.get_node(advanced.next_step).stage, "escalate-step")
@@ -1150,7 +1150,7 @@ class TestNextStepResolverSpecFor(unittest.TestCase):
 
 class TestCiFailedCapWithRealSteps(unittest.TestCase):
     def _uc(self, store):
-        return CompleteStepUseCase(store, FlowService(_RealFs(), store, _RealConfig()))
+        return CompleteStepUseCase(store, FlowService(_RealFs(), store, _RealConfig()), worktrees=None, config=None)
 
     def test_under_cap_routes_to_write_code(self):
         s = FakeStore()
@@ -1188,7 +1188,7 @@ class TestNextStepTitleTracksTheItem(unittest.TestCase):
         item = s.create_item("fix auth bug", "a description", workflow="spec-driven", shortcode="GRID")
         bid = s.create_step(stage="build", role="agent", item=item
         )
-        uc = CompleteStepUseCase(s, flow_for(self.CHAIN_METAS, s))
+        uc = CompleteStepUseCase(s, flow_for(self.CHAIN_METAS, s), worktrees=None, config=None)
 
         rid = uc.execute(CompleteInput(step=bid, outcome="done")).next_step
         self.assertEqual(s.get_node(rid).item, item)

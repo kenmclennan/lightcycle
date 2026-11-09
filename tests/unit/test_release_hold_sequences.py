@@ -72,7 +72,7 @@ class TestHoldAcrossAnInterruptedRelease(unittest.TestCase):
         store.assign(ender, "sp-1")
         store.update_state(ender, "running")
 
-        CompleteStepUseCase(store, flow, worktrees).execute(
+        CompleteStepUseCase(store, flow, worktrees, config=None).execute(
             CompleteInput(step=ender, outcome="done"))
         self.assertIn(RELEASE_PENDING_LABEL, store.labels_of(item))
         enrolled = store.create_step(stage="build", role="agent", item=item)

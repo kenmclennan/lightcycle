@@ -51,7 +51,7 @@ def _world(git, branches=((BRANCH, "code"),)):
 
 
 def _complete(store, svc, step):
-    return CompleteStepUseCase(store, _PassEndFlow(FakeFs(METAS), store), svc).execute(
+    return CompleteStepUseCase(store, _PassEndFlow(FakeFs(METAS), store), svc, config=None).execute(
         CompleteInput(step=step, outcome="done")
     )
 

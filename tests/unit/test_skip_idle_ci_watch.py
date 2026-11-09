@@ -55,7 +55,7 @@ class _Rig:
         plant_pr(self.store, self.item, _URL, branch=_BRANCH)
         self.poll = self.store.create_step(stage="poll-ci", role="engine", item=self.item)
         adapter = _FlowAdapter(flow or _flow())
-        complete = CompleteStepUseCase(self.store, adapter)
+        complete = CompleteStepUseCase(self.store, adapter, worktrees=None, config=None)
         if wrap:
             complete = wrap(self.store, complete)
         self.uc = ResolveCiUseCase(

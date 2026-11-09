@@ -60,7 +60,7 @@ class CompleteResponse:
 
 
 class CompleteStepUseCase:
-    def __init__(self, store, flow, worktrees=None, config=None):
+    def __init__(self, store, flow, worktrees, config):
         self._store = store
         self._flow = flow
         self._worktrees = worktrees

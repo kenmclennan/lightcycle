@@ -50,7 +50,7 @@ ROUTED_METAS = {
 
 
 def _complete(store, worktrees, step, outcome="done", note=None, metas=METAS):
-    uc = CompleteStepUseCase(store, FlowService(FakeFs(metas), store), worktrees)
+    uc = CompleteStepUseCase(store, FlowService(FakeFs(metas), store), worktrees, config=None)
     return uc.execute(CompleteInput(step=step, outcome=outcome, note=note))
 
 

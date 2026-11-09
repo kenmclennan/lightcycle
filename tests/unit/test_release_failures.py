@@ -100,7 +100,7 @@ class TestCompleteStepKeepsMarkerOnFailedPassEndRelease(unittest.TestCase):
         store, svc, item, _ = _world(git)
         store.label_add(item, RELEASE_PENDING_LABEL)
         with _stderr():
-            CompleteStepUseCase(store, None, svc)._release(item, store.runs_of(item), False)
+            CompleteStepUseCase(store, None, svc, config=None)._release(item, store.runs_of(item), False)
         return store.labels_of(item)
 
     def test_failed_release_keeps_the_label(self):

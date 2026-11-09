@@ -430,7 +430,7 @@ class TestConflictFallThrough(unittest.TestCase):
         step = store.create_step(stage="watch-step", role="agent", item=item)
         flow = _FlowAdapter(_FLOW)
         monitor = MonitorPrsUseCase(
-            store, github, FakeWorktrees(), flow, CompleteStepUseCase(store, flow),
+            store, github, FakeWorktrees(), flow, CompleteStepUseCase(store, flow, worktrees=None, config=None),
             trusted_authors=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
             writes=InlinePrWrites(github, time.monotonic), ci_clock=time.monotonic, ci_poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, ci_wall_clock=lambda: 10000.0, ci_views=AlwaysConfirmed(),
         )
@@ -454,7 +454,7 @@ class TestOneReadPerPrPerTick(unittest.TestCase):
         store.create_step(stage="watch-step", role="agent", item=item)
         flow = _FlowAdapter(_FLOW)
         return MonitorPrsUseCase(
-            store, github, FakeWorktrees(), flow, CompleteStepUseCase(store, flow),
+            store, github, FakeWorktrees(), flow, CompleteStepUseCase(store, flow, worktrees=None, config=None),
             trusted_authors=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
             writes=InlinePrWrites(github, time.monotonic), ci_clock=time.monotonic, ci_poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, ci_wall_clock=lambda: 10000.0, ci_views=AlwaysConfirmed(),
         )

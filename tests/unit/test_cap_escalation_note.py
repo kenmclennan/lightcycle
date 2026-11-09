@@ -67,7 +67,7 @@ class TestCapEscalationNote(unittest.TestCase):
             old = store.create_step(stage="watch-ci", role="agent", item=item)
             store.complete_node(old, outcome)
         step = store.create_step(stage="watch-ci", role="agent", item=item)
-        complete = CompleteStepUseCase(store, _FlowAdapter(flow, limits or {}))
+        complete = CompleteStepUseCase(store, _FlowAdapter(flow, limits or {}), worktrees=None, config=None)
         done = complete.execute(CompleteInput(step=step, outcome=outcome))
         return store, done
 

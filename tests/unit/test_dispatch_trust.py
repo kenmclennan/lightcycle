@@ -70,7 +70,7 @@ class _Base(unittest.TestCase):
         return found[0].value.split("\n") if found else None
 
     def _decide(self, hold_step, outcome):
-        CompleteStepUseCase(self.store, self.adapter).execute(
+        CompleteStepUseCase(self.store, self.adapter, worktrees=None, config=None).execute(
             _complete_input(hold_step, outcome))
 
 
@@ -321,7 +321,7 @@ class TestHoldsExpireWithTheRun(_Base):
         self.uc.execute()
         hold = self._hold_steps()[0]
         merged = FakeGitHub(merged_prs={_URL})
-        complete = CompleteStepUseCase(self.store, self.adapter)
+        complete = CompleteStepUseCase(self.store, self.adapter, worktrees=None, config=None)
         flow = _FlowAdapter(_FLOW)
         resolve = ResolveMergedPrsUseCase(
             self.store, merged, FakeWorktrees(), flow, complete,

@@ -121,7 +121,7 @@ class TestResolveCiJudgesTheGitHead(unittest.TestCase):
         })
         adapter = ci_helpers._FlowAdapter(flow)
         uc = ResolveCiUseCase(
-            store, snapshot, adapter, CompleteStepUseCase(store, adapter),
+            store, snapshot, adapter, CompleteStepUseCase(store, adapter, worktrees=None, config=None),
             clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600,
             ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60,
             ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0,
@@ -147,7 +147,7 @@ class TestSkipIdleCiWatchOnTheGitHead(unittest.TestCase):
         flow = _flow()
         adapter = ci_helpers._FlowAdapter(flow)
         uc = SkipIdleCiWatchUseCase(
-            store, snapshot, adapter, CompleteStepUseCase(store, adapter),
+            store, snapshot, adapter, CompleteStepUseCase(store, adapter, worktrees=None, config=None),
             trusted_authors=lambda: frozenset())
 
         skipped = uc.execute(store.get_node(poll), watch, _URL, _API)

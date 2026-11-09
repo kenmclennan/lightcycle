@@ -195,7 +195,7 @@ class TestBackground(CadenceFixture):
         self.execute(gate, at(3, 3, 1, 0))
         self.assertEqual(len(self.failure_items()), 1)
         step = self.h.store.children(self.failure_items()[0].id)[0]
-        CompleteStepUseCase(self.h.store, None).execute(
+        CompleteStepUseCase(self.h.store, None, worktrees=None, config=None).execute(
             CompleteInput(step=step.id, outcome="done"))
         self.assertEqual(self.h.store.get_node(step.id).state, State.DONE)
         self.execute(gate, at(4, 3, 0, 0))
