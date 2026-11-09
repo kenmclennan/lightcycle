@@ -40,7 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: npx --yes prettier --check --prose-wrap=never README.md METHODOLOGY.md 'docs/**/*.md'
+      - run: npx --yes prettier --check --prose-wrap=never $(git ls-files '*.md')
       - run: npx --yes markdownlint-cli2 README.md METHODOLOGY.md 'docs/**/*.md'
 
   unit-feature:
