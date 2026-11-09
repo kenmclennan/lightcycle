@@ -3,7 +3,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from lightcycle import frontmatter
+import lightcycle.frontmatter as frontmatter
+from lightcycle import __version__
 from lightcycle.config_ranges import check_range, parse_bool
 from lightcycle.config_reload import (
     RELOAD_REJECTED,
@@ -180,8 +181,6 @@ class Config:
         return _PROMPTS_ROOT
 
     def version(self):
-        from lightcycle import __version__
-
         return __version__
 
     def data_root(self):

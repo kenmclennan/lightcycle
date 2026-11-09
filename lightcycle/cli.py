@@ -394,7 +394,7 @@ def cmd_logs(argv):
             while True:
                 data, offset = _container.worker_log.read_from(path, offset)
                 if not data:
-                    time.sleep(0.3)
+                    _container.sleep(0.3)
                     continue
                 for ll in parser.feed(data):
                     emit(ll)

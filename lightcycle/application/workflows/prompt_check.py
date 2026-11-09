@@ -1,4 +1,4 @@
-from pathlib import Path
+import os
 
 from lightcycle.application.workflows.prompt_commands import json_field_reads, lc_calls
 from lightcycle.cli_commands import flags_by_verb
@@ -57,10 +57,11 @@ class PromptSurfaceUnavailable(Exception):
 
 
 def engine_fragment_names(fs):
-    root = Path(__file__).resolve().parents[2] / "prompts" / "fragments"
+    package = os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+    root = os.path.join(package, "prompts", "fragments")
     names = {
         rel[: -len(".md")]
-        for rel in fs.list_files(str(root))
+        for rel in fs.list_files(root)
         if rel.endswith(".md") and "/" not in rel
     }
     if not names:

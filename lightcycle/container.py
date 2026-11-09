@@ -60,6 +60,22 @@ from lightcycle.application.work.activate_item import ActivateItemUseCase
 from lightcycle.application.workflows.lifecycle import WorkflowLifecycleService
 from lightcycle.config import Config, ConfigError
 from lightcycle.domain.flow.flow import GUIDANCE_WORKSPACE
+from lightcycle.adapters.simulate import NullGithubBudget, NullWorkers, RecordingGit, SimulateConfig
+from lightcycle.application.flow.claim_step import ClaimStepUseCase
+from lightcycle.application.flow.complete_step import CompleteStepUseCase
+from lightcycle.application.flow.unblock_step import UnblockStepUseCase
+from lightcycle.application.pool.backup import BackupUseCase
+from lightcycle.application.pool.breaker_gate import BreakerGateUseCase
+from lightcycle.application.pool.close_stranded_items import CloseStrandedItemsUseCase
+from lightcycle.application.pool.hook_completions import HookCompletionsUseCase
+from lightcycle.application.pool.live_usage import LiveUsageAccrualUseCase
+from lightcycle.application.pool.memory_gate import MemoryGateUseCase
+from lightcycle.application.pool.monitor_prs import MonitorPrsUseCase
+from lightcycle.application.pool.release_interrupted_runs import ReleaseInterruptedRunsUseCase
+from lightcycle.application.pool.sweep import SweepUseCase
+from lightcycle.application.pool.tick import TickUseCase
+from lightcycle.application.services.flow import FlowService
+from lightcycle.application.services.worktree import WorktreeService
 
 
 class Container:
@@ -196,19 +212,6 @@ class Container:
             self.config, self.clock)
 
     def tick(self, flow=None):
-        from lightcycle.application.flow.complete_step import CompleteStepUseCase
-        from lightcycle.application.pool.backup import BackupUseCase
-        from lightcycle.application.pool.breaker_gate import BreakerGateUseCase
-        from lightcycle.application.pool.hook_completions import HookCompletionsUseCase
-        from lightcycle.application.pool.memory_gate import MemoryGateUseCase
-        from lightcycle.application.pool.monitor_prs import MonitorPrsUseCase
-        from lightcycle.application.pool.close_stranded_items import CloseStrandedItemsUseCase
-        from lightcycle.application.pool.release_interrupted_runs import (
-            ReleaseInterruptedRunsUseCase,
-        )
-        from lightcycle.application.pool.tick import TickUseCase
-        from lightcycle.application.pool.live_usage import LiveUsageAccrualUseCase
-
         flow = flow if flow is not None else self.flow_service()
         worktrees = worktrees_for(self, flow=flow)
         complete = CompleteStepUseCase(self.store, flow, worktrees, self.config)
@@ -282,8 +285,6 @@ class Container:
         )
 
     def sweep(self, flow=None, worktrees=None):
-        from lightcycle.application.pool.sweep import SweepUseCase
-
         flow = flow if flow is not None else self.flow_service()
         return SweepUseCase(
             self.store, self.workers,
@@ -302,22 +303,16 @@ class Container:
         return _Simulation(self)
 
     def unblock_step_use_case(self, flow=None):
-        from lightcycle.application.flow.unblock_step import UnblockStepUseCase
-
         return UnblockStepUseCase(
             self.store, flow if flow is not None else self.flow_service(), spin_port=self.spin
         )
 
 
 def make_flow_service(workflow_bundle, store, config, workflow_source):
-    from lightcycle.application.services.flow import FlowService
-
     return FlowService(workflow_bundle, store, config, workflow_source)
 
 
 def make_worktrees(store, git, fs, config, flow, scaffold=None):
-    from lightcycle.application.services.worktree import WorktreeService
-
     return WorktreeService(store, git, fs, config, flow, scaffold=scaffold)
 
 
@@ -360,24 +355,18 @@ class _Simulation:
 
 class SimulationContainer:
     def __init__(self, container, scratch):
-        from lightcycle.adapters.sqlite_store import SqliteStore
-        from lightcycle.application.flow.claim_step import ClaimStepUseCase
-        from lightcycle.application.flow.complete_step import CompleteStepUseCase
-        from lightcycle.adapters.simulate import (
-            NullGithubBudget, NullWorkers, RecordingGit, SimulateConfig,
-        )
-        from lightcycle.config import Config
-
         self.home = os.path.join(scratch, "home")
         self.specs_root = os.path.join(scratch, "specs")
         self.projects_root = os.path.join(scratch, "projects")
         for d in (self.home, self.specs_root, self.projects_root):
-            os.makedirs(d, exist_ok=True)
+            container.scaffold.make_dir(d)
         cfg_path = os.path.join(self.home, "config")
 
-        with open(cfg_path, "w") as f:
-            f.write("context-artifact-types: %s\n" % " ".join(sorted(container.config.context_artifact_types())))
-            f.write("context-artifact-project: %s\n" % container.config.context_artifact_project())
+        container.scaffold.write_text(
+            cfg_path,
+            "context-artifact-types: %s\n" % " ".join(sorted(container.config.context_artifact_types()))
+            + "context-artifact-project: %s\n" % container.config.context_artifact_project(),
+        )
         self.config = SimulateConfig(container.config, self.projects_root)
         self.store = SqliteStore(Config(environ={"LC_HOME": self.home, "LC_CONFIG": cfg_path}))
         self.store.add_project(self.config.context_artifact_project(), local_path=self.specs_root)

@@ -1,12 +1,13 @@
 import json
 from dataclasses import dataclass, field, replace
-from typing import Dict, List, Optional
+from typing import List, Optional
 
+from lightcycle.application.feedback.item_signals import ItemSignals
 from lightcycle.application.feedback.retro_scope import RetroScope
 from lightcycle.domain import feedback as cfeedback
 from lightcycle.domain.feedback import layers
 from lightcycle.domain.feedback.review_yield import REVIEW_FINDINGS
-from lightcycle.domain.work import Item, SlowStep, State, slow_steps
+from lightcycle.domain.work import State, slow_steps
 
 
 def _layer_order(key):
@@ -26,22 +27,6 @@ class RetroInput:
 class FeedbackItem:
     step: str
     text: str
-
-
-@dataclass(frozen=True)
-class ItemSignals:
-    item: Item
-    signals: Dict[str, Dict[str, int]]
-    reflections: int
-    durations: Dict[str, Optional[float]] = field(default_factory=dict)
-    slow_steps: List[SlowStep] = field(default_factory=list)
-    prs: int = 0
-    prs_merged: int = 0
-    layers: List[Dict[str, object]] = field(default_factory=list)
-
-    def total_duration(self) -> Optional[float]:
-        known = [v for v in self.durations.values() if v is not None]
-        return sum(known) if known else None
 
 
 @dataclass(frozen=True)
