@@ -3,7 +3,7 @@ import pathlib
 import tempfile
 import unittest
 
-from tests.support.baseline_counts import grown_entries, parse_counts
+from tests.support.baseline_counts import grown_entries, parse_counts, stale_entries, stale_message
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 LIGHTCYCLE = REPO_ROOT / "lightcycle"
@@ -78,11 +78,21 @@ class TestParentPackageImports(unittest.TestCase):
         after_keyed = {"lightcycle/%s" % k: v for k, v in after.items()}
         grown = grown_entries(before, after_keyed)
         self.assertEqual(grown, {}, "parent-package imports grew: %s" % grown)
+        stale = stale_entries(before, after_keyed)
+        self.assertEqual(stale, {}, stale_message(stale))
 
     def test_a_baselined_file_with_one_more_offender_fails(self):
         before = {"x.py": 1}
         after = {"x.py": 2}
         self.assertEqual(grown_entries(before, after), {"x.py": (1, 2)})
+
+    def test_a_baselined_file_with_fewer_offenders_than_its_entry_is_stale(self):
+        before = {"x.py": 2}
+        after = {"x.py": 1}
+        self.assertEqual(stale_entries(before, after), {"x.py": (2, 1)})
+
+    def test_a_baselined_file_with_no_offenders_is_stale(self):
+        self.assertEqual(stale_entries({"x.py": 1}, {}), {"x.py": (1, 0)})
 
 
 class TestFunctionLocalFirstPartyImports(unittest.TestCase):
@@ -114,11 +124,21 @@ class TestFunctionLocalFirstPartyImports(unittest.TestCase):
         after_keyed = {"lightcycle/%s" % k: v for k, v in after.items()}
         grown = grown_entries(before, after_keyed)
         self.assertEqual(grown, {}, "function-local first-party imports grew: %s" % grown)
+        stale = stale_entries(before, after_keyed)
+        self.assertEqual(stale, {}, stale_message(stale))
 
     def test_a_baselined_file_with_one_more_offender_fails(self):
         before = {"x.py": 1}
         after = {"x.py": 2}
         self.assertEqual(grown_entries(before, after), {"x.py": (1, 2)})
+
+    def test_a_baselined_file_with_fewer_offenders_than_its_entry_is_stale(self):
+        before = {"x.py": 2}
+        after = {"x.py": 1}
+        self.assertEqual(stale_entries(before, after), {"x.py": (2, 1)})
+
+    def test_a_baselined_file_with_no_offenders_is_stale(self):
+        self.assertEqual(stale_entries({"x.py": 1}, {}), {"x.py": (1, 0)})
 
 
 if __name__ == "__main__":

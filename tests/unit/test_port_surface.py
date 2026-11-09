@@ -4,7 +4,7 @@ import re
 import tempfile
 import unittest
 
-from tests.support.baseline_counts import grown_entries, parse_counts
+from tests.support.baseline_counts import grown_entries, parse_counts, stale_entries, stale_message
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 LIGHTCYCLE = REPO_ROOT / "lightcycle"
@@ -171,6 +171,11 @@ class TestUndeclaredPortCalls(unittest.TestCase):
         self.assertEqual(
             grown_entries(before, after), {}, "undeclared port method calls grew: %s" % grown_entries(before, after)
         )
+        stale = stale_entries(before, after)
+        self.assertEqual(stale, {}, stale_message(stale))
+
+    def test_a_baselined_method_count_above_the_live_count_is_stale(self):
+        self.assertEqual(stale_entries({"x.py": 2}, {"x.py": 1}), {"x.py": (2, 1)})
 
 
 class TestDeadPortMethods(unittest.TestCase):
@@ -201,6 +206,11 @@ class TestDeadPortMethods(unittest.TestCase):
         self.assertEqual(
             grown_entries(before, after), {}, "dead port methods grew: %s" % grown_entries(before, after)
         )
+        stale = stale_entries(before, after)
+        self.assertEqual(stale, {}, stale_message(stale))
+
+    def test_a_dead_method_baseline_above_the_live_count_is_stale(self):
+        self.assertEqual(stale_entries({"x.py": 1}, {}), {"x.py": (1, 0)})
 
 
 if __name__ == "__main__":
