@@ -1,5 +1,6 @@
 import time
 import unittest
+from tests.support.null_collaborators import NoopWorktrees
 
 from lightcycle.application.flow.complete_step import CompleteStepUseCase
 from lightcycle.application.pool.check_content_pin import CheckContentPinUseCase
@@ -70,7 +71,7 @@ class TestUnpinnedWorkflowOnOneItem(unittest.TestCase):
         _plant_pr(self.store, self.bad, _BAD_URL)
 
     def _complete(self):
-        return CompleteStepUseCase(self.store, self.flow, worktrees=None, config=None)
+        return CompleteStepUseCase(self.store, self.flow, worktrees=NoopWorktrees(), config=None)
 
     def test_merge_monitor_processes_the_normal_item_and_notes_the_bad_one(self):
         github = FakeGitHub(merged_prs={_GOOD_URL, _BAD_URL})

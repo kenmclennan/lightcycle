@@ -12,6 +12,7 @@ from contextlib import redirect_stdout, redirect_stderr
 from pathlib import Path
 from unittest.mock import patch
 from tests.support.step_factory import create_owned_step
+from tests.support.null_collaborators import NoFlow
 
 ROOT = Path(__file__).resolve().parents[2]
 LC = str(ROOT / "bin" / "lc")
@@ -3906,7 +3907,7 @@ class TestWorktreePushTarget(unittest.TestCase):
             def worktree_retry_sleep(self):
                 return 0.1
 
-        return WorktreeService(store, GitAdapter(), _Fs(), _Cfg(), scaffold=ScaffoldAdapter())
+        return WorktreeService(store, GitAdapter(), _Fs(), _Cfg(), scaffold=ScaffoldAdapter(), flow=NoFlow())
 
     def _git(self, path, *args):
         return subprocess.run(["git", "-C", path] + list(args),

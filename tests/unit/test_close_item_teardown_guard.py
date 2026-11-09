@@ -1,5 +1,6 @@
 import os
 import unittest
+from tests.support.null_collaborators import NoFlow
 
 from lightcycle.application.flow import CompleteInput, CompleteStepUseCase
 from lightcycle.application.services.flow import FlowService
@@ -46,7 +47,7 @@ def _world(git, branch=BRANCH, pr=None, run_state=None):
     if run_state:
         store.close_run(rid, run_state)
     step = store.create_step(stage="finalise", role="agent", item=item)
-    svc = WorktreeService(store, git, fs=None, config=_Cfg())
+    svc = WorktreeService(store, git, fs=None, config=_Cfg(), flow=NoFlow())
     return store, svc, item, step
 
 
@@ -224,7 +225,7 @@ class TestMixedWorktrees(unittest.TestCase):
         store.set_branch(clean, "feat/spec")
         store.set_branch(dirty, BRANCH)
         store.create_step(stage="finalise", role="agent", item=item)
-        svc = WorktreeService(store, git, fs=None, config=_Cfg())
+        svc = WorktreeService(store, git, fs=None, config=_Cfg(), flow=NoFlow())
         dirty_path = svc.path_for_run(store.get_run(dirty))
         clean_path = svc.path_for_run(store.get_run(clean))
         git._registered = {dirty_path, clean_path}

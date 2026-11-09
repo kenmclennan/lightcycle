@@ -2,6 +2,7 @@ import contextlib
 import datetime
 import io
 import unittest
+from tests.support.null_collaborators import NoopWorktrees
 
 from lightcycle.application.flow.complete_step import CompleteInput, CompleteStepUseCase
 from lightcycle.application.flow.engine_steps import (
@@ -195,7 +196,7 @@ class TestBackground(CadenceFixture):
         self.execute(gate, at(3, 3, 1, 0))
         self.assertEqual(len(self.failure_items()), 1)
         step = self.h.store.children(self.failure_items()[0].id)[0]
-        CompleteStepUseCase(self.h.store, None, worktrees=None, config=None).execute(
+        CompleteStepUseCase(self.h.store, None, worktrees=NoopWorktrees(), config=None).execute(
             CompleteInput(step=step.id, outcome="done"))
         self.assertEqual(self.h.store.get_node(step.id).state, State.DONE)
         self.execute(gate, at(4, 3, 0, 0))

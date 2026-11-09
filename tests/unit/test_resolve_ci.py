@@ -1,5 +1,6 @@
 import time
 import unittest
+from tests.support.null_collaborators import NoopWorktrees
 
 from lightcycle.application.flow.complete_step import CompleteInput, CompleteStepUseCase
 from lightcycle.application.pool.pr_snapshot import PrSnapshot
@@ -102,7 +103,7 @@ class TestResolveCiJudgedSha(unittest.TestCase):
             (_URL, "sha1"): (CheckRun(name="build", status=conclusion[0], conclusion=conclusion[1]),)
         })
         flow = _FlowAdapter(_FLOW)
-        ResolveCiUseCase(store, gh, flow, CompleteStepUseCase(store, flow, worktrees=None, config=None), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset()).execute()
+        ResolveCiUseCase(store, gh, flow, CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset()).execute()
         return [a.value for a in store.item_artifacts(step) if a.type == "ci-judged-sha"]
 
     def test_success_writes_the_judged_sha(self):
@@ -139,7 +140,7 @@ class TestResolveCiConfirmsHeadBeforeFailed(unittest.TestCase):
         step = store.create_step(stage="poll-ci", role="engine", item=item)
 
         flow = _FlowAdapter(_FLOW)
-        uc = ResolveCiUseCase(store, github, flow, CompleteStepUseCase(store, flow, worktrees=None, config=None), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
+        uc = ResolveCiUseCase(store, github, flow, CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
         return store, item, step, uc
 
     def _judged(self, store, step):
@@ -220,7 +221,7 @@ class TestResolveCiUseCase(unittest.TestCase):
         plant_pr(store, item, _URL, branch=_BRANCH)
         step = store.create_step(stage="poll-ci", role="engine", item=item)
 
-        complete = CompleteStepUseCase(store, _FlowAdapter(flow), worktrees=None, config=None)
+        complete = CompleteStepUseCase(store, _FlowAdapter(flow), worktrees=NoopWorktrees(), config=None)
         uc = ResolveCiUseCase(store, github, _FlowAdapter(flow), complete, clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
         return store, item, step, uc
 
@@ -354,7 +355,7 @@ class TestCiUnreadDiagnostics(unittest.TestCase):
         flow = _FlowAdapter(_FLOW)
         clock = _Clock()
         uc = ResolveCiUseCase(
-            store, github, flow, CompleteStepUseCase(store, flow, worktrees=None, config=None),
+            store, github, flow, CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None),
             clock=clock, poll_seconds=lambda: 60,
             ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
         return store, item, step, uc, clock
@@ -459,7 +460,7 @@ class TestCiUnreadDiagnostics(unittest.TestCase):
 
         split = _Split("sha1", _GREEN)
         uc = ResolveCiUseCase(
-            store, split, flow, CompleteStepUseCase(store, flow, worktrees=None, config=None),
+            store, split, flow, CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None),
             clock=clock, poll_seconds=lambda: 60,
             ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
         clock.now = 0.0
@@ -479,7 +480,7 @@ def _ci_setup(github):
     step = store.create_step(stage="poll-ci", role="engine", item=item)
     flow = _FlowAdapter(_FLOW)
     uc = ResolveCiUseCase(
-        store, github, flow, CompleteStepUseCase(store, flow, worktrees=None, config=None),
+        store, github, flow, CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None),
         clock=time.monotonic, poll_seconds=lambda: 60,
         ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset(),
     )
@@ -729,7 +730,7 @@ class TestViewConfirmationHold(unittest.TestCase):
     def _uc(self, store, github, views, clock, note_polls=3):
         flow = _FlowAdapter(_FLOW)
         return ResolveCiUseCase(
-            store, github, flow, CompleteStepUseCase(store, flow, worktrees=None, config=None), clock=clock,
+            store, github, flow, CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None), clock=clock,
             poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: note_polls,
             wall_clock=lambda: 10000.0, views=views, trusted_authors=lambda: frozenset())
 
@@ -906,7 +907,7 @@ class TestResolveCiSkipsAStepAnotherPathClosed(unittest.TestCase):
         plant_pr(store, item, _URL, branch=_BRANCH)
         step = store.create_step(stage="poll-ci", role="engine", item=item)
         flow = _FlowAdapter(_FLOW)
-        complete = CompleteStepUseCase(store, flow, worktrees=None, config=None)
+        complete = CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None)
         real = complete.execute
         calls = []
         closes = []
@@ -961,7 +962,7 @@ class _StackedCiRig:
             required_by_base={"acme/widget@%s" % bottom.base_ref: required} if required else None)
         flow = _FlowAdapter(_FLOW)
         self.uc = ResolveCiUseCase(
-            self.store, self.github, flow, CompleteStepUseCase(self.store, flow, worktrees=None, config=None),
+            self.store, self.github, flow, CompleteStepUseCase(self.store, flow, worktrees=NoopWorktrees(), config=None),
             clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600,
             ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60,
             ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0,

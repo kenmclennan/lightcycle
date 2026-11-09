@@ -1,5 +1,6 @@
 import time
 import unittest
+from tests.support.null_collaborators import NoopWorktrees, NoFlow
 
 from lightcycle.application.pool.pr_writes import InlinePrWrites
 from lightcycle.application.flow.complete_step import CompleteStepUseCase
@@ -277,7 +278,7 @@ class TestMonitorPrsUseCaseComposesAllThreeJobs(unittest.TestCase):
         )
         worktrees = FakeWorktrees()
         worktrees.paths[ci_item] = ci_root
-        complete = CompleteStepUseCase(store, _FlowAdapter(flow), worktrees=None, config=None)
+        complete = CompleteStepUseCase(store, _FlowAdapter(flow), worktrees=NoopWorktrees(), config=None)
 
         uc = MonitorPrsUseCase(
             store, gh, worktrees, _FlowAdapter(flow), complete,
@@ -307,7 +308,7 @@ class TestTeardownRefusalRunLog(unittest.TestCase):
         store.add_artifact(item, "repo", REPO)
         plant_pr(store, item, self.URL, branch=BRANCH)
         store.create_step(stage="ready-merge", role="human", item=item)
-        worktrees = WorktreeService(store, git, fs=None, config=_Cfg())
+        worktrees = WorktreeService(store, git, fs=None, config=_Cfg(), flow=NoFlow())
         path = worktrees.path_for_run(store.open_runs_of(item)[0])
         git._registered = {path}
         git._uncommitted = {path: ["x.py"]}

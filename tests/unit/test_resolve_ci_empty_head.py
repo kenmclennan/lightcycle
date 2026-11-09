@@ -1,4 +1,5 @@
 import unittest
+from tests.support.null_collaborators import NoopWorktrees
 
 from lightcycle.application.flow.complete_step import CompleteStepUseCase
 from lightcycle.application.flow.route_step import RouteStepService
@@ -57,7 +58,7 @@ class _Case(unittest.TestCase):
         flow = _FlowAdapter(_FLOW)
         self.wall = _Wall()
         self.uc = ResolveCiUseCase(
-            self.store, self.github, flow, CompleteStepUseCase(self.store, flow, worktrees=None, config=None),
+            self.store, self.github, flow, CompleteStepUseCase(self.store, flow, worktrees=NoopWorktrees(), config=None),
             clock=lambda: self.wall.now, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600,
             ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3,
             wall_clock=self.wall, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())

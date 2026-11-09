@@ -1,4 +1,5 @@
 import unittest
+from tests.support.null_collaborators import NoFlow
 
 from lightcycle.application.flow import CompleteInput, CompleteStepUseCase
 from lightcycle.application.flow.record_merged_gate_run import (
@@ -90,7 +91,7 @@ class _World:
         self.pass_id = self.store.open_pass(self.item)
         self.run = self._run(phase, branch, pr, stack)
         self.step = self.store.create_step(stage=gate, role="human", item=self.item)
-        self.worktrees = WorktreeService(self.store, self.git, fs=None, config=_Cfg())
+        self.worktrees = WorktreeService(self.store, self.git, fs=None, config=_Cfg(), flow=NoFlow())
 
     def _run(self, phase, branch, pr, stack):
         rid = self.store.open_run(self.item, self.pass_id, phase)

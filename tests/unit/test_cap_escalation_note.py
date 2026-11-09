@@ -1,4 +1,5 @@
 import unittest
+from tests.support.null_collaborators import NoopWorktrees
 
 from lightcycle.application.flow import CompleteStepUseCase
 from lightcycle.application.flow.complete_step import CompleteInput
@@ -67,7 +68,7 @@ class TestCapEscalationNote(unittest.TestCase):
             old = store.create_step(stage="watch-ci", role="agent", item=item)
             store.complete_node(old, outcome)
         step = store.create_step(stage="watch-ci", role="agent", item=item)
-        complete = CompleteStepUseCase(store, _FlowAdapter(flow, limits or {}), worktrees=None, config=None)
+        complete = CompleteStepUseCase(store, _FlowAdapter(flow, limits or {}), worktrees=NoopWorktrees(), config=None)
         done = complete.execute(CompleteInput(step=step, outcome=outcome))
         return store, done
 

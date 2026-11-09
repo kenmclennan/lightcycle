@@ -1,6 +1,7 @@
 import json
 import time
 import unittest
+from tests.support.null_collaborators import NoopWorktrees
 
 from lightcycle.application.flow import CompleteStepUseCase
 from lightcycle.application.flow.complete_step import CompleteInput
@@ -69,7 +70,7 @@ class _Harness:
         self.heads = heads
         self.github = FakeGitHub(head_shas=heads)
         self.flow = _FlowAdapter(flow)
-        self.complete = CompleteStepUseCase(self.store, self.flow, worktrees=None, config=None)
+        self.complete = CompleteStepUseCase(self.store, self.flow, worktrees=NoopWorktrees(), config=None)
         self.uc = DetectHeadMovedUseCase(self.store, self.github, self.flow, self.complete)
 
     def run(self):
@@ -239,15 +240,6 @@ class TestDetection(unittest.TestCase):
 
         self.assertEqual(h.run().head_moved, [item_a])
 
-    def test_no_complete_makes_the_use_case_a_no_op(self):
-        url = _pr(17)
-        h = _Harness({url: "aaa"})
-        item = h.item_with_pr(url)
-        h.store.create_step(stage="watch-step", role="agent", item=item)
-        h.uc = DetectHeadMovedUseCase(h.store, h.github, h.flow, None)
-
-        self.assertEqual(h.run().head_moved, [])
-
 
 class TestMonitorWiring(unittest.TestCase):
     def test_update_branch_cause_fires_on_the_next_pass(self):
@@ -261,7 +253,7 @@ class TestMonitorWiring(unittest.TestCase):
         gate = store.create_step(stage="watch-step", role="agent", item=item)
         flow = _FlowAdapter(_FLOW)
         monitor = MonitorPrsUseCase(
-            store, github, FakeWorktrees(), flow, CompleteStepUseCase(store, flow, worktrees=None, config=None),
+            store, github, FakeWorktrees(), flow, CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None),
             trusted_authors=lambda: frozenset(), held_shortcode=lambda: "HLD",
             writes=InlinePrWrites(github, time.monotonic), ci_clock=time.monotonic, ci_poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, ci_wall_clock=lambda: 10000.0, ci_views=AlwaysConfirmed(),
         )

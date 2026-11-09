@@ -2,6 +2,7 @@ import unittest
 
 from lightcycle.application.work.close_item import CloseItemInput, CloseItemUseCase
 from lightcycle.domain.work import State
+from tests.support.null_collaborators import NoopWorktrees
 from tests.support.sqlite_store_factory import make_sqlite_store
 from tests.support.step_factory import create_owned_step
 
@@ -31,7 +32,7 @@ class TestCloseItemAtomicity(unittest.TestCase):
         store.add_artifact = raising_add_artifact
 
         with self.assertRaises(RuntimeError):
-            CloseItemUseCase(store, None).execute(
+            CloseItemUseCase(store, NoopWorktrees()).execute(
                 CloseItemInput(item=item, reason="merged", disposition="completed")
             )
 

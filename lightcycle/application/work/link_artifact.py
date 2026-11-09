@@ -132,7 +132,7 @@ class LinkArtifactUseCase:
             raise UseCaseError(
                 "'%s' is not a step - review-findings attaches to the review step" % step_id
             )
-        if self._flow is None or self._flow.flow_for(node).step_def(node.stage).review is None:
+        if self._flow.flow_for(node).step_def(node.stage).review is None:
             raise UseCaseError(
                 "step '%s' (%s) is not a review step - its step file declares no review: key"
                 % (step_id, node.stage)
@@ -219,7 +219,7 @@ class LinkArtifactUseCase:
             self._store.set_pr(run.id, value)
 
     def _acting_step(self, input):
-        if not input.step or self._flow is None:
+        if not input.step:
             return None
         try:
             step = self._store.get_node(input.step)
@@ -235,7 +235,7 @@ class LinkArtifactUseCase:
         open_runs = self._store.open_runs_of(item)
         if not open_runs:
             return None
-        if self._flow is None or len(open_runs) == 1:
+        if len(open_runs) == 1:
             return open_runs[-1]
         phase = self._active_phase(item)
         return next((r for r in reversed(open_runs) if r.phase == phase), open_runs[-1])

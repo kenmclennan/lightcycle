@@ -72,8 +72,6 @@ class ResolveMergedPrsUseCase:
         )
 
     def _expire_holds(self, run):
-        if self._complete is None:
-            return
         for held in self._store.open_holds(run.id):
             if held.step_id is None:
                 continue
@@ -85,8 +83,6 @@ class ResolveMergedPrsUseCase:
             )
 
     def _release_refused(self, run, step):
-        if self._worktrees is None:
-            return False
         findings = self._worktrees.phase_release_refusals(run)
         if not findings:
             return False

@@ -1,5 +1,6 @@
 import time
 import unittest
+from tests.support.null_collaborators import NoopWorktrees
 
 from lightcycle.application.flow.complete_step import CompleteStepUseCase
 from lightcycle.application.pool.resolve_ci import ResolveCiUseCase
@@ -55,7 +56,7 @@ class _Rig:
         plant_pr(self.store, self.item, _URL, branch=_BRANCH)
         self.poll = self.store.create_step(stage="poll-ci", role="engine", item=self.item)
         adapter = _FlowAdapter(flow or _flow())
-        complete = CompleteStepUseCase(self.store, adapter, worktrees=None, config=None)
+        complete = CompleteStepUseCase(self.store, adapter, worktrees=NoopWorktrees(), config=None)
         if wrap:
             complete = wrap(self.store, complete)
         self.uc = ResolveCiUseCase(

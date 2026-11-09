@@ -3,6 +3,7 @@ from tests.support.fake_github import FakeGitHub
 from tests.support.fake_github_budget import FakeGithubBudget
 import json
 import unittest
+from tests.support.null_collaborators import NoopWorktrees
 
 from lightcycle.application.flow import ClaimInput, ClaimStepUseCase, CompleteInput, CompleteStepUseCase
 from lightcycle.application.work import ShowNodeInput, ShowNodeUseCase
@@ -32,7 +33,7 @@ class Rig:
         self.workers = FakeWorkers()
         self.config = FakeConfig(spawn=spawn)
         self.item = self.store.create_item("t", "the brief", workflow="spec-driven", shortcode="APP")
-        self.complete = CompleteStepUseCase(self.store, self.flow, worktrees=None, config=None)
+        self.complete = CompleteStepUseCase(self.store, self.flow, worktrees=NoopWorktrees(), config=None)
 
     def claim_uc(self):
         return ClaimStepUseCase(
