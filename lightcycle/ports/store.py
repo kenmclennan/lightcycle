@@ -233,16 +233,6 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def record_usage(self, tid, input_tokens, output_tokens, cache_read_tokens,
-                      cache_creation_tokens, cost_usd, cost_basis, thinking_tokens,
-                      rates_used=None):
-        pass
-
-    @abstractmethod
-    def record_attribution(self, tid, turn_count, tool_usage):
-        pass
-
-    @abstractmethod
     def tool_usage_for(self, step_id):
         pass
 
@@ -403,14 +393,6 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
-    def hold(self, run_id, key):
-        pass
-
-    @abstractmethod
-    def hold_for_step(self, step_id):
-        pass
-
-    @abstractmethod
     def approved_holds(self, run_id):
         pass
 
@@ -476,10 +458,6 @@ class StorePort(ABC):
 
     @abstractmethod
     def mark_day_summary_dirty(self, day):
-        pass
-
-    @abstractmethod
-    def start_day_summary(self, day, step_id, spawn_count):
         pass
 
     @abstractmethod

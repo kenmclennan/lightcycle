@@ -1,5 +1,2 @@
 lightcycle/adapters/launcher.py: 1
 lightcycle/adapters/spawner.py: 3
-lightcycle/adapters/worker_session.py: 1
-lightcycle/adapters/workers.py: 1
-lightcycle/adapters/workflow_source.py: 3

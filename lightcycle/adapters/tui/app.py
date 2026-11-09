@@ -579,7 +579,7 @@ class LightcycleApp(App):
         self._upgrade_check = upgrade_check or (
             lambda: upgrade(
                 self._container.config.version(), check_only=True,
-                fetch=self._container.upgrade.fetch_remote_version)
+                fetch=lambda: self._container.upgrade.fetch_remote_version())
         )
         self._doctor_check = doctor_check or (
             lambda: self._container.doctor_for_current_thread().execute(DoctorInput())

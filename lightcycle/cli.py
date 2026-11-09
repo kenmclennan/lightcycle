@@ -257,9 +257,9 @@ def cmd_upgrade(argv):
         source = WorkflowSourceAdapter(config, WorkflowBundleAdapter())
     try:
         resp = upgrade(
-            __version__, check_only=a.check, fetch=port.fetch_remote_version,
-            install=port.install_upgrade, installed=port.installed_version,
-            holders=lambda: scan_venv_holders(port.list_processes),
+            __version__, check_only=a.check, fetch=lambda: port.fetch_remote_version(),
+            install=lambda: port.install_upgrade(), installed=lambda: port.installed_version(),
+            holders=lambda: scan_venv_holders(lambda: port.list_processes()),
             bundle_conflicts=lambda target: installed_bundle_conflicts(source, target),
             force=a.force,
         )

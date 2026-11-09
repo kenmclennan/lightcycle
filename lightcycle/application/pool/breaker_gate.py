@@ -71,7 +71,7 @@ class BreakerGateUseCase:
             now,
             self._config.max_boot_seconds(),
             self._config.stall_seconds(),
-            self._worker_log.log_mtime,
+            lambda path: self._worker_log.log_mtime(path),
         ):
             return "stalled"
         return None

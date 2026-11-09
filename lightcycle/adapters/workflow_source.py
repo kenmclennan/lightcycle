@@ -14,6 +14,9 @@ from lightcycle.ports.workflow_source import (
 )
 
 _MANIFEST = "source.toml"
+_CLONE_TIMEOUT_SECONDS = 300
+_CHECKOUT_TIMEOUT_SECONDS = 60
+_REV_PARSE_TIMEOUT_SECONDS = 60
 _REGISTRY = "origin.toml"
 
 
@@ -82,23 +85,34 @@ class WorkflowSourceAdapter(WorkflowSourcePort):
         try:
             try:
                 subprocess.run(["git", "clone", "--quiet", url, checkout],
-                               check=True, capture_output=True, text=True)
+                               check=True, capture_output=True, text=True,
+                               timeout=_CLONE_TIMEOUT_SECONDS)
             except subprocess.CalledProcessError as e:
                 raise WorkflowSourceError(
                     "could not clone %s: %s" % (url, e.stderr.strip())) from e
+            except subprocess.TimeoutExpired as e:
+                raise WorkflowSourceError("could not clone %s: timed out" % url) from e
             if ref:
                 try:
                     subprocess.run(["git", "-C", checkout, "checkout", "--quiet", ref],
-                                   check=True, capture_output=True, text=True)
+                                   check=True, capture_output=True, text=True,
+                                   timeout=_CHECKOUT_TIMEOUT_SECONDS)
                 except subprocess.CalledProcessError:
                     raise WorkflowSourceError("ref %r not found in %s" % (ref, url))
+                except subprocess.TimeoutExpired as e:
+                    raise WorkflowSourceError(
+                        "checking out ref %r in %s timed out" % (ref, url)) from e
             try:
                 sha = subprocess.run(["git", "-C", checkout, "rev-parse", "HEAD"],
-                                     check=True, capture_output=True, text=True).stdout.strip()
+                                     check=True, capture_output=True, text=True,
+                                     timeout=_REV_PARSE_TIMEOUT_SECONDS).stdout.strip()
             except subprocess.CalledProcessError as e:
                 raise WorkflowSourceError(
                     "could not resolve HEAD in checkout of %s: %s"
                     % (url, e.stderr.strip())) from e
+            except subprocess.TimeoutExpired as e:
+                raise WorkflowSourceError(
+                    "could not resolve HEAD in checkout of %s: timed out" % url) from e
             with open(os.path.join(checkout, _MANIFEST)) as f:
                 manifest = f.read()
             steps = self._read_dir_texts(checkout, "steps")
