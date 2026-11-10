@@ -1,3 +1,4 @@
+from tests.support.store_seed import seed_attribution, seed_usage
 import unittest
 
 from lightcycle.adapters.tui.design_system import (
@@ -241,8 +242,8 @@ class TestTurnsCostTimeWiring(unittest.TestCase):
         step = create_owned_step(store, "s", stage="build", role="agent")
         store.claim_ready("agent")
         store.accrue_active_seconds([step], 600)
-        store.record_usage(step, 100, 10, 0, 0, 2.50, "list", None)
-        store.record_attribution(step, 50, {})
+        seed_usage(store, step, 100, 10, 0, 0, 2.50, "list", None)
+        seed_attribution(store, step, 50, {})
         row = HierarchyRow(store.get_node(step), 0)
 
         now = "2026-01-01T10:17:00"

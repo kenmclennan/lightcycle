@@ -1,3 +1,4 @@
+from tests.support.store_seed import held_comment, held_comment_for_step
 import unittest
 from tests.support.null_collaborators import NoopWorktrees
 
@@ -148,7 +149,7 @@ class TestMixedFeedback(_Base):
         self.assertEqual(len(steps), 1)
         self.assertEqual(self._artifact(steps[0].id), ["inline:root"])
         self.assertEqual(len(self._hold_steps()), 1)
-        self.assertEqual(self.store.hold(self.rid, "inline:reply").state, "held")
+        self.assertEqual(held_comment(self.store, self.rid, "inline:reply").state, "held")
         run = self.store.current_run(self.item, None)
         self.assertEqual(run.comments_dispatched_through, str(1500.0))
 
@@ -157,7 +158,7 @@ class TestMixedFeedback(_Base):
             _mention(1500.0, "mallory", "m1"), _mention(1600.0, "mallory", "m2")])
         self._build(gh)
         self.uc.execute()
-        by_key = {self.store.hold_for_step(h.id).key: h.id for h in self._hold_steps()}
+        by_key = {held_comment_for_step(self.store, h.id).key: h.id for h in self._hold_steps()}
         self._decide(by_key["mention:m1"], "approve")
         self._decide(by_key["mention:m2"], "reject")
 
@@ -166,10 +167,10 @@ class TestMixedFeedback(_Base):
         self.assertEqual(result.reworked, [self.item])
         steps = self._feedback_steps()
         self.assertEqual(self._artifact(steps[0].id), ["mention:m1"])
-        self.assertEqual(self.store.hold(self.rid, "mention:m1").state, "dispatched")
-        self.assertEqual(self.store.hold(self.rid, "mention:m2").state, "rejected")
+        self.assertEqual(held_comment(self.store, self.rid, "mention:m1").state, "dispatched")
+        self.assertEqual(held_comment(self.store, self.rid, "mention:m2").state, "rejected")
         self.uc.execute()
-        self.assertEqual(self.store.hold(self.rid, "mention:m2").state, "rejected")
+        self.assertEqual(held_comment(self.store, self.rid, "mention:m2").state, "rejected")
         self.assertEqual(len(self._hold_steps()), 2)
 
     def test_a_later_comment_from_the_same_author_is_held_again_after_approval(self):
@@ -179,7 +180,7 @@ class TestMixedFeedback(_Base):
         self._decide(self._hold_steps()[0].id, "approve")
         gh._timed_comments.append(_mention(1700.0, "mallory", "m3"))
         self.uc.execute()
-        self.assertEqual(self.store.hold(self.rid, "mention:m3").state, "held")
+        self.assertEqual(held_comment(self.store, self.rid, "mention:m3").state, "held")
         self.assertEqual(len(self._hold_steps()), 2)
 
 
@@ -191,14 +192,14 @@ class TestWatermark(_Base):
         self.uc.execute()
         run = self.store.current_run(self.item, None)
         self.assertEqual(run.comments_dispatched_through, str(1800.0))
-        self.assertEqual(self.store.hold(self.rid, "mention:old").state, "held")
+        self.assertEqual(held_comment(self.store, self.rid, "mention:old").state, "held")
         for s in self._feedback_steps():
             self.store.complete_node(s.id, "done")
         self._decide(self._hold_steps()[0].id, "approve")
 
         self.uc.execute()
 
-        self.assertEqual(self.store.hold(self.rid, "mention:old").state, "dispatched")
+        self.assertEqual(held_comment(self.store, self.rid, "mention:old").state, "dispatched")
         newest = [s for s in self._feedback_steps() if s.state != "done"]
         self.assertEqual(self._artifact(newest[0].id), ["mention:old"])
         run = self.store.current_run(self.item, None)
@@ -214,7 +215,7 @@ class TestWatermark(_Base):
             self.store.complete_node(s.id, "done")
         for _ in range(3):
             self.uc.execute()
-        self.assertEqual(self.store.hold(self.rid, "mention:old").state, "rejected")
+        self.assertEqual(held_comment(self.store, self.rid, "mention:old").state, "rejected")
         self.assertEqual(len([s for s in self._feedback_steps() if s.state != "done"]), 0)
 
     def test_a_trusted_comment_at_exactly_the_watermark_is_not_readmitted(self):
@@ -271,7 +272,7 @@ class TestFailClosed(_Base):
         self.uc.execute()
         self._decide(self._hold_steps()[0].id, "approve")
         self.uc.execute()
-        self.assertEqual(self.store.hold(self.rid, "mention:m1").state, "approved")
+        self.assertEqual(held_comment(self.store, self.rid, "mention:m1").state, "approved")
         self.assertEqual(len(self._feedback_steps()), 1)
 
 
@@ -287,7 +288,7 @@ class TestDecidingAHold(_Base):
             with self.subTest(outcome=outcome):
                 hold = self._held()
                 self._decide(hold.id, outcome)
-                self.assertEqual(self.store.hold(self.rid, "mention:m1").state, state)
+                self.assertEqual(held_comment(self.store, self.rid, "mention:m1").state, state)
                 self.assertEqual(self.store.get_node(hold.id).state, "done")
                 self.assertEqual(self.store.get_node(hold.item).state, "done")
 
@@ -296,7 +297,7 @@ class TestDecidingAHold(_Base):
         with self.assertRaises(UseCaseError) as caught:
             self._decide(hold.id, "done")
         self.assertIn("approve, reject", str(caught.exception))
-        self.assertEqual(self.store.hold(self.rid, "mention:m1").state, "held")
+        self.assertEqual(held_comment(self.store, self.rid, "mention:m1").state, "held")
 
     def test_the_hold_item_describes_the_comment_as_untrusted_text(self):
         hold = self._held()
@@ -329,7 +330,7 @@ class TestHoldsExpireWithTheRun(_Base):
             CheckContentPinUseCase(self.store, merged, flow, trusted_authors=lambda: frozenset({"review-code"})),
         )
         resolve.execute()
-        self.assertEqual(self.store.hold(self.rid, "mention:m1").state, "rejected")
+        self.assertEqual(held_comment(self.store, self.rid, "mention:m1").state, "rejected")
         self.assertEqual(self.store.get_node(hold.id).state, "done")
 
 

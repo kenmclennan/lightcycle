@@ -1,3 +1,4 @@
+from tests.support.store_seed import seed_day_summary_claim, seed_usage
 import datetime
 
 import pytest
@@ -59,7 +60,7 @@ def _store_closed_item_today_with_cost(ctx):
     item = store.create_item("done item", "a description")
     step = store.create_step(stage="build", role="agent", item=item)
     store.claim_ready("agent")
-    store.record_usage(step, 100, 10, 0, 0, 2.50, "list", None)
+    seed_usage(store, step, 100, 10, 0, 0, 2.50, "list", None)
     store.complete_node(step, "done")
     store.complete_node(item, "merged", disposition="completed")
     store._records[item]["closed_at"] = _NOW.isoformat()
@@ -78,7 +79,7 @@ def _store_closed_item_today_with_summary(ctx):
     today = _NOW.date()
     with store.transaction():
         store.mark_day_summary_dirty(today)
-        store.start_day_summary(today, step_id="fake-summary-step", spawn_count=1)
+        seed_day_summary_claim(store, today, step_id="fake-summary-step", spawn_count=1)
     store.finish_day_summary(
         today, summary=_SUMMARY_TEXT, summarized_count=1, clear_dirty=True,
     )

@@ -1,3 +1,4 @@
+from tests.support.store_seed import seed_attribution, seed_usage
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 from textual.widgets import Static
@@ -102,8 +103,8 @@ def _agent_step_with_cost(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
     step = store.create_step(stage="write-code", role="agent", item=item)
-    store.record_usage(step, 204_321, 2, 21_685_338, 555, 5.70, "list", None)
-    store.record_attribution(step, 42, {})
+    seed_usage(store, step, 204_321, 2, 21_685_338, 555, 5.70, "list", None)
+    seed_attribution(store, step, 42, {})
     ctx["store"] = store
     ctx["item_id"] = item
     ctx["step_id"] = step
@@ -116,8 +117,8 @@ def _agent_step_with_cost_and_tools(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
     step = store.create_step(stage="write-code", role="agent", item=item)
-    store.record_usage(step, 1000, 200, 0, 0, 1.5, "list", None)
-    store.record_attribution(
+    seed_usage(store, step, 1000, 200, 0, 0, 1.5, "list", None)
+    seed_attribution(store, 
         step, 10, {"Read": ToolUsage(calls=12, bytes=4300), "Bash": ToolUsage(calls=3, bytes=512)},
     )
     ctx["store"] = store
@@ -132,8 +133,8 @@ def _agent_step_with_cost_and_no_tools(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
     step = store.create_step(stage="write-code", role="agent", item=item)
-    store.record_usage(step, 1000, 200, 0, 0, 1.5, "list", None)
-    store.record_attribution(step, 10, {})
+    seed_usage(store, step, 1000, 200, 0, 0, 1.5, "list", None)
+    seed_attribution(store, step, 10, {})
     ctx["store"] = store
     ctx["item_id"] = item
     ctx["step_id"] = step
@@ -146,7 +147,7 @@ def _agent_step_turns_no_cost(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
     step = store.create_step(stage="handle-feedback", role="agent", item=item)
-    store.record_attribution(step, 246, {})
+    seed_attribution(store, step, 246, {})
     ctx["store"] = store
     ctx["item_id"] = item
     ctx["step_id"] = step
@@ -159,8 +160,8 @@ def _agent_step_unpriced(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
     step = store.create_step(stage="write-code", role="agent", item=item)
-    store.record_usage(step, 100, 20, 0, 0, 0.0, "unpriced", None)
-    store.record_attribution(step, 12, {})
+    seed_usage(store, step, 100, 20, 0, 0, 0.0, "unpriced", None)
+    seed_attribution(store, step, 12, {})
     ctx["store"] = store
     ctx["item_id"] = item
     ctx["step_id"] = step
@@ -173,11 +174,11 @@ def _item_with_priced_and_unpriced_steps(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
     priced = store.create_step(stage="write-code", role="agent", item=item)
-    store.record_usage(priced, 1000, 200, 0, 0, 1.0, "list", None)
-    store.record_attribution(priced, 10, {})
+    seed_usage(store, priced, 1000, 200, 0, 0, 1.0, "list", None)
+    seed_attribution(store, priced, 10, {})
     unpriced = store.create_step(stage="review-code", role="agent", item=item)
-    store.record_usage(unpriced, 100, 20, 0, 0, 0.0, "unpriced", None)
-    store.record_attribution(unpriced, 5, {})
+    seed_usage(store, unpriced, 100, 20, 0, 0, 0.0, "unpriced", None)
+    seed_attribution(store, unpriced, 5, {})
     ctx["store"] = store
     ctx["item_id"] = item
     ctx["session"] = launch(make_test_container(store=store), size=WIDE_SIZE)
@@ -203,19 +204,19 @@ def _item_two_passes(ctx):
     pass_1 = store.open_pass(item)
     spec_1 = store.create_step(stage="spec-writer", role="agent", item=item)
     store.set_step_pass(spec_1, pass_1)
-    store.record_usage(spec_1, 1000, 200, 0, 0, 2.0, "list", None)
-    store.record_attribution(spec_1, 10, {})
+    seed_usage(store, spec_1, 1000, 200, 0, 0, 2.0, "list", None)
+    seed_attribution(store, spec_1, 10, {})
     code_1 = store.create_step(stage="write-code", role="agent", item=item)
     store.set_step_pass(code_1, pass_1)
-    store.record_usage(code_1, 500, 100, 0, 0, 0.5, "list", None)
-    store.record_attribution(code_1, 5, {})
+    seed_usage(store, code_1, 500, 100, 0, 0, 0.5, "list", None)
+    seed_attribution(store, code_1, 5, {})
     store.close_pass(pass_1)
 
     pass_2 = store.open_pass(item)
     spec_2 = store.create_step(stage="spec-writer", role="agent", item=item)
     store.set_step_pass(spec_2, pass_2)
-    store.record_usage(spec_2, 800, 150, 0, 0, 1.5, "list", None)
-    store.record_attribution(spec_2, 8, {})
+    seed_usage(store, spec_2, 800, 150, 0, 0, 1.5, "list", None)
+    seed_attribution(store, spec_2, 8, {})
 
     ctx["store"] = store
     ctx["item_id"] = item
@@ -228,7 +229,7 @@ def _item_with_no_cost_stage(ctx):
     store = FakeStore()
     item = store.create_item("Item", "a description")
     step = store.create_step(stage="review-code", role="agent", item=item)
-    store.record_attribution(step, 60, {})
+    seed_attribution(store, step, 60, {})
     ctx["store"] = store
     ctx["item_id"] = item
     ctx["step_id"] = step
@@ -242,8 +243,8 @@ def _item_with_human_gate_and_agent_step(ctx):
     item = store.create_item("Item", "a description")
     store.create_step(stage="await-merge", role="human", item=item)
     step = store.create_step(stage="write-code", role="agent", item=item)
-    store.record_usage(step, 1000, 200, 0, 0, 1.0, "list", None)
-    store.record_attribution(step, 10, {})
+    seed_usage(store, step, 1000, 200, 0, 0, 1.0, "list", None)
+    seed_attribution(store, step, 10, {})
     ctx["store"] = store
     ctx["item_id"] = item
     ctx["session"] = launch(make_test_container(store=store), size=WIDE_SIZE)

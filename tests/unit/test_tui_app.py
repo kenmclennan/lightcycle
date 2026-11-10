@@ -1,3 +1,4 @@
+from tests.support.store_seed import seed_day_summary_claim, seed_usage
 import datetime
 import os
 import threading
@@ -327,14 +328,14 @@ class TestActiveGroup(unittest.TestCase):
         tid = create_owned_step(store, "active item", stage="build", role="agent")
         store.assign(tid, "worker-1")
         store.update_state(tid, State.RUNNING)
-        store.record_usage(tid, 0, 0, 0, 0, 1.0, "list", None)
+        seed_usage(store, tid, 0, 0, 0, 0, 1.0, "list", None)
 
         session = self._launch(store, now=lambda: clock["now"])
         table = session.app.query_one(DataTable)
         self.assertEqual(_cell(session, tid, "cost"), "$1.00")
         self.assertEqual(table.columns.get("cost").width, 5)
 
-        store.record_usage(tid, 0, 0, 0, 0, 11.0, "list", None)
+        seed_usage(store, tid, 0, 0, 0, 0, 11.0, "list", None)
         clock["now"] = claimed_at + datetime.timedelta(minutes=11)
         session.poll_tick()
 
@@ -3063,7 +3064,7 @@ def _closed_item_with_cost(store):
     step = store.create_step(stage="build", role="agent", item=item)
     store.claim_ready("agent")
     store.accrue_active_seconds([step], 300)
-    store.record_usage(step, 100, 10, 0, 0, 2.50, "list", None)
+    seed_usage(store, step, 100, 10, 0, 0, 2.50, "list", None)
     store.complete_node(step, "done")
     store.complete_node(item, "merged")
     return item
@@ -3148,7 +3149,7 @@ def _active_item_with_cost(store):
     store.assign(step, "worker-1")
     store.update_state(step, State.RUNNING)
     store.accrue_active_seconds([step], 300)
-    store.record_usage(step, 100, 10, 0, 0, 2.50, "list", None)
+    seed_usage(store, step, 100, 10, 0, 0, 2.50, "list", None)
     return step
 
 
@@ -3440,7 +3441,7 @@ class TestReportFigures(unittest.TestCase):
         item = store.create_item("done item", "a description")
         step = store.create_step(stage="build", role="agent", item=item)
         store.claim_ready("agent")
-        store.record_usage(step, 100, 10, 0, 0, 2.50, "list", None)
+        seed_usage(store, step, 100, 10, 0, 0, 2.50, "list", None)
         store.complete_node(step, "done")
         store.complete_node(item, "merged", disposition="completed")
 
@@ -3594,7 +3595,7 @@ def _store_summary(store, text):
     today = datetime.date.today()
     with store.transaction():
         store.mark_day_summary_dirty(today)
-        store.start_day_summary(today, step_id="fake-summary-step", spawn_count=1)
+        seed_day_summary_claim(store, today, step_id="fake-summary-step", spawn_count=1)
     store.finish_day_summary(today, summary=text, summarized_count=1, clear_dirty=True)
 
 

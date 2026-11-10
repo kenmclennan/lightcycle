@@ -1,3 +1,4 @@
+from tests.support.store_seed import seed_attribution, seed_usage
 import json
 import unittest
 
@@ -386,10 +387,10 @@ class TestBackfillUsageRepair(unittest.TestCase):
         tid = create_owned_step(store, "build: t", stage="build", role="agent")
         log_file = "/home/logs/worker-a.log"
         fs = FakeFs(files={log_file: _claim_result_log_with_usage(tid, 68, 0.5)})
-        store.record_usage(tid, 68, 0, 0, 0, 0.5, "list", None)
-        store.record_usage(tid, 68, 0, 0, 0, 0.5, "list", None)
-        store.record_attribution(tid, 1, _bash_tool_usage(tid))
-        store.record_attribution(tid, 1, _bash_tool_usage(tid))
+        seed_usage(store, tid, 68, 0, 0, 0, 0.5, "list", None)
+        seed_usage(store, tid, 68, 0, 0, 0, 0.5, "list", None)
+        seed_attribution(store, tid, 1, _bash_tool_usage(tid))
+        seed_attribution(store, tid, 1, _bash_tool_usage(tid))
         store._backfill_log[log_file] = (tid, True)
         workers = FakeWorkers()
 
@@ -447,8 +448,8 @@ class TestBackfillUsageTransitionWindowHazard(unittest.TestCase):
         tid = create_owned_step(store, "build: t", stage="build", role="agent")
         log_file = "/home/logs/worker-a.log"
         fs = FakeFs(files={log_file: _claim_result_log_with_usage(tid, 68, 0.5)})
-        store.record_usage(tid, 68, 0, 0, 0, 0.5, "list", None)
-        store.record_attribution(tid, 1, _bash_tool_usage(tid))
+        seed_usage(store, tid, 68, 0, 0, 0, 0.5, "list", None)
+        seed_attribution(store, tid, 1, _bash_tool_usage(tid))
         workers = FakeWorkers()
 
         resp = BackfillUsageUseCase(store, fs, workers, FakeConfig(), fs, stream=ClaudeStreamAdapter()).execute()

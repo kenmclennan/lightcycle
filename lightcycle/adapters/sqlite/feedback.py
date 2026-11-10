@@ -25,19 +25,6 @@ class FeedbackAggregate:
         )
         self._commit()
 
-    def hold(self, run_id, key):
-        row = self._conn.execute(
-            "SELECT %s FROM held_comments WHERE run_id = ? AND key = ?" % self._HOLD_COLUMNS,
-            (run_id, key),
-        ).fetchone()
-        return HeldComment(*row) if row else None
-
-    def hold_for_step(self, step_id):
-        row = self._conn.execute(
-            "SELECT %s FROM held_comments WHERE step_id = ?" % self._HOLD_COLUMNS, (step_id,)
-        ).fetchone()
-        return HeldComment(*row) if row else None
-
     def _holds_in_state(self, run_id, state):
         rows = self._conn.execute(
             "SELECT %s FROM held_comments WHERE run_id = ? AND state = ? "
@@ -132,13 +119,6 @@ class FeedbackAggregate:
             "ON CONFLICT(day) DO UPDATE SET dirty_since = excluded.dirty_since "
             "WHERE daily_summaries.dirty_since IS NULL",
             (day.isoformat(), self._now()),
-        )
-        self._commit()
-
-    def start_day_summary(self, day, step_id, spawn_count):
-        self._conn.execute(
-            "UPDATE daily_summaries SET step_id = ?, spawn_count = ? WHERE day = ?",
-            (step_id, spawn_count, day.isoformat()),
         )
         self._commit()
 

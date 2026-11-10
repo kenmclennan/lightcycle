@@ -1,3 +1,4 @@
+from tests.support.store_seed import seed_day_summary_claim
 from lightcycle.application.work.stack_layers import StackLayers
 from tests.support.fake_github import FakeGitHub
 from tests.support.fake_github_budget import FakeGithubBudget
@@ -533,7 +534,7 @@ class TestCompleteStepDailySummary(unittest.TestCase):
         store.label_add(item, "summary-origin")
         tid = store.create_step(stage=DAILY_SUMMARY_STEP, role="agent", item=item)
         store.mark_day_summary_dirty(day)
-        store.start_day_summary(day, step_id=tid, spawn_count=spawn_count)
+        seed_day_summary_claim(store, day, step_id=tid, spawn_count=spawn_count)
         return tid
 
     def _closed_item(self, store, day):

@@ -1,3 +1,4 @@
+from tests.support.store_seed import seed_attribution, seed_usage
 import datetime
 import unittest
 
@@ -21,7 +22,7 @@ class TestBuildDoneRowsCost(unittest.TestCase):
         step = store.create_step(stage="build", role="agent", item=item)
         store.claim_ready("agent")
         store.accrue_active_seconds([step], 540)
-        store.record_usage(step, 100, 10, 0, 0, 3.75, "list", None)
+        seed_usage(store, step, 100, 10, 0, 0, 3.75, "list", None)
         store.complete_node(step, "done")
         store.complete_node(item, "merged")
 
@@ -45,7 +46,7 @@ class TestBuildDoneRowsCost(unittest.TestCase):
         item = store.create_item("story", "a description")
         step = store.create_step(stage="build", role="agent", item=item)
         store.claim_ready("agent")
-        store.record_attribution(step, 50, {})
+        seed_attribution(store, step, 50, {})
         store.complete_node(step, "done")
         store.complete_node(item, "merged")
 
@@ -61,7 +62,7 @@ class TestBuildDoneRowsCache(unittest.TestCase):
         step = store.create_step(stage="build", role="agent", item=item)
         store.claim_ready("agent")
         store.accrue_active_seconds([step], 300)
-        store.record_usage(step, 100, 10, 0, 0, 2.50, "list", None)
+        seed_usage(store, step, 100, 10, 0, 0, 2.50, "list", None)
         store.complete_node(step, "done")
         store.complete_node(item, "merged")
         return store, item

@@ -1,3 +1,4 @@
+from tests.support.store_seed import seed_attribution, seed_usage
 import unittest
 from unittest.mock import patch
 
@@ -269,8 +270,8 @@ class TestCostShapeGuard(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("Item", "a description", id=self._ITEM)
         step = store.create_step(stage="write-code", role="agent", item=item, id=self._STEP)
-        store.record_usage(step, 100, 50, 0, 0, 1.0, "list", None)
-        store.record_attribution(step, 5, {})
+        seed_usage(store, step, 100, 50, 0, 0, 1.0, "list", None)
+        seed_attribution(store, step, 5, {})
         return store
 
     def _launch(self, width):

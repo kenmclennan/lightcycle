@@ -51,15 +51,6 @@ class UsageAggregate:
         )
         return cursor.rowcount
 
-    def record_usage(self, tid, input_tokens, output_tokens, cache_read_tokens,
-                      cache_creation_tokens, cost_usd, cost_basis, thinking_tokens,
-                      rates_used=None):
-        self._record_usage_nocommit(
-            tid, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
-            cost_usd, cost_basis, thinking_tokens, rates_used=rates_used,
-        )
-        self._commit()
-
     def _record_attribution_nocommit(self, tid, turn_count, tool_usage):
         self._conn.execute(
             "UPDATE steps SET turn_count = turn_count + ? WHERE id = ?", (turn_count, tid),
@@ -71,10 +62,6 @@ class UsageAggregate:
                 "calls = calls + excluded.calls, bytes = bytes + excluded.bytes",
                 (tid, tool, usage.calls, usage.bytes),
             )
-
-    def record_attribution(self, tid, turn_count, tool_usage):
-        self._record_attribution_nocommit(tid, turn_count, tool_usage)
-        self._commit()
 
     def tool_usage_for(self, step_id):
         rows = self._conn.execute(
