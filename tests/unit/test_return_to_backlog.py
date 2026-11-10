@@ -91,7 +91,7 @@ class TestReturnToBacklogRefuses(unittest.TestCase):
         self.assertEqual(self.store.get_node(step).state, State.RUNNING)
         msg = _refusal(self, self.store, item)
         self.assertIn(step, msg)
-        self.assertIn("wait for it, or park it", msg)
+        self.assertIn("wait for it, or `lc halt` it", msg)
         self.assertEqual([c.id for c in self.store.children(item)], [step])
 
     def test_a_claimed_step_beside_an_unclaimed_one_refuses_and_removes_nothing(self):

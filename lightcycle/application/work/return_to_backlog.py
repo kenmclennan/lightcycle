@@ -23,7 +23,7 @@ class ReturnToBacklogUseCase:
         if node.state == State.DONE:
             return ["item %s is closed; use lc reopen %s to bring it back" % (node.id, node.id)]
         reasons = [
-            "step %s is held by a worker - wait for it, or park it" % s.id
+            "step %s is held by a worker - wait for it, or `lc halt` it" % s.id
             for s in open_steps
             if s.state == State.RUNNING
         ]

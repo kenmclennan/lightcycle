@@ -132,7 +132,7 @@ The mutating CLI is a small set of generic primitives over nodes; the read views
 | `lc set <id> [--state/--title/--description/--workflow/--project/--label/--step/--notes/--needs/--reason/--tried/--backlog/--depends/--unset]` | update a node. The type decides which flags and states are legal, and `lc set` refuses at the boundary rather than silently ignoring one: an **item** takes `title description project workflow label backlog step` and the states `active` (plans it - files its entry step) and `backlogged` (removes its open steps; refused while a worker holds a step or an open run has a branch or PR); a **step** takes `title notes needs reason tried label` and the states `ready` and `waiting`, and `waiting` requires `--needs` and `--reason`. An empty string is never a value - it is refused rather than silently applied; `--unset <field>` (repeatable) clears `description`/`project`/`workflow` on an item or `notes` on a step instead |
 | `lc show <id>` | one node as JSON (artifacts, resume-state) |
 | `lc done <id> [<outcome>]` | close a node; a **step** done-with-outcome advances the flow; an item force-closes its open steps |
-| `lc close <item> [--outcome/--disposition/--note]` | end an **item** outright; `--outcome` is free-form text (default `closed`), `--disposition` defaults to `completed`; refuses a **step** - use `lc done` for one |
+| `lc close <item> [--outcome/--disposition/--note]` | end an **item** outright; `--outcome` is free-form text (default `closed`), `--disposition` defaults to `completed`; refuses a **step** - use `lc done` for one; refuses while a worker holds a step of the item - `lc halt` first |
 | `lc rm <id> [--force]` | delete a node; refuses on a live worker, a dirty worktree, or a branch with commits not merged into the base (a run recorded `merged` counts as merged); `--force` overrides the dirty worktree, the unmerged branch and stale claims |
 | `lc attach <id> <type> <value> [--label/--replace/--file]` | attach an artifact to an **item** (`spec`, `repo`, `brief`, `blueprint`, ...). `pr`, `branch`, `stack` and `comments-handled` are not artifacts - they route onto the item's current phase run. `reflection` routes to the retro |
 | `lc dep <id> --needs <id>` | link one node as a blocker of another |
@@ -150,6 +150,7 @@ The mutating CLI is a small set of generic primitives over nodes; the read views
 | `lc config [--edit]` | show (or `--edit`) the lightcycle config: projects + specs roots |
 | `lc start [--once] [--detach]` | the agent pool: sweep, then fill up to `LC_MAX_AGENTS` workers from the ready queue; `--detach` runs it in the background |
 | `lc stop [--drain]` | stop a detached pool; `--drain` lets running workers finish first |
+| `lc halt <item\|step> --note "<reason>"` | stop one running step's worker now and park the step, keeping its worktree and branch; resume with `lc set <step> --state ready` |
 | `lc tui [--start]` | the interactive dashboard; `--start` first starts the pool in the background if it is not already running |
 | `lc status` | all buckets: inbox / active / queue / blocked |
 | `lc inbox [N]` / `lc backlog [N]` | what needs you now (gates + blocked) / todo items to develop later |

@@ -16,6 +16,8 @@ from lightcycle.application.work import (
     ReopenItemUseCase,
 )
 from lightcycle.application.errors import UseCaseError
+from lightcycle.application.pool.halt_step import HaltInput, HaltStepUseCase
+from lightcycle.application.work.refuse_held_step import RefuseHeldStepUseCase
 from lightcycle.application.flow.advance_feedback_ledger import AdvanceFeedbackLedgerUseCase
 from lightcycle.application.flow.record_merged_gate_run import (
     RecordMergedGateRunInput, RecordMergedGateRunUseCase,
@@ -128,6 +130,7 @@ def cmd_done(argv):
                     "{completed,abandoned} explicitly\n" % a.outcome
                 )
                 return 2
+            RefuseHeldStepUseCase(container().store, container().workers).execute(a.id)
             CloseItemUseCase(container().store, _worktrees()).execute(
                 CloseItemInput(item=a.id, reason=a.outcome, disposition=disposition, note=note)
             )
@@ -155,6 +158,7 @@ def cmd_close(argv):
     if rc is not None:
         return rc
     try:
+        RefuseHeldStepUseCase(container().store, container().workers).execute(a.id)
         CloseItemUseCase(container().store, _worktrees()).execute(
             CloseItemInput(item=a.id, reason=a.outcome, disposition=a.disposition, note=note)
         )
@@ -163,6 +167,29 @@ def cmd_close(argv):
         if isinstance(e, TeardownRefused):
             _log_teardown_refusal(str(e))
         return 1
+    return 0
+
+
+def cmd_halt(argv):
+    a = build_parser(COMMANDS["halt"]).parse_args(argv)
+    note = " ".join(a.note).strip() if a.note else ""
+    if not note:
+        sys.stderr.write("lc halt needs --note \"<reason>\"\n")
+        return 2
+    rc = refuse_over_cap([("--note", note)])
+    if rc is not None:
+        return rc
+    try:
+        resp = HaltStepUseCase(
+            container().store, container().workers, _worktrees()
+        ).execute(HaltInput(target=a.id, note=note))
+    except UseCaseError as e:
+        sys.stderr.write("%s\n" % e)
+        return 1
+    print(
+        "halted %s: stopped worker %s (pid %s); resume with lc set %s --state ready"
+        % (resp.step, resp.spawnid, resp.pid, resp.step)
+    )
     return 0
 
 
