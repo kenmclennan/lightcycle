@@ -315,6 +315,9 @@ class NullWorkers(WorkersPort):
     def mark_checked(self, spawnid):
         self._refuse("mark_checked")
 
+    def mark_halted(self, spawnid):
+        self._refuse("mark_halted")
+
     def set_pid_started(self, spawnid, pid_started):
         self._refuse("set_pid_started")
 

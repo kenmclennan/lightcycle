@@ -210,6 +210,15 @@ def mark_checked(root, spawnid):
         write_workers(root, workers)
 
 
+def mark_halted(root, spawnid):
+    with registry_lock(root):
+        workers = workers_state(root)
+        for w in workers:
+            if w.get("spawnid") == spawnid:
+                w["halted"] = True
+        write_workers(root, workers)
+
+
 def set_pid_started(root, spawnid, pid_started):
     with registry_lock(root):
         workers = workers_state(root)
@@ -249,6 +258,9 @@ class WorkersAdapter(WorkersPort):
 
     def mark_checked(self, spawnid):
         return mark_checked(self._config.data_root(), spawnid)
+
+    def mark_halted(self, spawnid):
+        return mark_halted(self._config.data_root(), spawnid)
 
     def set_pid_started(self, spawnid, pid_started):
         return set_pid_started(self._config.data_root(), spawnid, pid_started)

@@ -37,3 +37,7 @@ class WorkersPort(ABC):
     @abstractmethod
     def mark_checked(self, spawnid):
         pass
+
+    @abstractmethod
+    def mark_halted(self, spawnid):
+        pass

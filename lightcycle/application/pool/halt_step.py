@@ -61,6 +61,7 @@ class HaltStepUseCase:
         observation = "halted by the driver: %s %s" % (input.note, " ".join(detail))
         decision = "resume with `lc set %s --state ready`, or close the item" % step.id
         ParkStepUseCase(self._store).execute(ParkInput(step.id, observation, decision))
+        self._workers.mark_halted(worker.spawnid)
         self._workers.kill(worker.pid)
         return HaltResponse(
             step=step.id, spawnid=worker.spawnid, pid=worker.pid, findings=tuple(findings)

@@ -9,6 +9,7 @@ class FakeWorkers(WorkersPort):
         self._delayed_death = delayed_death
         self._zombie_pids = set()
         self.killed = []
+        self.events = []
 
     def workers_state(self):
         return [Worker.from_state(d) for d in self._workers]
@@ -26,6 +27,7 @@ class FakeWorkers(WorkersPort):
 
     def kill(self, pid):
         self.killed.append(pid)
+        self.events.append(("kill", pid))
         if self._delayed_death:
             self._zombie_pids.add(pid)
         else:
@@ -57,6 +59,12 @@ class FakeWorkers(WorkersPort):
         for w in self._workers:
             if w.get("spawnid") == spawnid:
                 w["checked"] = True
+
+    def mark_halted(self, spawnid):
+        self.events.append(("mark_halted", spawnid))
+        for w in self._workers:
+            if w.get("spawnid") == spawnid:
+                w["halted"] = True
 
     def set_pid_started(self, spawnid, pid_started):
         for w in self._workers:

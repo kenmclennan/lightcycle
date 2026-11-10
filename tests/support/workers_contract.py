@@ -87,6 +87,17 @@ class WorkersContractBase:
         self.assertTrue(state["w1"])
         self.assertFalse(state["w2"])
 
+    def test_mark_halted_only_affects_the_matching_worker(self):
+        w = self.make_workers()
+        self._seed(w, [
+            {"spawnid": "w1", "role": "coder", "pid": 1, "step": None},
+            {"spawnid": "w2", "role": "coder", "pid": 2, "step": None},
+        ])
+        w.mark_halted("w1")
+        state = {entry.spawnid: entry.halted for entry in w.workers_state()}
+        self.assertTrue(state["w1"])
+        self.assertFalse(state["w2"])
+
     def test_set_pid_started_only_affects_the_matching_worker(self):
         w = self.make_workers()
         self._seed(w, [

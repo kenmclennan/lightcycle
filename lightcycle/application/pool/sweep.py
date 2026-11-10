@@ -152,7 +152,7 @@ class SweepUseCase:
             swept.append(t.id)
         for step_id in pre_claim_dead:
             dead = pool.dead_for_step(probe, step_id)
-            if dead is None:
+            if dead is None or dead.halted:
                 continue
             lines = list(self._worker_log.iter_lines(dead.log))
             no_work = not self._stream.saw_session_activity(lines)
