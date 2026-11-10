@@ -70,6 +70,8 @@ from lightcycle.commands.flow import cmd_done as cmd_done
 from lightcycle.commands.flow import cmd_close as cmd_close
 from lightcycle.commands.flow import cmd_reopen as cmd_reopen
 from lightcycle.commands.flow import cmd_halt as cmd_halt
+from lightcycle.commands.flow import cmd_hold as cmd_hold
+from lightcycle.commands.flow import cmd_release as cmd_release
 from lightcycle.commands.pool import cmd_ps as cmd_ps
 from lightcycle.commands.pool import cmd_sweep as cmd_sweep
 from lightcycle.commands.pool import cmd_schedule as cmd_schedule
@@ -142,6 +144,8 @@ COMMAND_GROUPS = [
         ("start", "[--once] [--detach]", "the agent pool: each tick, sweep stale claims, then fill up to LC_MAX_AGENTS (see `lc config`) workers from the ready queue; --detach spawns it in the background and returns immediately"),
         ("stop", "", "signal a detached pool to stop (--drain lets running workers finish first); reports the pid signalled"),
         ("halt", "<item|step> --note \"<reason>\"", "stop one running step's worker now and park the step, keeping its worktree and branch; resume with `lc set <step> --state ready`"),
+        ("hold", "<item|step> --note \"<why>\"", "hold a waiting human gate so the PR watchers leave it and its PR alone, recording what they would have done; only `lc release` or `lc close` moves it"),
+        ("release", "<item|step>", "lift a gate hold and leave the step waiting; the watchers act on the next tick"),
     ]),
     ("See what's happening", [
         ("status", "[--json]", "all lanes at once: inbox / active / queue / blocked"),

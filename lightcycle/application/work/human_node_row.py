@@ -16,3 +16,4 @@ class HumanNodeRow:
     pr: Optional[str] = None
     title: Optional[str] = None
     behind: Optional[str] = None
+    held: Optional[str] = None

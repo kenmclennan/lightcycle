@@ -28,6 +28,9 @@ A `done` step moved back to `waiting` or `queued` (any route through `RouteStepS
 - **queued** - waiting on a worker slot.
 - **running** - a worker is on it right now.
 - **waiting** - waiting on the human. Two different things land here: a routine gate a workflow routes to a human owner by design (`[*] --> waiting` and `blocked --> waiting` above - the step's role was always `human`, so nothing transitioned it) and an escalation, where an agent parked it (`queued --> waiting` and `running --> waiting` above, both via `RouteStepService`). Only the park transitions write a `history` row - a step created or unblocked straight into `waiting` never does - so a `history` row with `state='waiting'` is always an escalation, never a routine gate arrival. See [ontology.md](ontology.md)'s **escalation** entry.
+
+  A held gate (`lc hold`) is `waiting` like any other and is distinguished only by its `gate-hold` marker.
+
 - **done** - terminal; the `outcome` says how it ended, and (for an item) `disposition` says whether that ending was a completion or an abandonment.
 
 `role`, `outcome` and `disposition` ride alongside the state, not inside it. An unassigned, unblocked step with `role=human` is `waiting`, not `queued` - the state already encodes "needs a human." Routing a step to `human` goes through `RouteStepService` (`application/flow/route_step.py`), which derives the state from the role via `role_state` (i.e. `lc set <step> --state waiting`) and sets it to `waiting`; routing it back to an agent role sets it to `queued`.

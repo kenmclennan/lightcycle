@@ -103,6 +103,26 @@ class TestRenderBacklog(unittest.TestCase):
             "  pr:https://github.com/x/y/pull/1",
         )])
 
+    def test_held_row_renders_the_note_then_the_pr(self):
+        r = row(
+            kind="action", project="proj-a", step=tk(id="t1", title="one"), title="one",
+            pr="https://github.com/x/y/pull/1", held="wait for the stack",
+            behind="update cap reached (3 updates)",
+        )
+        lines = render_inbox([r], TITLE_CAP)
+        self.assertEqual(lines, [_inbox(
+            "action", "t1", "proj-a", "one",
+            "  held: wait for the stack  pr:https://github.com/x/y/pull/1",
+        )])
+
+    def test_held_row_without_a_pr_renders_the_note_alone(self):
+        r = row(
+            kind="action", project="proj-a", step=tk(id="t1", title="one"), title="one",
+            held="wait",
+        )
+        self.assertEqual(
+            render_inbox([r], TITLE_CAP), [_inbox("action", "t1", "proj-a", "one", "  held: wait")])
+
     def test_missing_project_renders_dash(self):
         lines = render_backlog([row(project=None, step=tk(id="t1", title="one"), title="one")], TITLE_CAP)
         self.assertEqual(lines[0], _flat("t1", "-", "one"))

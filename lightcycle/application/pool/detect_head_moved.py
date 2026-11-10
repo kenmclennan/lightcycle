@@ -5,6 +5,7 @@ from typing import List
 from lightcycle.application.flow.complete_step import CompleteInput
 from lightcycle.application.pool.pr_lookups import _MIN_TIMESTAMP, flow_for, run_of, skip_unpinned
 from lightcycle.application.pool.stack_reads import read_stack
+from lightcycle.application.work.gate_hold import GateHold, route_name
 from lightcycle.domain.pool import stack_shape
 from lightcycle.domain.work import State, node_id_key, parse_timestamp
 from lightcycle.ports.github import NotYetRead, ReadFailure
@@ -26,6 +27,7 @@ class DetectHeadMovedUseCase:
         self._github = github
         self._flow_service = flow_service
         self._complete = complete
+        self._gate_hold = GateHold(store)
 
     def _artifact(self, step_id, atype):
         found = None
@@ -81,6 +83,10 @@ class DetectHeadMovedUseCase:
             return True
         return prior != fresh
 
+    def _observe(self, step, flow, sd):
+        self._gate_hold.observe(
+            step, "PR head moved (would route to %s)" % route_name(flow, step, sd.pr_head_moved))
+
     def _stacked(self, step, flow, sd, run, reads):
         stack = read_stack(self._github, run.stack)
         if not stack.layers:
@@ -124,10 +130,14 @@ class DetectHeadMovedUseCase:
                 pushed.append("head of %s moved from %s to %s" % (names[layer.url], old, head))
             else:
                 self._github.check_runs(layer.url, head)
-        if updated != recorded:
+        held = self._gate_hold.is_held(step.id)
+        if updated != recorded and not held:
             self._store.add_artifact(
                 step.id, PR_LAYER_HEADS, json.dumps(updated, sort_keys=True), internal=True)
         if not pushed:
+            return False
+        if held:
+            self._observe(step, flow, sd)
             return False
         self._complete.execute(CompleteInput(
             step=step.id, outcome=sd.pr_head_moved, note=". ".join(pushed)))
@@ -165,6 +175,9 @@ class DetectHeadMovedUseCase:
                     continue
                 self._store.add_artifact(step.id, PR_HEAD_SHA, recorded, internal=True)
             if recorded != sync.head_sha:
+                if self._gate_hold.is_held(step.id):
+                    self._observe(step, flow, sd)
+                    continue
                 self._complete.execute(CompleteInput(step=step.id, outcome=sd.pr_head_moved))
                 head_moved.append(step.item)
         return DetectHeadMovedResponse(head_moved=head_moved)

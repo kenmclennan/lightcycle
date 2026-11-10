@@ -18,6 +18,9 @@ from lightcycle.application.work import (
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.pool.halt_step import HaltInput, HaltStepUseCase
 from lightcycle.application.work.refuse_held_step import RefuseHeldStepUseCase
+from lightcycle.application.work.refuse_gate_hold import RefuseGateHoldUseCase
+from lightcycle.application.work.hold_gate import HoldGateInput, HoldGateUseCase
+from lightcycle.application.work.release_gate import ReleaseGateInput, ReleaseGateUseCase
 from lightcycle.application.flow.advance_feedback_ledger import AdvanceFeedbackLedgerUseCase
 from lightcycle.application.flow.record_merged_gate_run import (
     RecordMergedGateRunInput, RecordMergedGateRunUseCase,
@@ -63,6 +66,12 @@ def cmd_spawn(argv):
 
 def cmd_advance(argv):
     a = build_parser(COMMANDS["advance"]).parse_args(argv)
+    try:
+        if container().store.type_of(a.id) == "step":
+            RefuseGateHoldUseCase(container().store).execute(a.id)
+    except UseCaseError as e:
+        sys.stderr.write("%s\n" % e)
+        return 1
     resp = AdvanceStepUseCase(container().store, _flow()).execute(
         AdvanceInput(step=a.id, outcome=a.outcome)
     )
@@ -103,6 +112,7 @@ def cmd_done(argv):
         return rc
     try:
         if node_type == "step":
+            RefuseGateHoldUseCase(container().store).execute(a.id)
             gate = RecordMergedGateRunUseCase(
                 container().store, container().github, _flow())
             gate_input = RecordMergedGateRunInput(step=a.id, outcome=a.outcome)
@@ -190,6 +200,35 @@ def cmd_halt(argv):
         "halted %s: stopped worker %s (pid %s); resume with lc set %s --state ready"
         % (resp.step, resp.spawnid, resp.pid, resp.step)
     )
+    return 0
+
+
+def cmd_hold(argv):
+    a = build_parser(COMMANDS["hold"]).parse_args(argv)
+    note = " ".join(a.note).strip() if a.note else ""
+    if not note:
+        sys.stderr.write("lc hold needs --note \"<why>\"\n")
+        return 2
+    rc = refuse_over_cap([("--note", note)])
+    if rc is not None:
+        return rc
+    try:
+        resp = HoldGateUseCase(container().store).execute(HoldGateInput(target=a.id, note=note))
+    except UseCaseError as e:
+        sys.stderr.write("%s\n" % e)
+        return 1
+    print("held %s: %s" % (resp.step, resp.note))
+    return 0
+
+
+def cmd_release(argv):
+    a = build_parser(COMMANDS["release"]).parse_args(argv)
+    try:
+        resp = ReleaseGateUseCase(container().store).execute(ReleaseGateInput(target=a.id))
+    except UseCaseError as e:
+        sys.stderr.write("%s\n" % e)
+        return 1
+    print("released %s" % resp.step)
     return 0
 
 
