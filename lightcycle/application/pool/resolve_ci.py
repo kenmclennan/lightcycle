@@ -384,10 +384,11 @@ class ResolveCiUseCase:
         self._complete.execute(CompleteInput(step=step.id, outcome=sd.ci_success, note=note))
         ci_resolved.append(step.item)
 
-    def _mark_unrun(self, labelled, required):
+    def _mark_unrun(self, labelled):
         bottom = labelled[0][1]
         if bottom is None:
             return labelled
+        required = bottom.required
         expected = {
             check_label(c) for c in bottom.checks if required is None or c.name not in required}
         window = self._ci_start_window_seconds()
@@ -417,13 +418,12 @@ class ResolveCiUseCase:
         ]
         if not open_layers:
             return
-        required = self._required(open_layers[0][1].url)
         labelled = []
         for position, layer in open_layers:
             key = "%s@%s" % (step.id, layer.url)
-            v = self._judge(step, layer.url, key, required, ctx)
+            v = self._judge(step, layer.url, key, _OWN, ctx)
             labelled.append(("layer %d of %d" % (position, total), v))
-        labelled = self._mark_unrun(labelled, required)
+        labelled = self._mark_unrun(labelled)
         self._finish_stacked(step, sd, labelled, ci_resolved)
 
     def execute(self) -> ResolveCiResponse:
