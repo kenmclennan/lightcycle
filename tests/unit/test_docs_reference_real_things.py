@@ -1,5 +1,6 @@
 import pathlib
 import re
+import tempfile
 import unittest
 
 from lightcycle.cli_commands import flags_by_verb
@@ -27,8 +28,16 @@ ELSEWHERE = {
     "package.json",
     "CLAUDE.md",
     "README.md",
+    "_data_table.py",
 }
+THIRD_PARTY_DIRS = {".venv", "venv", "site-packages", "node_modules"}
 NOT_A_COMMAND = {"plan-add"}
+
+
+def bare_name_resolves(root, name):
+    return any(
+        not THIRD_PARTY_DIRS.intersection(hit.relative_to(root).parts) for hit in root.rglob(name)
+    )
 
 
 class TestDocsNameThingsThatExist(unittest.TestCase):
@@ -41,10 +50,22 @@ class TestDocsNameThingsThatExist(unittest.TestCase):
                     continue
                 if (REPO / ref).exists() or (PKG / ref).exists():
                     continue
-                if "/" not in ref and (any(REPO.rglob(ref)) or any(PKG.rglob(ref))):
+                if "/" not in ref and (
+                    bare_name_resolves(REPO, ref) or bare_name_resolves(PKG, ref)
+                ):
                     continue
                 missing.append("%s: %s" % (doc.relative_to(REPO), ref))
         self.assertEqual(missing, [], "docs name files that do not exist: %s" % missing)
+
+    def test_a_name_found_only_under_a_virtualenv_does_not_resolve(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            (root / ".venv" / "lib" / "site-packages").mkdir(parents=True)
+            (root / ".venv" / "lib" / "site-packages" / "only_here.py").write_text("")
+            (root / "src").mkdir()
+            (root / "src" / "real.py").write_text("")
+            self.assertFalse(bare_name_resolves(root, "only_here.py"))
+            self.assertTrue(bare_name_resolves(root, "real.py"))
 
 
 class TestDocsNameCommandsThatExist(unittest.TestCase):
