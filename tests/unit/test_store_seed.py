@@ -125,12 +125,12 @@ class StoreSeedBase:
         self.assertEqual(held_comment_for_step(s, step).key, "mention:1")
         self.assertIsNone(held_comment_for_step(s, "nope"))
 
-    def test_seed_day_summary_claim_round_trips_through_summary_day_for_step(self):
+    def test_seed_day_summary_claim_round_trips_through_day_summary(self):
         s = self.make_store()
         day = datetime.date(2026, 1, 1)
         s.mark_day_summary_dirty(day)
         seed_day_summary_claim(s, day, "step-1", 3)
-        self.assertEqual(s.summary_day_for_step("step-1"), day)
+        self.assertEqual(s.day_summary(day).step_id, "step-1")
         self.assertEqual(s.day_summary(day).spawn_count, 3)
 
 
