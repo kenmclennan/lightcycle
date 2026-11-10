@@ -322,3 +322,13 @@ class TestCmdHalt(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestHaltMarksBeforeSignalling(_World):
+    def test_the_worker_is_marked_halted_before_it_is_killed(self):
+        item, step = _held_item(self.store, "sp1", 101, self.workers)
+
+        self.halt(step)
+
+        self.assertEqual(self.workers.events, [("mark_halted", "sp1"), ("kill", 101)])
+        self.assertTrue(self.workers.workers_state()[0].halted)

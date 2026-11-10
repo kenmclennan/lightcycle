@@ -12,6 +12,7 @@ class Worker:
     pid_started: Optional[str] = None
     log: Optional[str] = None
     checked: bool = False
+    halted: bool = False
 
     @classmethod
     def from_state(cls, d) -> "Worker":
@@ -24,6 +25,7 @@ class Worker:
             pid_started=d.get("pid_started"),
             log=d.get("log"),
             checked=bool(d.get("checked", False)),
+            halted=bool(d.get("halted", False)),
         )
 
     def is_alive(self, probe):

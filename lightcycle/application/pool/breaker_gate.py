@@ -121,6 +121,8 @@ class BreakerGateUseCase:
                         % (w.spawnid, type(e).__name__, e)
                     )
             self._workers.mark_checked(w.spawnid)
+            if w.halted:
+                continue
             if event and event.is_rejected:
                 rejected_reset_ats.append(event.reset_at)
             elif not no_work:

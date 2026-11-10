@@ -100,6 +100,8 @@ class TestNullWorkers(unittest.TestCase):
             workers.step_for("s")
         with self.assertRaises(AssertionError):
             workers.mark_checked("s")
+        with self.assertRaises(AssertionError):
+            workers.mark_halted("s")
 
 
 class TestSimulateConfig(unittest.TestCase):
