@@ -1060,7 +1060,7 @@ class TestResolveCiNotRunLayers(unittest.TestCase):
         self.assertEqual(
             rig.artifacts("ci-not-run"), ["layer 3 of 3 https://github.com/acme/widget/pull/3: ci / build"])
 
-    def test_a_required_label_missing_from_a_layer_follows_the_missing_check_path(self):
+    def test_a_layer_whose_own_base_requires_nothing_is_not_held_for_the_bottom_required_check(self):
         checks = {1: [_wf("build")], 2: [_wf("lint", "lint")], 3: [_wf("build")]}
         rig = self._rig(checks, required={"build"})
 
@@ -1068,7 +1068,7 @@ class TestResolveCiNotRunLayers(unittest.TestCase):
         rig.clock[0] += 601
         rig.uc.execute()
 
-        self.assertNotEqual(rig.node().state, State.DONE)
+        self.assertEqual(rig.node().outcome, "succeeded")
         self.assertEqual(rig.artifacts("ci-not-run"), [])
 
     def test_a_failing_layer_routes_failed_with_no_not_run_clause(self):
@@ -1122,6 +1122,30 @@ class TestResolveCiOverAStack(unittest.TestCase):
         self.assertEqual(rig.artifacts("ci-judged-sha"), ["sha-3"])
         import json
         self.assertEqual(len(json.loads(rig.artifacts("ci-judged-layers")[0])), 3)
+
+    def test_a_trunk_required_check_only_on_layer_one_does_not_hold_the_upper_layers(self):
+        rig = _StackedCiRig(
+            checks={
+                1: [_check("build", "success"), _check("codacy", "success")],
+                2: [_check("build", "success")],
+                3: [_check("build", "success")],
+            },
+            required={"codacy"})
+
+        rig.uc.execute()
+
+        node = rig.node()
+        self.assertEqual(node.state, State.DONE)
+        self.assertEqual(node.outcome, "succeeded")
+
+    def test_an_upper_layer_whose_base_requires_a_check_still_waits_for_it(self):
+        rig = _StackedCiRig(checks={n: [_check("build", "success")] for n in (1, 2, 3)})
+        rig.github._required_by_base["acme/widget@layer-1"] = {"lint"}
+
+        rig.uc.execute()
+
+        self.assertNotEqual(rig.node().state, State.DONE)
+        self.assertIsNone(rig.node().outcome)
 
     def test_a_red_layer_two_with_layer_one_pending_fails_naming_layer_two(self):
         rig = _StackedCiRig(checks={
@@ -1205,16 +1229,20 @@ class TestResolveCiOverAStack(unittest.TestCase):
         reasons = [u.reason for u in first.ci_unread + second.ci_unread]
         self.assertEqual(reasons, ["checks-not-yet-read"])
 
-    def test_required_checks_are_read_once_from_the_bottom_open_layer(self):
+    def test_required_checks_are_read_once_per_open_layer_from_its_own_base(self):
         rig = _StackedCiRig(
             required=["build"], checks={n: [_check("build", "success")] for n in (1, 2, 3)})
 
         rig.uc.execute()
 
         required_calls = [c for c in rig.github.calls if c[0] == "required_checks"]
-        self.assertEqual(required_calls, [("required_checks", "acme/widget@main")])
+        self.assertEqual(required_calls, [
+            ("required_checks", "acme/widget@main"),
+            ("required_checks", "acme/widget@layer-1"),
+            ("required_checks", "acme/widget@layer-2"),
+        ])
 
-    def test_a_merged_lower_layer_is_not_judged_and_bottom_open_supplies_required(self):
+    def test_a_merged_lower_layer_is_not_judged(self):
         rig = _StackedCiRig(
             state_by_layer={1: "merged"}, required=["build"],
             checks={2: [_check("build", "success")], 3: [_check("build", "success")]})
