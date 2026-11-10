@@ -7,6 +7,7 @@ from lightcycle.domain.work import NodeSpec
 from lightcycle.domain.work.cost import step_cost
 from lightcycle.ports.store import NodeNotFoundError, StoreError
 from tests.support.step_factory import create_owned_step
+from tests.support.store_seed import held_comment, held_comment_for_step, seed_attribution, seed_day_summary_claim, seed_usage
 
 
 class StoreContractBase:
@@ -920,10 +921,19 @@ class StoreContractBase:
         self.assertIsNone(t.usage_rates_used)
         self.assertIsNone(t.usage_thinking_tokens)
 
-    def test_record_usage_roundtrips_all_seven_fields(self):
+    def _live_usage(self, s, tid, input_tokens, output_tokens, cache_read_tokens,
+                    cache_creation_tokens, cost_usd, cost_basis, thinking_tokens,
+                    rates_used=None, turn_count=0, tool_usage=None):
+        s.record_live_usage(
+            "contract-spawn", UsageResume(log_file="/l/seed.log"), tid, input_tokens, output_tokens,
+            cache_read_tokens, cache_creation_tokens, cost_usd, cost_basis, thinking_tokens,
+            turn_count, tool_usage or {}, rates_used=rates_used,
+        )
+
+    def test_record_live_usage_roundtrips_all_seven_fields(self):
         s = self.make_store()
         tid = self._step(s, "t")
-        s.record_usage(tid, 10, 20, 30, 40, 1.5, "list", 5)
+        self._live_usage(s, tid, 10, 20, 30, 40, 1.5, "list", 5)
         t = s.get_node(tid)
         self.assertEqual(t.usage_input_tokens, 10)
         self.assertEqual(t.usage_output_tokens, 20)
@@ -933,11 +943,11 @@ class StoreContractBase:
         self.assertEqual(t.usage_cost_basis, "list")
         self.assertEqual(t.usage_thinking_tokens, 5)
 
-    def test_record_usage_second_call_adds_to_the_numeric_fields(self):
+    def test_record_live_usage_second_call_adds_to_the_numeric_fields(self):
         s = self.make_store()
         tid = self._step(s, "t")
-        s.record_usage(tid, 10, 20, 30, 40, 1.5, None, None)
-        s.record_usage(tid, 1, 2, 3, 4, 0.5, None, None)
+        self._live_usage(s, tid, 10, 20, 30, 40, 1.5, None, None)
+        self._live_usage(s, tid, 1, 2, 3, 4, 0.5, None, None)
         t = s.get_node(tid)
         self.assertEqual(t.usage_input_tokens, 11)
         self.assertEqual(t.usage_output_tokens, 22)
@@ -945,37 +955,37 @@ class StoreContractBase:
         self.assertEqual(t.usage_cache_creation_tokens, 44)
         self.assertEqual(t.usage_cost_usd, Cost.from_usd(2.0))
 
-    def test_record_usage_none_cost_basis_and_thinking_tokens_leave_prior_values_untouched(self):
+    def test_record_live_usage_none_cost_basis_and_thinking_tokens_leave_prior_values_untouched(self):
         s = self.make_store()
         tid = self._step(s, "t")
-        s.record_usage(tid, 1, 1, 1, 1, 1.0, "list", 5)
-        s.record_usage(tid, 1, 1, 1, 1, 1.0, None, None)
+        self._live_usage(s, tid, 1, 1, 1, 1, 1.0, "list", 5)
+        self._live_usage(s, tid, 1, 1, 1, 1, 1.0, None, None)
         t = s.get_node(tid)
         self.assertEqual(t.usage_cost_basis, "list")
         self.assertEqual(t.usage_thinking_tokens, 5)
 
-    def test_record_usage_first_none_then_real_values_moves_off_null(self):
+    def test_record_live_usage_first_none_then_real_values_moves_off_null(self):
         s = self.make_store()
         tid = self._step(s, "t")
-        s.record_usage(tid, 1, 1, 1, 1, 1.0, None, None)
-        s.record_usage(tid, 1, 1, 1, 1, 1.0, "list", 5)
+        self._live_usage(s, tid, 1, 1, 1, 1, 1.0, None, None)
+        self._live_usage(s, tid, 1, 1, 1, 1, 1.0, "list", 5)
         t = s.get_node(tid)
         self.assertEqual(t.usage_cost_basis, "list")
         self.assertEqual(t.usage_thinking_tokens, 5)
 
-    def test_record_usage_unpriced_basis_and_no_rates_roundtrips(self):
+    def test_record_live_usage_unpriced_basis_and_no_rates_roundtrips(self):
         s = self.make_store()
         tid = self._step(s, "t")
-        s.record_usage(tid, 10, 0, 0, 0, 0.0, "unpriced", None, rates_used=None)
+        self._live_usage(s, tid, 10, 0, 0, 0, 0.0, "unpriced", None, rates_used=None)
         t = s.get_node(tid)
         self.assertEqual(t.usage_cost_basis, "unpriced")
         self.assertIsNone(t.usage_rates_used)
 
-    def test_record_usage_derived_basis_persists_and_roundtrips_rates_used(self):
+    def test_record_live_usage_derived_basis_persists_and_roundtrips_rates_used(self):
         s = self.make_store()
         tid = self._step(s, "t", role="agent")
         rates = ModelRates(input=2.0, output=10.0, cache_read=0.2, cache_write=2.5)
-        s.record_usage(tid, 10, 20, 30, 40, 1.5, "derived", None, rates_used=rates)
+        self._live_usage(s, tid, 10, 20, 30, 40, 1.5, "derived", None, rates_used=rates)
         t = s.get_node(tid)
         self.assertEqual(t.usage_cost_basis, "derived")
         self.assertEqual(
@@ -983,40 +993,40 @@ class StoreContractBase:
             {"input": 2.0, "output": 10.0, "cache_read": 0.2, "cache_write": 2.5},
         )
 
-    def test_record_usage_none_rates_used_leaves_prior_value_untouched(self):
+    def test_record_live_usage_none_rates_used_leaves_prior_value_untouched(self):
         s = self.make_store()
         tid = self._step(s, "t", role="agent")
         rates = ModelRates(input=2.0, output=10.0, cache_read=0.2, cache_write=2.5)
-        s.record_usage(tid, 1, 1, 1, 1, 1.0, "derived", None, rates_used=rates)
-        s.record_usage(tid, 1, 1, 1, 1, 1.0, None, None, rates_used=None)
+        self._live_usage(s, tid, 1, 1, 1, 1, 1.0, "derived", None, rates_used=rates)
+        self._live_usage(s, tid, 1, 1, 1, 1, 1.0, None, None, rates_used=None)
         t = s.get_node(tid)
         self.assertEqual(
             step_cost(t, {}).rates_used,
             {"input": 2.0, "output": 10.0, "cache_read": 0.2, "cache_write": 2.5},
         )
 
-    def test_record_attribution_roundtrips_turn_count_and_tool_usage(self):
+    def test_record_live_usage_attribution_roundtrips_turn_count_and_tool_usage(self):
         s = self.make_store()
         tid = self._step(s, "t")
-        s.record_attribution(tid, 3, {"Read": ToolUsage(calls=2, bytes=100)})
+        self._live_usage(s, tid, 0, 0, 0, 0, 0.0, None, None, turn_count=3, tool_usage={"Read": ToolUsage(calls=2, bytes=100)})
         t = s.get_node(tid)
         self.assertEqual(t.turn_count, 3)
         self.assertEqual(s.tool_usage_for(tid), {"Read": ToolUsage(calls=2, bytes=100)})
 
-    def test_record_attribution_second_call_adds_to_turn_count_and_existing_tool_rows(self):
+    def test_record_live_usage_attribution_second_call_adds_to_turn_count_and_existing_tool_rows(self):
         s = self.make_store()
         tid = self._step(s, "t")
-        s.record_attribution(tid, 3, {"Read": ToolUsage(calls=2, bytes=100)})
-        s.record_attribution(tid, 1, {"Read": ToolUsage(calls=1, bytes=50)})
+        self._live_usage(s, tid, 0, 0, 0, 0, 0.0, None, None, turn_count=3, tool_usage={"Read": ToolUsage(calls=2, bytes=100)})
+        self._live_usage(s, tid, 0, 0, 0, 0, 0.0, None, None, turn_count=1, tool_usage={"Read": ToolUsage(calls=1, bytes=50)})
         t = s.get_node(tid)
         self.assertEqual(t.turn_count, 4)
         self.assertEqual(s.tool_usage_for(tid), {"Read": ToolUsage(calls=3, bytes=150)})
 
-    def test_record_attribution_new_tool_adds_a_row_without_disturbing_existing_ones(self):
+    def test_record_live_usage_attribution_new_tool_adds_a_row_without_disturbing_existing_ones(self):
         s = self.make_store()
         tid = self._step(s, "t")
-        s.record_attribution(tid, 1, {"Read": ToolUsage(calls=1, bytes=10)})
-        s.record_attribution(tid, 1, {"Grep": ToolUsage(calls=1, bytes=5)})
+        self._live_usage(s, tid, 0, 0, 0, 0, 0.0, None, None, turn_count=1, tool_usage={"Read": ToolUsage(calls=1, bytes=10)})
+        self._live_usage(s, tid, 0, 0, 0, 0, 0.0, None, None, turn_count=1, tool_usage={"Grep": ToolUsage(calls=1, bytes=5)})
         usage = s.tool_usage_for(tid)
         self.assertEqual(usage["Read"], ToolUsage(calls=1, bytes=10))
         self.assertEqual(usage["Grep"], ToolUsage(calls=1, bytes=5))
@@ -1175,7 +1185,7 @@ class StoreContractBase:
     def test_reclassify_with_a_result_line_only_flips_classification_leaving_usage_untouched(self):
         s = self.make_store()
         tid = self._step(s, "t")
-        s.record_usage(tid, 1, 1, 1, 1, 1.0, "list", None)
+        seed_usage(s, tid, 1, 1, 1, 1, 1.0, "list", None)
         s._seed_unclassified_backfill_row("/l/x.log", tid)
         before = s.get_node(tid).usage_cost_usd
 
@@ -1220,8 +1230,8 @@ class StoreContractBase:
     def test_overwrite_usage_and_attribution_replaces_rather_than_adds(self):
         s = self.make_store()
         tid = self._step(s, "t")
-        s.record_usage(tid, 100, 100, 100, 100, 10.0, "list", 5)
-        s.record_attribution(tid, 9, {"Read": ToolUsage(calls=9, bytes=90)})
+        self._live_usage(s, tid, 100, 100, 100, 100, 10.0, "list", 5)
+        self._live_usage(s, tid, 0, 0, 0, 0, 0.0, None, None, turn_count=9, tool_usage={"Read": ToolUsage(calls=9, bytes=90)})
         usage_totals = UsageEvent(
             input_tokens=1, output_tokens=2, cache_read_tokens=3, cache_creation_tokens=4,
             cost_usd=Cost.from_usd(0.5), cost_basis="derived", thinking_tokens=6,
@@ -1241,7 +1251,7 @@ class StoreContractBase:
     def test_overwrite_usage_and_attribution_drops_a_tool_absent_from_the_new_totals(self):
         s = self.make_store()
         tid = self._step(s, "t")
-        s.record_attribution(tid, 1, {"Read": ToolUsage(calls=1, bytes=10)})
+        self._live_usage(s, tid, 0, 0, 0, 0, 0.0, None, None, turn_count=1, tool_usage={"Read": ToolUsage(calls=1, bytes=10)})
         s.overwrite_usage_and_attribution(tid, UsageEvent(), 1, {"Bash": ToolUsage(calls=1, bytes=5)})
         usage = s.tool_usage_for(tid)
         self.assertNotIn("Read", usage)
@@ -1250,7 +1260,7 @@ class StoreContractBase:
     def test_reclassify_leaves_attribution_already_recorded_at_original_ingest_untouched(self):
         s = self.make_store()
         tid = self._step(s, "t")
-        s.record_attribution(tid, 246, {"Read": ToolUsage(calls=3, bytes=100)})
+        seed_attribution(s, tid, 246, {"Read": ToolUsage(calls=3, bytes=100)})
         s._seed_unclassified_backfill_row("/l/x.log", tid)
         usage = UsageEvent(input_tokens=5, output_tokens=6, cost_usd=Cost.from_usd(1.0), cost_basis="derived")
         attribution = AttributionEvent(
@@ -1712,7 +1722,7 @@ class StoreContractBase:
         s = self.make_store()
         day = datetime.date(2026, 1, 1)
         s.mark_day_summary_dirty(day)
-        s.start_day_summary(day, step_id="step-1", spawn_count=3)
+        seed_day_summary_claim(s, day, step_id="step-1", spawn_count=3)
         s.finish_day_summary(day, summary="what shipped", summarized_count=3, clear_dirty=True)
 
         row = s.day_summary(day)
@@ -1738,7 +1748,7 @@ class StoreContractBase:
         s = self.make_store()
         day = datetime.date(2026, 1, 1)
         s.mark_day_summary_dirty(day)
-        s.start_day_summary(day, step_id="step-1", spawn_count=1)
+        seed_day_summary_claim(s, day, step_id="step-1", spawn_count=1)
 
         self.assertEqual(s.summary_day_for_step("step-1"), day)
 
@@ -1750,10 +1760,10 @@ class StoreContractBase:
         s = self.make_store()
         day = datetime.date(2026, 1, 1)
         s.mark_day_summary_dirty(day)
-        s.start_day_summary(day, step_id="step-1", spawn_count=1)
+        seed_day_summary_claim(s, day, step_id="step-1", spawn_count=1)
         s.finish_day_summary(day, summary="text", summarized_count=1, clear_dirty=False)
         before = s.day_summary(day)
-        s.start_day_summary(day, step_id="step-2", spawn_count=2)
+        seed_day_summary_claim(s, day, step_id="step-2", spawn_count=2)
 
         s.release_day_summary(day)
 
@@ -1770,7 +1780,7 @@ class StoreContractBase:
         day = datetime.date(2026, 1, 1)
         s.mark_day_summary_dirty(day)
         dirty_since = s.day_summary(day).dirty_since
-        s.start_day_summary(day, step_id="step-1", spawn_count=1)
+        seed_day_summary_claim(s, day, step_id="step-1", spawn_count=1)
 
         s.finish_day_summary(day, summary="text", summarized_count=1, clear_dirty=False)
 
@@ -1791,21 +1801,21 @@ class StoreContractBase:
         self.assertTrue(s.file_hold("R-1", "inline:1", "mallory", "b", None, None, 1.0))
         self.assertFalse(s.file_hold("R-1", "inline:1", "other", "changed", None, None, 2.0))
         self.assertTrue(s.file_hold("R-2", "inline:1", "mallory", "b", None, None, 1.0))
-        held = s.hold("R-1", "inline:1")
+        held = held_comment(s, "R-1", "inline:1")
         self.assertEqual((held.author, held.body, held.state), ("mallory", "b", "held"))
-        self.assertIsNone(s.hold("R-1", "inline:2"))
+        self.assertIsNone(held_comment(s, "R-1", "inline:2"))
 
     def test_hold_for_step_and_open_and_approved_lists(self):
         s = self.make_store()
         step = self._filed_hold(s)
-        self.assertEqual(s.hold_for_step(step).key, "inline:1")
-        self.assertIsNone(s.hold_for_step("nope"))
+        self.assertEqual(held_comment_for_step(s, step).key, "inline:1")
+        self.assertIsNone(held_comment_for_step(s, "nope"))
         self.assertEqual([h.key for h in s.open_holds("R-1")], ["inline:1"])
         self.assertEqual(s.approved_holds("R-1"), [])
         s.decide_hold(step, "approved")
         self.assertEqual([h.key for h in s.approved_holds("R-1")], ["inline:1"])
         self.assertEqual(s.open_holds("R-1"), [])
-        self.assertIsNotNone(s.hold("R-1", "inline:1").decided_at)
+        self.assertIsNotNone(held_comment(s, "R-1", "inline:1").decided_at)
 
     def test_approved_holds_come_back_oldest_first(self):
         s = self.make_store()
@@ -1824,7 +1834,7 @@ class StoreContractBase:
         with self.assertRaises(StoreError):
             s.decide_hold(step, "rejected")
         s.mark_hold_dispatched("R-1", "inline:1")
-        self.assertEqual(s.hold("R-1", "inline:1").state, "dispatched")
+        self.assertEqual(held_comment(s, "R-1", "inline:1").state, "dispatched")
         with self.assertRaises(StoreError):
             s.decide_hold(step, "approved")
 
@@ -1835,7 +1845,7 @@ class StoreContractBase:
         with self.assertRaises(StoreError):
             s.decide_hold(step, "approved")
         self.assertFalse(s.file_hold("R-1", "inline:1", "mallory", "do it", None, None, 10.0))
-        self.assertEqual(s.hold("R-1", "inline:1").state, "rejected")
+        self.assertEqual(held_comment(s, "R-1", "inline:1").state, "rejected")
 
     def test_deciding_an_unknown_step_is_refused(self):
         s = self.make_store()
@@ -1848,7 +1858,7 @@ class StoreContractBase:
             with s.transaction():
                 s.file_hold("R-1", "inline:1", "mallory", "b", None, None, 1.0)
                 raise RuntimeError("boom")
-        self.assertIsNone(s.hold("R-1", "inline:1"))
+        self.assertIsNone(held_comment(s, "R-1", "inline:1"))
 
     def test_a_lost_complete_step_atomic_race_inside_a_transaction_keeps_the_earlier_writes(self):
         s = self.make_store()
@@ -1859,7 +1869,7 @@ class StoreContractBase:
             won, new = s.complete_step_atomic(tid, "done", "", NodeSpec(stage="review"))
         self.assertFalse(won)
         self.assertIsNone(new)
-        self.assertIsNotNone(s.hold("R-1", "inline:1"))
+        self.assertIsNotNone(held_comment(s, "R-1", "inline:1"))
 
     def test_a_keyboard_interrupt_inside_a_transaction_restores_depth_and_rolls_back(self):
         s = self.make_store()
@@ -1868,9 +1878,9 @@ class StoreContractBase:
                 s.file_hold("R-1", "inline:1", "mallory", "b", None, None, 1.0)
                 raise KeyboardInterrupt
         self.assertEqual(s._tx_depth, 0)
-        self.assertIsNone(s.hold("R-1", "inline:1"))
+        self.assertIsNone(held_comment(s, "R-1", "inline:1"))
         s.file_hold("R-2", "inline:2", "mallory", "b", None, None, 1.0)
-        self.assertIsNotNone(s.hold("R-2", "inline:2"))
+        self.assertIsNotNone(held_comment(s, "R-2", "inline:2"))
 
     def test_a_keyboard_interrupt_in_a_nested_transaction_unwinds_only_after_the_outer_exits(self):
         s = self.make_store()
@@ -1883,7 +1893,7 @@ class StoreContractBase:
                 finally:
                     self.assertEqual(s._tx_depth, 1)
         self.assertEqual(s._tx_depth, 0)
-        self.assertIsNone(s.hold("R-1", "inline:1"))
+        self.assertIsNone(held_comment(s, "R-1", "inline:1"))
 
     def test_feedback_cutoff_upserts_and_reads_back(self):
         s = self.make_store()
