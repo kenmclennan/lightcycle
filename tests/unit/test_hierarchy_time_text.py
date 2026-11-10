@@ -1,3 +1,4 @@
+from tests.support.store_seed import seed_attribution
 import unittest
 
 from lightcycle.adapters.tui.hub import hierarchy_time_text
@@ -88,7 +89,7 @@ class TestHierarchyTimeText(unittest.TestCase):
         step = create_owned_step(store, "s", stage="watch-ci", role="agent")
         clock["now"] = "2026-01-01T09:05:00"
         store.claim_ready("agent")
-        store.record_attribution(step, 9, {})
+        seed_attribution(store, step, 9, {})
         store.accrue_active_seconds([step], 57)
         clock["now"] = "2026-01-01T09:06:00"
         route_to_human(store, step, "BLOCKED: re-run the CI job")

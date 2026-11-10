@@ -1,3 +1,4 @@
+from tests.support.store_seed import seed_attribution, seed_day_summary_claim, seed_usage
 import argparse
 import datetime
 import functools
@@ -332,8 +333,8 @@ def _priority_cost_store():
     item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
     spec = store.step("LC-143.3.1", stage="spec-writer", role="agent", item=item)
     store.complete_node(spec, "done")
-    store.record_usage(spec, 1000, 200, 0, 0, 2.91, "list", None)
-    store.record_attribution(spec, 20, {})
+    seed_usage(store, spec, 1000, 200, 0, 0, 2.91, "list", None)
+    seed_attribution(store, spec, 20, {})
     store.step("LC-143.3.4", stage="write-code", role="agent", item=item)
     store.claim_ready("agent")
     return store
@@ -349,7 +350,7 @@ def _priority_cost_not_recorded_store():
     feedback = store.step(
         "LC-447.4", stage="handle-feedback", role="agent", item=item)
     store.complete_node(feedback, "done")
-    store.record_attribution(feedback, 246, {})
+    seed_attribution(store, feedback, 246, {})
     store.step("LC-447.5", stage="write-code", role="agent", item=item)
     store.claim_ready("agent")
     return store
@@ -611,7 +612,7 @@ def _done_with_cost_store():
     step273 = store.step("LC-273.1", stage="write-code", role="agent", item=lc273)
     store.claim_ready("agent")
     store.accrue_active_seconds([step273], 600)
-    store.record_usage(step273, 1000, 200, 0, 0, 2.91, "list", None)
+    seed_usage(store, step273, 1000, 200, 0, 0, 2.91, "list", None)
     store.complete_node(step273, "done")
     store.complete_node(lc273, "merged")
     store._records[lc273]["closed_at"] = "2026-01-01T15:00:00+00:00"
@@ -620,7 +621,7 @@ def _done_with_cost_store():
     step275 = store.step("LC-275.1", stage="write-code", role="agent", item=lc275)
     store.claim_ready("agent")
     store.accrue_active_seconds([step275], 900)
-    store.record_usage(step275, 1500, 300, 0, 0, 4.10, "list", None)
+    seed_usage(store, step275, 1500, 300, 0, 0, 4.10, "list", None)
     store.complete_node(step275, "done")
     store.complete_node(lc275, "merged")
     store._records[lc275]["closed_at"] = "2026-01-02T09:30:00+00:00"
@@ -668,7 +669,7 @@ def _report_store():
     step273 = store.step("LC-273.1", stage="write-code", role="agent", item=lc273)
     store.claim_ready("agent")
     store.accrue_active_seconds([step273], 600)
-    store.record_usage(step273, 1000, 200, 0, 0, 2.91, "list", None)
+    seed_usage(store, step273, 1000, 200, 0, 0, 2.91, "list", None)
     store.complete_node(step273, "done")
     store.complete_node(lc273, "merged", disposition="completed")
     store._records[lc273]["closed_at"] = _at(60)
@@ -700,7 +701,7 @@ def _automation_store():
         item = store.item(item_id, title)
         step = store.step("%s.1" % item_id, stage=step_name, role="agent", item=item)
         store.claim_ready("agent")
-        store.record_usage(step, 100, 10, 0, 0, cost, "list", None)
+        seed_usage(store, step, 100, 10, 0, 0, cost, "list", None)
         store.complete_node(step, "done")
         store.complete_node(item, "merged", disposition="completed")
         store._records[item]["closed_at"] = _at(minutes)
@@ -760,7 +761,7 @@ def _report_with_summary(size, width=None):
     today = NOW.date()
     with store.transaction():
         store.mark_day_summary_dirty(today)
-        store.start_day_summary(today, step_id="fake-summary-step", spawn_count=1)
+        seed_day_summary_claim(store, today, step_id="fake-summary-step", spawn_count=1)
     store.finish_day_summary(
         today,
         summary="Closed a handful of items today, mostly hardening the reporting surface.",
@@ -785,7 +786,7 @@ def _report_by_project(size, width=None):
     store._records[yo8]["closed_at"] = _at(50)
     with store.transaction():
         store.mark_day_summary_dirty(today)
-        store.start_day_summary(today, step_id="fake-summary-step", spawn_count=1)
+        seed_day_summary_claim(store, today, step_id="fake-summary-step", spawn_count=1)
     store.finish_day_summary(
         today,
         summary=(
@@ -832,12 +833,12 @@ def _hierarchy_cost_store():
     recorded = store.step(
         "LC-143.3.1", stage="spec-writer", role="agent", item=item)
     store.complete_node(recorded, "done")
-    store.record_usage(recorded, 1000, 200, 0, 0, 2.91, "list", None)
-    store.record_attribution(recorded, 20, {})
+    seed_usage(store, recorded, 1000, 200, 0, 0, 2.91, "list", None)
+    seed_attribution(store, recorded, 20, {})
     not_recorded = store.step(
         "LC-143.3.4", stage="handle-feedback", role="agent", item=item)
     store.complete_node(not_recorded, "done")
-    store.record_attribution(not_recorded, 246, {})
+    seed_attribution(store, not_recorded, 246, {})
     store.step("LC-143.3.6", stage="code-await-merge", role="human", item=item)
     return store, item
 
@@ -912,8 +913,8 @@ def _hierarchy_parked_ran_store():
     ran = store.step("LC-143.3.1", stage="spec-writer", role="agent", item=item)
     store.claim_ready("agent")
     store.accrue_active_seconds([ran], 60 * 20)
-    store.record_usage(ran, 1000, 200, 0, 0, 2.91, "list", None)
-    store.record_attribution(ran, 20, {})
+    seed_usage(store, ran, 1000, 200, 0, 0, 2.91, "list", None)
+    seed_attribution(store, ran, 20, {})
     clock["now"] = _at(16)
     store.complete_node(ran, "done")
     store._records[ran]["closed_at"] = _at(16)
@@ -922,8 +923,8 @@ def _hierarchy_parked_ran_store():
     parked = store.step("LC-143.3.4", stage="watch-ci", role="agent", item=item)
     store.claim_ready("agent")
     store.accrue_active_seconds([parked], 57)
-    store.record_usage(parked, 500, 100, 0, 0, 0.23, "list", None)
-    store.record_attribution(parked, 9, {})
+    seed_usage(store, parked, 500, 100, 0, 0, 0.23, "list", None)
+    seed_attribution(store, parked, 9, {})
     clock["now"] = _at(13)
     route_to_human(store, parked, "BLOCKED: re-run the CI job")
 
@@ -1089,8 +1090,8 @@ def _running_with_dependency_store():
 
 def _hub_done_item(size):
     store, scan, coding = _populated_store()
-    store.record_usage("LC-143.3.1", 1000, 200, 0, 0, 2.91, "list", None)
-    store.record_attribution("LC-143.3.1", 20, {})
+    seed_usage(store, "LC-143.3.1", 1000, 200, 0, 0, 2.91, "list", None)
+    seed_attribution(store, "LC-143.3.1", 20, {})
     store.complete_node(coding, "done")
     store.complete_node(scan, "done")
     store._records[scan]["closed_at"] = _at(2)
@@ -1388,8 +1389,8 @@ def _hub_step_active_with_cost_store():
         "LC-143.3.4", stage="write-code", role="agent", item=item)
     store.claim_ready("agent")
     store.accrue_active_seconds([step], 300)
-    store.record_usage(step, 1000, 200, 0, 0, 2.91, "list", None)
-    store.record_attribution(step, 20, {})
+    seed_usage(store, step, 1000, 200, 0, 0, 2.91, "list", None)
+    seed_attribution(store, step, 20, {})
     return store, step
 
 
@@ -1406,8 +1407,8 @@ def _hub_step_done_with_cost_store():
         "LC-143.3.4", stage="write-code", role="agent", item=item)
     store.claim_ready("agent")
     store.accrue_active_seconds([step], 600)
-    store.record_usage(step, 1000, 200, 0, 0, 2.91, "list", None)
-    store.record_attribution(step, 20, {})
+    seed_usage(store, step, 1000, 200, 0, 0, 2.91, "list", None)
+    seed_attribution(store, step, 20, {})
     clock["now"] = _at(2)
     store.complete_node(step, "done")
     store._records[step]["closed_at"] = _at(2)
@@ -1546,8 +1547,8 @@ def _cost_step_recorded_store():
     item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
     step = store.step(
         "LC-143.3.4", stage="write-code", role="agent", item=item)
-    store.record_usage(step, 204_321, 2, 21_685_338, 555, 5.70, "list", None)
-    store.record_attribution(
+    seed_usage(store, step, 204_321, 2, 21_685_338, 555, 5.70, "list", None)
+    seed_attribution(store, 
         step, 42, {"Read": ToolUsage(calls=12, bytes=4300), "Bash": ToolUsage(calls=3, bytes=512)},
     )
     return store, step
@@ -1563,7 +1564,7 @@ def _cost_step_not_recorded_store():
     item = store.item("LC-447", SCAN_TITLE, workflow=WORKFLOW)
     step = store.step(
         "LC-447.4", stage="handle-feedback", role="agent", item=item)
-    store.record_attribution(step, 246, {})
+    seed_attribution(store, step, 246, {})
     return store, step
 
 
@@ -1577,8 +1578,8 @@ def _cost_step_unpriced_store():
     item = store.item("LC-522", SCAN_TITLE, workflow=WORKFLOW)
     step = store.step(
         "LC-522.4", stage="write-code", role="agent", item=item)
-    store.record_usage(step, 100, 20, 0, 0, 0.0, "unpriced", None)
-    store.record_attribution(step, 12, {})
+    seed_usage(store, step, 100, 20, 0, 0, 0.0, "unpriced", None)
+    seed_attribution(store, step, 12, {})
     return store, step
 
 
@@ -1594,19 +1595,19 @@ def _cost_item_store():
     pass_1 = store.open_pass(item)
     spec = store.step("LC-143.3.1", stage="spec-writer", role="agent", item=item)
     store.set_step_pass(spec, pass_1)
-    store.record_usage(spec, 1000, 200, 0, 0, 2.91, "list", None)
-    store.record_attribution(spec, 20, {})
+    seed_usage(store, spec, 1000, 200, 0, 0, 2.91, "list", None)
+    seed_attribution(store, spec, 20, {})
     cleanup = store.step("LC-143.3.7", stage="cleanup", role="agent", item=item)
     store.set_step_pass(cleanup, pass_1)
-    store.record_usage(cleanup, 100, 20, 0, 0, 0.17, "derived", None)
-    store.record_attribution(cleanup, 3, {})
+    seed_usage(store, cleanup, 100, 20, 0, 0, 0.17, "derived", None)
+    seed_attribution(store, cleanup, 3, {})
     review = store.step("LC-143.3.8", stage="review-code", role="agent", item=item)
     store.set_step_pass(review, pass_1)
-    store.record_attribution(review, 60, {})
+    seed_attribution(store, review, 60, {})
     unpriced = store.step("LC-143.3.10", stage="review-code", role="agent", item=item)
     store.set_step_pass(unpriced, pass_1)
-    store.record_usage(unpriced, 50, 10, 0, 0, 0.0, "unpriced", None)
-    store.record_attribution(unpriced, 8, {})
+    seed_usage(store, unpriced, 50, 10, 0, 0, 0.0, "unpriced", None)
+    seed_attribution(store, unpriced, 8, {})
     gate = store.step(
         "LC-143.3.6", stage="code-await-merge", role="human", item=item)
     store.set_step_pass(gate, pass_1)
@@ -1616,8 +1617,8 @@ def _cost_item_store():
     pass_2 = store.open_pass(item)
     rework = store.step("LC-143.3.9", stage="write-code", role="agent", item=item)
     store.set_step_pass(rework, pass_2)
-    store.record_usage(rework, 500, 100, 0, 0, 0.5, "list", None)
-    store.record_attribution(rework, 5, {})
+    seed_usage(store, rework, 500, 100, 0, 0, 0.5, "list", None)
+    seed_attribution(store, rework, 5, {})
 
     return store, item
 

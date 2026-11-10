@@ -1,3 +1,4 @@
+from tests.support.store_seed import seed_usage
 import datetime
 import unittest
 
@@ -31,7 +32,7 @@ def _closed(store, id, label=None, step="build", closed_at="2026-01-01T10:00:00+
     child = store.create_step(stage=step, role="agent", item=item)
     if cost is not None:
         store.claim_ready("agent")
-        store.record_usage(child, 100, 10, 0, 0, cost, "list", None)
+        seed_usage(store, child, 100, 10, 0, 0, cost, "list", None)
     store.complete_node(child, "done")
     store.complete_node(item, "merged", disposition=disposition)
     store._records[item]["closed_at"] = closed_at

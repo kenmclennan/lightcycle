@@ -1,3 +1,4 @@
+from tests.support.store_seed import seed_attribution, seed_usage
 import unittest
 
 from lightcycle.adapters.tui.design_system import HUMAN_STEP_GLYPH, STATE_GLYPHS
@@ -74,7 +75,7 @@ class TestRowForStoreCalls(unittest.TestCase):
         active_step = create_owned_step(store, "in progress", stage="build", role="agent")
         queued_step = create_owned_step(store, "queued", stage="build", role="agent")
         for step in (attention_step, active_step, queued_step):
-            store.record_usage(step, 100, 10, 0, 0, 1.25, "list", None)
+            seed_usage(store, step, 100, 10, 0, 0, 1.25, "list", None)
             store.accrue_active_seconds([step], 300)
         lanes = {
             "inbox": [store.get_node(attention_step)],
@@ -396,10 +397,10 @@ class TestBuildPriorityRowsCost(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("story", "a description")
         done = store.create_step(stage="spec-writer", role="agent", item=item)
-        store.record_usage(done, 100, 10, 0, 0, 2.50, "list", None)
+        seed_usage(store, done, 100, 10, 0, 0, 2.50, "list", None)
         store.complete_node(done, "done")
         step = store.create_step(stage="build", role="agent", item=item)
-        store.record_usage(step, 100, 10, 0, 0, 1.25, "list", None)
+        seed_usage(store, step, 100, 10, 0, 0, 1.25, "list", None)
         lanes = {"inbox": [], "queue": [], "active": [store.get_node(step)]}
 
         _, active, _ = build_priority_rows(store, lanes, FixedFlowService(_FLOW), True)
@@ -410,7 +411,7 @@ class TestBuildPriorityRowsCost(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("story", "a description")
         step = store.create_step(stage="build", role="agent", item=item)
-        store.record_attribution(step, 50, {})
+        seed_attribution(store, step, 50, {})
         lanes = {"inbox": [], "queue": [], "active": [store.get_node(step)]}
 
         _, active, _ = build_priority_rows(store, lanes, FixedFlowService(_FLOW), True)

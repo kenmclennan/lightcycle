@@ -1,3 +1,4 @@
+from tests.support.store_seed import seed_attribution, seed_usage
 import unittest
 
 from lightcycle.adapters.tui.hub import _stat_line_item, _stat_line_step, log_tab_mode
@@ -81,8 +82,8 @@ class TestStatLineItem(unittest.TestCase):
         step = store.create_step(stage="build", role="agent", item=item)
         store.claim_ready("agent")
         store.accrue_active_seconds([step], 300)
-        store.record_usage(step, 100, 10, 0, 0, 2.91, "list", None)
-        store.record_attribution(step, 50, {})
+        seed_usage(store, step, 100, 10, 0, 0, 2.91, "list", None)
+        seed_attribution(store, step, 50, {})
         node = store.get_node(item)
 
         now = "2026-01-01T10:24:00"
@@ -192,8 +193,8 @@ class TestStatLineStepAgent(unittest.TestCase):
         step = store.create_step(stage="build", role="agent", item=item)
         store.claim_ready("agent")
         store.accrue_active_seconds([step], 600)
-        store.record_usage(step, 100, 10, 0, 0, 1.5, "list", None)
-        store.record_attribution(step, 10, {})
+        seed_usage(store, step, 100, 10, 0, 0, 1.5, "list", None)
+        seed_attribution(store, step, 10, {})
         node = store.get_node(step)
 
         now = "2026-01-01T10:17:00"
@@ -208,8 +209,8 @@ class TestStatLineStepAgent(unittest.TestCase):
         step = store.create_step(stage="build", role="agent", item=item)
         store.claim_ready("agent")
         store.accrue_active_seconds([step], 300)
-        store.record_usage(step, 100, 10, 0, 0, 2.0, "list", None)
-        store.record_attribution(step, 20, {})
+        seed_usage(store, step, 100, 10, 0, 0, 2.0, "list", None)
+        seed_attribution(store, step, 20, {})
         clock["now"] = "2026-01-01T10:30:00"
         store.complete_node(step, "done")
         store._records[step]["closed_at"] = "2026-01-01T10:30:00"

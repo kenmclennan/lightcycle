@@ -1,3 +1,4 @@
+from tests.support.store_seed import held_comment
 import dataclasses
 import json
 import unittest
@@ -307,7 +308,7 @@ class TestPrCommentEscapes(unittest.TestCase):
         uc = DispatchPrFeedbackUseCase(rig.store, gh, _FlowAdapter(_FLOW), rig.complete, **_TRUST)
         uc.execute()
         self.assertEqual(rig.store.escapes_since(""), [])
-        held = rig.store.hold(rig.rid, "mention:1500.0")
+        held = held_comment(rig.store, rig.rid, "mention:1500.0")
         rig.store.decide_hold(held.step_id, "approved")
         uc.execute()
         (row,) = rig.store.escapes_since("")

@@ -1,3 +1,4 @@
+from tests.support.store_seed import seed_attribution, seed_usage
 import unittest
 
 from lightcycle.application.work import CostInput, CostUseCase
@@ -12,8 +13,8 @@ class TestCostUseCase(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("item", "a description")
         step = store.create_step(stage="write-code", role="agent", item=item)
-        store.record_usage(step, 100, 50, 10, 5, 1.5, "list", None)
-        store.record_attribution(step, 4, {"Read": ToolUsage(calls=2, bytes=40)})
+        seed_usage(store, step, 100, 50, 10, 5, 1.5, "list", None)
+        seed_attribution(store, step, 4, {"Read": ToolUsage(calls=2, bytes=40)})
 
         cost = CostUseCase(store).execute(CostInput(node=step))
 
@@ -27,10 +28,10 @@ class TestCostUseCase(unittest.TestCase):
         item = store.create_item("item", "a description")
         step_a = store.create_step(stage="write-code", role="agent", item=item)
         step_b = store.create_step(stage="write-code", role="agent", item=item)
-        store.record_usage(step_a, 100, 50, 0, 0, 1.0, "list", None)
-        store.record_attribution(step_a, 5, {})
-        store.record_usage(step_b, 100, 50, 0, 0, 2.0, "list", None)
-        store.record_attribution(step_b, 3, {})
+        seed_usage(store, step_a, 100, 50, 0, 0, 1.0, "list", None)
+        seed_attribution(store, step_a, 5, {})
+        seed_usage(store, step_b, 100, 50, 0, 0, 2.0, "list", None)
+        seed_attribution(store, step_b, 3, {})
 
         cost = CostUseCase(store).execute(CostInput(node=item))
 
@@ -53,8 +54,8 @@ class TestCostUseCase(unittest.TestCase):
         store = FakeStore()
         item = store.create_item("item", "a description")
         step = store.create_step(stage="write-code", role="agent", item=item)
-        store.record_usage(step, 100, 50, 0, 0, 2.0, "list", None)
-        store.record_attribution(step, 5, {})
+        seed_usage(store, step, 100, 50, 0, 0, 2.0, "list", None)
+        seed_attribution(store, step, 5, {})
         pid = store.open_pass(item)
         rid = store.open_run(item, pid, "code")
         store.set_pr(rid, "https://github.com/a/b/pull/3")

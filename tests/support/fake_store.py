@@ -636,7 +636,7 @@ class FakeStore(StorePort):
             meta["active_seconds"] = (meta.get("active_seconds") or 0) + seconds
             b["metadata"] = meta
 
-    def record_usage(self, tid, input_tokens, output_tokens, cache_read_tokens,
+    def _add_usage(self, tid, input_tokens, output_tokens, cache_read_tokens,
                       cache_creation_tokens, cost_usd, cost_basis, thinking_tokens,
                       rates_used=None):
         b = self._get(tid)
@@ -660,7 +660,7 @@ class FakeStore(StorePort):
             )
         b["metadata"] = meta
 
-    def record_attribution(self, tid, turn_count, tool_usage):
+    def _add_attribution(self, tid, turn_count, tool_usage):
         b = self._get(tid)
         meta = dict(b.get("metadata") or {})
         meta["turn_count"] = (meta.get("turn_count") or 0) + turn_count
@@ -684,12 +684,12 @@ class FakeStore(StorePort):
             return False
         stored = step_id is not None and step_id in self._records
         if stored:
-            self.record_usage(
+            self._add_usage(
                 step_id, usage.input_tokens, usage.output_tokens, usage.cache_read_tokens,
                 usage.cache_creation_tokens, usage.cost_usd.to_usd(), usage.cost_basis,
                 usage.thinking_tokens, rates_used=usage.rates_used,
             )
-            self.record_attribution(step_id, attribution.turn_count, attribution.tool_usage)
+            self._add_attribution(step_id, attribution.turn_count, attribution.tool_usage)
         self._backfill_log[log_file] = (step_id, usage.has_result_line)
         return stored
 
@@ -701,12 +701,12 @@ class FakeStore(StorePort):
     ):
         self._usage_accrual_state[spawnid] = resume
         if input_tokens or output_tokens or cache_read_tokens or cache_creation_tokens:
-            self.record_usage(
+            self._add_usage(
                 tid, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
                 cost_usd, cost_basis, thinking_tokens, rates_used=rates_used,
             )
         if turn_count or tool_usage:
-            self.record_attribution(tid, turn_count, tool_usage)
+            self._add_attribution(tid, turn_count, tool_usage)
 
     def usage_accrual_state(self, spawnid):
         return self._usage_accrual_state.get(spawnid)
@@ -727,7 +727,7 @@ class FakeStore(StorePort):
     def reclassify_backfilled_log(self, log_file, step_id, usage, attribution):
         recovered = False
         if not usage.has_result_line and step_id is not None and step_id in self._records:
-            self.record_usage(
+            self._add_usage(
                 step_id, usage.input_tokens, usage.output_tokens, usage.cache_read_tokens,
                 usage.cache_creation_tokens, usage.cost_usd.to_usd(), usage.cost_basis,
                 usage.thinking_tokens, rates_used=usage.rates_used,
@@ -781,11 +781,6 @@ class FakeStore(StorePort):
         b = self._daily_summaries.setdefault(day, {"summarized_count": 0})
         if b.get("dirty_since") is None:
             b["dirty_since"] = self._now()
-
-    def start_day_summary(self, day, step_id, spawn_count):
-        b = self._daily_summaries[day]
-        b["step_id"] = step_id
-        b["spawn_count"] = spawn_count
 
     def finish_day_summary(self, day, summary, summarized_count, clear_dirty):
         b = self._daily_summaries[day]
@@ -1002,10 +997,7 @@ class FakeStore(StorePort):
         self._holds[(run_id, key)] = replace(
             self._holds[(run_id, key)], item_id=item_id, step_id=step_id)
 
-    def hold(self, run_id, key):
-        return self._holds.get((run_id, key))
-
-    def hold_for_step(self, step_id):
+    def _hold_for_step(self, step_id):
         return next((h for h in self._holds.values() if h.step_id == step_id), None)
 
     def _holds_in_state(self, run_id, state):
@@ -1029,7 +1021,7 @@ class FakeStore(StorePort):
             hold, state=target, decided_at=self._now())
 
     def decide_hold(self, step_id, state):
-        self._transition_hold(self.hold_for_step(step_id), state)
+        self._transition_hold(self._hold_for_step(step_id), state)
 
     def mark_hold_dispatched(self, run_id, key):
         self._transition_hold(self._holds.get((run_id, key)), DISPATCHED)

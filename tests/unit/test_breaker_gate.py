@@ -34,7 +34,7 @@ class RecordingFakeStore(FakeStore):
         self.record_attribution_calls = []
         self.get_node_calls = []
 
-    def record_usage(self, tid, input_tokens, output_tokens, cache_read_tokens,
+    def _add_usage(self, tid, input_tokens, output_tokens, cache_read_tokens,
                       cache_creation_tokens, cost_usd, cost_basis, thinking_tokens,
                       rates_used=None):
         self.record_usage_calls.append(
@@ -42,7 +42,7 @@ class RecordingFakeStore(FakeStore):
              cost_usd, cost_basis, thinking_tokens, rates_used)
         )
 
-    def record_attribution(self, tid, turn_count, tool_usage):
+    def _add_attribution(self, tid, turn_count, tool_usage):
         self.record_attribution_calls.append((tid, turn_count, tool_usage))
 
     def get_node(self, tid):

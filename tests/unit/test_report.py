@@ -1,3 +1,4 @@
+from tests.support.store_seed import seed_day_summary_claim, seed_usage
 import dataclasses
 import datetime
 import unittest
@@ -94,7 +95,7 @@ class TestReportUseCase(unittest.TestCase):
         item = s.create_item("item", "a description")
         step = s.create_step(stage="build", role="agent", item=item)
         s.claim_ready("agent")
-        s.record_usage(step, 100, 10, 0, 0, 2.50, "list", None)
+        seed_usage(s, step, 100, 10, 0, 0, 2.50, "list", None)
         s.complete_node(step, "done")
         s.complete_node(item, "merged", disposition="completed")
         s._records[item]["closed_at"] = "2026-01-01T10:00:00+00:00"
@@ -111,7 +112,7 @@ class TestReportUseCaseCacheHitRate(unittest.TestCase):
         item = s.create_item("item", "a description", id=id)
         step = s.create_step(stage="build", role="agent", item=item)
         s.claim_ready("agent")
-        s.record_usage(step, input_tokens, 0, cache_read, 0, 1.0, "list", None)
+        seed_usage(s, step, input_tokens, 0, cache_read, 0, 1.0, "list", None)
         s.complete_node(step, "done")
         s.complete_node(item, "merged", disposition="completed")
         s._records[item]["closed_at"] = "2026-01-01T10:00:00+00:00"
@@ -217,7 +218,7 @@ class TestReportUseCaseSummary(unittest.TestCase):
         day = datetime.date(2026, 1, 1)
         with s.transaction():
             s.mark_day_summary_dirty(day)
-            s.start_day_summary(day, step_id="step-1", spawn_count=0)
+            seed_day_summary_claim(s, day, step_id="step-1", spawn_count=0)
         s.finish_day_summary(day, summary="what shipped", summarized_count=0, clear_dirty=True)
 
         resp = ReportUseCase(s).execute(ReportInput(day=day))
@@ -275,7 +276,7 @@ def _project_item(store, project, *, disposition="completed", closed_at="2026-01
     step = store.create_step(stage="write-code", role="agent", item=item)
     if cost is not None:
         store.claim_ready("agent")
-        store.record_usage(step, 100, 10, 5, 2, cost, "list", None)
+        seed_usage(store, step, 100, 10, 5, 2, cost, "list", None)
     store.complete_node(step, "done")
     store.complete_node(item, "merged", disposition=disposition)
     store._records[item]["closed_at"] = closed_at
@@ -287,7 +288,7 @@ def _project_item(store, project, *, disposition="completed", closed_at="2026-01
 def _store_summary(store, day, text):
     with store.transaction():
         store.mark_day_summary_dirty(day)
-        store.start_day_summary(day, step_id="s", spawn_count=1)
+        seed_day_summary_claim(store, day, step_id="s", spawn_count=1)
     store.finish_day_summary(day, summary=text, summarized_count=1, clear_dirty=True)
 
 

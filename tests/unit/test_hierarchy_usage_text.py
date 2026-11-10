@@ -1,3 +1,4 @@
+from tests.support.store_seed import seed_attribution, seed_usage
 import unittest
 
 from lightcycle.adapters.tui.hub import COST_NOT_RECORDED, hierarchy_usage_text
@@ -32,7 +33,7 @@ class TestHierarchyUsageText(unittest.TestCase):
     ):
         store = FakeStore()
         step = create_owned_step(store, "building", stage="build", role="agent")
-        store.record_attribution(step, 246, {})
+        seed_attribution(store, step, 246, {})
         node = store.get_node(step)
 
         self.assertEqual(hierarchy_usage_text(node), ("246 turns", COST_NOT_RECORDED))
@@ -40,8 +41,8 @@ class TestHierarchyUsageText(unittest.TestCase):
     def test_an_agent_step_with_recorded_cost_shows_both_turns_and_cost(self):
         store = FakeStore()
         step = create_owned_step(store, "building", stage="build", role="agent")
-        store.record_usage(step, 100, 10, 0, 0, 2.91, "list", None)
-        store.record_attribution(step, 50, {})
+        seed_usage(store, step, 100, 10, 0, 0, 2.91, "list", None)
+        seed_attribution(store, step, 50, {})
         node = store.get_node(step)
 
         self.assertEqual(hierarchy_usage_text(node), ("50 turns", "$2.91"))
@@ -51,8 +52,8 @@ class TestHierarchyUsageText(unittest.TestCase):
     ):
         store = FakeStore()
         step = create_owned_step(store, "building", stage="build", role="agent")
-        store.record_usage(step, 0, 0, 0, 0, 0.0, "list", None)
-        store.record_attribution(step, 50, {})
+        seed_usage(store, step, 0, 0, 0, 0, 0.0, "list", None)
+        seed_attribution(store, step, 50, {})
         node = store.get_node(step)
 
         self.assertEqual(hierarchy_usage_text(node), ("50 turns", COST_NOT_RECORDED))
@@ -60,8 +61,8 @@ class TestHierarchyUsageText(unittest.TestCase):
     def test_an_agent_step_with_an_unpriced_basis_shows_the_not_recorded_placeholder(self):
         store = FakeStore()
         step = create_owned_step(store, "building", stage="build", role="agent")
-        store.record_usage(step, 100, 10, 0, 0, 0.0, "unpriced", None)
-        store.record_attribution(step, 50, {})
+        seed_usage(store, step, 100, 10, 0, 0, 0.0, "unpriced", None)
+        seed_attribution(store, step, 50, {})
         node = store.get_node(step)
 
         self.assertEqual(hierarchy_usage_text(node), ("50 turns", COST_NOT_RECORDED))
@@ -69,7 +70,7 @@ class TestHierarchyUsageText(unittest.TestCase):
     def test_a_single_turn_is_singular(self):
         store = FakeStore()
         step = create_owned_step(store, "building", stage="build", role="agent")
-        store.record_attribution(step, 1, {})
+        seed_attribution(store, step, 1, {})
         node = store.get_node(step)
 
         self.assertEqual(hierarchy_usage_text(node), ("1 turn", COST_NOT_RECORDED))
