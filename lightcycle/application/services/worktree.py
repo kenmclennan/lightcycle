@@ -272,6 +272,22 @@ class WorktreeService:
             findings = findings + self._unmerged_findings(target, branch)
         return findings
 
+    def halt_findings(self, step):
+        node = self._store.get_node(step)
+        run = self._run(node)
+        if run is None or not run.branch:
+            return []
+        item = self._item_of(node)
+        if not self.has_repo(item):
+            return []
+        try:
+            return self._run_findings(
+                item, run, proven_merged=False,
+                fetched={self._target_for_phase(item, run.phase)}, check_dirty=True,
+            )
+        except (UseCaseError, GitReadError) as e:
+            return ["could not read the worktree: %s" % e]
+
     def teardown_refusals(self, item, merged_prs=frozenset()):
         return self._refusals(item, merged_prs, check_dirty=True)
 

@@ -177,9 +177,9 @@ def cmd_halt(argv):
     if rc is not None:
         return rc
     try:
-        resp = HaltStepUseCase(container().store, container().workers).execute(
-            HaltInput(target=a.id, note=note)
-        )
+        resp = HaltStepUseCase(
+            container().store, container().workers, _worktrees()
+        ).execute(HaltInput(target=a.id, note=note))
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
         return 1

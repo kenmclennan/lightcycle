@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Tuple
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
@@ -17,12 +18,14 @@ class HaltResponse:
     step: str
     spawnid: str
     pid: int
+    findings: Tuple[str, ...]
 
 
 class HaltStepUseCase:
-    def __init__(self, store, workers):
+    def __init__(self, store, workers, worktrees):
         self._store = store
         self._workers = workers
+        self._worktrees = worktrees
         self._held = HeldSteps(store, workers)
 
     def _held_steps(self, target):
@@ -51,8 +54,14 @@ class HaltStepUseCase:
                 % (input.target, ", ".join(step.id for step, _ in held))
             )
         step, worker = held[0]
-        observation = "halted by the driver: %s" % input.note
+        findings = self._worktrees.halt_findings(step.id)
+        detail = [f if f.endswith(".") else f + "." for f in findings] or [
+            "There is no worktree to report."
+        ]
+        observation = "halted by the driver: %s %s" % (input.note, " ".join(detail))
         decision = "resume with `lc set %s --state ready`, or close the item" % step.id
         ParkStepUseCase(self._store).execute(ParkInput(step.id, observation, decision))
         self._workers.kill(worker.pid)
-        return HaltResponse(step=step.id, spawnid=worker.spawnid, pid=worker.pid)
+        return HaltResponse(
+            step=step.id, spawnid=worker.spawnid, pid=worker.pid, findings=tuple(findings)
+        )
