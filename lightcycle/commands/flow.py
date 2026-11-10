@@ -17,6 +17,7 @@ from lightcycle.application.work import (
 )
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.pool.halt_step import HaltInput, HaltStepUseCase
+from lightcycle.application.work.refuse_held_step import RefuseHeldStepUseCase
 from lightcycle.application.flow.advance_feedback_ledger import AdvanceFeedbackLedgerUseCase
 from lightcycle.application.flow.record_merged_gate_run import (
     RecordMergedGateRunInput, RecordMergedGateRunUseCase,
@@ -129,6 +130,7 @@ def cmd_done(argv):
                     "{completed,abandoned} explicitly\n" % a.outcome
                 )
                 return 2
+            RefuseHeldStepUseCase(container().store, container().workers).execute(a.id)
             CloseItemUseCase(container().store, _worktrees()).execute(
                 CloseItemInput(item=a.id, reason=a.outcome, disposition=disposition, note=note)
             )
@@ -156,6 +158,7 @@ def cmd_close(argv):
     if rc is not None:
         return rc
     try:
+        RefuseHeldStepUseCase(container().store, container().workers).execute(a.id)
         CloseItemUseCase(container().store, _worktrees()).execute(
             CloseItemInput(item=a.id, reason=a.outcome, disposition=a.disposition, note=note)
         )
