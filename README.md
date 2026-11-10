@@ -150,6 +150,7 @@ The mutating CLI is a small set of generic primitives over nodes; the read views
 | `lc config [--edit]` | show (or `--edit`) the lightcycle config: projects + specs roots |
 | `lc start [--once] [--detach]` | the agent pool: sweep, then fill up to `LC_MAX_AGENTS` workers from the ready queue; `--detach` runs it in the background |
 | `lc stop [--drain]` | stop a detached pool; `--drain` lets running workers finish first |
+| `lc halt <item\|step> --note "<reason>"` | stop one running step's worker now and park the step, keeping its worktree and branch; resume with `lc set <step> --state ready` |
 | `lc tui [--start]` | the interactive dashboard; `--start` first starts the pool in the background if it is not already running |
 | `lc status` | all buckets: inbox / active / queue / blocked |
 | `lc inbox [N]` / `lc backlog [N]` | what needs you now (gates + blocked) / todo items to develop later |

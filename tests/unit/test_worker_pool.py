@@ -175,3 +175,24 @@ class TestWorkerPool(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestHolding(unittest.TestCase):
+    def setUp(self):
+        self.pool = WorkerPool([
+            Worker(spawnid="sp1", pid=1, step="s-1"),
+            Worker(spawnid="sp2", pid=2, step="s-2"),
+            Worker(spawnid="sp3", pid=3, step="s-3"),
+        ])
+
+    def test_matching_step_and_spawnid_returns_the_worker(self):
+        self.assertEqual(self.pool.holding(probe({1, 2}), "s-1", "sp1").pid, 1)
+
+    def test_dead_worker_is_not_holding(self):
+        self.assertIsNone(self.pool.holding(probe({2}), "s-1", "sp1"))
+
+    def test_different_spawnid_on_the_same_step_is_not_holding(self):
+        self.assertIsNone(self.pool.holding(probe({1}), "s-1", "other"))
+
+    def test_unnamed_step_is_not_held(self):
+        self.assertIsNone(self.pool.holding(probe({1, 2, 3}), "s-9", "sp1"))

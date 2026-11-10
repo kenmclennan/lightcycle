@@ -50,6 +50,7 @@ class TestWorkerPermitted(unittest.TestCase):
 
     def test_a_verb_outside_worker_verbs_and_not_set_never_permitted(self):
         self.assertFalse(worker_permitted("rm", {"state": "waiting"}))
+        self.assertFalse(worker_permitted("halt", {"note": ["x"]}))
 
 
 class TestWorkerPermittedAttach(unittest.TestCase):
