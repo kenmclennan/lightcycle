@@ -122,6 +122,8 @@ def _strategy_suffix(r):
         return "  " + "  ".join(parts)
     if StepKind.of(r.step) is StepKind.ENGINE_FINDINGS and r.step.notes:
         return "  findings:%s" % _truncate(r.step.notes.splitlines()[0])
+    if r.held:
+        return "  held: %s  pr:%s" % (r.held, r.pr) if r.pr else "  held: %s" % r.held
     if r.behind and r.pr:
         return "  %s: %s  pr:%s" % (BEHIND_NOT_UPDATED_PHRASE, r.behind, r.pr)
     if r.pr:

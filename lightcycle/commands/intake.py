@@ -14,6 +14,7 @@ from lightcycle.domain.work import (
 from lightcycle.domain.work.state import ALIASES
 from lightcycle.application.work.activate_item import ActivateItemInput, ActivateItemUseCase
 from lightcycle.application.work.link_source import LinkSourceUseCase
+from lightcycle.application.work.refuse_gate_hold import RefuseGateHoldUseCase
 from lightcycle.application.work.resolve_backlog import link_resolves
 from lightcycle.application.work.return_to_backlog import (
     ReturnToBacklogInput, ReturnToBacklogUseCase,
@@ -234,6 +235,8 @@ def cmd_set(argv):
         sys.stderr.write(msg)
         return 2
     try:
+        if a.state is not None and node_type == "step":
+            RefuseGateHoldUseCase(container().store).execute(a.id)
         if a.state == "active":
             depends_ids = a.depends or []
             for node_id in depends_ids:

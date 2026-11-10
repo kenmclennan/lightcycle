@@ -367,6 +367,31 @@ class TestInboxBehindMarker(unittest.TestCase):
         self.assertEqual(behind, {marked: "update-branch refused", plain: None})
 
 
+class TestInboxGateHold(unittest.TestCase):
+    def test_only_the_held_gate_carries_held(self):
+        s = FakeStore()
+        held = create_owned_step(s, "held", stage="gate", role="human")
+        plain = create_owned_step(s, "plain", stage="gate", role="human")
+        s.add_artifact(held, "gate-hold", "wait for the stack", internal=True)
+        rows = InboxUseCase(s, _empty_flow(s)).execute(InboxInput()).rows
+        self.assertEqual(
+            {row.step.id: row.held for row in rows}, {held: "wait for the stack", plain: None})
+
+
+class TestShowNodeGateHold(unittest.TestCase):
+    def test_a_held_step_lists_the_gate_hold_artifact(self):
+        s = FakeStore()
+        step = create_owned_step(s, "held", stage="gate", role="human")
+        s.replace_artifact(step, "gate-hold", "wait", internal=True)
+        flow = _empty_flow(s)
+        resp = ShowNodeUseCase(s, flow, StackLayers(FakeGitHub())).execute(ShowNodeInput(step=step))
+        surface = node_read_surface(s, flow, resp.view, ItemOutputs(s, flow), StackLayers(FakeGitHub()))
+        self.assertIn(
+            {"type": "gate-hold", "value": "wait", "internal": True},
+            [{k: a[k] for k in ("type", "value", "internal")} for a in surface["artifacts"]],
+        )
+
+
 class TestInboxBacklog(unittest.TestCase):
     def _store(self):
         s = FakeStore()

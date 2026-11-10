@@ -204,6 +204,34 @@ class TestAttentionRowBehind(unittest.TestCase):
             _attention_row(store, store.get_node(step), _FLOW).step, "stuck · build")
 
 
+class TestAttentionRowHeld(unittest.TestCase):
+    def test_a_held_gate_reads_held_with_its_note(self):
+        store = FakeStore()
+        held = create_owned_step(store, "held", stage="ready-merge", role="human")
+        store.add_artifact(held, "gate-hold", "stack", internal=True)
+
+        self.assertEqual(
+            _attention_row(store, store.get_node(held), _FLOW).step, "held · stack")
+
+    def test_a_long_note_is_truncated_to_the_step_budget(self):
+        store = FakeStore()
+        held = create_owned_step(store, "held", stage="ready-merge", role="human")
+        note = "n" * 200
+        store.add_artifact(held, "gate-hold", note, internal=True)
+
+        self.assertEqual(
+            _attention_row(store, store.get_node(held), _FLOW).step,
+            truncate_field("held · %s" % note, STEP_PHRASE_BUDGET))
+
+    def test_an_escalation_keeps_stuck_even_when_held(self):
+        store = FakeStore()
+        step = create_owned_step(store, "stuck build", stage="build", role="human")
+        store.add_artifact(step, "gate-hold", "x", internal=True)
+
+        self.assertEqual(
+            _attention_row(store, store.get_node(step), _FLOW).step, "stuck · build")
+
+
 _FLOW_WITH_DISPLAY = flow_from_metas(
     {
         "coder": {

@@ -7,6 +7,7 @@ from lightcycle.adapters.tui.hub import _item_cost_text
 from lightcycle.adapters.tui.row_grid import STEP_PHRASE_BUDGET, truncate_field
 from lightcycle.application.flow.engine_steps import engine_display_of
 from lightcycle.application.work.behind_reason import behind_reason
+from lightcycle.application.work.gate_hold import GateHold
 from lightcycle.application.work.priority_rows import select_priority_rows
 from lightcycle.application.work.project_of import project_of, short_project_label
 from lightcycle.domain.work import is_human_step, item_active_seconds, row_bucket
@@ -46,6 +47,7 @@ def _attention_row(store, node, flow):
     glyph = STATE_GLYPHS["escalation"] if escalation else STATE_GLYPHS["gate"]
     step = _resolved_step(node, flow)
     behind = not escalation and behind_reason(store, node.id) is not None
+    held = None if escalation else GateHold(store).note_of(node.id)
     return PriorityRow(
         id=node.id,
         step_id=node.id,
@@ -55,7 +57,11 @@ def _attention_row(store, node, flow):
         dependency_icon="",
         project=_project(store, node),
         title="",
-        step="stuck · %s" % step if escalation else "behind · %s" % step if behind else step,
+        step=(
+            "stuck · %s" % step if escalation
+            else truncate_field("held · %s" % held, STEP_PHRASE_BUDGET) if held
+            else "behind · %s" % step if behind else step
+        ),
         step_colour="amber",
         cost="",
         time="",
