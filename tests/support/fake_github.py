@@ -9,10 +9,11 @@ class FakeGitHub(GitHubEventsPort):
                  behind_prs=(), strict_bases=(), base_keys=None, login="operator",
                  updated_ats=None, failing_prs=(), required_by_base=None,
                  update_pushed_at=None, workflows_by_sha=None, runs_by_sha=None, stacks=None,
-                 signatures=None):
+                 signatures=None, files_by_pr=None):
         self._login = login
         self._stacks = dict(stacks or {})
         self._signatures = dict(signatures or {})
+        self._files_by_pr = dict(files_by_pr or {})
         self._update_pushed_at = update_pushed_at
         self._merged = set(merged_prs)
         self._closed = set(closed_prs)
@@ -193,6 +194,12 @@ class FakeGitHub(GitHubEventsPort):
         if "changed_files" in self._failing_calls:
             return ReadFailure(1, "boom")
         return self._files_by_sha.get((pr, sha), frozenset())
+
+    def pr_files(self, pr):
+        self._record("pr_files", pr)
+        if "pr_files" in self._failing_calls:
+            return ReadFailure(1, "boom")
+        return frozenset(self._files_by_pr.get(pr, frozenset()))
 
     def check_runs(self, pr, sha):
         self._record("check_runs", pr, sha)

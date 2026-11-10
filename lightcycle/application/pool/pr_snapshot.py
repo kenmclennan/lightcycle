@@ -205,6 +205,9 @@ class PrSnapshot(GitHubEventsPort):
     def branch_tip(self, repo, base):
         return self._github.branch_tip(repo, base)
 
+    def pr_files(self, pr):
+        return self._github.pr_files(pr)
+
     def pr_view(self, pr):
         return self._github.pr_view(pr)
 

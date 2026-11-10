@@ -40,6 +40,7 @@ def _captured_argvs():
         adapter.stack_view("https://github.com/acme/widget/stack/3")
         adapter.changed_files(_PR, "deadbeef", "main")
         adapter.diff_signature(_PR, "deadbeef")
+        adapter.pr_files(_PR)
 
     return [c for c in calls if c and c[0] == "gh"]
 

@@ -310,6 +310,27 @@ class GitHubEventsAdapter(GitHubEventsPort):
             return ReadFailure(-1, "could not parse gh api compare JSON for changed filenames")
         return frozenset(f for f in filenames if f)
 
+    def pr_files(self, pr: str) -> Union[frozenset, ReadFailure]:
+        parts = _repo_parts(pr)
+        if not parts:
+            return ReadFailure(-1, "pr is not a parseable GitHub PR URL: %r" % pr)
+        owner, repo, number = parts
+        try:
+            r = subprocess.run(
+                [
+                    "gh", "api", "--paginate",
+                    "/repos/%s/%s/pulls/%s/files?per_page=100" % (owner, repo, number),
+                    "--jq", ".[].filename",
+                ],
+                capture_output=True, text=True,
+                timeout=_GH_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired:
+            return _timeout_read_failure()
+        if r.returncode != 0:
+            return ReadFailure(r.returncode, r.stderr)
+        return frozenset(line for line in r.stdout.splitlines() if line)
+
     def diff_signature(
         self, pr: str, sha: str, base: Optional[str] = None
     ) -> Union[str, ReadFailure]:

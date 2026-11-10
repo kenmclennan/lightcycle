@@ -245,6 +245,17 @@ class TestStackView(unittest.TestCase):
         self.assertFalse(self.snap.is_upper_layer(self.layers[2].url))
 
 
+class TestPrFilesPassThrough(unittest.TestCase):
+    def test_it_delegates_without_registering_a_wanted_read(self):
+        github = FakeGitHub(files_by_pr={_PR: frozenset({"a.py"})})
+        snap = PrSnapshot(github)
+
+        self.assertEqual(snap.pr_files(_PR), frozenset({"a.py"}))
+
+        self.assertEqual(github.calls, [("pr_files", _PR)])
+        self.assertEqual(snap.take_wanted().files, frozenset())
+
+
 class TestDiffSignatureRead(unittest.TestCase):
     def setUp(self):
         self.github = FakeGitHub()

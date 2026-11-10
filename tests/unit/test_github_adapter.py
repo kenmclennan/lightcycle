@@ -890,6 +890,38 @@ class TestReadFailureMethodsTimeOutCleanly(unittest.TestCase):
         self.assertIsInstance(result, ReadFailure)
 
 
+class TestPrFiles(unittest.TestCase):
+    def setUp(self):
+        self.adapter = GitHubEventsAdapter()
+
+    def test_it_reads_the_pull_files_list_with_a_timeout_and_returns_the_lines(self):
+        mock_run = MagicMock(return_value=_proc("a.py\nsrc/b.py\n"))
+        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+            files = self.adapter.pr_files(_PR)
+
+        argv = mock_run.call_args.args[0]
+        self.assertEqual(argv[:3], ["gh", "api", "--paginate"])
+        self.assertIn("/repos/x/y/pulls/7/files?per_page=100", argv)
+        self.assertIn("timeout", mock_run.call_args.kwargs)
+        self.assertEqual(files, frozenset({"a.py", "src/b.py"}))
+
+    def test_a_nonzero_exit_returns_a_read_failure(self):
+        with patch("lightcycle.adapters.github.subprocess.run",
+                   return_value=_proc("", returncode=1, stderr="gh: Not Found")):
+            files = self.adapter.pr_files(_PR)
+
+        self.assertEqual(files, ReadFailure(1, "gh: Not Found"))
+
+    def test_a_timeout_returns_a_read_failure(self):
+        with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):
+            files = self.adapter.pr_files(_PR)
+
+        self.assertIsInstance(files, ReadFailure)
+
+    def test_a_non_pr_url_returns_a_read_failure(self):
+        self.assertIsInstance(self.adapter.pr_files("not-a-pr-url"), ReadFailure)
+
+
 class TestReviewsTimeout(unittest.TestCase):
     def test_reviews_returns_read_failure_on_timeout(self):
         with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):

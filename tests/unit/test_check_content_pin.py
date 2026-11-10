@@ -775,6 +775,7 @@ class TestContentPinOverAStack(unittest.TestCase):
         self.github._head_shas[two] = "sha-2b"
 
         self._run()
+        self._run()
 
         node = self.store.get_node(self.step)
         self.assertEqual(node.state, State.WAITING)
@@ -883,6 +884,7 @@ class TestContentPinOverAStack(unittest.TestCase):
         one, two = self._move_layer_two({"a.py", "gone.py"}, {"a.py"})
 
         self._run()
+        self._run()
 
         node = self.store.get_node(self.step)
         self.assertEqual(node.state, State.WAITING)
@@ -894,6 +896,7 @@ class TestContentPinOverAStack(unittest.TestCase):
             {"a.py", "moved.py", "gone.py"}, {"a.py"},
             {(_layer_url(1), "sha-1"): frozenset({"moved.py"})})
 
+        self._run()
         self._run()
 
         node = self.store.get_node(self.step)
@@ -925,16 +928,116 @@ class TestContentPinOverAStack(unittest.TestCase):
         self.assertNotEqual(self.store.get_node(self.step).state, State.WAITING)
         self.assertEqual(self._pins()[two], "sha-2")
 
-    def test_a_file_moved_into_a_merged_layer_is_still_reported_dropped(self):
+    def test_a_file_moved_into_a_merged_layer_parks_nothing(self):
         one, two = self._move_layer_two(
-            {"a.py", "moved.py"}, {"a.py"}, {(_layer_url(1), "sha-1"): frozenset({"moved.py"})},
-            states={1: "merged"})
+            {"a.py", "moved.py"}, {"a.py"}, states={1: "merged"})
+        self.github._files_by_pr[one] = frozenset({"moved.py"})
 
+        self._run()
+
+        node = self.store.get_node(self.step)
+        self.assertNotEqual(node.state, State.WAITING)
+        self.assertIsNone(node.notes)
+        self.assertEqual(self._pins()[two], "sha-2b")
+
+    def test_a_mixed_merged_open_and_lost_recut_parks_naming_only_the_lost_file(self):
+        one, two = self._move_layer_two(
+            {"a.py", "a_merged.py", "b_open.py", "gone.py"}, {"a.py"},
+            {(_layer_url(3), "sha-3"): frozenset({"b_open.py"})}, states={1: "merged"})
+        self.github._files_by_pr[one] = frozenset({"a_merged.py"})
+
+        self._run()
+        self._run()
+
+        node = self.store.get_node(self.step)
+        self.assertEqual(node.state, State.WAITING)
+        self.assertIn("gone.py", node.park.reason)
+        self.assertNotIn("a_merged.py", node.park.reason)
+        self.assertNotIn("b_open.py", node.park.reason)
+
+    def test_a_failed_merged_read_defers_nothing_and_parks_with_todays_wording(self):
+        one, two = self._move_layer_two(
+            {"a.py", "moved.py"}, {"a.py"}, states={1: "merged"})
+        self.github._files_by_pr[one] = frozenset({"moved.py"})
+        self.github._failing_calls = {"pr_files"}
+
+        self._run()
         self._run()
 
         node = self.store.get_node(self.step)
         self.assertEqual(node.state, State.WAITING)
         self.assertIn("moved.py", node.park.reason)
+        self.assertIn("did not find one accounting for", node.park.reason)
+
+    def test_a_merged_layer_is_not_read_when_open_layers_account_for_the_drop(self):
+        self._move_layer_two(
+            {"a.py", "moved.py"}, {"a.py"}, {(_layer_url(1), "sha-1"): frozenset({"moved.py"})})
+
+        self._run()
+
+        self.assertNotIn("pr_files", [c[0] for c in self.github.calls])
+
+    def _hold_state(self):
+        return self._move_layer_two({"a.py", "late.py"}, {"a.py"})
+
+    def test_a_drop_with_unmoved_open_layers_is_held_on_the_first_poll(self):
+        one, two = self._hold_state()
+
+        self._run()
+
+        node = self.store.get_node(self.step)
+        self.assertNotEqual(node.state, State.WAITING)
+        self.assertIsNone(node.notes)
+        self.assertEqual(self._pins()[two], "sha-2")
+        self.assertEqual(self._pins()["hold:%s" % two], "sha-2b")
+
+    def test_a_held_drop_resolves_when_an_earlier_layer_then_carries_it(self):
+        one, two = self._hold_state()
+        self._run()
+        self.github._head_shas[one] = "sha-1b"
+        self.github._files_by_sha[(one, "sha-1")] = frozenset({"x.py"})
+        self.github._files_by_sha[(one, "sha-1b")] = frozenset({"x.py", "late.py"})
+
+        self._run()
+
+        node = self.store.get_node(self.step)
+        self.assertNotEqual(node.state, State.WAITING)
+        self.assertIsNone(node.notes)
+        self.assertEqual(self._pins()[two], "sha-2b")
+        self.assertNotIn("hold:%s" % two, self._pins())
+
+    def test_a_spent_hold_parks_with_todays_wording_and_clears_the_hold(self):
+        one, two = self._hold_state()
+        self._run()
+
+        self._run()
+
+        node = self.store.get_node(self.step)
+        self.assertEqual(node.state, State.WAITING)
+        self.assertIn("late.py", node.park.reason)
+        self.assertIn("did not find one accounting for", node.park.reason)
+        self.assertNotIn("hold:%s" % two, self._pins())
+        self.assertEqual(self._pins()[two], "sha-2b")
+
+    def test_a_drop_parks_at_once_when_no_other_open_layer_is_unmoved(self):
+        one, two = self._move_layer_two(
+            {"a.py", "late.py"}, {"a.py"}, states={1: "merged", 3: "merged"})
+
+        self._run()
+
+        self.assertEqual(self.store.get_node(self.step).state, State.WAITING)
+        self.assertNotIn("hold:%s" % two, self._pins())
+
+    def test_a_fresh_head_restarts_the_hold(self):
+        one, two = self._hold_state()
+        self._run()
+        self.github._head_shas[two] = "sha-2c"
+        self.github._files_by_sha[(two, "sha-2c")] = frozenset({"a.py"})
+
+        self._run()
+
+        self.assertNotEqual(self.store.get_node(self.step).state, State.WAITING)
+        self.assertEqual(self._pins()["hold:%s" % two], "sha-2c")
 
     def test_a_rework_decision_at_the_pinned_head_notes_only_the_real_drop(self):
         one, two = _layer_url(1), _layer_url(2)
@@ -951,6 +1054,7 @@ class TestContentPinOverAStack(unittest.TestCase):
             is_top_level=True,
             created_at=100.0)))
 
+        self._run()
         self._run()
 
         node = self.store.get_node(self.step)
@@ -981,3 +1085,4 @@ class TestContentPinUnstackedMakesNoLayerReads(unittest.TestCase):
 
         self.assertEqual(store.get_node(step).state, State.WAITING)
         self.assertNotIn("stack_view", [c[0] for c in github.calls])
+        self.assertNotIn("pr_files", [c[0] for c in github.calls])
