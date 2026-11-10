@@ -13,6 +13,7 @@ from lightcycle.application.pool.pr_sync_reads import PrSyncReads
 from lightcycle.application.pool.stack_conflict import scan_stack
 from lightcycle.application.pool.stack_reads import read_stack
 from lightcycle.application.feedback.hold_comment import HoldCommentUseCase
+from lightcycle.application.work.gate_hold import GateHold, route_name
 from lightcycle.config import ConfigError
 from lightcycle.domain.feedback import (
     ADMIT,
@@ -93,6 +94,7 @@ class DispatchPrFeedbackUseCase:
         self._trusted_authors = trusted_authors
         self._hold = HoldCommentUseCase(store, held_shortcode)
         self._escapes = EscapeRecorder(store)
+        self._gate_hold = GateHold(store)
 
     def _note_gh_read_failure(self, step_id, failure):
         if isinstance(failure, NotYetRead):
@@ -320,12 +322,16 @@ class DispatchPrFeedbackUseCase:
                 continue
             advanced = False
             reason = None
+            held = self._gate_hold.is_held(step.id)
             if feedback_step:
                 if run.stack:
                     outstanding, reason = self._stacked_feedback(step, flow, run)
                 else:
                     outstanding, reason = self._outstanding_feedback(step, pr_value, flow, run)
-                if outstanding:
+                if outstanding and held:
+                    self._gate_hold.observe(
+                        step, "PR has outstanding feedback (would open %s)" % feedback_step)
+                elif outstanding:
                     advanced = True
                     open_step = next(
                         (n for n in self._store.all_nodes()
@@ -340,7 +346,8 @@ class DispatchPrFeedbackUseCase:
                         reason = (
                             "%s feedback is waiting on %s - %s %s is still open for this item"
                             % (PR_FEEDBACK_PREFIX, pr_value, feedback_step, open_step.id))
-                self._settle(step, reason)
+                if not held:
+                    self._settle(step, reason)
                 seen.add(step.id)
             hit, base_sync, note = None, None, None
             if not advanced and conflict_outcome:
@@ -352,6 +359,11 @@ class DispatchPrFeedbackUseCase:
                     sync = reads.read(pr_value)
                     if _is_conflicted(sync, step):
                         hit, base_sync = True, sync
+            if hit and held:
+                self._gate_hold.observe(
+                    step, "PR conflicts with the base branch (would route to %s)"
+                    % route_name(flow, step, conflict_outcome))
+                continue
             if hit:
                 history = [t for t in self._store.steps_at_step(step.stage)
                            if t.item == step.item and t.state == State.DONE]

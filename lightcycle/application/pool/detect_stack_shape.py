@@ -4,6 +4,7 @@ from typing import List
 from lightcycle.application.flow.complete_step import CompleteInput
 from lightcycle.application.pool.pr_lookups import flow_for, run_of, skip_unpinned
 from lightcycle.application.pool.stack_reads import read_stack
+from lightcycle.application.work.gate_hold import GateHold, route_name
 from lightcycle.domain.pool import stack_shape
 from lightcycle.domain.work import State
 from lightcycle.ports.github import PrSync
@@ -20,6 +21,7 @@ class DetectStackShapeUseCase:
         self._github = github
         self._flow_service = flow_service
         self._complete = complete
+        self._gate_hold = GateHold(store)
 
     def _observed_bases(self, layers):
         bases = {}
@@ -52,13 +54,15 @@ class DetectStackShapeUseCase:
             previous = stack_shape.decode(run.stack_seen)
             bases = self._observed_bases(read.layers)
             current = stack_shape.record_of(read.layers, bases, previous)
+            held = self._gate_hold.is_held(step.id)
             if previous is None:
-                self._store.set_stack_seen(run.id, stack_shape.encode(current))
+                if not held:
+                    self._store.set_stack_seen(run.id, stack_shape.encode(current))
                 continue
             diff = stack_shape.compare(previous, read.layers, current, read.dissolved)
             encoded = stack_shape.encode(current)
             if not diff.differences:
-                if current != previous:
+                if current != previous and not held:
                     self._store.set_stack_seen(run.id, encoded)
                     remaining = sum(1 for l in read.layers if l.state != "merged")
                     for name in diff.newly_merged:
@@ -70,6 +74,11 @@ class DetectStackShapeUseCase:
                             )
                 continue
             if not sd.pr_stack_shape or run.id in handled:
+                continue
+            if held:
+                self._gate_hold.observe(
+                    step, "stack shape changed (would route to %s)"
+                    % route_name(flow, step, sd.pr_stack_shape))
                 continue
             handled.add(run.id)
             with self._store.transaction():
