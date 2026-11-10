@@ -14,6 +14,7 @@ from lightcycle.application.pool.pr_lookups import (
     skip_unpinned,
 )
 from lightcycle.application.pool.stack_reads import read_stack
+from lightcycle.application.work.gate_hold import GateHold
 from lightcycle.application.work.close_item import (
     RELEASE_PENDING_LABEL, CloseItemInput, CloseItemUseCase, TeardownRefused,
 )
@@ -37,6 +38,7 @@ class ResolveMergedPrsUseCase:
         self._flow_service = flow_service
         self._complete = complete
         self._check_content_pin = check_content_pin
+        self._gate_hold = GateHold(store)
 
     def _disposition_for_close(self, item, flow, outcome, stage):
         disposition = flow.disposition_for(outcome)
@@ -62,6 +64,12 @@ class ResolveMergedPrsUseCase:
                 )
             )
         return None
+
+    def _held(self, gate, text):
+        if gate is None or not self._gate_hold.is_held(gate.id):
+            return False
+        self._gate_hold.observe(gate, text)
+        return True
 
     def _at_another_gate(self, item, flow, stage):
         active = active_step_any(self._store, item.id)
@@ -174,7 +182,9 @@ class ResolveMergedPrsUseCase:
                             merged_by_pr[layer.url] = True
                     if merge_outcome:
                         merged_by_pr[pr_value] = stack.layers[-1].state == "merged"
-                        if merged_by_pr[pr_value]:
+                        gate = active_step_at(self._store, item.id, stage)
+                        if merged_by_pr[pr_value] and not (
+                                gate is not None and self._gate_hold.is_held(gate.id)):
                             run = self._record_final_stack(run, stack)
                 elif merge_outcome and pr_value not in merged_by_pr:
                     merged_by_pr[pr_value] = false_on_failure(self._github.is_merged(pr_value))
@@ -183,6 +193,9 @@ class ResolveMergedPrsUseCase:
                     if nxt and nxt.to_stage and not nxt.to_terminal:
                         step = active_step_at(self._store, item.id, stage)
                         if step is None:
+                            continue
+                        if self._held(step, "PR merged (would complete the gate with outcome '%s')"
+                                      % merge_outcome):
                             continue
                         resp = self._close_run_and_complete(
                             run, RunState.MERGED, step, merge_outcome
@@ -193,7 +206,10 @@ class ResolveMergedPrsUseCase:
                             refused.append((item.id, resp.teardown_refusal))
                         merged.append(item.id)
                     else:
-                        if active_step_at(self._store, item.id, stage) is None:
+                        gate = active_step_at(self._store, item.id, stage)
+                        if gate is None:
+                            continue
+                        if self._held(gate, "PR merged (would close the item)"):
                             continue
                         disposition = self._disposition_for_close(item, flow, merge_outcome, stage)
                         if disposition is None:
@@ -217,6 +233,9 @@ class ResolveMergedPrsUseCase:
                         step = active_step_at(self._store, item.id, stage)
                         if step is None:
                             continue
+                        if self._held(step, "PR closed without merging (would complete the gate "
+                                      "with outcome '%s')" % close_outcome):
+                            continue
                         resp = self._close_run_and_complete(
                             run, RunState.ABANDONED, step, close_outcome
                         )
@@ -228,9 +247,12 @@ class ResolveMergedPrsUseCase:
                     else:
                         if self._at_another_gate(item, flow, stage):
                             continue
-                        if active_step_in_phase(
+                        gate = active_step_in_phase(
                             self._store, self._flow_service, item.id, phase
-                        ) is None:
+                        )
+                        if gate is None:
+                            continue
+                        if self._held(gate, "PR closed without merging (would close the item)"):
                             continue
                         disposition = self._disposition_for_close(item, flow, close_outcome, stage)
                         if disposition is None:

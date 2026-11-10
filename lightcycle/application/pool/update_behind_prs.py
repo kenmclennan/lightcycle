@@ -9,6 +9,7 @@ from lightcycle.application.pool.pr_writes import (
     UPDATE_FAILED,
 )
 from lightcycle.application.work.behind_reason import behind_reason
+from lightcycle.application.work.gate_hold import GateHold
 from lightcycle.domain.work import State
 from lightcycle.domain.work.behind_marker import BEHIND_NOT_UPDATED
 from lightcycle.ports.github import NotYetRead, ReadFailure
@@ -37,6 +38,7 @@ class UpdateBehindPrsUseCase:
         self._attempted = set()
         self._streaks = {}
         self._cap_noted = set()
+        self._gate_hold = GateHold(store)
 
     def _note_failure(self, step_id, what, failure):
         if isinstance(failure, NotYetRead):
@@ -82,6 +84,20 @@ class UpdateBehindPrsUseCase:
             del self._streaks[pr]
         count = self._streaks[pr][1] if pr in self._streaks else 0
         sync = reads.read(pr)
+        if self._gate_hold.is_held(step.id):
+            if (
+                pr not in self._pending
+                and not isinstance(sync, ReadFailure)
+                and sync.behind
+                and (pr, sync.head_sha) not in self._attempted
+                and count < UPDATE_CAP
+            ):
+                self._gate_hold.observe(
+                    step,
+                    "PR is behind the base branch "
+                    "(would update the branch through GitHub update-branch)",
+                )
+            return
         if pr in self._pending:
             outcome = self._writes.take_outcome(pr)
             if outcome is None:
