@@ -30,6 +30,10 @@ class TestWorkerPermitted(unittest.TestCase):
     def test_set_with_no_state_key_forbidden(self):
         self.assertFalse(worker_permitted("set", {}))
 
+    def test_hold_and_release_are_refused_for_a_worker(self):
+        self.assertFalse(worker_permitted("hold", {}))
+        self.assertFalse(worker_permitted("release", {}))
+
     def test_workflow_set_is_refused_for_a_worker(self):
         self.assertFalse(worker_permitted("workflow", {"sub": "set", "origin": "acme"}))
 

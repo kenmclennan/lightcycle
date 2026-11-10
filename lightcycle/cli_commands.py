@@ -252,6 +252,8 @@ COMMANDS = {
         Arg("--once", action="store_true"), Arg("--detach", action="store_true"),
     )),
     "halt": CommandSpec(prog="lc halt", args=(Arg("id"), Arg("--note", nargs="+"))),
+    "hold": CommandSpec(prog="lc hold", args=(Arg("id"), Arg("--note", nargs="+"))),
+    "release": CommandSpec(prog="lc release", args=(Arg("id"),)),
     "stop": CommandSpec(prog="lc stop", args=(Arg("--drain", action="store_true"),)),
     "init": CommandSpec(prog="lc init", args=(
         Arg("--guidance-path"),
