@@ -137,19 +137,6 @@ class FeedbackAggregate:
             )
         self._commit()
 
-    def release_day_summary(self, day):
-        self._conn.execute(
-            "UPDATE daily_summaries SET step_id = NULL, spawn_count = NULL WHERE day = ?",
-            (day.isoformat(),),
-        )
-        self._commit()
-
-    def summary_day_for_step(self, step_id):
-        row = self._conn.execute(
-            "SELECT day FROM daily_summaries WHERE step_id = ?", (step_id,)
-        ).fetchone()
-        return datetime.date.fromisoformat(row[0]) if row else None
-
     def request_schedule_run(self, schedule_id):
         self._conn.execute(
             "INSERT OR IGNORE INTO schedule_run_requests (schedule_id, requested_at) VALUES (?, ?)",

@@ -18,7 +18,6 @@ from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.application.work.close_item import (
     RELEASE_PENDING_LABEL, CloseItemInput, CloseItemUseCase,
 )
-from lightcycle.application.work.closed_count import closed_count
 from lightcycle.application.work.has_feedback import has_feedback
 from lightcycle.application.work.item_outputs import ItemOutputs
 from lightcycle.application.work.step_inputs import StepInputs
@@ -94,8 +93,7 @@ class CompleteStepUseCase:
             if t.stage == FINDINGS_STEP:
                 return self._complete(t, input, repair=repair)
         if self._is_summary_origin(t) and t.stage == DAILY_SUMMARY_STEP:
-            return self._complete(t, input, writes=self._day_summary_writes(t, input),
-                                  repair=repair)
+            return self._complete(t, input, repair=repair)
         if self._is_held_comment_origin(t) and t.stage == HELD_COMMENT_STEP:
             return self._complete_held_comment(t, input, repair)
         if self._is_lifecycle_origin(t) and t.stage == LIFECYCLE_FAILURE_STEP:
@@ -317,27 +315,6 @@ class CompleteStepUseCase:
 
         resp = self._complete(t, input, spec=spec, writes=writes, repair=repair)
         return CompleteResponse(next_step=None, teardown_refusal=resp.teardown_refusal)
-
-    def _day_summary_writes(self, t, input: CompleteInput):
-        def writes(_new):
-            day = self._store.summary_day_for_step(t.id)
-            if day is None:
-                return
-            row = self._store.day_summary(day)
-            if input.outcome == "done":
-                text = next(
-                    (a.value for a in self._store.item_artifacts(t.id) if a.type == "summary"),
-                    None,
-                )
-                current = closed_count(self._store, day)
-                self._store.finish_day_summary(
-                    day, summary=text, summarized_count=row.spawn_count,
-                    clear_dirty=(current == row.spawn_count),
-                )
-            else:
-                self._store.release_day_summary(day)
-
-        return writes
 
     def _mark_retroed(self):
         for item in self._store.closed_unretroed_items():
