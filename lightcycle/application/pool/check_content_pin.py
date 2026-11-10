@@ -88,12 +88,14 @@ class CheckContentPinUseCase:
         pins = self._decode_pins(run.content_pin)
         updated = dict(pins)
         total = len(read.layers)
+        heads = {}
         for position, layer in enumerate(read.layers, start=1):
             if layer.state != "open":
                 continue
             head = self._github.head_sha(layer.url)
             if isinstance(head, ReadFailure):
                 continue
+            heads[layer.url] = head
             pin = pins.get(layer.url)
             if pin is None:
                 updated[layer.url] = head
@@ -109,14 +111,16 @@ class CheckContentPinUseCase:
                 continue
             prefix = "%s: " % stack_shape.label(position, total, layer.url)
             retained = self._retained_by_others(read.layers, layer.url)
-            if self._review_move(item, layer.url, phase, pin, head, prefix, retained):
+            hold = self._hold_for(read.layers, layer.url, head, pins, updated)
+            if self._review_move(item, layer.url, phase, pin, head, prefix, retained, hold):
                 updated[layer.url] = head
+        self._drop_ended_holds(read.layers, pins, updated, heads)
         encoded = json.dumps(updated, sort_keys=True)
         if updated and encoded != run.content_pin:
             self._store.set_content_pin(run.id, encoded)
 
     def _retained_by_others(self, layers, own_url):
-        def read_others():
+        def read_others(unaccounted):
             files = set()
             for other in layers:
                 if other.url == own_url or other.state != "open":
@@ -128,21 +132,56 @@ class CheckContentPinUseCase:
                 if isinstance(other_files, ReadFailure):
                     return None
                 files |= set(other_files)
+            if unaccounted - files:
+                for other in layers:
+                    if other.url == own_url or other.state != "merged":
+                        continue
+                    merged_files = self._github.pr_files(other.url)
+                    if not isinstance(merged_files, ReadFailure):
+                        files |= set(merged_files)
             return files
 
         return read_others
 
-    def _review_move(self, item, pr_value, phase, pin, head, prefix, retained=None):
+    def _hold_for(self, layers, own_url, head, pins, updated):
+        key = "hold:%s" % own_url
+
+        def hold(dropped):
+            if pins.get(key) == head:
+                return False
+            for other in layers:
+                if other.url == own_url or other.state != "open":
+                    continue
+                other_head = self._github.head_sha(other.url)
+                if isinstance(other_head, str) and pins.get(other.url) == other_head:
+                    updated[key] = head
+                    return True
+            return False
+
+        return hold
+
+    def _drop_ended_holds(self, layers, pins, updated, heads):
+        open_urls = {layer.url for layer in layers if layer.state == "open"}
+        for key in [k for k in updated if k.startswith("hold:")]:
+            url = key[len("hold:"):]
+            advanced = updated.get(url) != pins.get(url)
+            moved_on = url in heads and heads[url] != updated[key]
+            if url not in open_urls or advanced or moved_on:
+                del updated[key]
+
+    def _review_move(self, item, pr_value, phase, pin, head, prefix, retained=None, hold=None):
         old_files = self._github.changed_files(pr_value, pin)
         new_files = self._github.changed_files(pr_value, head)
         if isinstance(old_files, ReadFailure) or isinstance(new_files, ReadFailure):
             return False
         dropped = old_files - new_files
         if dropped and retained is not None:
-            carried = retained()
+            carried = retained(dropped)
             if carried is None:
                 return False
             dropped = dropped - carried
+            if dropped and hold is not None and hold(dropped):
+                return False
         if dropped:
             unauthorized, lookup_failed, round_ordered = self._unauthorized_drops(
                 pr_value, dropped, pin
