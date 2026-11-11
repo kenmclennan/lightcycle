@@ -86,6 +86,7 @@ class ResolveCiUseCase:
         self._first_epoch = {}
         self._first_judged = {}
         self._expected = {}
+        self._stack_expected = {}
         self._mismatch_noted = set()
         ci_ceiling_seconds()
         ci_start_window_seconds()
@@ -384,18 +385,55 @@ class ResolveCiUseCase:
         self._complete.execute(CompleteInput(step=step.id, outcome=sd.ci_success, note=note))
         ci_resolved.append(step.item)
 
-    def _mark_unrun(self, labelled):
+    def _stack_expectation(self, step, v, bottom_pr, ctx):
+        cached = self._stack_expected.get(v.key)
+        bottom_sync = self._github.pr_sync_state(bottom_pr)
+        if isinstance(bottom_sync, ReadFailure):
+            self._note_unread(step, _reason("sync", bottom_sync), bottom_sync, ctx.still_unread, ctx.ci_unread, v.key)
+            return None
+        bottom_base = bottom_sync.base_key.partition("@")[2]
+        if cached and cached[0] == v.sha and cached[1] == bottom_base:
+            return cached[2]
+        sources = self._github.workflow_sources(v.pr, v.sha)
+        if isinstance(sources, ReadFailure):
+            self._note_unread(
+                step, _reason("workflow-sources", sources), sources, ctx.still_unread, ctx.ci_unread, v.key)
+            return None
+        files = self._github.changed_files(v.pr, v.sha)
+        if isinstance(files, ReadFailure):
+            self._note_unread(
+                step, _reason("changed-files", files), files, ctx.still_unread, ctx.ci_unread, v.key)
+            return None
+        expectation = pr_workflows_expected(sources, bottom_base, files)
+        self._stack_expected[v.key] = (v.sha, bottom_base, expectation)
+        return expectation
+
+    def _mark_unrun(self, step, labelled, ctx):
         bottom = labelled[0][1]
         if bottom is None:
             return labelled
         required = bottom.required
-        expected = {
-            check_label(c) for c in bottom.checks if required is None or c.name not in required}
+        files_by_label = {}
+        for c in bottom.checks:
+            if required is None or c.name not in required:
+                label = check_label(c)
+                if files_by_label.get(label, "") == "":
+                    files_by_label[label] = c.workflow_file
+        expected = set(files_by_label)
         window = self._ci_start_window_seconds()
         marked = [labelled[0]]
         for name, v in labelled[1:]:
             if v is not None and v.outcome == "success":
                 unrun = unrun_checks(expected, v.checks)
+                if unrun:
+                    expectation = self._stack_expectation(step, v, bottom.pr, ctx)
+                    if expectation is None:
+                        v = replace(v, outcome="pending")
+                        marked.append((name, v))
+                        continue
+                    unrun = tuple(
+                        label for label in unrun
+                        if not files_by_label[label] or files_by_label[label] in expectation.expected)
                 if unrun:
                     if window is not None and v.now - v.since > window:
                         v = replace(v, unrun=unrun)
@@ -423,7 +461,7 @@ class ResolveCiUseCase:
             key = "%s@%s" % (step.id, layer.url)
             v = self._judge(step, layer.url, key, _OWN, ctx)
             labelled.append(("layer %d of %d" % (position, total), v))
-        labelled = self._mark_unrun(labelled)
+        labelled = self._mark_unrun(step, labelled, ctx)
         self._finish_stacked(step, sd, labelled, ci_resolved)
 
     def execute(self) -> ResolveCiResponse:
@@ -459,5 +497,7 @@ class ResolveCiUseCase:
             del self._first_judged[key]
         for key in [k for k in self._expected if k not in ctx.seen]:
             del self._expected[key]
+        for key in [k for k in self._stack_expected if k not in ctx.seen]:
+            del self._stack_expected[key]
         self._mismatch_noted &= ctx.seen
         return ResolveCiResponse(ci_resolved=ci_resolved, ci_unread=ctx.ci_unread)

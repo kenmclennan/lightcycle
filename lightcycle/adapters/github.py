@@ -394,7 +394,8 @@ class GitHubEventsAdapter(GitHubEventsPort):
         workflows = self._workflow_names(owner, repo, sha, data)
         return tuple(
             CheckRun(
-                workflow=workflows.get(_actions_run_id(c.get("url") or ""), ""),
+                workflow=workflows.get(_actions_run_id(c.get("url") or ""), ("", ""))[0],
+                workflow_file=workflows.get(_actions_run_id(c.get("url") or ""), ("", ""))[1],
                 name=c.get("name") or "",
                 status=c.get("status") or "",
                 conclusion=c.get("conclusion"),
@@ -419,9 +420,10 @@ class GitHubEventsAdapter(GitHubEventsPort):
         for r in rows:
             if not isinstance(r, dict) or r.get("id") is None:
                 continue
-            name = r.get("name") or os.path.splitext(os.path.basename(r.get("path") or ""))[0]
-            if name:
-                names[str(r["id"])] = name
+            base = os.path.basename(r.get("path") or "")
+            name = r.get("name") or os.path.splitext(base)[0]
+            if name or base:
+                names[str(r["id"])] = (name, base)
         return names
 
     def workflow_sources(self, pr: str, sha: str) -> Union[Tuple[WorkflowFile, ...], ReadFailure]:

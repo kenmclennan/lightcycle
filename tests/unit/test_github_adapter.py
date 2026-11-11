@@ -725,6 +725,26 @@ class TestCheckRuns(unittest.TestCase):
         self.assertEqual([(c.workflow, c.name) for c in result],
                          [("scanner-python", "test (3.13)"), ("scanner-kotlin", "test (3.13)")])
 
+    def test_workflow_file_is_the_base_name_of_the_run_path(self):
+        runs = "\n".join(json.dumps(r) for r in (
+            {"id": 10, "name": "app", "path": ".github/workflows/app.yml"},
+            {"id": 20, "name": "legacy"},
+        ))
+        payload = [
+            {"name": "build", "status": "completed", "conclusion": "success",
+             "url": "https://github.com/x/y/actions/runs/10/job/1"},
+            {"name": "build", "status": "completed", "conclusion": "success",
+             "url": "https://github.com/x/y/actions/runs/20/job/2"},
+            {"name": "ext", "status": "completed", "conclusion": "success",
+             "url": "https://github.com/x/y/actions/runs/30/job/3"},
+        ]
+        with self._with_runs(payload, _proc(runs)):
+            result = self.adapter.check_runs(_PR, "sha1")
+
+        self.assertEqual(
+            [(c.workflow, c.workflow_file) for c in result],
+            [("app", "app.yml"), ("legacy", ""), ("", "")])
+
     def test_workflow_name_falls_back_to_the_path_basename(self):
         runs = json.dumps({"id": 10, "name": None, "path": ".github/workflows/sensors.yml"})
         payload = [{"name": "test", "status": "completed", "conclusion": "success",

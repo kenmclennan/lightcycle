@@ -53,6 +53,7 @@ class CheckRun:
     started_at: float = 0.0
     completed_at: float = 0.0
     workflow: str = ""
+    workflow_file: str = ""
 
 
 @dataclass(frozen=True)
