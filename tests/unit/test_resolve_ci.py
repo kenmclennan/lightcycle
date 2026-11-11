@@ -6,7 +6,7 @@ from lightcycle.application.flow.complete_step import CompleteInput, CompleteSte
 from lightcycle.application.pool.pr_snapshot import PrSnapshot
 from lightcycle.application.pool.resolve_ci import ResolveCiUseCase
 from lightcycle.domain.work import State
-from lightcycle.ports.github import CheckRun, NotYetRead, ReadFailure
+from lightcycle.ports.github import CheckRun, NotYetRead, ReadFailure, WorkflowFile
 from tests.support.fake_view_freshness import AlwaysConfirmed, NeverConfirmed
 from tests.support.fake_fs import flow_from_metas
 from tests.support.fake_github import FakeGitHub
@@ -1277,3 +1277,191 @@ class TestResolveCiOverAStack(unittest.TestCase):
         rig.uc.execute()
 
         self.assertNotEqual(rig.node().state, State.DONE)
+
+
+def _wff(name, workflow, workflow_file, conclusion="success"):
+    return CheckRun(
+        name=name, status="completed", conclusion=conclusion, url="https://x/%s" % name,
+        workflow=workflow, workflow_file=workflow_file)
+
+
+def _paths_workflow(file, paths=None, ignore=None, branches=None):
+    lines = ["on:", "  pull_request:"]
+    if branches:
+        lines.append("    branches: [%s]" % ", ".join(branches))
+    if paths:
+        lines.append("    paths: [%s]" % ", ".join("'%s'" % x for x in paths))
+    if ignore:
+        lines.append("    paths-ignore: [%s]" % ", ".join("'%s'" % x for x in ignore))
+    lines += ["jobs:", "  j:", "    runs-on: x", "    steps: []"]
+    return WorkflowFile(file, "\n".join(lines) + "\n")
+
+
+class TestResolveCiPathFilteredLayers(unittest.TestCase):
+    def _rig(self, workflows, files, bottom=None, layer2=None, layer3=None):
+        bottom = bottom if bottom is not None else [_wff("build", "app", "app.yml"), _wff("lint", "lint", "lint.yml")]
+        layer2 = layer2 if layer2 is not None else [_wff("lint", "lint", "lint.yml")]
+        rig = _StackedCiRig(checks={1: bottom, 2: layer2, 3: layer3 if layer3 is not None else bottom})
+        rig.clock = [10000.0]
+        rig.uc._wall_clock = lambda: rig.clock[0]
+        rig.uc._ci_ceiling_seconds = lambda: 10 ** 9
+        for layer in rig.layers:
+            key = (layer.url, layer.head_sha)
+            rig.github._workflows_by_sha[key] = tuple(workflows)
+            rig.github._files_by_sha[key] = frozenset(files.get(layer.number, ()))
+        return rig
+
+    def _run(self, rig):
+        rig.uc.execute()
+        rig.clock[0] += 601
+        rig.uc.execute()
+        return rig.node()
+
+    def _flat(self, files):
+        return {1: files, 2: files, 3: files}
+
+    def test_a_layer_whose_diff_misses_the_paths_filter_is_not_reported_unrun(self):
+        rig = self._rig([_paths_workflow("app.yml", paths=["app/**"])], {2: {"sensors/a"}})
+
+        node = self._run(rig)
+
+        self.assertEqual(node.outcome, "succeeded")
+        self.assertNotIn("not run", node.report)
+        self.assertEqual(rig.artifacts("ci-not-run"), [])
+
+    def test_a_layer_not_owing_a_check_is_not_held_for_the_window(self):
+        rig = self._rig([_paths_workflow("app.yml", paths=["app/**"])], {2: {"sensors/a"}})
+
+        rig.uc.execute()
+
+        self.assertEqual(rig.node().outcome, "succeeded")
+
+    def test_a_layer_whose_diff_hits_the_filter_and_lacks_the_check_is_still_reported(self):
+        rig = self._rig([_paths_workflow("app.yml", paths=["app/**"])], {2: {"app/main.rs"}})
+
+        node = self._run(rig)
+
+        self.assertEqual(rig.artifacts("ci-not-run"), ["layer 2 of 3 https://github.com/acme/widget/pull/2: app / build"])
+        self.assertIn("layer 2 of 3", node.report)
+
+    def test_a_single_matching_path_is_enough_to_expect_the_workflow(self):
+        rig = self._rig([_paths_workflow("app.yml", paths=["sensors/**"])], {2: {"sensors/a"}})
+
+        self._run(rig)
+
+        self.assertEqual(len(rig.artifacts("ci-not-run")), 1)
+
+    def test_paths_ignore_matching_every_file_drops_the_expectation(self):
+        rig = self._rig([_paths_workflow("app.yml", ignore=["docs/**"])], {2: {"docs/a"}})
+
+        self._run(rig)
+
+        self.assertEqual(rig.artifacts("ci-not-run"), [])
+
+    def test_paths_ignore_matching_only_some_files_keeps_the_expectation(self):
+        rig = self._rig([_paths_workflow("app.yml", ignore=["docs/**"])], {2: {"docs/a", "src/b"}})
+
+        self._run(rig)
+
+        self.assertEqual(len(rig.artifacts("ci-not-run")), 1)
+
+    def test_a_mixed_layer_lists_only_the_check_its_diff_triggers(self):
+        bottom = [_wff("build", "app", "app.yml"), _wff("test", "svc", "svc.yml"), _wff("lint", "lint", "lint.yml")]
+        rig = self._rig(
+            [_paths_workflow("app.yml", paths=["app/**"]), _paths_workflow("svc.yml", paths=["svc/**"])],
+            {2: {"svc/a"}}, bottom=bottom)
+
+        self._run(rig)
+
+        self.assertEqual(rig.artifacts("ci-not-run"), ["layer 2 of 3 https://github.com/acme/widget/pull/2: svc / test"])
+
+    def test_a_check_with_no_workflow_file_is_always_expected(self):
+        rig = self._rig(
+            [_paths_workflow("app.yml", paths=["app/**"])], {2: {"sensors/a"}},
+            bottom=[_wff("build", "app", ""), _wff("lint", "lint", "lint.yml")])
+
+        self._run(rig)
+
+        self.assertEqual(len(rig.artifacts("ci-not-run")), 1)
+
+    def test_a_branches_filter_is_evaluated_against_the_bottom_base(self):
+        rig = self._rig([_paths_workflow("app.yml", branches=["main"])], {2: {"sensors/a"}})
+
+        self._run(rig)
+
+        self.assertEqual(len(rig.artifacts("ci-not-run")), 1)
+
+    def test_an_unparseable_workflow_stays_expected(self):
+        rig = self._rig([WorkflowFile("app.yml", "on: [unclosed\n  - : :")], {2: {"sensors/a"}})
+
+        self._run(rig)
+
+        self.assertEqual(len(rig.artifacts("ci-not-run")), 1)
+
+    def test_a_diff_of_300_files_stays_expected(self):
+        files = {"sensors/f%d" % i for i in range(300)}
+        rig = self._rig([_paths_workflow("app.yml", paths=["app/**"])], {2: files})
+
+        self._run(rig)
+
+        self.assertEqual(len(rig.artifacts("ci-not-run")), 1)
+
+    def test_a_workflow_sources_read_failure_leaves_the_step_unresolved(self):
+        rig = self._rig([_paths_workflow("app.yml", paths=["app/**"])], {2: {"sensors/a"}})
+        rig.github._failing_calls = {"workflow_sources"}
+
+        time_now = [0.0]
+        rig.uc._clock = lambda: time_now[0]
+
+        rig.uc.execute()
+        time_now[0] += 1000
+        response = rig.uc.execute()
+
+        self.assertNotEqual(rig.node().state, State.DONE)
+        self.assertIn("workflow-sources-read-failed", [u.reason for u in response.ci_unread])
+
+    def test_a_changed_files_read_failure_leaves_the_step_unresolved(self):
+        rig = self._rig([_paths_workflow("app.yml", paths=["app/**"])], {2: {"sensors/a"}})
+        rig.github._failing_calls = {"changed_files"}
+        time_now = [0.0]
+        rig.uc._clock = lambda: time_now[0]
+
+        rig.uc.execute()
+        time_now[0] += 1000
+        response = rig.uc.execute()
+
+        self.assertNotEqual(rig.node().state, State.DONE)
+        self.assertIn("changed-files-read-failed", [u.reason for u in response.ci_unread])
+
+    def test_the_expectation_is_read_once_per_layer_sha(self):
+        rig = self._rig([_paths_workflow("app.yml", paths=["app/**"])], {2: {"sensors/a"}}, layer3=[CheckRun(name="slow", status="in_progress", conclusion=None, workflow="lint", workflow_file="lint.yml")])
+        rig.uc._ci_start_window_seconds = lambda: None
+
+        rig.uc.execute()
+        rig.uc.execute()
+
+        layer2 = rig.layers[1]
+        reads = [c for c in rig.github.calls if c == ("workflow_sources", layer2.url, layer2.head_sha)]
+        self.assertEqual(len(reads), 1)
+
+    def test_a_new_layer_sha_reads_the_expectation_again(self):
+        rig = self._rig([_paths_workflow("app.yml", paths=["app/**"])], {2: {"sensors/a"}}, layer3=[CheckRun(name="slow", status="in_progress", conclusion=None, workflow="lint", workflow_file="lint.yml")])
+        layer2 = rig.layers[1]
+        rig.uc._ci_start_window_seconds = lambda: None
+        rig.uc.execute()
+        key = "%s@%s" % (rig.step, layer2.url)
+        sha, base, expectation = rig.uc._stack_expected[key]
+        rig.uc._stack_expected[key] = ("old-sha", base, expectation)
+
+        rig.uc.execute()
+
+        reads = [c for c in rig.github.calls if c == ("workflow_sources", layer2.url, layer2.head_sha)]
+        self.assertEqual(len(reads), 2)
+
+    def test_a_layer_reporting_every_bottom_check_makes_no_expectation_reads(self):
+        both = [_wff("build", "app", "app.yml"), _wff("lint", "lint", "lint.yml")]
+        rig = self._rig([_paths_workflow("app.yml", paths=["app/**"])], {}, layer2=both)
+
+        self._run(rig)
+
+        self.assertEqual([c for c in rig.github.calls if c[0] == "workflow_sources"], [])
