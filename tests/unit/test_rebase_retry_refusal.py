@@ -11,6 +11,12 @@ X = "describer / test"
 Y = "describer / lint"
 
 
+_REC_480 = (
+    "Stale reading: poll-ci judged CI on 1e0f3f52 but "
+    "origin/feat/REC-480-code-mutation-bounds-its-memory-and-leaves is now df95de90"
+)
+
+
 def line(check, prose="behind by 2"):
     return "rebase-retried: %s; %s" % (check, prose)
 
@@ -76,6 +82,20 @@ def test_stale_reading_retry_after_a_check_naming_one_is_accepted():
     assert rc == 0, err
 
 
+def test_a_stale_reading_note_with_a_slash_never_counts_as_a_rebase_retry():
+    w = RebaseWorld()
+    _step, rc, err = w.retry(_REC_480)
+    assert rc == 0, err
+    _step, rc, err = w.retry(_REC_480)
+    assert rc == 0, err
+    first, rc, err = w.retry(line(X))
+    assert rc == 0, err
+    again = w.recheck()
+    rc, _out, err = w.close(again, "retried", line(X))
+    assert rc != 0
+    assert first in err
+
+
 def test_new_phase_run_is_judged_against_that_run_only():
     w = RebaseWorld()
     w.retry(line(X))
@@ -127,7 +147,9 @@ def test_repair_close_of_a_done_step_is_not_refused():
     ("rebase-retried: a / b\nrebase-retried: c / d", ["a / b", "c / d"]),
     ("rebase-retried: wf / job; prose / more", ["wf / job"]),
     ("  Rebase-Retried:   wf / job  ", ["wf / job"]),
-    ("wf-job / prose", ["wf-job"]),
+    ("wf-job / prose", []),
+    ("rebase-retried: wf / job; origin/feat/x", ["wf / job"]),
+    (_REC_480, []),
     ("head moved from abc to def", []),
     ("", []),
     (None, []),

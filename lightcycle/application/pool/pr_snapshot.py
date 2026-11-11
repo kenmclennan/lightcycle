@@ -235,6 +235,12 @@ class PrSnapshot(GitHubEventsPort):
         view = self._view(pr)
         return view if isinstance(view, ReadFailure) else view.head_sha
 
+    def head_lags_branch(self, pr):
+        view = self._view(pr)
+        if isinstance(view, ReadFailure):
+            return view
+        return bool(view.branch_sha and view.head_sha and view.branch_sha != view.head_sha)
+
     def stack_view(self, stack_url):
         with self._lock:
             self._pending.stacks.add(stack_url)

@@ -89,6 +89,7 @@ class PrView:
     mergeable: str
     merge_state_status: str
     updated_at: float
+    branch_sha: str = ""
 
 
 @dataclass(frozen=True)
@@ -132,6 +133,10 @@ class GitHubEventsPort(ABC):
 
     @abstractmethod
     def head_sha(self, pr: str) -> Union[str, ReadFailure]:
+        pass
+
+    @abstractmethod
+    def head_lags_branch(self, pr: str) -> Union[bool, ReadFailure]:
         pass
 
     @abstractmethod

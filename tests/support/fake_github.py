@@ -9,7 +9,7 @@ class FakeGitHub(GitHubEventsPort):
                  behind_prs=(), strict_bases=(), base_keys=None, login="operator",
                  updated_ats=None, failing_prs=(), required_by_base=None,
                  update_pushed_at=None, workflows_by_sha=None, runs_by_sha=None, stacks=None,
-                 signatures=None, files_by_pr=None):
+                 signatures=None, files_by_pr=None, lagging_prs=(), branch_shas=None):
         self._login = login
         self._stacks = dict(stacks or {})
         self._signatures = dict(signatures or {})
@@ -22,6 +22,8 @@ class FakeGitHub(GitHubEventsPort):
         self._timed_comments = timed_comments or []
         self._timed_reviews = timed_reviews or []
         self._head_shas = head_shas or {}
+        self._lagging = set(lagging_prs)
+        self._branch_shas = branch_shas if branch_shas is not None else {}
         self._files_by_sha = files_by_sha or {}
         self._check_runs_by_sha = check_runs_by_sha or {}
         self._workflows_by_sha = workflows_by_sha or {}
@@ -132,7 +134,8 @@ class FakeGitHub(GitHubEventsPort):
             state=state, head_sha=self._head_shas.get(pr, ""),
             base_ref=base_key.partition("@")[2], base_key=base_key,
             mergeable=mergeable, merge_state_status=merge_state,
-            updated_at=self._updated_ats.get(pr, 0.0))
+            updated_at=self._updated_ats.get(pr, 0.0),
+            branch_sha=self._branch_shas.get(pr, ""))
 
     def authenticated_login(self):
         if "authenticated_login" in self._failing_calls:
@@ -188,6 +191,16 @@ class FakeGitHub(GitHubEventsPort):
         if "head_sha" in self._failing_calls:
             return ReadFailure(1, "boom")
         return self._head_shas.get(pr, "")
+
+    def head_lags_branch(self, pr):
+        self._record("head_lags_branch", pr)
+        if "head_lags_branch" in self._failing_calls:
+            return ReadFailure(1, "boom")
+        return pr in self._lagging
+
+    def end_lag(self, pr, head):
+        self._lagging.discard(pr)
+        self._head_shas[pr] = head
 
     def changed_files(self, pr, sha, base=None):
         self._record("changed_files", pr, sha)
