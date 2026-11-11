@@ -85,6 +85,7 @@ class ResolveCiUseCase:
         self._noted = {}
         self._first_epoch = {}
         self._first_judged = {}
+        self._lagging = {}
         self._expected = {}
         self._stack_expected = {}
         self._mismatch_noted = set()
@@ -191,6 +192,40 @@ class ResolveCiUseCase:
             tried="Judged every check on the head; none failed and the cancelled one is not a failure.",
         ))
 
+    def _park_head_lag(self, step, pr_value, head, branch, elapsed):
+        ParkStepUseCase(self._store).execute(ParkInput(
+            step=step.id,
+            observation=(
+                "The head of PR %s has stayed at %s while its branch is at %s for %ds "
+                "(ci-start-window-seconds), so CI has not been judged."
+            ) % (pr_value, head, branch, elapsed),
+            decision=(
+                "Check why GitHub has not moved the PR head to the branch (a push that did not "
+                "reach the PR, a closed or reopened PR), then unblock this step; unblocking "
+                "restarts the wait for a fresh window."
+            ),
+            tried="Compared the PR head with its branch ref on every poll for %ds." % elapsed,
+        ))
+
+    def _hold_for_lag(self, step, pr_value, key, head, ctx):
+        now = self._clock()
+        since, noted = self._lagging.get(key, (now, False))
+        branch = self._github.pr_view(pr_value)
+        branch_sha = getattr(branch, "branch_sha", "")
+        window = self._ci_start_window_seconds()
+        if window is not None and now - since > window:
+            self._lagging.pop(key, None)
+            if self._store.get_node(step.id).role == "engine":
+                self._park_head_lag(step, pr_value, head, branch_sha, int(now - since))
+            return
+        if not noted:
+            self._store.note_condition(
+                step.id,
+                "poll-ci is holding CI for %s: the PR head is %s but its branch is at %s"
+                % (pr_value, head, branch_sha),
+            )
+        self._lagging[key] = (since, True)
+
     def _already_closed(self, step):
         return self._store.get_node(step.id).state == State.DONE
 
@@ -211,6 +246,14 @@ class ResolveCiUseCase:
             return None
         if not sha:
             return None
+        lag = self._github.head_lags_branch(pr_value)
+        if isinstance(lag, (ReadFailure, NotYetRead)):
+            self._note_unread(step, _reason("head-lag", lag), lag, ctx.still_unread, ctx.ci_unread, key)
+            return None
+        if lag:
+            self._hold_for_lag(step, pr_value, key, sha, ctx)
+            return None
+        self._lagging.pop(key, None)
         checks = self._github.check_runs(pr_value, sha)
         if isinstance(checks, ReadFailure):
             self._note_unread(
@@ -495,6 +538,8 @@ class ResolveCiUseCase:
             del self._first_epoch[key]
         for key in [k for k in self._first_judged if k not in ctx.seen]:
             del self._first_judged[key]
+        for key in [k for k in self._lagging if k not in ctx.seen]:
+            del self._lagging[key]
         for key in [k for k in self._expected if k not in ctx.seen]:
             del self._expected[key]
         for key in [k for k in self._stack_expected if k not in ctx.seen]:

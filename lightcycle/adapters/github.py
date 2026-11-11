@@ -106,6 +106,30 @@ class GitHubEventsAdapter(GitHubEventsPort):
                 return fields[0] if _SHA_RE.fullmatch(fields[0]) else None
         return None
 
+    def _ls_remote_refs(self, owner: str, repo: str, refs) -> dict:
+        try:
+            result = subprocess.run(
+                ["git", "ls-remote", "https://github.com/%s/%s.git" % (owner, repo), *refs],
+                capture_output=True, text=True, timeout=_GH_TIMEOUT_SECONDS,
+                env={**self._base_env, "GIT_TERMINAL_PROMPT": "0"},
+            )
+        except (OSError, subprocess.SubprocessError):
+            return {}
+        if result.returncode != 0:
+            return {}
+        found = {}
+        for line in result.stdout.splitlines():
+            fields = line.split()
+            if len(fields) >= 2 and fields[1] in refs and _SHA_RE.fullmatch(fields[0]):
+                found[fields[1]] = fields[0]
+        return found
+
+    def head_lags_branch(self, pr: str) -> Union[bool, ReadFailure]:
+        view = self.pr_view(pr)
+        if isinstance(view, ReadFailure):
+            return view
+        return bool(view.branch_sha and view.head_sha and view.branch_sha != view.head_sha)
+
     def last_push_time(self, pr: str) -> Union[float, ReadFailure]:
         parts = _repo_parts(pr)
         if not parts:
@@ -785,7 +809,8 @@ class GitHubEventsAdapter(GitHubEventsPort):
             result = subprocess.run(
                 [
                     "gh", "pr", "view", pr, "--json",
-                    "state,headRefOid,baseRefName,mergeable,mergeStateStatus,updatedAt",
+                    "state,headRefOid,baseRefName,mergeable,mergeStateStatus,updatedAt,"
+                    "headRefName,isCrossRepository",
                 ],
                 capture_output=True, text=True, timeout=_GH_TIMEOUT_SECONDS)
         except subprocess.TimeoutExpired:
@@ -799,7 +824,15 @@ class GitHubEventsAdapter(GitHubEventsPort):
             return ReadFailure(-1, "could not parse gh pr view JSON for the shared view")
         base = data.get("baseRefName") or ""
         api_head = data.get("headRefOid") or ""
-        fresh_head = self._fresh_head_sha(owner, repo, number)
+        pull_ref = "refs/pull/%s/head" % number
+        branch_name = data.get("headRefName") or ""
+        refs = [pull_ref]
+        track_branch = bool(branch_name) and not data.get("isCrossRepository")
+        if track_branch:
+            refs.append("refs/heads/%s" % branch_name)
+        listed = self._ls_remote_refs(owner, repo, refs)
+        fresh_head = listed.get(pull_ref)
+        branch_sha = listed.get("refs/heads/%s" % branch_name, "") if track_branch else ""
         head = fresh_head or api_head
         mergeable = data.get("mergeable") or ""
         merge_state_status = data.get("mergeStateStatus") or ""
@@ -814,4 +847,5 @@ class GitHubEventsAdapter(GitHubEventsPort):
             mergeable=mergeable,
             merge_state_status=merge_state_status,
             updated_at=updated,
+            branch_sha=branch_sha,
         )

@@ -1471,15 +1471,80 @@ class TestBranchTipAndPrView(unittest.TestCase):
         self.assertEqual(view.updated_at, 1767225600.0)
         self.assertEqual(run.call_count, 2)
         self.assertIn(
-            "state,headRefOid,baseRefName,mergeable,mergeStateStatus,updatedAt",
+            "state,headRefOid,baseRefName,mergeable,mergeStateStatus,updatedAt,"
+            "headRefName,isCrossRepository",
             run.call_args_list[0].args[0])
 
-    def _view_payload(self, head=_OLD_SHA):
+    def _view_payload(self, head=_OLD_SHA, **extra):
         return _proc(json.dumps({
             "state": "OPEN", "headRefOid": head, "baseRefName": "main",
             "mergeable": "MERGEABLE", "mergeStateStatus": "BEHIND",
-            "updatedAt": "2026-01-01T00:00:00Z",
+            "updatedAt": "2026-01-01T00:00:00Z", **extra,
         }))
+
+    def _branch_view(self, git, **extra):
+        run = MagicMock(side_effect=[self._view_payload(**extra), git])
+        with patch("lightcycle.adapters.github.subprocess.run", run):
+            return self.adapter.pr_view(_PR), run
+
+    def test_pr_view_names_both_refs_in_one_ls_remote_call(self):
+        git = _proc("%s\trefs/pull/7/head\n%s\trefs/heads/feat/x\n" % (_OLD_SHA, _NEW_SHA))
+
+        view, run = self._branch_view(git, headRefName="feat/x", isCrossRepository=False)
+
+        argv = run.call_args_list[1].args[0]
+        self.assertEqual(run.call_count, 2)
+        self.assertEqual(argv[:2], ["git", "ls-remote"])
+        self.assertIn("refs/pull/7/head", argv)
+        self.assertIn("refs/heads/feat/x", argv)
+        self.assertEqual(view.head_sha, _OLD_SHA)
+        self.assertEqual(view.branch_sha, _NEW_SHA)
+
+    def test_branch_sha_is_empty_when_it_cannot_be_trusted(self):
+        listed_pull_only = _ls_remote(_OLD_SHA)
+        cases = {
+            "branch not listed": (listed_pull_only, dict(headRefName="feat/x", isCrossRepository=False)),
+            "not a sha": (_proc("%s\trefs/pull/7/head\nnothex\trefs/heads/feat/x\n" % _OLD_SHA),
+                          dict(headRefName="feat/x", isCrossRepository=False)),
+            "call fails": (_proc("", returncode=128, stderr="fatal"),
+                           dict(headRefName="feat/x", isCrossRepository=False)),
+            "call times out": (subprocess.TimeoutExpired("git", 1),
+                               dict(headRefName="feat/x", isCrossRepository=False)),
+            "cross repository": (_proc("%s\trefs/pull/7/head\n%s\trefs/heads/feat/x\n" % (_OLD_SHA, _NEW_SHA)),
+                                 dict(headRefName="feat/x", isCrossRepository=True)),
+            "empty head ref name": (_proc("%s\trefs/pull/7/head\n" % _OLD_SHA),
+                                    dict(headRefName="", isCrossRepository=False)),
+        }
+        for name, (git, extra) in cases.items():
+            with self.subTest(name):
+                view, _ = self._branch_view(git, **extra)
+
+                self.assertEqual(view.branch_sha, "")
+
+    def test_a_missing_branch_ref_still_carries_the_pull_ref_head(self):
+        view, _ = self._branch_view(
+            _ls_remote(_NEW_SHA), headRefName="feat/x", isCrossRepository=False)
+
+        self.assertEqual(view.head_sha, _NEW_SHA)
+        self.assertEqual(view.branch_sha, "")
+
+    def test_head_lags_branch_only_when_both_shas_differ(self):
+        for pull, branch, expected in [
+            (_OLD_SHA, _NEW_SHA, True), (_OLD_SHA, _OLD_SHA, False), (_OLD_SHA, None, False),
+        ]:
+            with self.subTest(pull=pull, branch=branch):
+                lines = "%s\trefs/pull/7/head\n" % pull
+                if branch:
+                    lines += "%s\trefs/heads/feat/x\n" % branch
+                run = MagicMock(side_effect=[
+                    self._view_payload(headRefName="feat/x", isCrossRepository=False), _proc(lines)])
+                with patch("lightcycle.adapters.github.subprocess.run", run):
+                    self.assertIs(self.adapter.head_lags_branch(_PR), expected)
+
+    def test_head_lags_branch_passes_a_read_failure_through(self):
+        with patch("lightcycle.adapters.github.subprocess.run",
+                   return_value=_proc("", returncode=1, stderr="boom")):
+            self.assertIsInstance(self.adapter.head_lags_branch(_PR), ReadFailure)
 
     def _view_with_git(self, git, head=_OLD_SHA):
         run = MagicMock(side_effect=[self._view_payload(head), git])

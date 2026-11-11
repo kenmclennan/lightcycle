@@ -13,10 +13,6 @@ def checks_of(note):
     ]
     if marked:
         return [c for c in marked if c]
-    text = note or ""
-    if "/" in text:
-        first = text.split("/", 1)[0].strip()
-        return [first] if first else []
     return []
 
 

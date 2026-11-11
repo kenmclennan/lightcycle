@@ -258,6 +258,9 @@ class ScriptedGitHub(GitHubEventsPort):
     def pr_view(self, pr):
         return ReadFailure(-1, "pr views are not simulated")
 
+    def head_lags_branch(self, pr):
+        return False
+
     def stack_view(self, stack_url):
         if stack_url in self._stacks:
             return self._stacks[stack_url]

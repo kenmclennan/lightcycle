@@ -281,3 +281,19 @@ class TestDiffSignatureRead(unittest.TestCase):
         self.snap.retain(frozenset(), frozenset())
 
         self.assertIsInstance(self.snap.diff_signature(_PR, "h1"), NotYetRead)
+
+
+class TestHeadLagsBranch(unittest.TestCase):
+    def _lags(self, **view):
+        snap = PrSnapshot(FakeGitHub())
+        snap.publish(_PR, PrEntry(state="OPEN", view=_view(**view)))
+        return snap.head_lags_branch(_PR)
+
+    def test_lag_only_when_both_shas_are_present_and_differ(self):
+        self.assertIs(self._lags(head_sha="old", branch_sha="new"), True)
+        self.assertIs(self._lags(head_sha="same", branch_sha="same"), False)
+        self.assertIs(self._lags(head_sha="old", branch_sha=""), False)
+        self.assertIs(self._lags(head_sha="", branch_sha="new"), False)
+
+    def test_an_unread_view_is_not_yet_read(self):
+        self.assertIsInstance(PrSnapshot(FakeGitHub()).head_lags_branch(_PR), NotYetRead)

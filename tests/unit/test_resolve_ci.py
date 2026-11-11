@@ -1465,3 +1465,125 @@ class TestResolveCiPathFilteredLayers(unittest.TestCase):
         self._run(rig)
 
         self.assertEqual([c for c in rig.github.calls if c[0] == "workflow_sources"], [])
+
+
+class TestResolveCiHeadLagsBranch(unittest.TestCase):
+    OLD = "1e0f3f52"
+    NEW = "df95de90"
+
+    def _rig(self, window=lambda: 600, github=None):
+        store = FakeStore()
+        item = store.create_item("lagging", "a description")
+        plant_pr(store, item, _URL, branch=_BRANCH)
+        step = store.create_step(stage="poll-ci", role="engine", item=item)
+        github = github or FakeGitHub(
+            lagging_prs={_URL}, head_shas={_URL: self.OLD}, branch_shas={_URL: self.NEW},
+            check_runs_by_sha={
+                (_URL, self.OLD): (CheckRun(name="build", status="completed", conclusion="failure"),),
+                (_URL, self.NEW): (),
+            })
+        flow = _FlowAdapter(_FLOW)
+        clock = _Clock()
+        uc = ResolveCiUseCase(
+            store, github, flow, CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None),
+            clock=clock, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600,
+            ci_start_window_seconds=window, ci_no_workflows_wait_seconds=lambda: 60,
+            ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0,
+            views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
+        return store, step, github, clock, uc
+
+    def _judged(self, store, step):
+        return [a.value for a in store.item_artifacts(step) if a.type == "ci-judged-sha"]
+
+    def test_rec_480_sequence_waits_then_judges_the_new_commit(self):
+        store, step, github, clock, uc = self._rig()
+        self.assertTrue(any(
+            c.conclusion == "failure" for c in github.check_runs(_URL, self.OLD)))
+
+        first = uc.execute()
+
+        self.assertEqual(first.ci_resolved, [])
+        self.assertNotEqual(store.get_node(step).state, State.DONE)
+        self.assertEqual(self._judged(store, step), [])
+        self.assertEqual([n for n in store.all_nodes() if n.type == "step" and n.stage == "watch-ci"], [])
+
+        github._check_runs_by_sha[(_URL, self.NEW)] = (
+            CheckRun(name="build", status="completed", conclusion="success"),)
+        github.end_lag(_URL, self.NEW)
+        second = uc.execute()
+
+        node = store.get_node(step)
+        self.assertEqual(node.state, State.DONE)
+        self.assertEqual(node.outcome, "succeeded")
+        self.assertIn(self.NEW, node.report)
+        self.assertEqual(second.ci_resolved, [node.item])
+
+    def test_the_lag_is_noted_once_on_the_step(self):
+        store, step, _, _, uc = self._rig()
+
+        uc.execute()
+        uc.execute()
+
+        notes = store.get_node(step).notes or ""
+        self.assertEqual(notes.count("holding CI"), 1)
+        self.assertIn(self.OLD, notes)
+        self.assertIn(self.NEW, notes)
+
+    def test_a_lag_past_the_window_parks_once_naming_both_shas(self):
+        store, step, _, clock, uc = self._rig()
+
+        uc.execute()
+        clock.now = 601
+        uc.execute()
+
+        node = store.get_node(step)
+        self.assertEqual((node.state, node.role), (State.WAITING, "human"))
+        self.assertIn(self.OLD, node.park.reason)
+        self.assertIn(self.NEW, node.park.reason)
+        reason = node.park.reason
+        clock.now = 2000
+        uc.execute()
+        self.assertEqual(store.get_node(step).park.reason, reason)
+
+    def test_a_disabled_window_waits_without_parking(self):
+        store, step, _, clock, uc = self._rig(window=lambda: None)
+
+        uc.execute()
+        clock.now = 100000
+        uc.execute()
+
+        node = store.get_node(step)
+        self.assertNotEqual(node.state, State.WAITING)
+        self.assertEqual(node.role, "engine")
+
+    def test_an_unreadable_lag_leaves_the_step_unclosed_and_reports_it(self):
+        gh = FakeGitHub(
+            head_shas={_URL: self.OLD}, failing_calls={"head_lags_branch"},
+            check_runs_by_sha={(_URL, self.OLD): (
+                CheckRun(name="build", status="completed", conclusion="failure"),)})
+        store, step, _, clock, uc = self._rig(github=gh)
+
+        uc.execute()
+        clock.now = 61
+        result = uc.execute()
+
+        self.assertNotEqual(store.get_node(step).state, State.DONE)
+        self.assertEqual([u.reason for u in result.ci_unread], ["head-lag-read-failed"])
+
+
+class TestResolveCiStackLagHolds(unittest.TestCase):
+    def test_only_the_upper_layer_lagging_closes_nothing_until_it_clears(self):
+        rig = _StackedCiRig(count=2, checks={1: _GREEN, 2: _GREEN})
+        top = rig.layers[-1]
+        rig.github._lagging.add(top.url)
+
+        first = rig.uc.execute()
+
+        self.assertEqual(first.ci_resolved, [])
+        self.assertNotEqual(rig.node().state, State.DONE)
+
+        rig.github._lagging.discard(top.url)
+        second = rig.uc.execute()
+
+        self.assertEqual(second.ci_resolved, [rig.item])
+        self.assertEqual(rig.node().state, State.DONE)
