@@ -72,8 +72,23 @@ class CreateStepUseCase:
         if input.title.strip():
             raise FieldRefusalError(refuse_fields("step", ("title",)))
         with self._store.transaction():
-            tid = self._store.create_step(stage=input.step, role=role, item=input.parent)
+            tid = self._store.create_step(
+                stage=input.step,
+                role=role,
+                item=input.parent,
+                previous=self._last_closed_step(input.parent),
+            )
             if input.note:
                 self._store.note(tid, " ".join(input.note))
             PassBook(self._store, self._flow).enrol(input.parent, tid, input.step, pin)
         return CreateStepResponse(id=tid)
+
+    def _last_closed_step(self, item):
+        closed = [
+            c
+            for c in self._store.children(item)
+            if c.state == State.DONE and c.closed_at
+        ]
+        if not closed:
+            return None
+        return max(closed, key=lambda c: (c.closed_at, c.created_at or "")).id

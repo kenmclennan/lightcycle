@@ -3,6 +3,8 @@ import unittest
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.services.flow import FlowService
 from lightcycle.application.work.create_step import CreateStepInput, CreateStepUseCase
+from lightcycle.application.work.item_outputs import ItemOutputs
+from lightcycle.application.work.step_inputs import StepInputs
 from tests.support.fake_fs import FakeFs, graph_text_from_metas
 from tests.support.fake_store import FakeStore
 
@@ -196,3 +198,79 @@ class TestCreateStepUseCase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _tick_clock():
+    state = {"n": 0}
+
+    def now():
+        state["n"] += 1
+        return "2026-01-01T00:00:%02d+00:00" % state["n"]
+
+    return now
+
+
+def _closed_step(s, parent, report):
+    tid = s.create_step(stage="build", role="agent", item=parent)
+    s.set_report(tid, report)
+    s.complete_node(tid, "done")
+    return tid
+
+
+def _build(s, flow, step_id):
+    return StepInputs(s, flow, ItemOutputs(s, flow)).build(s.get_node(step_id))
+
+
+class TestCreateStepPrevious(unittest.TestCase):
+    def test_a_re_armed_step_carries_the_last_closed_steps_report_and_the_note(self):
+        s = FakeStore(now=_tick_clock())
+        flow = _flow(s)
+        parent = s.create_item("an item", "a description", workflow="standard")
+        closed = _closed_step(s, parent, "ci failed: test_x")
+        self.assertTrue(s.get_node(closed).report)
+        resp = CreateStepUseCase(s, flow, _Config()).execute(
+            CreateStepInput(title="", step="build", parent=parent, note=["try the other layer"])
+        )
+        self.assertEqual(s.get_node(resp.id).previous_step, closed)
+        built = _build(s, flow, resp.id)
+        self.assertEqual(built["previous"]["report"], "ci failed: test_x")
+        self.assertEqual(built["previous"]["step"], closed)
+        self.assertEqual(built["previous"]["stage"], s.get_node(closed).stage)
+        self.assertIn("try the other layer", s.get_node(resp.id).notes)
+
+    def test_the_latest_closed_step_wins_when_closing_order_differs_from_creation_order(self):
+        s = FakeStore(now=_tick_clock())
+        parent = s.create_item("an item", "a description", workflow="standard")
+        earlier_created = s.create_step(stage="build", role="agent", item=parent)
+        later_created = s.create_step(stage="build", role="agent", item=parent)
+        s.complete_node(later_created, "done")
+        s.complete_node(earlier_created, "done")
+        resp = CreateStepUseCase(s, _flow(s), _Config()).execute(
+            CreateStepInput(title="", step="build", parent=parent)
+        )
+        self.assertEqual(s.get_node(resp.id).previous_step, earlier_created)
+
+    def test_equal_closed_at_prefers_the_later_created_step(self):
+        s = FakeStore(now=_tick_clock())
+        parent = s.create_item("an item", "a description", workflow="standard")
+        first = s.create_step(stage="build", role="agent", item=parent)
+        second = s.create_step(stage="build", role="agent", item=parent)
+        s.complete_node(first, "done")
+        s.complete_node(second, "done")
+        for tid in (first, second):
+            s._records[tid]["closed_at"] = "2026-01-01T00:01:00+00:00"
+        resp = CreateStepUseCase(s, _flow(s), _Config()).execute(
+            CreateStepInput(title="", step="build", parent=parent)
+        )
+        self.assertEqual(s.get_node(resp.id).previous_step, second)
+
+    def test_no_closed_step_leaves_previous_empty(self):
+        s = FakeStore(now=_tick_clock())
+        flow = _flow(s)
+        parent = s.create_item("an item", "a description", workflow="standard")
+        s.create_step(stage="build", role="agent", item=parent)
+        resp = CreateStepUseCase(s, flow, _Config()).execute(
+            CreateStepInput(title="", step="build", parent=parent)
+        )
+        self.assertIsNone(s.get_node(resp.id).previous_step)
+        self.assertIsNone(_build(s, flow, resp.id)["previous"])
