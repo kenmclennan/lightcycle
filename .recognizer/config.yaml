@@ -1,6 +1,4 @@
 sensors:
-  structure:
-    composition_roots: ["lightcycle"]
   duplication:
     threshold: 0.82
     min_lines: 4
