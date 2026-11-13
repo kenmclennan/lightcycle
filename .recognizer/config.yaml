@@ -5,5 +5,16 @@ sensors:
     min_nodes: 20
   crap:
     threshold: 30
-  mutation: {}
+  mutation:
+    carry:
+      - .venv
   thresholds: {}
+tests:
+  - name: unit
+    language: python
+    directory: .
+    activate: source .venv/bin/activate
+    command: pytest -n auto --dist=loadgroup --cov=lightcycle --cov-report=lcov:.recognizer/cache/coverage/unit/lcov.info tests/unit tests/feature
+    coverage:
+      path: .recognizer/cache/coverage/unit/lcov.info
+      format: lcov
