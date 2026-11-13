@@ -1,8 +1,4 @@
 sensors:
-  duplication:
-    threshold: 0.82
-    min_lines: 4
-    min_nodes: 20
   crap:
     threshold: 30
   mutation:
