@@ -33,6 +33,14 @@ def consecutive_outcome_count(history, outcome):
     return count
 
 
+def since_last_firing(history, firing_ids):
+    cut = 0
+    for i, s in enumerate(history):
+        if s.id in firing_ids:
+            cut = i + 1
+    return list(history[cut:])
+
+
 def total_outcome_count(history, outcome):
     return sum(1 for s in history if s.outcome == outcome)
 

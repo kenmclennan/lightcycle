@@ -1,10 +1,10 @@
 from dataclasses import dataclass, field
 from typing import List
 
+from lightcycle.application.flow.cap_restart import last_gate_firing_key, step_order_key
 from lightcycle.application.flow.complete_step import CompleteInput
 from lightcycle.application.flow.escapes import EscapeRecorder
 from lightcycle.application.pool.pr_lookups import (
-    _MIN_TIMESTAMP,
     flow_for,
     run_of,
     skip_unpinned,
@@ -26,7 +26,7 @@ from lightcycle.domain.feedback import (
 )
 from lightcycle.domain.flow import outcome_counts, pr_conflict_failures, total_outcome_count
 from lightcycle.domain.flow.hooks import PR_CONFLICT_CAP
-from lightcycle.domain.work import State, node_id_key, parse_timestamp
+from lightcycle.domain.work import State, parse_timestamp
 from lightcycle.ports.github import NotYetRead, ReadFailure
 
 CONFLICT_BASE_TIP = "conflict-base-tip"
@@ -264,7 +264,7 @@ class DispatchPrFeedbackUseCase:
         self._store.add_artifact(step.id, CONFLICT_BASE_TIP, tip, internal=True)
         return tip
 
-    def _escalated_resolutions(self, step, flow, conflict_outcome):
+    def _escalated_resolutions(self, step, flow, conflict_outcome, cut=None):
         gate = flow.step_def(step.stage)
         resolve_stage = gate.routes.get(conflict_outcome)
         escalate_outcome = next(
@@ -280,6 +280,7 @@ class DispatchPrFeedbackUseCase:
             1 for t in self._store.steps_at_step(resolve_stage)
             if t.item == step.item and t.state == State.DONE
             and resolve_routes.get(t.outcome) == escalation
+            and (cut is None or step_order_key(t) > cut)
         )
 
     def _conflict_cap_note(self, fired, failures, prior, stage, step_id, stacked=False):
@@ -365,19 +366,20 @@ class DispatchPrFeedbackUseCase:
                     % route_name(flow, step, conflict_outcome))
                 continue
             if hit:
-                history = [t for t in self._store.steps_at_step(step.stage)
-                           if t.item == step.item and t.state == State.DONE]
+                all_done = [t for t in self._store.steps_at_step(step.stage)
+                            if t.item == step.item and t.state == State.DONE]
+                cut = last_gate_firing_key(flow, step.stage, all_done)
+                history = [t for t in all_done if cut is None or step_order_key(t) > cut]
                 conflicts = sorted(
                     (t for t in history if t.outcome == conflict_outcome),
-                    key=lambda t: (parse_timestamp(t.created_at) or _MIN_TIMESTAMP,
-                                   node_id_key(t.id)),
+                    key=step_order_key,
                 )
                 prior = total_outcome_count(history, conflict_outcome)
                 current_tip = self._read_base_tip(step, base_sync)
                 failures = pr_conflict_failures(
                     [self._recorded_tip(t.id) for t in conflicts],
                     current_tip,
-                    self._escalated_resolutions(step, flow, conflict_outcome),
+                    self._escalated_resolutions(step, flow, conflict_outcome, cut),
                 )
                 counts = outcome_counts(history, conflict_outcome, failures)
                 fired = flow.fired_cap(step.stage, conflict_outcome, counts)

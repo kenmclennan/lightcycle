@@ -1,6 +1,7 @@
 import unittest
 
 from lightcycle.domain.flow import Flow, Transition, consecutive_outcome_count, total_outcome_count
+from lightcycle.domain.flow.flow import since_last_firing
 from lightcycle.domain.flow.graph import parse_graph
 from tests.support.fake_fs import graph_text_from_metas
 from tests.support.factories import make_step
@@ -201,6 +202,26 @@ class TestOutcomeCountRules(unittest.TestCase):
 
     def test_total_outcome_count_ignores_interruption(self):
         self.assertEqual(total_outcome_count(self._history(), "conflicted"), 4)
+
+
+class TestSinceLastFiring(unittest.TestCase):
+    def _history(self):
+        return [make_step(id="s-%d" % i, outcome="rejected") for i in range(4)]
+
+    def test_no_firing_ids_returns_whole_history(self):
+        self.assertEqual([s.id for s in since_last_firing(self._history(), set())],
+                         ["s-0", "s-1", "s-2", "s-3"])
+
+    def test_one_firing_id_returns_the_tail_after_it(self):
+        self.assertEqual([s.id for s in since_last_firing(self._history(), {"s-1"})],
+                         ["s-2", "s-3"])
+
+    def test_several_firing_ids_cut_after_the_last(self):
+        self.assertEqual([s.id for s in since_last_firing(self._history(), {"s-0", "s-2"})],
+                         ["s-3"])
+
+    def test_last_step_firing_returns_empty(self):
+        self.assertEqual(since_last_firing(self._history(), {"s-3"}), [])
 
 
 class TestGraphTextFromMetasStepKey(unittest.TestCase):
