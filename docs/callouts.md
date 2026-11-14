@@ -19,11 +19,11 @@ callout-pr-view:
 - `wait` - `true` holds the gate out of `lc inbox` until the callout finishes or times out. The hold ends on success, failure, timeout and a pool restart. `false` runs alongside.
 - `timeout` - whole seconds, at least 1. The runner kills the process at the limit.
 
-`lc doctor` reports a block with a problem as `callout-invalid`; such a block never runs.
+`lc doctor` reports a block with a problem as `callout-invalid`; such a block never runs. It also runs each valid callout's [preflight](#preflight) and reports its problems.
 
 ## Request (protocol 2)
 
-The engine writes one JSON object to the callout's stdin, then closes it. `verb` is `run`. The environment is the engine's own base environment; the working directory is `repos.repo_path`.
+The engine writes one JSON object to the callout's stdin, then closes it. `verb` is `run` here and `preflight` in a [preflight](#preflight). The environment is the engine's own base environment; the working directory is `repos.repo_path`.
 
 ```json
 {
@@ -58,6 +58,28 @@ One JSON object on stdout, validated against [the schema](schemas/callout-respon
 `status` is `ok` or `failed`; `failed` needs a non-blank `message` or a non-empty `errors` list. `errors` is an optional list of `{message, fix}` objects (each string non-empty and at most 500 characters, at most 20): what is wrong and a command the operator can run to repair it. `ok` with `errors` is rejected. A protocol 1 response is still accepted. An artifact's `kind` is `link`, `text` or `markdown`. Limits: at most 20 artifacts, a `value` of at most 65536 characters, a `label` of at most 80. A `link` value is one token of the form `<scheme>://<rest>`, and opens from the Detail tab whatever its scheme.
 
 A callout is **failed** when it exits non-zero, times out, writes output the validator rejects, or answers `status: "failed"`; its `errors` add detail and change nothing else.
+
+## Preflight
+
+A callout answers a second verb, `preflight`, by checking its own prerequisites (tools installed, versions, the repository set up). It is the same configured `command` run with this request on stdin:
+
+```json
+{
+  "protocol": 2,
+  "verb": "preflight",
+  "callout": "<id>",
+  "context": "doctor",
+  "item": null,
+  "step": null,
+  "repos": null
+}
+```
+
+`context` is `doctor` or `register`; the `item`, `step` and `repos` keys are `null`: check the repository only when `repos` is non-null. The timeout is the callout's own, capped at 30 seconds.
+
+The response is `{"status": "ok"}` or `{"status": "failed", "errors": [{"message": "...", "fix": "..."}]}`, validated against [the schema](schemas/callout-preflight.schema.json). `errors` is required when `failed` and must be empty when `ok`. A protocol 1 callout that ignores `verb` and answers with its run response is read as a passing preflight.
+
+The engine runs preflight in two places: `lc doctor` (each problem is a `config` finding of kind `callout-preflight` with its fix) and after `lc config --edit` saves a new callout or one whose `command` changed (a `warning:` line and an indented `fix:` line per error, never changing the exit status).
 
 ## Where it shows
 

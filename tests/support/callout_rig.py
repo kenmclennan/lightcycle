@@ -61,6 +61,15 @@ def ok(*artifacts):
         "artifacts": [{"label": l, "kind": k, "value": v} for l, k, v in artifacts]}))
 
 
+def preflight_ok():
+    return ScriptResult(exit_code=0, stdout=json.dumps({"status": "ok"}))
+
+
+def preflight_failed(*errors):
+    return ScriptResult(exit_code=0, stdout=json.dumps({
+        "status": "failed", "errors": [{"message": m, "fix": f} for m, f in errors]}))
+
+
 class CalloutRig:
     def __init__(self, callouts, presents="pr", runner=None, github=None):
         self.store = FakeStore()

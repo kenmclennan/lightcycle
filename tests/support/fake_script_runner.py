@@ -12,6 +12,7 @@ class FakeScriptRunner(ScriptRunnerPort):
         self.calls = []
         self.started = []
         self._programmed = {}
+        self._run_programmed = {}
         self._running = {}
         self._finished = {}
         self._log_paths = {}
@@ -19,6 +20,9 @@ class FakeScriptRunner(ScriptRunnerPort):
 
     def program(self, key, result):
         self._programmed[key] = result
+
+    def program_run(self, script_path, result):
+        self._run_programmed[script_path] = result
 
     def finish(self, key, result=None):
         self._finished[key] = result if result is not None else self._programmed[key]
@@ -43,7 +47,7 @@ class FakeScriptRunner(ScriptRunnerPort):
         self.calls.append({
             "script": script_path, "cwd": cwd, "env": dict(env), "stdin": stdin_text,
             "timeout": timeout, "log_label": log_label})
-        return OK_EMPTY
+        return self._run_programmed.get(script_path, OK_EMPTY)
 
     def start(self, key, script_path, cwd, env, stdin_text, timeout, log_label):
         if key in self._running or key in self._orphans:
