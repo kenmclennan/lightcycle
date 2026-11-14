@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 from lightcycle.application.pool.backup import BackupResponse
+from lightcycle.application.pool.callout_dispatch import CalloutDispatchResponse
 from lightcycle.application.pool.close_stranded_items import CloseStrandedItemsResponse
 from lightcycle.application.pool.github_budget import GithubBudgetState
 from lightcycle.application.pool.guidance_sync import GuidanceSyncResponse
@@ -71,6 +72,7 @@ class TickResponse:
     github: Optional[GithubBudgetState] = None
     released: Optional[ReleaseInterruptedRunsResponse] = None
     stranded: Optional[CloseStrandedItemsResponse] = None
+    callouts: Optional[CalloutDispatchResponse] = None
 
 
 class TickUseCase:
@@ -78,7 +80,7 @@ class TickUseCase:
         self, store, workers, spawner, config, monitor, breaker_gate,
         hook_completions, backup_gate, flow_service, memory_gate, guidance_gate,
         github_poll_gate, github_budget, config_reload, sweep, cadence, accrual, worker_log,
-        release_gate, stranded_gate,
+        release_gate, stranded_gate, callout_gate,
     ):
         self._store = store
         self._workers = workers
@@ -101,6 +103,7 @@ class TickUseCase:
         self._github_budget = github_budget
         self._release_gate = release_gate
         self._stranded_gate = stranded_gate
+        self._callout_gate = callout_gate
         self._budget_low = False
 
     def _log_refusals(self, refused, now):
@@ -153,6 +156,7 @@ class TickUseCase:
         schedules_result = cadence_result.schedules
         lifecycle_result = cadence_result.lifecycle
         scripts_result = cadence_result.scripts
+        callouts_result = self._callout_gate.execute(input.now)
         self._log_refusals(
             monitor_result.refused + (scripts_result.refused if scripts_result else []),
             input.now)
@@ -243,4 +247,5 @@ class TickUseCase:
             github=github_state,
             released=released_result,
             stranded=stranded_result,
+            callouts=callouts_result,
         )

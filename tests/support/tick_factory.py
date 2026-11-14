@@ -3,6 +3,7 @@ from lightcycle.application.pool.cadence_gates import CadenceGatesUseCase
 from lightcycle.application.pool.no_op_gates import (
     NoOpBackupGate,
     NoOpBreakerGate,
+    NoOpCalloutGate,
     NoOpConfigReload,
     NoOpFlowService,
     NoOpFs,
@@ -61,6 +62,7 @@ def make_tick(store, workers, spawner, config, **overrides):
         github_poll_gate=NoOpGithubPollGate(), config_reload=NoOpConfigReload(),
         guidance_gate=NoOpGuidanceGate(), github_budget=NoOpGithubBudget(),
         release_gate=NoOpReleaseGate(), stranded_gate=NoOpStrandedGate(),
+        callout_gate=NoOpCalloutGate(),
     )
     kwargs.update(overrides)
     return TickUseCase(

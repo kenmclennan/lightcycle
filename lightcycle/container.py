@@ -66,6 +66,7 @@ from lightcycle.application.flow.complete_step import CompleteStepUseCase
 from lightcycle.application.flow.unblock_step import UnblockStepUseCase
 from lightcycle.application.pool.backup import BackupUseCase
 from lightcycle.application.pool.breaker_gate import BreakerGateUseCase
+from lightcycle.application.pool.callout_dispatch import CalloutDispatchUseCase
 from lightcycle.application.pool.close_stranded_items import CloseStrandedItemsUseCase
 from lightcycle.application.pool.hook_completions import HookCompletionsUseCase
 from lightcycle.application.pool.live_usage import LiveUsageAccrualUseCase
@@ -255,6 +256,8 @@ class Container:
                     self.store, ReleaseHolds(self.store, flow), self.monotonic,
                     self.config.release_hold_note_seconds)),
             stranded_gate=CloseStrandedItemsUseCase(self.store, worktrees),
+            callout_gate=CalloutDispatchUseCase(
+                self.store, flow, self.config, self.script_runner, self.github, worktrees),
             config_reload=ReloadConfigUseCase(
                 self.config, self.config_reload_status, os.getpid()),
             sweep=self.sweep(flow=flow, worktrees=worktrees),
