@@ -12,6 +12,7 @@ class CalloutLine:
     wait: bool
     started: Optional[float]
     finished: Optional[float]
+    artifact_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -34,6 +35,7 @@ def callout_line(callout_id, record):
         wait=bool(record.get("wait")),
         started=record.get("started"),
         finished=record.get("finished"),
+        artifact_count=len(record.get("artifacts") or []),
     )
 
 

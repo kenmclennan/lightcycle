@@ -130,7 +130,7 @@ class DetailTabMixin:
             return
         self._detail_needs_rebuild = False
 
-        selected_key = self._selected_detail_key(table)
+        selected_key = self._selected_detail_key(table) or self._pending_detail_key
         table.clear(columns=True)
         if layout.stacked:
             table.add_column(STACKED_COLUMN_KEY, width=row_budget, key=STACKED_COLUMN_KEY)
@@ -147,6 +147,7 @@ class DetailTabMixin:
             keys = [row_key for row_key, _cells in rows]
             index = keys.index(selected_key) if selected_key in keys else 0
             table.move_cursor(row=index)
+            self._pending_detail_key = None
 
     def _selected_detail_key(self, table):
         if table.row_count == 0:

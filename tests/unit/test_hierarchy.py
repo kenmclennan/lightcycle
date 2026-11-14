@@ -225,6 +225,16 @@ class TestCalloutRows(unittest.TestCase):
         self.assertEqual(rows[2].callout.finished, 5)
         self.assertTrue(rows[3].callout.wait)
 
+    def test_a_step_with_no_artifact_yields_no_callout_rows(self):
+        s = FakeStore()
+        item = s.create_item("item", "a description")
+        step = s.create_step(stage="write-code", role="human", item=item)
+
+        rows = HierarchyUseCase(s).execute(HierarchyInput(node=item)).rows
+
+        self.assertEqual([r.node.id for r in rows], [item, step])
+        self.assertTrue(all(r.callout is None for r in rows))
+
     def test_a_non_dict_record_is_dropped(self):
         s = FakeStore()
         item = s.create_item("item", "a description")

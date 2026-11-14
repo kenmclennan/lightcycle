@@ -1,4 +1,6 @@
-from lightcycle.adapters.tui.hub import HierarchyPagingTable, NodeHubScreen
+from types import SimpleNamespace
+
+from lightcycle.adapters.tui.hub import DetailTable, HierarchyPagingTable, NodeHubScreen
 from lightcycle.domain.work import State
 from lightcycle.domain.work.callout_runs import CALLOUT_RUNS, dump_runs
 from tests.support.fake_store import FakeStore
@@ -40,6 +42,18 @@ def _table_keys(screen):
     return [row.key.value for row in table.ordered_rows]
 
 
+def _select(session, screen, row_key):
+    calls = []
+    screen.switch_at = lambda *a, **k: calls.append((a, k))
+    event = SimpleNamespace(
+        data_table=screen.query_one(HierarchyPagingTable),
+        row_key=SimpleNamespace(value=row_key),
+        stop=lambda: None,
+    )
+    session.run(lambda: screen.on_data_table_row_selected(event))
+    return calls
+
+
 def test_the_table_holds_one_row_per_step_and_callout_with_unique_keys():
     store, item, gate = _store_with({"a": _record("ok", finished=5), "b": _record("running", True)})
     session, screen = _open(store, item)
@@ -79,6 +93,93 @@ def test_the_active_glyph_timer_ignores_callout_rows():
 
         assert screen._active_glyph_ids() == ()
         assert screen._active_glyph_timer is None
+    finally:
+        session.close()
+
+
+def test_selecting_a_running_callout_opens_the_gate_detail_on_its_key():
+    store, item, gate = _store_with({"a": _record("running", True)})
+    session, screen = _open(store, item)
+    try:
+        calls = _select(session, screen, "callout:%s:a" % gate)
+
+        assert calls == [((gate,), {"initial_tab": "detail", "detail_key": "callout:a"})]
+    finally:
+        session.close()
+
+
+def test_selecting_a_failed_callout_lands_on_its_key():
+    store, item, gate = _store_with({"a": _record("failed", finished=4)})
+    session, screen = _open(store, item)
+    try:
+        calls = _select(session, screen, "callout:%s:a" % gate)
+
+        assert calls == [((gate,), {"initial_tab": "detail", "detail_key": "callout:a"})]
+    finally:
+        session.close()
+
+
+def test_selecting_an_ok_callout_with_artifacts_lands_on_its_first_artifact():
+    artifacts = [
+        {"label": "One", "kind": "text", "value": "1"},
+        {"label": "Two", "kind": "text", "value": "2"},
+    ]
+    store, item, gate = _store_with({"a": _record("ok", finished=4, artifacts=artifacts)})
+    session, screen = _open(store, item)
+    try:
+        calls = _select(session, screen, "callout:%s:a" % gate)
+
+        assert calls == [((gate,), {"initial_tab": "detail", "detail_key": "callout:a:1"})]
+    finally:
+        session.close()
+
+
+def test_selecting_an_ok_callout_with_no_artifacts_opens_the_detail_tab_without_a_key():
+    store, item, gate = _store_with({"a": _record("ok", finished=4)})
+    session, screen = _open(store, item)
+    try:
+        calls = _select(session, screen, "callout:%s:a" % gate)
+
+        assert calls == [((gate,), {"initial_tab": "detail", "detail_key": None})]
+    finally:
+        session.close()
+
+
+def test_selecting_a_step_row_still_switches_with_no_tab():
+    store, item, gate = _store_with({"a": _record("running", True)})
+    session, screen = _open(store, item)
+    try:
+        calls = _select(session, screen, gate)
+
+        assert calls == [((gate,), {})]
+    finally:
+        session.close()
+
+
+def _detail_keys(screen):
+    return [row.key.value for row in screen.query_one(DetailTable).ordered_rows]
+
+
+def _cursor_key(screen):
+    table = screen.query_one(DetailTable)
+    return table.coordinate_to_cell_key(table.cursor_coordinate).row_key.value
+
+
+def test_a_hub_given_a_detail_key_places_the_cursor_on_it():
+    store, item, gate = _store_with({"a": _record("running", True), "b": _record("failed", finished=3)})
+    session, screen = _open(store, gate, initial_tab="detail", detail_key="callout:b")
+    try:
+        assert "callout:b" in _detail_keys(screen)
+        assert _cursor_key(screen) == "callout:b"
+    finally:
+        session.close()
+
+
+def test_an_unknown_detail_key_falls_to_the_first_row():
+    store, item, gate = _store_with({"a": _record("running", True)})
+    session, screen = _open(store, gate, initial_tab="detail", detail_key="callout:nope")
+    try:
+        assert _cursor_key(screen) == _detail_keys(screen)[0]
     finally:
         session.close()
 

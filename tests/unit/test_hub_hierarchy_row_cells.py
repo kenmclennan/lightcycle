@@ -10,6 +10,7 @@ from lightcycle.adapters.tui.design_system import (
 )
 from lightcycle.adapters.tui.hub import hierarchy_row_cells
 from lightcycle.adapters.tui.row_grid import GridLayout
+from lightcycle.adapters.tui.hub_render import callout_detail_key
 from lightcycle.domain.work import CalloutLine, HierarchyRow
 from tests.support.fake_fs import flow_from_metas
 from tests.support.fake_store import FakeStore
@@ -340,10 +341,10 @@ if __name__ == "__main__":
     unittest.main()
 
 
-def _callout_row(status="ok", wait=False, started=0, finished=None, depth=2):
+def _callout_row(status="ok", wait=False, started=0, finished=None, artifact_count=0, depth=2):
     store = FakeStore()
     step = create_owned_step(store, "s", stage="gate", role="human")
-    line = CalloutLine("view", status, wait, started, finished)
+    line = CalloutLine("view", status, wait, started, finished, artifact_count)
     return HierarchyRow(store.get_node(step), depth, line)
 
 
@@ -370,6 +371,9 @@ class TestCalloutRowCells(unittest.TestCase):
 
     def test_a_running_callout_that_does_not_wait_reads_running(self):
         self.assertEqual(_cells(_callout_row("running", wait=False))[3], "running")
+
+    def test_an_ok_waiting_callout_reads_ok(self):
+        self.assertEqual(_cells(_callout_row("ok", wait=True, finished=5))[3], "ok")
 
     def test_duration_of_a_finished_callout_is_finished_minus_started(self):
         self.assertEqual(_cells(_callout_row("ok", started=0, finished=100))[4], "1m")
@@ -398,3 +402,10 @@ class TestCalloutRowCells(unittest.TestCase):
         self.assertIn("running · holds gate", lines[0])
         self.assertIn("20s", lines[0])
         self.assertIn("callout · view", lines[1])
+
+    def test_the_detail_key_follows_status_and_artifacts(self):
+        self.assertEqual(callout_detail_key(_callout_row("running").callout), "callout:view")
+        self.assertEqual(callout_detail_key(_callout_row("failed").callout), "callout:view")
+        self.assertEqual(
+            callout_detail_key(_callout_row("ok", artifact_count=2).callout), "callout:view:1")
+        self.assertIsNone(callout_detail_key(_callout_row("ok").callout))

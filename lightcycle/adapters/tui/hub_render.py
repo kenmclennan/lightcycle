@@ -745,6 +745,13 @@ def callout_time_text(line, now):
     return format_elapsed(line.finished - line.started)
 
 
+def callout_detail_key(line):
+    key = "callout:%s" % line.callout_id
+    if line.status == "ok":
+        return key + ":1" if line.artifact_count else None
+    return key
+
+
 def callout_title(row):
     return ("  " * row.depth) + "callout · " + row.callout.callout_id
 
