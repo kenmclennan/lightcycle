@@ -2,7 +2,8 @@ from dataclasses import dataclass
 from typing import List
 
 from lightcycle.domain.runs import pass_number
-from lightcycle.domain.work import HierarchyRow, compose_hierarchy
+from lightcycle.application.work.callout_hold import callout_runs_of
+from lightcycle.domain.work import HierarchyRow, callout_line, compose_hierarchy
 
 
 @dataclass(frozen=True)
@@ -29,7 +30,20 @@ class HierarchyUseCase:
         multi_pass = (current is not None and current.n > 1) or any(
             pass_number(step.pass_id) > 1 for step in steps
         )
-        return HierarchyResponse(rows=compose_hierarchy(root, steps_by_item), multi_pass=multi_pass)
+        return HierarchyResponse(rows=compose_hierarchy(root, steps_by_item, self._callouts_by_step(steps)),
+            multi_pass=multi_pass)
+
+    def _callouts_by_step(self, steps):
+        found = {}
+        for step in steps:
+            lines = [
+                callout_line(callout_id, record)
+                for callout_id, record in callout_runs_of(self._store, step.id).items()
+                if isinstance(record, dict)
+            ]
+            if lines:
+                found[step.id] = lines
+        return found
 
     def _resolve_root(self, node):
         return node if node.type == "item" else self._store.get_node(node.item)

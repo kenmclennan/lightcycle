@@ -1,19 +1,49 @@
 from dataclasses import dataclass
+from typing import Optional
 
 from lightcycle.domain.work.step import Step
 from lightcycle.domain.work.state import State
 
 
 @dataclass(frozen=True)
+class CalloutLine:
+    callout_id: str
+    status: str
+    wait: bool
+    started: Optional[float]
+    finished: Optional[float]
+
+
+@dataclass(frozen=True)
 class HierarchyRow:
     node: Step
     depth: int
+    callout: Optional[CalloutLine] = None
+
+    @property
+    def row_key(self):
+        if self.callout is None:
+            return self.node.id
+        return "callout:%s:%s" % (self.node.id, self.callout.callout_id)
 
 
-def compose_hierarchy(root, steps_by_item):
+def callout_line(callout_id, record):
+    return CalloutLine(
+        callout_id=callout_id,
+        status=record.get("status"),
+        wait=bool(record.get("wait")),
+        started=record.get("started"),
+        finished=record.get("finished"),
+    )
+
+
+def compose_hierarchy(root, steps_by_item, callouts_by_step=None):
+    callouts_by_step = callouts_by_step or {}
     rows = [HierarchyRow(root, 0)]
     for step in steps_by_item.get(root.id, []):
         rows.append(HierarchyRow(step, 1))
+        for line in callouts_by_step.get(step.id, []):
+            rows.append(HierarchyRow(step, 2, line))
     return rows
 
 
