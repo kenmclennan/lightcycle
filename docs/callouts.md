@@ -75,11 +75,11 @@ A callout answers a second verb, `preflight`, by checking its own prerequisites 
 }
 ```
 
-`context` is `doctor` or `register`; the `item`, `step` and `repos` keys are `null`: check the repository only when `repos` is non-null. The timeout is the callout's own, capped at 30 seconds.
+`context` is `doctor`, `register` or `gate`. In `doctor` and `register` the `item`, `step` and `repos` keys are `null`: check the repository only when `repos` is non-null. In a `gate` preflight they are filled as in a run request and `subject` is omitted. The timeout is the callout's own, capped at 30 seconds.
 
 The response is `{"status": "ok"}` or `{"status": "failed", "errors": [{"message": "...", "fix": "..."}]}`, validated against [the schema](schemas/callout-preflight.schema.json). `errors` is required when `failed` and must be empty when `ok`. A protocol 1 callout that ignores `verb` and answers with its run response is read as a passing preflight.
 
-The engine runs preflight in two places: `lc doctor` (each problem is a `config` finding of kind `callout-preflight` with its fix) and after `lc config --edit` saves a new callout or one whose `command` changed (a `warning:` line and an indented `fix:` line per error, never changing the exit status).
+The engine runs preflight in three places: `lc doctor` (each problem is a `config` finding of kind `callout-preflight` with its fix), after `lc config --edit` saves a new callout or one whose `command` changed (a `warning:` line and an indented `fix:` line per error, never changing the exit status), and before each gate run. A gate whose preflight fails skips the run, is never retried, and shows the problem and its fix in the Detail tab.
 
 ## Where it shows
 

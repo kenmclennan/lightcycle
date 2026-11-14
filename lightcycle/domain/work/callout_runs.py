@@ -4,6 +4,8 @@ CALLOUT_RUNS = "callout-runs"
 STATUS_RUNNING = "running"
 STATUS_OK = "ok"
 STATUS_FAILED = "failed"
+PHASE_PREFLIGHT = "preflight"
+PHASE_RUN = "run"
 INTERRUPTED_MESSAGE = "interrupted by a pool restart"
 
 

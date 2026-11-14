@@ -3,7 +3,7 @@ import unittest
 from lightcycle.application.work.inbox import InboxInput, InboxUseCase
 from lightcycle.domain.work import State
 from lightcycle.ports.script_runner import ScriptResult
-from tests.support.callout_rig import CalloutRig, callout, ok
+from tests.support.callout_rig import CalloutRig, callout, ok, preflight_failed
 
 
 class TestCalloutHold(unittest.TestCase):
@@ -36,11 +36,22 @@ class TestCalloutHold(unittest.TestCase):
         for name, end in outcomes.items():
             rig, step, _ = self._rig(True)
             self.assertNotIn(step, self._rows(rig), name)
+            rig.pass_preflight(step, 101)
+            self.assertNotIn(step, self._rows(rig), name)
             end(rig, rig.key(step))
 
-            rig.use_case.execute(101)
+            rig.use_case.execute(102)
 
             self.assertIn(step, self._rows(rig), name)
+
+    def test_a_failed_preflight_releases_the_gate(self):
+        rig, step, _ = self._rig(True)
+        self.assertNotIn(step, self._rows(rig))
+        rig.runner.finish(rig.preflight_key(step), preflight_failed(("m", "f")))
+
+        rig.use_case.execute(101)
+
+        self.assertIn(step, self._rows(rig))
 
     def test_a_non_waiting_callout_never_hides_a_gate(self):
         rig, step, other = self._rig(False)

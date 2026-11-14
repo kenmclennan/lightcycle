@@ -8,7 +8,11 @@ from lightcycle.application.setup.project_registry import ProjectRegistry
 from lightcycle.application.work.callout_hold import callout_runs_of
 from lightcycle.application.work.stack_layers import StackLayers
 from lightcycle.domain.work import State, callout_log_label
-from lightcycle.domain.work.callout_preflight import failure_message
+from lightcycle.domain.work.callout_preflight import (
+    failure_message,
+    preflight_errors,
+    preflight_timeout,
+)
 from lightcycle.domain.work.callout_response import (
     PROTOCOL,
     CalloutResponse,
@@ -17,6 +21,8 @@ from lightcycle.domain.work.callout_response import (
 from lightcycle.domain.work.callout_runs import (
     CALLOUT_RUNS,
     INTERRUPTED_MESSAGE,
+    PHASE_PREFLIGHT,
+    PHASE_RUN,
     STATUS_FAILED,
     STATUS_OK,
     STATUS_RUNNING,
@@ -39,8 +45,9 @@ class CalloutDispatchResponse:
     reaped: List[str] = field(default_factory=list)
 
 
-def callout_key(step_id, callout_id):
-    return "%s%s:%s" % (CALLOUT_KEY_PREFIX, step_id, callout_id)
+def callout_key(step_id, callout_id, phase=PHASE_RUN):
+    key = "%s%s:%s" % (CALLOUT_KEY_PREFIX, step_id, callout_id)
+    return key + ":preflight" if phase == PHASE_PREFLIGHT else key
 
 
 class CalloutDispatchUseCase:
@@ -79,9 +86,9 @@ class CalloutDispatchUseCase:
             for callout_id, record in list(runs.items()):
                 if not isinstance(record, dict) or record.get("status") != STATUS_RUNNING:
                     continue
-                key = callout_key(step.id, callout_id)
+                key = callout_key(step.id, callout_id, record.get("phase", PHASE_RUN))
                 try:
-                    updated = self._reap_one(step, callout_id, record, key, key in running)
+                    updated = self._reap_one(step, callout_id, record, key, key in running, now)
                 except _CALLOUT_ERRORS as e:
                     updated = self._record_failure(step.id, callout_id, record, str(e))
                 if updated is None:
@@ -93,12 +100,14 @@ class CalloutDispatchUseCase:
                 self._write(step.id, runs)
         return reaped
 
-    def _reap_one(self, step, callout_id, record, key, is_running):
+    def _reap_one(self, step, callout_id, record, key, is_running, now):
         if not is_running:
             return self._record_failure(step.id, callout_id, record, INTERRUPTED_MESSAGE)
         result = self._runner.poll(key)
         if result is None:
             return None
+        if record.get("phase") == PHASE_PREFLIGHT:
+            return self._reap_preflight(step, callout_id, record, result, now)
         if result.timed_out:
             return self._record_failure(
                 step.id, callout_id, record,
@@ -124,6 +133,29 @@ class CalloutDispatchUseCase:
                 {"label": a.label, "kind": a.kind, "value": a.value} for a in parsed.artifacts])
         return record
 
+    def _reap_preflight(self, step, callout_id, record, result, now):
+        errors = preflight_errors(result, record.get("preflight_timeout"))
+        if errors:
+            return self._record_failure(step.id, callout_id, record, "", errors)
+        callout = self._callout(callout_id)
+        if callout is None:
+            return self._record_failure(
+                step.id, callout_id, record, "callout is no longer configured")
+        presents = self._presents(step)
+        record = dict(record)
+        record.update(phase=PHASE_RUN, deadline=now + callout.timeout)
+        self._runner.start(
+            callout_key(step.id, callout_id), callout.command, self._cwd(step),
+            self._config.base_env(), json.dumps(self._request(step, callout, presents, "run")),
+            callout.timeout, callout_log_label(step.id, callout_id))
+        return record
+
+    def _callout(self, callout_id):
+        for callout in self._config.callouts():
+            if callout.id == callout_id:
+                return callout
+        return None
+
     def _start(self, now):
         callouts = self._config.callouts()
         started = []
@@ -139,18 +171,19 @@ class CalloutDispatchUseCase:
             for callout in callouts:
                 if callout.subject != presents or callout.id in runs:
                     continue
-                key = callout_key(step.id, callout.id)
+                key = callout_key(step.id, callout.id, PHASE_PREFLIGHT)
+                limit = preflight_timeout(callout.timeout)
                 runs[callout.id] = {
-                    "status": STATUS_RUNNING, "wait": callout.wait, "started": now,
-                    "deadline": now + callout.timeout, "timeout": callout.timeout,
-                    "message": None, "artifacts": [],
+                    "status": STATUS_RUNNING, "phase": PHASE_PREFLIGHT, "wait": callout.wait,
+                    "started": now, "deadline": now + limit, "timeout": callout.timeout,
+                    "preflight_timeout": limit, "message": None, "artifacts": [], "errors": [],
                 }
                 self._write(step.id, runs)
                 try:
-                    stdin = json.dumps(self._request(step, callout, presents))
+                    stdin = json.dumps(self._request(step, callout, presents, "preflight"))
                     self._runner.start(
                         key, callout.command, self._cwd(step), self._config.base_env(), stdin,
-                        callout.timeout, callout_log_label(step.id, callout.id))
+                        limit, callout_log_label(step.id, callout.id))
                     started.append(key)
                 except _CALLOUT_ERRORS as e:
                     runs[callout.id] = self._record_failure(
@@ -184,20 +217,25 @@ class CalloutDispatchUseCase:
             return None
         return self._worktrees.worktree_path(step)
 
-    def _request(self, step, callout, presents):
+    def _request(self, step, callout, presents, verb):
         item = self._store.get_item(step.item)
-        return {
+        request = {
             "protocol": PROTOCOL,
-            "verb": "run",
+            "verb": verb,
             "callout": callout.id,
-            "item": {
-                "id": item.id, "title": item.title, "repo": item.repo, "project": item.project},
-            "step": {
-                "id": step.id, "stage": step.stage,
-                "workflow": self._flow_service.workflow_for(step)},
-            "subject": self._subject(step, item, presents),
-            "repos": {"repo_path": self._repo_path(step), "workspace": self._workspace(step)},
         }
+        if verb == "preflight":
+            request["context"] = "gate"
+        request["item"] = {
+            "id": item.id, "title": item.title, "repo": item.repo, "project": item.project}
+        request["step"] = {
+            "id": step.id, "stage": step.stage,
+            "workflow": self._flow_service.workflow_for(step)}
+        if verb == "run":
+            request["subject"] = self._subject(step, item, presents)
+        request["repos"] = {
+            "repo_path": self._repo_path(step), "workspace": self._workspace(step)}
+        return request
 
     def _subject(self, step, item, presents):
         focus = parse_presents(presents)

@@ -90,6 +90,14 @@ class CalloutRig:
     def key(self, step, callout_id="a"):
         return callout_key(step, callout_id)
 
+    def preflight_key(self, step, callout_id="a"):
+        return callout_key(step, callout_id, "preflight")
+
+    def pass_preflight(self, step, now, *callout_ids):
+        for callout_id in callout_ids or ("a",):
+            self.runner.finish(self.preflight_key(step, callout_id), preflight_ok())
+        self.use_case.execute(now)
+
     def records(self, step):
         from lightcycle.application.work.callout_hold import callout_runs_of
         return callout_runs_of(self.store, step)
