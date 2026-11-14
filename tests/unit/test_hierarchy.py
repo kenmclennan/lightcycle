@@ -3,6 +3,7 @@ import unittest
 from lightcycle.application.work.hierarchy import HierarchyInput, HierarchyUseCase
 from lightcycle.domain.runs import pass_number
 from lightcycle.domain.work import row_bucket
+from lightcycle.domain.work.callout_runs import CALLOUT_RUNS, dump_runs
 from lightcycle.domain.work.item import Item
 from lightcycle.domain.work.step import Step
 from tests.support.fake_fs import flow_from_metas
@@ -194,3 +195,71 @@ class TestRowBucket(unittest.TestCase):
         item = s.create_item("item", "a description")
         s.create_step(stage="poll-ci", role="engine", item=item)
         self.assertEqual(row_bucket(s.get_node(item), FLOW, True), "queued")
+
+
+def _record(status, wait=False, started=0, finished=None, artifacts=None):
+    record = {"status": status, "wait": wait, "started": started, "artifacts": artifacts or []}
+    if finished is not None:
+        record["finished"] = finished
+    return record
+
+
+def _runs(store, step, runs):
+    store.replace_artifact(step, CALLOUT_RUNS, dump_runs(runs), internal=True)
+
+
+class TestCalloutRows(unittest.TestCase):
+    def test_a_step_with_two_records_yields_two_rows_after_it_in_record_order(self):
+        s = FakeStore()
+        item = s.create_item("item", "a description")
+        step = s.create_step(stage="write-code", role="human", item=item)
+        _runs(s, step, {"b": _record("ok", finished=5), "a": _record("running", wait=True)})
+
+        rows = HierarchyUseCase(s).execute(HierarchyInput(node=item)).rows
+
+        self.assertEqual([r.node.id for r in rows], [item, step, step, step])
+        self.assertEqual([r.depth for r in rows], [0, 1, 2, 2])
+        self.assertEqual([r.callout for r in rows[:2]], [None, None])
+        self.assertEqual([r.callout.callout_id for r in rows[2:]], ["b", "a"])
+        self.assertEqual(rows[2].callout.status, "ok")
+        self.assertEqual(rows[2].callout.finished, 5)
+        self.assertTrue(rows[3].callout.wait)
+
+    def test_a_step_with_no_artifact_yields_no_callout_rows(self):
+        s = FakeStore()
+        item = s.create_item("item", "a description")
+        step = s.create_step(stage="write-code", role="human", item=item)
+
+        rows = HierarchyUseCase(s).execute(HierarchyInput(node=item)).rows
+
+        self.assertEqual([r.node.id for r in rows], [item, step])
+        self.assertTrue(all(r.callout is None for r in rows))
+
+    def test_a_non_dict_record_is_dropped(self):
+        s = FakeStore()
+        item = s.create_item("item", "a description")
+        step = s.create_step(stage="write-code", role="human", item=item)
+        _runs(s, step, {"junk": "oops", "a": _record("ok", finished=1)})
+
+        rows = HierarchyUseCase(s).execute(HierarchyInput(node=item)).rows
+
+        self.assertEqual([r.callout.callout_id for r in rows if r.callout], ["a"])
+
+    def test_mixed_statuses_list_under_their_gate_only_with_distinct_keys(self):
+        s = FakeStore()
+        item = s.create_item("item", "a description")
+        first = s.create_step(stage="write-code", role="human", item=item)
+        second = s.create_step(stage="review", role="human", item=item)
+        _runs(s, first, {
+            "x": _record("ok", finished=2), "y": _record("failed", finished=3),
+            "z": _record("running")})
+
+        rows = HierarchyUseCase(s).execute(HierarchyInput(node=item)).rows
+
+        self.assertEqual(rows[1].node.id, first)
+        self.assertEqual([r.node.id for r in rows], [item, first, first, first, first, second])
+        self.assertEqual([r.callout.status for r in rows[2:5]], ["ok", "failed", "running"])
+        keys = [r.row_key for r in rows]
+        self.assertEqual(len(set(keys)), len(keys))
+        self.assertEqual(rows[2].row_key, "callout:%s:x" % first)
+        self.assertEqual(rows[1].row_key, first)

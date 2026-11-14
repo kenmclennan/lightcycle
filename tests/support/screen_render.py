@@ -17,6 +17,7 @@ from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.step_def import StepDef
 from lightcycle.domain.pool import GithubBudget, MemoryGateState, ToolUsage
 from lightcycle.domain.work import State
+from lightcycle.domain.work.callout_runs import CALLOUT_RUNS, dump_runs
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_github_budget_status import FakeGithubBudgetStatus
 from tests.support.fake_store import FakeStore
@@ -877,6 +878,34 @@ def _hub_hierarchy_human_square(size):
     return _open_hub(_launch(store, size=size), item, tab="workflow")
 
 
+def _hierarchy_callouts_store():
+    store = DemoStore(now=lambda: _at(30))
+    item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
+    first = store.step("LC-143.3.1", stage="ready-merge", role="human", item=item)
+    second = store.step("LC-143.3.2", stage="code-await-merge", role="human", item=item)
+    base = NOW.timestamp()
+    store.replace_artifact(first, CALLOUT_RUNS, dump_runs({
+        "recognizer-spec-view": {
+            "status": "ok", "wait": False, "started": base - 100, "finished": base - 60,
+            "deadline": base + 100, "timeout": 200, "message": None, "artifacts": []},
+        "spec-digest": {
+            "status": "running", "wait": True, "started": base - 20,
+            "deadline": base + 100, "timeout": 120, "message": None, "artifacts": []},
+    }), internal=True)
+    store.replace_artifact(second, CALLOUT_RUNS, dump_runs({
+        "lint-view": {
+            "status": "failed", "wait": False, "started": base - 50, "finished": base - 30,
+            "deadline": base + 100, "timeout": 120, "message": "exited with code 1",
+            "artifacts": []},
+    }), internal=True)
+    return store, item
+
+
+def _hub_hierarchy_callouts(size):
+    store, item = _hierarchy_callouts_store()
+    return _open_hub(_launch(store, size=size), item, tab="workflow")
+
+
 def _hierarchy_time_store():
     clock = {"now": _at(40)}
     store = DemoStore(now=lambda: clock["now"])
@@ -1682,6 +1711,7 @@ SCREENS = {
     "hub#workflow-cost": _hub_hierarchy_cost,
     "hub#workflow-human-square": _hub_hierarchy_human_square,
     "hub#workflow-time": _hub_hierarchy_time,
+    "hub#workflow-callouts": _hub_hierarchy_callouts,
     "hub#workflow-parked-ran": _hub_hierarchy_parked_ran,
     "hub#workflow-stacked-time": _hub_hierarchy_stacked_time,
     "hub#active-log": _hub_active_log,

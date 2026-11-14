@@ -60,6 +60,8 @@ The node the hub is open for is highlighted wherever it falls. As you scroll pas
 
 A step that ran as an agent step and was then parked for a human keeps its turns and cost on its row, and its time cell shows the worker's wall and active time followed by the human wait, for example `57s (57s active) · waited 22s`. A human gate that never ran shows its wait alone and no turns or cost; an agent step shows wall and active time alone. The Cost tab follows the same rule.
 
+A gate with `callout-runs` records shows one indented row per callout straight after its step row, in record order: `callout · <callout-id>`, then `running`, `ok` or `failed` in the turns column and the duration in the time column. A running callout that holds its gate reads `running · holds gate`. A callout row is never a step row: it has no id, no glyph and an empty cost column, and it does not animate. Enter on it opens the gate's hub on the Detail tab with the cursor on that callout's first row; an `ok` callout with no artifacts opens the Detail tab at its first row. A record written before `finished` existed shows a blank duration.
+
 ## Roles, and what the TUI does with them
 
 A step's role is `agent`, `human`, or `engine`.

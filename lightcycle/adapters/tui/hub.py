@@ -41,6 +41,7 @@ from textual.widgets import (
     Static,
 )
 from lightcycle.adapters.tui.hub_render import (
+    callout_detail_key,
     CONTEXT_CONTINUATION_INDENT,
     CONTEXT_EMPTY_MESSAGE,
     CONTEXT_INPUTS_LIVE_TITLE,
@@ -452,8 +453,10 @@ class NodeHubScreen(HubScreenMarker, LogTabMixin, HierarchyTabMixin, OutputsTabM
     }}
     """
 
-    def __init__(self, container, node_id, now, initial_tab=None):
+    def __init__(self, container, node_id, now, initial_tab=None, detail_key=None):
         super().__init__()
+        self._pending_detail_key = detail_key
+        self._detail_key_requested = detail_key is not None
         self._container = container
         self._node_id = node_id
         self._now = now
@@ -675,6 +678,8 @@ class NodeHubScreen(HubScreenMarker, LogTabMixin, HierarchyTabMixin, OutputsTabM
         if self._landed:
             return
         self._landed = True
+        if self._detail_key_requested:
+            return
         name = self._focus.name
         if not name:
             return
@@ -868,8 +873,20 @@ class NodeHubScreen(HubScreenMarker, LogTabMixin, HierarchyTabMixin, OutputsTabM
         self._show_resume_toast(True, "Resumed - reassigned to %s" % response.role)
         self._refresh(initial=False)
 
-    def switch_at(self, node_id, initial_tab=None) -> None:
-        self.app.switch_screen(NodeHubScreen(self._container, node_id, self._now, initial_tab=initial_tab))
+    def switch_at(self, node_id, initial_tab=None, detail_key=None) -> None:
+        if detail_key is None:
+            screen = NodeHubScreen(self._container, node_id, self._now, initial_tab=initial_tab)
+        else:
+            screen = NodeHubScreen(
+                self._container, node_id, self._now, initial_tab=initial_tab, detail_key=detail_key)
+        self.app.switch_screen(screen)
+
+    def _open_selected_callout(self, row_key) -> None:
+        row = next((r for r in self._last_rows if r.row_key == row_key), None)
+        if row is None or row.callout is None:
+            return
+        self.switch_at(
+            row.node.id, initial_tab="detail", detail_key=callout_detail_key(row.callout))
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         event.stop()
@@ -884,6 +901,9 @@ class NodeHubScreen(HubScreenMarker, LogTabMixin, HierarchyTabMixin, OutputsTabM
             return
         row_id = event.row_key.value
         if row_id is None or row_id == self._node_id:
+            return
+        if row_id.startswith("callout:"):
+            self._open_selected_callout(row_id)
             return
         self.switch_at(row_id)
 

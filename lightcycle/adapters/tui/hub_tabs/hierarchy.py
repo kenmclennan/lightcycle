@@ -22,6 +22,8 @@ from lightcycle.adapters.tui.hub_render import (
     HIERARCHY_CONTINUATION_BASE_INDENT,
     STACKED_COLUMN_KEY,
     _flow_for_bucket,
+    callout_status_text,
+    callout_time_text,
     hierarchy_row_cells,
     hierarchy_time_text,
     hierarchy_usage_text,
@@ -33,12 +35,15 @@ class HierarchyTabMixin:
     def _hierarchy_layout(self, table, rows):
         store = self._container.store
         now = self._now().isoformat()
-        step_rows = [r for r in rows if r.node.type == "step"]
+        step_rows = [r for r in rows if r.callout is None and r.node.type == "step"]
+        callout_rows = [r.callout for r in rows if r.callout is not None]
         usage = [hierarchy_usage_text(r.node) for r in step_rows]
         atomic_values = {
-            "id": [r.node.id for r in rows],
-            "turns": [turns_text for turns_text, _cost_text in usage],
-            "time": [hierarchy_time_text(store, r.node, now) for r in step_rows],
+            "id": [r.node.id for r in rows if r.callout is None],
+            "turns": [turns_text for turns_text, _cost_text in usage]
+            + [callout_status_text(c) for c in callout_rows],
+            "time": [hierarchy_time_text(store, r.node, now) for r in step_rows]
+            + [callout_time_text(c, now) for c in callout_rows],
             "cost": [cost_text for _turns_text, cost_text in usage],
         }
         row_budget = screen_row_budget_for(table, len(COLUMN_GRIDS["workflow"]))
@@ -84,7 +89,9 @@ class HierarchyTabMixin:
         self._last_multi_pass = multi_pass
         self._sync_active_glyph_animation()
         table = self.query_one(HierarchyPagingTable)
-        shape = tuple(r.node.id for r in rows)
+        shape = tuple(
+            r.row_key if r.callout is None else "%s@%s" % (r.row_key, r.callout.status) for r in rows
+        )
         layout = self._hierarchy_layout(table, rows)
         if (
             shape == self._last_hierarchy_shape
@@ -126,7 +133,7 @@ class HierarchyTabMixin:
             for key in COLUMN_GRIDS["workflow"]:
                 table.add_column(key, width=widths[key], key=key)
 
-        ids = [r.node.id for r in rows]
+        ids = [r.row_key for r in rows]
         index = ids.index(selected_id) if selected_id in ids else 0
         active_frame = self._active_glyph_char()
         for row in rows:
@@ -136,7 +143,7 @@ class HierarchyTabMixin:
                     flow_service=self._flow_service, multi_pass=multi_pass,
                     store=store, now=now, pool_running=self._pool_running,
                 ),
-                height=None, key=row.node.id
+                height=None, key=row.row_key
             )
 
         self._last_hierarchy_shape = shape
@@ -160,10 +167,10 @@ class HierarchyTabMixin:
                 store=store, now=now, pool_running=self._pool_running,
             )
             if layout.stacked:
-                table.update_cell(row.node.id, STACKED_COLUMN_KEY, cells[0])
+                table.update_cell(row.row_key, STACKED_COLUMN_KEY, cells[0])
                 continue
             for key, value in zip(COLUMN_GRIDS["workflow"], cells):
-                table.update_cell(row.node.id, key, value)
+                table.update_cell(row.row_key, key, value)
 
     def _active_glyph_char(self) -> str:
         return ACTIVE_GLYPH_FRAMES[self._active_glyph_frame]
@@ -171,7 +178,7 @@ class HierarchyTabMixin:
     def _active_glyph_ids(self):
         return tuple(
             r.node.id for r in self._last_rows
-            if row_bucket(r.node, _flow_for_bucket(r.node, self._flow_service), self._pool_running) == "active"
+            if r.callout is None and row_bucket(r.node, _flow_for_bucket(r.node, self._flow_service), self._pool_running) == "active"
         )
 
     def _sync_active_glyph_animation(self) -> None:
@@ -201,7 +208,7 @@ class HierarchyTabMixin:
         row_budget = self._hierarchy_row_budget_cache
         store = self._container.store
         now = self._now().isoformat()
-        rows_by_id = {r.node.id: r for r in self._last_rows}
+        rows_by_id = {r.node.id: r for r in self._last_rows if r.callout is None}
         for node_id in active_ids:
             row = rows_by_id.get(node_id)
             if row is None:

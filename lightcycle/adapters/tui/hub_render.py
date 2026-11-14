@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 import re
 from dataclasses import dataclass
 from lightcycle.adapters.tui.design_system import (
@@ -723,7 +724,59 @@ def _hierarchy_label(node, flow_service, multi_pass):
 
 
 def _row_node(rows, row_id):
-    return next((r.node for r in rows if r.node.id == row_id), None)
+    return next((r.node for r in rows if r.callout is None and r.node.id == row_id), None)
+
+
+def callout_status_text(line):
+    if line.status == "running" and line.wait:
+        return "running · holds gate"
+    return line.status or ""
+
+
+def callout_time_text(line, now):
+    if line.started is None:
+        return ""
+    if line.status == "running":
+        if now is None:
+            return ""
+        return format_elapsed(datetime.fromisoformat(now).timestamp() - line.started)
+    if line.finished is None:
+        return ""
+    return format_elapsed(line.finished - line.started)
+
+
+def callout_detail_key(line):
+    key = "callout:%s" % line.callout_id
+    if line.status == "ok":
+        return key + ":1" if line.artifact_count else None
+    return key
+
+
+def callout_title(row):
+    return ("  " * row.depth) + "callout · " + row.callout.callout_id
+
+
+def _callout_row_cells(row, layout, row_budget, now):
+    line = row.callout
+    status = callout_status_text(line)
+    duration = callout_time_text(line, now)
+    if layout is not None and layout.stacked:
+        first_line = (
+            pad_field(Text(""), GLYPH_WIDTHS["icon"])
+            + pad_atomic_field("", layout.atomic_widths["id"])
+            + pad_atomic_field(Text(status, style=COLOURS["dim"]), layout.atomic_widths["turns"])
+            + pad_atomic_field(Text(duration, style=COLOURS["dim"]), layout.atomic_widths["time"])
+        )
+        cost_area = max(0, row_budget - len(first_line.plain))
+        first_line = first_line + pad_field_right(Text(""), cost_area)
+        indent = HIERARCHY_CONTINUATION_BASE_INDENT + row.depth
+        return (stacked_cell(first_line, indent, "callout · " + line.callout_id, row_budget),)
+    return (
+        Text(""), "", callout_title(row),
+        Text(status, style=COLOURS["dim"]) if status else "",
+        Text(duration, style=COLOURS["dim"]) if duration else "",
+        "",
+    )
 
 
 def hierarchy_row_cells(
@@ -731,6 +784,8 @@ def hierarchy_row_cells(
     store=None, now=None, pool_running=False,
 ):
     node = row.node
+    if row.callout is not None:
+        return _callout_row_cells(row, layout, row_budget, now)
     if layout is not None and layout.stacked:
         first_line = _hierarchy_stacked_first_line(
             row, layout, row_budget, active_frame, flow_service, store, now, pool_running

@@ -1,4 +1,5 @@
 from tests.support.store_seed import seed_attribution, seed_usage
+import datetime
 import unittest
 
 from lightcycle.adapters.tui.design_system import (
@@ -9,7 +10,8 @@ from lightcycle.adapters.tui.design_system import (
 )
 from lightcycle.adapters.tui.hub import hierarchy_row_cells
 from lightcycle.adapters.tui.row_grid import GridLayout
-from lightcycle.domain.work import HierarchyRow
+from lightcycle.adapters.tui.hub_render import callout_detail_key
+from lightcycle.domain.work import CalloutLine, HierarchyRow
 from tests.support.fake_fs import flow_from_metas
 from tests.support.fake_store import FakeStore
 from tests.support.step_factory import create_owned_step
@@ -337,3 +339,73 @@ class TestStackedShape(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _callout_row(status="ok", wait=False, started=0, finished=None, artifact_count=0, depth=2):
+    store = FakeStore()
+    step = create_owned_step(store, "s", stage="gate", role="human")
+    line = CalloutLine("view", status, wait, started, finished, artifact_count)
+    return HierarchyRow(store.get_node(step), depth, line)
+
+
+def _plain(cell):
+    return cell.plain if hasattr(cell, "plain") else cell
+
+
+def _cells(row, now=_NOW):
+    return [_plain(c) for c in hierarchy_row_cells(row, now=now)]
+
+
+class TestCalloutRowCells(unittest.TestCase):
+    def test_each_status_reads_its_word_with_empty_icon_id_and_cost(self):
+        for status in ("running", "ok", "failed"):
+            icon, row_id, title, turns, _time, cost = _cells(
+                _callout_row(status, finished=10 if status != "running" else None))
+
+            self.assertEqual(title, "    callout · view")
+            self.assertEqual(turns, status)
+            self.assertEqual((icon, row_id, cost), ("", "", ""))
+
+    def test_a_running_waiting_callout_holds_the_gate(self):
+        self.assertEqual(_cells(_callout_row("running", wait=True))[3], "running · holds gate")
+
+    def test_a_running_callout_that_does_not_wait_reads_running(self):
+        self.assertEqual(_cells(_callout_row("running", wait=False))[3], "running")
+
+    def test_an_ok_waiting_callout_reads_ok(self):
+        self.assertEqual(_cells(_callout_row("ok", wait=True, finished=5))[3], "ok")
+
+    def test_duration_of_a_finished_callout_is_finished_minus_started(self):
+        self.assertEqual(_cells(_callout_row("ok", started=0, finished=100))[4], "1m")
+        self.assertEqual(_cells(_callout_row("failed", started=0, finished=20))[4], "20s")
+        self.assertEqual(_cells(_callout_row("ok", started=0, finished=60))[4], "1m")
+
+    def test_duration_of_a_running_callout_is_now_minus_started(self):
+        now = datetime.datetime.fromtimestamp(20).isoformat()
+
+        self.assertEqual(_cells(_callout_row("running", started=0), now=now)[4], "20s")
+
+    def test_a_finished_callout_without_finished_has_a_blank_duration(self):
+        self.assertEqual(_cells(_callout_row("ok", started=0, finished=None))[4], "")
+
+    def test_a_callout_without_started_has_a_blank_duration(self):
+        self.assertEqual(_cells(_callout_row("ok", started=None, finished=9))[4], "")
+
+    def test_the_stacked_layout_is_one_cell_with_status_first_and_title_after(self):
+        row = _callout_row("running", wait=True, started=0)
+        now = datetime.datetime.fromtimestamp(20).isoformat()
+
+        cells = hierarchy_row_cells(row, _STACKED_LAYOUT, 60, now=now)
+
+        self.assertEqual(len(cells), 1)
+        lines = cells[0].plain.split("\n")
+        self.assertIn("running · holds gate", lines[0])
+        self.assertIn("20s", lines[0])
+        self.assertIn("callout · view", lines[1])
+
+    def test_the_detail_key_follows_status_and_artifacts(self):
+        self.assertEqual(callout_detail_key(_callout_row("running").callout), "callout:view")
+        self.assertEqual(callout_detail_key(_callout_row("failed").callout), "callout:view")
+        self.assertEqual(
+            callout_detail_key(_callout_row("ok", artifact_count=2).callout), "callout:view:1")
+        self.assertIsNone(callout_detail_key(_callout_row("ok").callout))

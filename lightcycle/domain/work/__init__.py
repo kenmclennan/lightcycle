@@ -15,7 +15,7 @@ from lightcycle.domain.work.state import State, lane_for
 from lightcycle.domain.work.rollup import roll_up
 from lightcycle.domain.work.derive import derive_state, item_blocked_by, role_state
 from lightcycle.domain.work.hierarchy import (
-    HierarchyRow, compose_hierarchy, is_engine_step, is_human_step, row_bucket,
+    CalloutLine, HierarchyRow, callout_line, compose_hierarchy, is_engine_step, is_human_step, row_bucket,
 )
 from lightcycle.domain.work.field_owner import (
     ALLOWED_STATES_BY_FLAG, DONE_FIELDS_BY_TYPE, FIELDS_BY_TYPE, FieldRefusal,
@@ -59,7 +59,7 @@ __all__ = [
     "ItemCost", "StageSubtotal", "StepCost", "ToolUsageRow", "cache_hit_rate",
     "item_cost", "step_cost",
     "derive_state", "item_blocked_by", "role_state",
-    "HierarchyRow", "compose_hierarchy",
+    "CalloutLine", "HierarchyRow", "callout_line", "compose_hierarchy",
     "is_engine_step", "is_human_step", "row_bucket",
     "ALLOWED_STATES_BY_FLAG", "DONE_FIELDS_BY_TYPE", "FIELDS_BY_TYPE", "FieldRefusal",
     "REQUIRED_WITH_STATE", "STATES_BY_TYPE", "StateRefusal", "UNSETTABLE_FIELDS",

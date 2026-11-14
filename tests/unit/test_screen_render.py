@@ -699,3 +699,16 @@ def test_the_cost_tab_fields_of_a_parked_step_that_ran_are_populated():
 
     assert fields["turns"] == "9"
     assert fields["cost"] == "$0.23"
+
+
+@pytest.mark.parametrize("size", [(100, 30), (140, 30)])
+def test_the_workflow_callouts_state_paints_three_callout_rows_without_a_glyph(size):
+    frame = render("hub#workflow-callouts", size=size)
+    callout_rows = [row for row in frame.split("\n") if "callout ·" in row]
+
+    assert len(callout_rows) == 3
+    assert "running · holds gate" in frame
+    assert "failed" in frame
+    for row in callout_rows:
+        body = row.strip("│ ")
+        assert body.startswith("callout ·")
