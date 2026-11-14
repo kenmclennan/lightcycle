@@ -25,7 +25,7 @@ from lightcycle.application.work.step_focus import (
     ResolveStepFocusInput,
     ResolveStepFocusUseCase,
 )
-from lightcycle.domain.work.detail import detail_value_is_url
+from lightcycle.domain.work.detail import detail_value_is_link, detail_value_is_url
 from lightcycle.domain.work.step_focus import (
     FOCUS_CONTEXT,
     FOCUS_DETAIL,
@@ -500,6 +500,8 @@ class NodeHubScreen(HubScreenMarker, LogTabMixin, HierarchyTabMixin, OutputsTabM
         self._outputs_needs_rebuild = False
         self._last_detail_shape = None
         self._last_detail_fields = []
+        self._last_detail_labels = {}
+        self._last_detail_links = set()
         self._detail_floor = False
         self._detail_stacked = False
         self._detail_needs_rebuild = False
@@ -928,6 +930,12 @@ class NodeHubScreen(HubScreenMarker, LogTabMixin, HierarchyTabMixin, OutputsTabM
             return
         if key_value == "worktree":
             self._open_worktree(value)
+            return
+        if key_value in self._last_detail_links and detail_value_is_link(value):
+            url = value.strip()
+            use_case = OpenArtifactUseCase(self._container.fs, self._container.launcher)
+            result = use_case.execute(OpenArtifactInput(kind="url", value=url))
+            self._show_toast(result.success, result.message, "url", url, tab="detail")
             return
         file_path = resolve_detail_file(self._last_detail_fields, key_value, self._container.fs)
         if file_path is not None:

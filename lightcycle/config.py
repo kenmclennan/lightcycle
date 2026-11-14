@@ -15,6 +15,7 @@ from lightcycle.config_reload import (
     rejection_reason,
     restart_required,
 )
+from lightcycle.config_callouts import callout_blocks, valid_callouts
 from lightcycle.config_schedules import (
     SCHEDULE_KEY_PREFIX,
     WORKFLOW_KEY_PREFIX,
@@ -591,6 +592,12 @@ class Config:
 
     def schedule_blocks(self):
         return schedule_blocks(self.load_config())
+
+    def callout_blocks(self):
+        return callout_blocks(self.load_config())
+
+    def callouts(self):
+        return valid_callouts(self.callout_blocks(), self.expand_path)
 
     def lifecycle_timeout_seconds(self):
         return self._check_range(

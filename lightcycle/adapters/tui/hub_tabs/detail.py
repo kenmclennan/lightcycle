@@ -26,6 +26,8 @@ from lightcycle.adapters.tui.hub_render import (
     STACKED_COLUMN_KEY,
     _detail_field_label,
     detail_fields,
+    detail_labels,
+    detail_link_keys,
     detail_row_cells,
     resolve_detail_file,
     detail_value_is_block,
@@ -54,7 +56,8 @@ class DetailTabMixin:
         apply_widths(table, {"key": layout.atomic_widths["key"], "value": layout.flexible_width})
 
     def _detail_layout(self, table, fields):
-        atomic_values = {"key": [_detail_field_label(key) for key, _value in fields]}
+        labels = self._last_detail_labels
+        atomic_values = {"key": [_detail_field_label(key, labels) for key, _value in fields]}
         row_budget = screen_row_budget_for(table, len(COLUMN_GRIDS["detail"]))
         return compute_layout(row_budget, [], atomic_values, indent=DETAIL_CONTINUATION_INDENT)
 
@@ -64,6 +67,8 @@ class DetailTabMixin:
         entries, _presents = StepDetail(store, flow_service).resolve(
             step, step_inputs.read(step), step_inputs.entry_dicts_for_step(step), run=run,
             worktree=self._worktree_path_for(run, flow_service))
+        self._last_detail_labels = detail_labels(entries)
+        self._last_detail_links = detail_link_keys(entries)
         return detail_fields(entries)
 
     def _render_detail(self, store, step, initial) -> None:
@@ -94,7 +99,9 @@ class DetailTabMixin:
         for key, value in fields:
             field = (key, shorten_home(value, home) if key == "worktree" else value)
             is_file = resolve_detail_file(fields, key, self._container.fs) is not None
-            rows.extend(detail_row_cells(field, layout, row_budget, titles, is_file=is_file))
+            rows.extend(detail_row_cells(
+                field, layout, row_budget, titles, is_file=is_file,
+                labels=self._last_detail_labels, is_link=key in self._last_detail_links))
         return rows
 
     def _render_detail_fields(self, fields, initial) -> None:

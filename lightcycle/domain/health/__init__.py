@@ -1,5 +1,6 @@
 from lightcycle.domain.health.config_fix import (
     blank_key_fix,
+    callout_invalid_fix,
     obsolete_key_fix,
     schedule_not_enabled_fix,
 )
@@ -11,6 +12,7 @@ from lightcycle.domain.health.problem_lines import problem_lines
 __all__ = [
     "Problem",
     "blank_key_fix",
+    "callout_invalid_fix",
     "doctor_summary",
     "fsck",
     "obsolete_key_fix",

@@ -487,6 +487,19 @@ class TestObsoleteConfigKeys(unittest.TestCase):
         self.assertEqual(set(c.missing_config_keys()), {k for k, _ in _SEED_KEYS})
 
 
+class TestCalloutKeys(unittest.TestCase):
+    def test_callout_block_is_not_obsolete(self):
+        c = _cfg(projects="/p")
+        path = c.config_path()
+        with open(path, "a") as f:
+            f.write("callout-x:\n  command: /bin/x\n  subject: pr\n  wait: true\n  timeout: 5\n")
+            f.write("callout-scalar: oops\n")
+        c.reload()
+
+        self.assertEqual(c.obsolete_config_keys(), ("callout-scalar",))
+        self.assertEqual([x.id for x in c.callouts()], ["x"])
+
+
 class TestRetiredGlobalShortcodeKey(unittest.TestCase):
     def test_a_freshly_seeded_config_has_no_shortcode_key_and_reports_nothing_obsolete(self):
         d = tempfile.mkdtemp()

@@ -41,6 +41,15 @@ class TestOpeningDetailRows(unittest.TestCase):
 
         self.assertEqual(self.launcher.opened_urls, ["https://example.test/pull/1"])
 
+    def test_a_link_callout_row_opens_whatever_its_scheme_and_a_text_row_does_not(self):
+        self.screen._last_detail_links = {"callout:a:1"}
+        self._select([("callout:a:1", "myapp://open?x=1")], "callout:a:1")
+        self.assertEqual(self.launcher.opened_urls, ["myapp://open?x=1"])
+
+        self._select([("callout:a:2", "myapp://open?x=1")], "callout:a:2")
+
+        self.assertEqual(self.launcher.opened_urls, ["myapp://open?x=1"])
+
     def test_the_worktree_row_opens_in_the_editor(self):
         self._select([("worktree", "/tmp/wt")], "worktree")
 

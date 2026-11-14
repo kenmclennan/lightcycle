@@ -1,0 +1,42 @@
+import os
+import stat
+import tempfile
+import time
+import unittest
+
+from lightcycle.adapters.run_groups import RunGroupsAdapter
+from lightcycle.adapters.script_runner import ScriptRunnerAdapter
+from lightcycle.config import Config
+from lightcycle.domain.work import State
+from tests.support.callout_rig import CalloutRig, callout
+
+
+class TestCalloutThroughTheRealRunner(unittest.TestCase):
+    def test_a_real_script_response_lands_in_the_record(self):
+        directory = tempfile.mkdtemp()
+        home = tempfile.mkdtemp()
+        script = os.path.join(directory, "callout.sh")
+        with open(script, "w") as f:
+            f.write(
+                "#!/bin/sh\ncat >/dev/null\n"
+                'echo \'{"status":"ok","artifacts":[{"label":"Open","kind":"link",'
+                '"value":"myapp://open?x=1"}]}\'\n')
+        os.chmod(script, os.stat(script).st_mode | stat.S_IXUSR)
+        runner = ScriptRunnerAdapter(
+            Config(environ={"LC_HOME": home, "LC_WORKER_HISTORY": "20"}), RunGroupsAdapter())
+        real = callout("a", "pr")
+        real = type(real)(id="a", command=script, subject="pr", wait=False, timeout=30)
+        rig = CalloutRig([real], runner=runner)
+        step = rig.gate()
+        self.assertEqual(rig.store.get_node(step).state, State.WAITING)
+
+        rig.use_case.execute(100)
+        for tick in range(300):
+            rig.use_case.execute(101 + tick)
+            if rig.records(step)["a"]["status"] != "running":
+                break
+            time.sleep(0.02)
+
+        record = rig.records(step)["a"]
+        self.assertEqual(record["status"], "ok", record)
+        self.assertEqual(record["artifacts"][0]["value"], "myapp://open?x=1")

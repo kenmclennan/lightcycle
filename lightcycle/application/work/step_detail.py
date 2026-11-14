@@ -1,3 +1,4 @@
+from lightcycle.application.work.callout_hold import callout_runs_of
 from lightcycle.application.work.step_run import StepRunInput, StepRunUseCase
 from lightcycle.domain.work.detail import (
     CI_CHECKS_ROW,
@@ -6,6 +7,7 @@ from lightcycle.domain.work.detail import (
     SPEC_PHASE,
     SPEC_PR_ROW,
     SPEC_ROW,
+    callout_entries,
     ci_checks_url,
     default_detail,
     detail_presents,
@@ -64,7 +66,9 @@ class StepDetail:
             names, fields, self._input_values(names, inputs),
             {e["name"]: e["value"] for e in output_entries},
         )
-        return entries, detail_presents(step_def.presents, entries)
+        presents = detail_presents(step_def.presents, entries)
+        entries = entries + callout_entries(callout_runs_of(self._store, step.id))
+        return entries, presents
 
     def _phase_run(self, step):
         phase = self._flow.phase_for(step)

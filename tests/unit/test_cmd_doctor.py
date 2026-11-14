@@ -88,6 +88,9 @@ class FakeConfig:
     def schedule_blocks(self):
         return {}
 
+    def callout_blocks(self):
+        return {}
+
 
 class FakeWorkflowBundle:
     def step_roles(self, root):
