@@ -18,7 +18,7 @@ class TestWhichGatesStart(unittest.TestCase):
 
         self.assertEqual([c["key"] for c in rig.runner.started], [rig.key(step, "a")])
 
-    def test_the_stdin_carries_protocol_one_and_the_pr_subject_with_its_stack(self):
+    def test_the_stdin_carries_protocol_two_and_the_pr_subject_with_its_stack(self):
         rig = CalloutRig([callout("a", "pr")])
         step = rig.gate()
         item = rig.store.get_node(step).item
@@ -32,7 +32,8 @@ class TestWhichGatesStart(unittest.TestCase):
         rig.use_case.execute(100)
 
         request = rig.stdin()
-        self.assertEqual(request["protocol"], 1)
+        self.assertEqual(request["protocol"], 2)
+        self.assertEqual(request["verb"], "run")
         self.assertEqual(request["callout"], "a")
         self.assertEqual(request["step"]["id"], step)
         self.assertEqual(request["subject"]["kind"], "pr")
@@ -194,6 +195,19 @@ class TestFailures(unittest.TestCase):
         self.assertEqual(rows, [
             ("callout:a:1", "myapp://1"), ("callout:a:2", "t"),
             ("callout:b", "failed: exited with code 2")])
+
+    def test_a_run_that_fails_with_only_errors_keeps_them(self):
+        rig = CalloutRig([callout("a", "pr")])
+        step = rig.gate()
+        rig.use_case.execute(100)
+        stdout = json.dumps({"status": "failed", "errors": [{"message": "m", "fix": "f"}]})
+        rig.runner.finish(rig.key(step), ScriptResult(exit_code=0, stdout=stdout))
+
+        rig.use_case.execute(101)
+
+        record = rig.records(step)["a"]
+        self.assertEqual((record["status"], record["message"]), ("failed", "m"))
+        self.assertEqual(record["errors"], [{"message": "m", "fix": "f"}])
 
 
 class _DetailFlow:

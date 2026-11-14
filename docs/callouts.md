@@ -21,13 +21,14 @@ callout-pr-view:
 
 `lc doctor` reports a block with a problem as `callout-invalid`; such a block never runs.
 
-## Request (protocol 1)
+## Request (protocol 2)
 
-The engine writes one JSON object to the callout's stdin, then closes it. The environment is the engine's own base environment; the working directory is `repos.repo_path`.
+The engine writes one JSON object to the callout's stdin, then closes it. `verb` is `run`. The environment is the engine's own base environment; the working directory is `repos.repo_path`.
 
 ```json
 {
-  "protocol": 1,
+  "protocol": 2,
+  "verb": "run",
   "callout": "<id>",
   "item": { "id": "...", "title": "...", "repo": "...", "project": "..." },
   "step": { "id": "...", "stage": "...", "workflow": "<origin>/<name>@<sha>" },
@@ -54,10 +55,10 @@ One JSON object on stdout, validated against [the schema](schemas/callout-respon
 }
 ```
 
-`status` is `ok` or `failed`; `message` is required when `failed`. An artifact's `kind` is `link`, `text` or `markdown`. Limits: at most 20 artifacts, a `value` of at most 65536 characters, a `label` of at most 80. A `link` value is one token of the form `<scheme>://<rest>`, and opens from the Detail tab whatever its scheme.
+`status` is `ok` or `failed`; `failed` needs a non-blank `message` or a non-empty `errors` list. `errors` is an optional list of `{message, fix}` objects (each string non-empty and at most 500 characters, at most 20): what is wrong and a command the operator can run to repair it. `ok` with `errors` is rejected. A protocol 1 response is still accepted. An artifact's `kind` is `link`, `text` or `markdown`. Limits: at most 20 artifacts, a `value` of at most 65536 characters, a `label` of at most 80. A `link` value is one token of the form `<scheme>://<rest>`, and opens from the Detail tab whatever its scheme.
 
-A callout is **failed** when it exits non-zero, times out, writes output the validator rejects, or answers `status: "failed"`.
+A callout is **failed** when it exits non-zero, times out, writes output the validator rejects, or answers `status: "failed"`; its `errors` add detail and change nothing else.
 
 ## Where it shows
 
-One run is recorded per (step, callout) in the `callout-runs` step artifact and is never retried. The Detail tab appends, after the workflow's own rows, a `callout:<id>` row (`running` or `failed: <message>`) or one `callout:<id>:<n>` row per artifact. A gate surfaces after at most one pool tick of delay when a waiting callout matches it.
+One run is recorded per (step, callout) in the `callout-runs` step artifact and is never retried. The Detail tab appends, after the workflow's own rows, a `callout:<id>` row (`running` or `failed: <message>`), followed on a failure by one `callout:<id>:error:<n>` row per error showing `<message> - fix: <fix>`, or one `callout:<id>:<n>` row per artifact. A gate surfaces after at most one pool tick of delay when a waiting callout matches it.

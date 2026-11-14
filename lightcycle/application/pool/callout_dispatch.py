@@ -8,6 +8,7 @@ from lightcycle.application.setup.project_registry import ProjectRegistry
 from lightcycle.application.work.callout_hold import callout_runs_of
 from lightcycle.application.work.stack_layers import StackLayers
 from lightcycle.domain.work import State, callout_log_label
+from lightcycle.domain.work.callout_preflight import failure_message
 from lightcycle.domain.work.callout_response import (
     PROTOCOL,
     CalloutResponse,
@@ -60,9 +61,12 @@ class CalloutDispatchUseCase:
     def _write(self, step_id, runs):
         self._store.replace_artifact(step_id, CALLOUT_RUNS, dump_runs(runs), internal=True)
 
-    def _record_failure(self, step_id, callout_id, record, message):
+    def _record_failure(self, step_id, callout_id, record, message, errors=()):
         record = dict(record)
-        record.update(status=STATUS_FAILED, message=message, artifacts=[])
+        message = failure_message(message, errors)
+        record.update(
+            status=STATUS_FAILED, message=message, artifacts=[],
+            errors=[{"message": e.message, "fix": e.fix} for e in errors])
         self._store.note_condition(step_id, "callout:%s: failed - %s" % (callout_id, message))
         return record
 
@@ -111,7 +115,8 @@ class CalloutDispatchUseCase:
             return self._record_failure(
                 step.id, callout_id, record, "invalid response: %s" % parsed)
         if parsed.status == STATUS_FAILED:
-            return self._record_failure(step.id, callout_id, record, parsed.message)
+            return self._record_failure(
+                step.id, callout_id, record, parsed.message, parsed.errors)
         record = dict(record)
         record.update(
             status=STATUS_OK, message=parsed.message or None,
@@ -183,6 +188,7 @@ class CalloutDispatchUseCase:
         item = self._store.get_item(step.item)
         return {
             "protocol": PROTOCOL,
+            "verb": "run",
             "callout": callout.id,
             "item": {
                 "id": item.id, "title": item.title, "repo": item.repo, "project": item.project},
