@@ -930,6 +930,80 @@ class TestReviewRoundsCapRouting(unittest.TestCase):
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="rejected"))
         self.assertEqual(s.get_node(resp.next_step).stage, "build")
 
+    def _fire(self, s, item):
+        self._reject_n_times(s, item, 2)
+        firing = s.create_step(stage="review", role="agent", item=item)
+        resp = self._uc(s).execute(CompleteInput(step=firing, outcome="rejected"))
+        escalation = s.get_node(resp.next_step)
+        self.assertEqual(escalation.stage, "escalate-step")
+        self.assertEqual(escalation.previous_step, firing)
+        s.complete_node(escalation.id, "done")
+        return firing
+
+    def test_cap_counts_from_zero_after_the_escalation_closes(self):
+        s = FakeStore()
+        item = s.create_item("st", "a description", workflow="spec-driven", shortcode="GRID")
+        self._fire(s, item)
+        self._reject_n_times(s, item, 1)
+        wid = s.create_step(stage="review", role="agent", item=item)
+        resp = self._uc(s).execute(CompleteInput(step=wid, outcome="rejected"))
+        self.assertEqual(s.get_node(resp.next_step).stage, "build")
+
+    def test_cap_fires_again_after_limit_steps_since_the_firing_step(self):
+        s = FakeStore()
+        item = s.create_item("st", "a description", workflow="spec-driven", shortcode="GRID")
+        self._fire(s, item)
+        self._reject_n_times(s, item, 2)
+        wid = s.create_step(stage="review", role="agent", item=item)
+        resp = self._uc(s).execute(CompleteInput(step=wid, outcome="rejected"))
+        self.assertEqual(s.get_node(resp.next_step).stage, "escalate-step")
+
+    def test_a_different_outcome_after_the_cut_still_breaks_the_streak(self):
+        s = FakeStore()
+        item = s.create_item("st", "a description", workflow="spec-driven", shortcode="GRID")
+        self._fire(s, item)
+        self._reject_n_times(s, item, 1)
+        passed = s.create_step(stage="review", role="agent", item=item)
+        s.complete_node(passed, "done")
+        self._reject_n_times(s, item, 1)
+        wid = s.create_step(stage="review", role="agent", item=item)
+        resp = self._uc(s).execute(CompleteInput(step=wid, outcome="rejected"))
+        self.assertEqual(s.get_node(resp.next_step).stage, "build")
+
+    BOTH_CAPS_GRAPH = (
+        "entry: build\n\nnodes:\n  build   coder\n  review  reviewer\n\n"
+        "edges:\n  build   done      review\n  review  rejected  build\n  review  done      ship\n\n"
+        "hooks:\n  ci_failed_cap      review  rejected  2  escalate-a\n"
+        "  review_rounds_cap  review  rejected  escalate-b\n"
+    )
+
+    def _both_caps_uc(self, store):
+        return CompleteStepUseCase(
+            store,
+            FlowService(
+                FakeFs(self.METAS, workflow=self.BOTH_CAPS_GRAPH), store,
+                _ReviewRoundsCapConfig(3),
+            ), worktrees=NoopWorktrees(), config=None,
+        )
+
+    def test_a_stage_with_both_caps_restarts_both_after_either_fires(self):
+        s = FakeStore()
+        item = s.create_item("st", "a description", workflow="spec-driven", shortcode="GRID")
+        uc = self._both_caps_uc(s)
+        self._reject_n_times(s, item, 2)
+        firing = s.create_step(stage="review", role="agent", item=item)
+        resp = uc.execute(CompleteInput(step=firing, outcome="rejected"))
+        escalation = s.get_node(resp.next_step)
+        self.assertEqual(escalation.stage, "escalate-a")
+        self.assertEqual(escalation.previous_step, firing)
+        s.complete_node(escalation.id, "done")
+        self._reject_n_times(s, item, 1)
+
+        wid = s.create_step(stage="review", role="agent", item=item)
+        resp = uc.execute(CompleteInput(step=wid, outcome="rejected"))
+
+        self.assertEqual(s.get_node(resp.next_step).stage, "build")
+
     def test_no_cap_declared_never_escalates(self):
         no_cap_metas = {"coder": {"model": "sonnet"}, "reviewer": {"model": "sonnet"}}
         no_cap_graph = (
@@ -1092,6 +1166,32 @@ class TestCiFailedCapWithRealSteps(unittest.TestCase):
         resp = self._uc(s).execute(CompleteInput(step=wid, outcome="ci-failed"))
         self.assertEqual(s.get_node(resp.next_step).stage, "review-ci")
         self.assertEqual(s.get_node(resp.next_step).role, "human")
+
+
+    def test_ci_failed_cap_restarts_after_the_escalation_closes(self):
+        s = FakeStore()
+        item = s.create_item("st", "a description", workflow="spec-driven", shortcode="GRID")
+        uc = self._uc(s)
+        for _ in range(3):
+            old = s.create_step(stage="watch-ci", role="agent", item=item)
+            s.complete_node(old, "ci-failed")
+        firing = s.create_step(stage="watch-ci", role="agent", item=item)
+        resp = uc.execute(CompleteInput(step=firing, outcome="ci-failed"))
+        escalation = s.get_node(resp.next_step)
+        self.assertEqual(escalation.stage, "review-ci")
+        self.assertEqual(escalation.previous_step, firing)
+        s.complete_node(escalation.id, "done")
+        for _ in range(2):
+            old = s.create_step(stage="watch-ci", role="agent", item=item)
+            s.complete_node(old, "ci-failed")
+
+        wid = s.create_step(stage="watch-ci", role="agent", item=item)
+        resp = uc.execute(CompleteInput(step=wid, outcome="ci-failed"))
+        self.assertEqual(s.get_node(resp.next_step).stage, "write-code")
+
+        again = s.create_step(stage="watch-ci", role="agent", item=item)
+        resp = uc.execute(CompleteInput(step=again, outcome="ci-failed"))
+        self.assertEqual(s.get_node(resp.next_step).stage, "review-ci")
 
 
 class TestNextStepTitleTracksTheItem(unittest.TestCase):

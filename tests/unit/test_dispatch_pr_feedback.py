@@ -1083,6 +1083,80 @@ class TestConflictCapCountsFailuresNotConflicts(unittest.TestCase):
         self.assertIn("pr_conflict_cap reached: 2 failed resolutions in 1 conflicts",
                       self._escalation_note())
 
+    def _escalate_and_resume(self):
+        for _ in range(3):
+            self._round(move_base=False)
+        self.uc.execute()
+        self.assertEqual(self._gate_outcomes()[-1], "gave-up")
+        self.store.complete_node(self._open("escalate-step").id, "done")
+        self.store.create_step(stage="watch-step", role="agent", item=self.item)
+
+    def test_conflicts_after_a_human_resolves_the_escalation_count_from_zero(self):
+        self._start(self._flow())
+        self._escalate_and_resume()
+
+        self.uc.execute()
+
+        self.assertEqual(self._gate_outcomes()[-1], "conflicted")
+
+    def test_failures_fire_the_cap_again_after_limit_rounds_since_the_cut(self):
+        self._start(self._flow())
+        self._escalate_and_resume()
+        for _ in range(3):
+            self._round(move_base=False)
+
+        self.uc.execute()
+
+        self.assertEqual(self._gate_outcomes()[-1], "gave-up")
+
+    def test_escalated_resolutions_before_the_cut_stop_counting(self):
+        self._start(self._flow(failure_cap=2))
+        self.store.complete_node(self._open("watch-step").id, "done")
+        for _ in range(2):
+            fix = self.store.create_step(stage="fix-step", role="agent", item=self.item)
+            self.store.complete_node(fix, "escalate")
+        self.store.create_step(stage="watch-step", role="agent", item=self.item)
+        self.uc.execute()
+        self.assertEqual(self._gate_outcomes()[-1], "gave-up")
+        self.store.complete_node(self._open("escalate-step").id, "done")
+        self.store.create_step(stage="watch-step", role="agent", item=self.item)
+
+        self.uc.execute()
+
+        self.assertEqual(self._gate_outcomes()[-1], "conflicted")
+
+    def test_total_cap_restarts_after_the_gate_escalates(self):
+        self._start(self._flow(total_cap=2))
+        for _ in range(2):
+            self._round(move_base=True)
+        self.uc.execute()
+        self.assertEqual(self._gate_outcomes(), ["conflicted", "conflicted", "gave-up"])
+        self.assertTrue(
+            self._escalation_note().startswith("pr_conflict_total_cap reached: 3 conflicts"),
+            self._escalation_note())
+        self.store.complete_node(self._open("escalate-step").id, "done")
+        self.store.create_step(stage="watch-step", role="agent", item=self.item)
+
+        for _ in range(2):
+            self._round(move_base=True)
+        self.assertEqual(self._gate_outcomes()[3:], ["conflicted", "conflicted"])
+        self.uc.execute()
+
+        self.assertEqual(self._gate_outcomes()[-1], "gave-up")
+        self.assertEqual(len(self._gate_outcomes()), 6)
+
+    def test_a_same_tip_conflict_after_the_cut_is_not_a_failure(self):
+        self._start(self._flow(failure_cap=1))
+        self._round(move_base=False)
+        self.uc.execute()
+        self.assertEqual(self._gate_outcomes(), ["conflicted", "gave-up"])
+        self.store.complete_node(self._open("escalate-step").id, "done")
+        self.store.create_step(stage="watch-step", role="agent", item=self.item)
+
+        self.uc.execute()
+
+        self.assertEqual(self._gate_outcomes(), ["conflicted", "gave-up", "conflicted"])
+
     def test_a_declared_total_cap_escalates_the_sixth_conflict(self):
         self._start(self._flow(total_cap=5))
         for _ in range(5):
