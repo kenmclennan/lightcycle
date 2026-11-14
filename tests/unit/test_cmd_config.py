@@ -7,6 +7,8 @@ from pathlib import Path
 
 from lightcycle import cli
 from lightcycle.adapters.fsio import FsAdapter
+from lightcycle.domain.work.callout_response import CalloutError
+from tests.support.fake_callout_preflight import FakeCalloutPreflight
 from lightcycle.config import _SEED_KEYS, RESTART_REQUIRED_KEYS, Config
 
 
@@ -21,21 +23,27 @@ def call(fn, *args):
 
 
 class FakeContainer:
-    def __init__(self, config, launcher=None):
+    def __init__(self, config, launcher=None, callout_preflight=None):
         self.config = config
         self.launcher = launcher
+        self.callout_preflight = callout_preflight
         self.fs = FsAdapter(config)
 
 
 class FakeLauncher:
-    def __init__(self, returncode=0, touches=False):
+    def __init__(self, returncode=0, touches=False, rewrite=None):
         self.returncode = returncode
         self.touches = touches
+        self.rewrite = rewrite
         self.edited = None
 
     def edit(self, editor, path):
         self.edited = (editor, path)
-        if self.touches:
+        if self.rewrite is not None:
+            Path(path).write_text(self.rewrite)
+            st = os.stat(path).st_mtime_ns + 1_000_000_000
+            os.utime(path, ns=(st, st))
+        elif self.touches:
             st = os.stat(path).st_mtime_ns + 1_000_000_000
             os.utime(path, ns=(st, st))
         return self.returncode
@@ -178,6 +186,51 @@ class TestCmdConfig(unittest.TestCase):
         rc, out, _err = call(cli.cmd_config, "--edit")
         self.assertEqual(rc, 1)
         self.assertNotIn("restarted", out)
+
+
+_BLOCK = "callout-x:\n  command: %s\n  subject: pr\n  wait: false\n  timeout: 5\n"
+
+
+class TestCmdConfigCalloutRegistration(unittest.TestCase):
+    def setUp(self):
+        self._orig = cli.container()
+        self.addCleanup(lambda: cli.set_container(self._orig))
+
+    def _edit(self, before, after, errors=None, rc=0):
+        c = _cfg()
+        c.ensure_config()
+        path = Path(c.config_path())
+        path.write_text(path.read_text() + before)
+        c.reload()
+        stub = FakeCalloutPreflight({"x": errors or []})
+        launcher = FakeLauncher(returncode=rc, rewrite=path.read_text().replace(before, after))
+        cli.set_container(FakeContainer(c, launcher, stub))
+        result = call(cli.cmd_config, "--edit")
+        return result, stub
+
+    def test_a_new_callout_that_fails_preflight_warns_after_the_restart_notice(self):
+        errors = [CalloutError("pandoc is not installed", "brew install pandoc")]
+
+        (rc, out, err), stub = self._edit("", _BLOCK % "/bin/x", errors)
+
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(stub.calls, [("x", "register")])
+        self.assertIn("warning: callout x: pandoc is not installed", out)
+        self.assertIn("  fix: brew install pandoc", out)
+        self.assertLess(out.index("lc start"), out.index("warning:"))
+
+    def test_an_unchanged_callout_runs_no_preflight(self):
+        (rc, out, err), stub = self._edit(_BLOCK % "/bin/x", _BLOCK % "/bin/x" + "\n")
+
+        self.assertEqual(rc, 0, err)
+        self.assertIn("lc start", out)
+        self.assertEqual(stub.calls, [])
+
+    def test_a_changed_command_runs_the_preflight(self):
+        (rc, _out, err), stub = self._edit(_BLOCK % "/bin/x", _BLOCK % "/bin/y")
+
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(stub.calls, [("x", "register")])
 
 
 if __name__ == "__main__":

@@ -58,6 +58,20 @@ class TestCalloutRows(unittest.TestCase):
             ("callout:o:1", "myapp://x", "Open", "link"),
             ("callout:o:2", "# hi", "Note", "markdown")])
 
+    def test_a_failed_record_with_errors_adds_one_row_per_error(self):
+        errors = [{"message": "m1", "fix": "f1"}, {"message": "m2", "fix": "f2"}]
+        rows = callout_entries({"a": {"status": "failed", "message": "m1 (and 1 more)", "errors": errors}})
+
+        self.assertEqual([(e.key, e.value, e.label, e.artifact_kind) for e in rows], [
+            ("callout:a", "failed: m1 (and 1 more)", "callout:a", None),
+            ("callout:a:error:1", "m1 - fix: f1", "callout:a:error:1", None),
+            ("callout:a:error:2", "m2 - fix: f2", "callout:a:error:2", None)])
+
+    def test_a_failed_record_without_errors_renders_as_before(self):
+        rows = callout_entries({"a": {"status": "failed", "message": "boom"}})
+
+        self.assertEqual([e.key for e in rows], ["callout:a"])
+
     def test_a_step_with_no_record_has_byte_identical_rows(self):
         store, step = planted(None)
 

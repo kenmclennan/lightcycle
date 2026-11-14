@@ -19,6 +19,7 @@ from lightcycle.domain.health.gh_tooling import (
 )
 from lightcycle.domain.runs import PhaseRun
 from lightcycle.ports.github import StackLayer
+from tests.support.fake_callout_preflight import FakeCalloutPreflight
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_github import FakeGitHub
 from tests.support.fake_store import FakeStore
@@ -222,7 +223,7 @@ class TestDoctorReportsGhTooling(unittest.TestCase):
         report = DoctorUseCase(
             FakeStore(), source, _cfg(**_ALL_KEYS), FakeWorkflowBundle(), FakeFs(), machine,
             _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(),
-            FakeLock(running=False), FakeGithubBudget(), lambda seconds: None,
+            FakeLock(running=False), FakeGithubBudget(), lambda seconds: None, FakeCalloutPreflight()
         ).execute(DoctorInput())
         return report.problems["github"]
 

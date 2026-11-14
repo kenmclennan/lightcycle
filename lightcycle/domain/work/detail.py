@@ -78,6 +78,11 @@ def callout_entries(runs):
             entries.append(DetailEntry(
                 key=key, kind=KIND_CALLOUT, value="failed: %s" % record.get("message"),
                 label=key))
+            for n, error in enumerate(record.get("errors") or [], 1):
+                error_key = "%s:error:%d" % (key, n)
+                entries.append(DetailEntry(
+                    key=error_key, kind=KIND_CALLOUT, label=error_key,
+                    value="%s - fix: %s" % (error["message"], error["fix"])))
         elif status == "ok":
             for n, artifact in enumerate(record.get("artifacts") or [], 1):
                 entries.append(DetailEntry(

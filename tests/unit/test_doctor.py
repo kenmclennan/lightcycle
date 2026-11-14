@@ -5,6 +5,8 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
+from lightcycle.domain.work.callout_response import CalloutError
+from tests.support.fake_callout_preflight import FakeCalloutPreflight
 from lightcycle.application.inspect import DoctorInput, DoctorUseCase
 from lightcycle.config import _SEED_KEYS, Config
 from lightcycle.domain.pool import ConfigReloadState
@@ -119,7 +121,7 @@ class _Worktrees:
 def _uc(store, source, config, bundle):
     return DoctorUseCase(
         store, source, config, bundle, FakeFs(), FakeMachine(), _Worktrees(),
-        FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False), FakeGithubBudget(), lambda seconds: None)
+        FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False), FakeGithubBudget(), lambda seconds: None, FakeCalloutPreflight())
 
 
 class TestAllKeysCoversEverySeedKey(unittest.TestCase):
@@ -670,7 +672,7 @@ class TestDoctorGithubBudget(unittest.TestCase):
         return DoctorUseCase(
             FakeStore(), source, _cfg(**_ALL_KEYS), FakeWorkflowBundle(), FakeFs(), FakeMachine(),
             _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(),
-            FakeLock(running=False), budget, lambda seconds: None).execute(DoctorInput())
+            FakeLock(running=False), budget, lambda seconds: None, FakeCalloutPreflight()).execute(DoctorInput())
 
     def test_a_known_budget_above_the_reserve_is_ok_with_the_figures(self):
         report = self._report(FakeGithubBudget(remaining=4261, limit=5000, reset=1792503970))
@@ -702,7 +704,7 @@ class TestDoctorPrFeedbackConditions(unittest.TestCase):
         return DoctorUseCase(
             store, source, _cfg(**_ALL_KEYS), FakeWorkflowBundle(), FakeFs(), FakeMachine(),
             _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(),
-            FakeLock(running=False), FakeGithubBudget(), lambda seconds: None).execute(DoctorInput())
+            FakeLock(running=False), FakeGithubBudget(), lambda seconds: None, FakeCalloutPreflight()).execute(DoctorInput())
 
     def _gate(self, store):
         item = store.create_item("feature", "d")
@@ -776,7 +778,7 @@ class TestDoctorLayerBranches(unittest.TestCase):
             store, source, _cfg(**_ALL_KEYS), FakeWorkflowBundle(), FakeFs(), FakeMachine(),
             _LayerWorktrees(leftover), FakeGit(), FakeGuidanceSyncStatus(),
             FakeConfigReloadStatus(), FakeLock(running=False), FakeGithubBudget(),
-            lambda seconds: None).execute(DoctorInput())
+            lambda seconds: None, FakeCalloutPreflight()).execute(DoctorInput())
         return item, report.problems["orphans"]
 
     def test_an_abandoned_stacked_run_with_leftover_layers_is_one_orphan(self):
@@ -815,7 +817,7 @@ class TestDoctorOrphans(unittest.TestCase):
         return DoctorUseCase(
             store, source, config, FakeWorkflowBundle(), fs, machine, worktrees,
             FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False), FakeGithubBudget(),
-            sleep if sleep is not None else (lambda seconds: None)).execute(DoctorInput())
+            sleep if sleep is not None else (lambda seconds: None), FakeCalloutPreflight()).execute(DoctorInput())
 
     def test_worktree_matching_a_claimed_items_path_reports_no_problem(self):
         store = FakeStore()
@@ -1073,7 +1075,7 @@ class TestDoctorFacets(unittest.TestCase):
         source.add_bundle("acme", "sha1", 1, current=True)
         report = DoctorUseCase(
             store, source, _cfg(**_ALL_KEYS), FakeWorkflowBundle(), fs, FakeMachine(), _Worktrees(),
-            git if git is not None else FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False), FakeGithubBudget(), lambda seconds: None).execute(DoctorInput())
+            git if git is not None else FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False), FakeGithubBudget(), lambda seconds: None, FakeCalloutPreflight()).execute(DoctorInput())
         return report.problems["facets"]
 
     def _kb(self, *pages):
@@ -1216,7 +1218,8 @@ def _schedule_doctor(blocks, known=None, projects=("acme/app",), origin="acme"):
     config = _ScheduleConfig(_cfg(**_ALL_KEYS), blocks)
     uc = DoctorUseCase(
         store, _ScheduleSource(known, origin), config, _ScheduleBundle(known), FakeFs(),
-        FakeMachine(), _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False), FakeGithubBudget(), lambda seconds: None)
+        FakeMachine(), _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(), FakeLock(running=False), FakeGithubBudget(), lambda seconds: None,
+        FakeCalloutPreflight())
     return uc.execute(DoctorInput())
 
 
@@ -1345,6 +1348,30 @@ class TestDoctorCallouts(unittest.TestCase):
 
         self.assertFalse([p for p in report.problems["config"] if "callout" in p.message])
 
+    def test_failed_callout_preflight_is_reported(self):
+        valid = "callout-x:\n  command: /bin/x\n  subject: pr\n  wait: false\n  timeout: 5\n"
+        invalid = "callout-y:\n  command: /bin/y\n  subject: step\n"
+        stub = FakeCalloutPreflight({"x": [
+            CalloutError("pandoc is not installed", "brew install pandoc"),
+            CalloutError("repo not set up", "run setup")]})
+
+        report = _lifecycle_doctor({}, valid + invalid, preflight=stub)
+
+        found = [p for p in report.problems["config"] if p.kind == "callout-preflight"]
+        self.assertEqual(stub.calls, [("x", "doctor")])
+        self.assertEqual([p.fix for p in found], ["brew install pandoc", "run setup"])
+        self.assertTrue(all(p.category == "config" for p in found))
+        self.assertIn("callout x: pandoc is not installed", found[0].message)
+
+    def test_a_passing_callout_preflight_reports_nothing(self):
+        valid = "callout-x:\n  command: /bin/x\n  subject: pr\n  wait: false\n  timeout: 5\n"
+        stub = FakeCalloutPreflight()
+
+        report = _lifecycle_doctor({}, valid, preflight=stub)
+
+        self.assertEqual(stub.calls, [("x", "doctor")])
+        self.assertFalse([p for p in report.problems["config"] if p.kind == "callout-preflight"])
+
 
 _LIFECYCLE_META = {
     "lifecycle": {"install": "scripts/install.sh"},
@@ -1353,7 +1380,7 @@ _LIFECYCLE_META = {
 }
 
 
-def _lifecycle_doctor(known, config_text="", present=("acme/scripts/install.sh",), executable=None):
+def _lifecycle_doctor(known, config_text="", present=("acme/scripts/install.sh",), executable=None, preflight=None):
     config = _cfg(**_ALL_KEYS)
     path = config.config_path()
     Path(path).write_text(Path(path).read_text() + config_text)
@@ -1364,7 +1391,8 @@ def _lifecycle_doctor(known, config_text="", present=("acme/scripts/install.sh",
     uc = DoctorUseCase(
         FakeStore(), _ScheduleSource(known), config, _ScheduleBundle(known), fs,
         FakeMachine(), _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(),
-        FakeConfigReloadStatus(), FakeLock(running=False), FakeGithubBudget(), lambda seconds: None)
+        FakeConfigReloadStatus(), FakeLock(running=False), FakeGithubBudget(), lambda seconds: None,
+        preflight if preflight is not None else FakeCalloutPreflight())
     return uc.execute(DoctorInput())
 
 
@@ -1440,7 +1468,7 @@ class TestDoctorWorkflowLifecycle(unittest.TestCase):
         uc = DoctorUseCase(
             FakeStore(), source, config, _ScheduleBundle(known), FakeFs(), FakeMachine(),
             _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(),
-            FakeLock(running=False), FakeGithubBudget(), lambda seconds: None)
+            FakeLock(running=False), FakeGithubBudget(), lambda seconds: None, FakeCalloutPreflight())
         messages = [p.message for p in uc.execute(DoctorInput()).problems["config"]]
         self.assertTrue(any("workflow-acme-b-c" in m for m in messages), messages)
 
@@ -1458,7 +1486,7 @@ class TestReloadProblems(unittest.TestCase):
             _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(),
             FakeConfigReloadStatus(replace(state, pid=pid)),
             FakeLock(running=True, pid=4242), FakeGithubBudget(),
-         lambda seconds: None).execute(DoctorInput()).problems["config"]
+         lambda seconds: None, FakeCalloutPreflight()).execute(DoctorInput()).problems["config"]
 
     def _rejected(self, **kw):
         return self._report(
@@ -1497,7 +1525,7 @@ class TestDoctorHealthIcons(unittest.TestCase):
         uc = DoctorUseCase(
             FakeStore(), FakeWorkflowSource(), config, FakeWorkflowBundle(), fs, FakeMachine(),
             _Worktrees(), FakeGit(), FakeGuidanceSyncStatus(), FakeConfigReloadStatus(),
-            FakeLock(running=False), FakeGithubBudget(), lambda seconds: None)
+            FakeLock(running=False), FakeGithubBudget(), lambda seconds: None, FakeCalloutPreflight())
         report = uc.execute(DoctorInput())
         return [p.message for p in report.problems["config"] if "tui-health-icon" in p.message], paths
 

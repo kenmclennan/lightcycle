@@ -211,15 +211,35 @@ CONFIG_EDIT_RESTART_NOTICE = (
 )
 
 
+def _callouts_by_id():
+    try:
+        return {c.id: c for c in container().config.callouts()}
+    except ConfigError:
+        return {}
+
+
+def _preflight_changed_callouts(before):
+    container().config.reload()
+    for callout in _callouts_by_id().values():
+        previous = before.get(callout.id)
+        if previous is not None and previous.command == callout.command:
+            continue
+        for error in container().callout_preflight.check(callout, "register"):
+            print("warning: callout %s: %s" % (callout.id, error.message))
+            print("  fix: %s" % error.fix)
+
+
 def cmd_config(argv):
     a = build_parser(COMMANDS["config"]).parse_args(argv)
     if a.edit:
         container().config.ensure_config()
         editor = container().config.editor()
         before = container().config.config_mtime()
+        callouts_before = _callouts_by_id()
         rc = container().launcher.edit(editor, container().config.config_path())
         if rc == 0 and container().config.config_mtime() != before:
             print(CONFIG_EDIT_RESTART_NOTICE)
+            _preflight_changed_callouts(callouts_before)
         return rc
     p = container().config.config_path()
     print("config: %s" % p)

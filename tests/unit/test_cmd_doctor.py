@@ -1,4 +1,5 @@
 from lightcycle.application.inspect import DoctorUseCase
+from tests.support.fake_callout_preflight import FakeCalloutPreflight
 from tests.support.fake_github_budget import FakeGithubBudget
 import io
 import json
@@ -91,6 +92,9 @@ class FakeConfig:
     def callout_blocks(self):
         return {}
 
+    def callouts(self):
+        return []
+
 
 class FakeWorkflowBundle:
     def step_roles(self, root):
@@ -132,7 +136,7 @@ class FakeContainer:
             self.store, self.workflow_source, self.config, self.workflow_bundle,
             self.fs, self.machine, self.worktrees(),
             self.git, self.guidance_sync_status,
-            self.config_reload_status, self.lock, self.github_budget(), lambda seconds: None,
+            self.config_reload_status, self.lock, self.github_budget(), lambda seconds: None, FakeCalloutPreflight()
         )
 
 

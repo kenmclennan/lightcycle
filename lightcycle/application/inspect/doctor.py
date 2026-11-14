@@ -73,7 +73,9 @@ class DoctorUseCase:
     def __init__(
         self, store, workflow_source, config, workflow_bundle, fs, machine, worktrees,
         git, guidance_sync_status, config_reload_status, lock, github_budget, sleep,
+        callout_preflight,
     ):
+        self._callout_preflight = callout_preflight
         self._sleep = sleep
         self._github_budget = github_budget
         self._store = store
@@ -109,7 +111,7 @@ class DoctorUseCase:
             "workflows": self._origin_problems() + self._hook_failure_problems(),
             "config": (
                 self._config_problems() + self._retired_job_problems()
-                + self._schedule_problems() + self._callout_problems() + self._reload_problems() + lifecycle_config),
+                + self._schedule_problems() + self._callout_problems() + self._callout_preflight_problems() + self._reload_problems() + lifecycle_config),
             "orphans": self._orphan_problems() + self._layer_branch_problems(nodes),
             "teardown": self._teardown_refusal_problems(),
             "facets": self._guidance_registration_problems() + self._facet_problems(),
@@ -418,6 +420,15 @@ class DoctorUseCase:
                 problems.append(Problem(
                     "config", "callout %s: %s" % (callout_id, text),
                     kind="callout-invalid", fix=callout_invalid_fix(callout_id)))
+        return problems
+
+    def _callout_preflight_problems(self):
+        problems = []
+        for callout in self._config.callouts():
+            for error in self._callout_preflight.check(callout, "doctor"):
+                problems.append(Problem(
+                    "config", "callout %s: %s" % (callout.id, error.message),
+                    kind="callout-preflight", fix=error.fix))
         return problems
 
     def _schedule_problems(self):

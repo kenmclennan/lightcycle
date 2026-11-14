@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Callout preflight response (protocol 2)",
+  "type": "object",
+  "required": ["status"],
+  "properties": {
+    "status": { "enum": ["ok", "failed"] },
+    "errors": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "required": ["message", "fix"],
+        "properties": {
+          "message": { "type": "string", "minLength": 1, "maxLength": 500 },
+          "fix": { "type": "string", "minLength": 1, "maxLength": 500 }
+        }
+      }
+    }
+  },
+  "if": { "properties": { "status": { "const": "failed" } } },
+  "then": { "required": ["errors"], "properties": { "errors": { "minItems": 1 } } },
+  "else": { "properties": { "errors": { "maxItems": 0 } } }
+}

@@ -66,6 +66,7 @@ from lightcycle.application.flow.complete_step import CompleteStepUseCase
 from lightcycle.application.flow.unblock_step import UnblockStepUseCase
 from lightcycle.application.pool.backup import BackupUseCase
 from lightcycle.application.pool.breaker_gate import BreakerGateUseCase
+from lightcycle.application.inspect.callout_preflight import CalloutPreflightUseCase
 from lightcycle.application.pool.callout_dispatch import CalloutDispatchUseCase
 from lightcycle.application.pool.close_stranded_items import CloseStrandedItemsUseCase
 from lightcycle.application.pool.hook_completions import HookCompletionsUseCase
@@ -125,6 +126,7 @@ class Container:
             script_runner if script_runner is not None
             else ScriptRunnerAdapter(self.config, self.run_groups)
         )
+        self.callout_preflight = CalloutPreflightUseCase(self.config, self.script_runner)
         self.github_poll_runner = (
             github_poll_runner if github_poll_runner is not None
             else GithubPollRunnerAdapter(self.worker_log)
@@ -191,6 +193,7 @@ class Container:
             self.fs, self.machine, self.worktrees(),
             self.git, self.guidance_sync_status,
             self.config_reload_status, self.lock, self.github_budget(), self.sleep,
+            self.callout_preflight,
         )
 
     def doctor_for_current_thread(self):
