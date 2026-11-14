@@ -68,11 +68,11 @@ class CalloutDispatchUseCase:
     def _write(self, step_id, runs):
         self._store.replace_artifact(step_id, CALLOUT_RUNS, dump_runs(runs), internal=True)
 
-    def _record_failure(self, step_id, callout_id, record, message, errors=()):
+    def _record_failure(self, step_id, callout_id, record, message, now, errors=()):
         record = dict(record)
         message = failure_message(message, errors)
         record.update(
-            status=STATUS_FAILED, message=message, artifacts=[],
+            status=STATUS_FAILED, message=message, artifacts=[], finished=now,
             errors=[{"message": e.message, "fix": e.fix} for e in errors])
         self._store.note_condition(step_id, "callout:%s: failed - %s" % (callout_id, message))
         return record
@@ -90,7 +90,7 @@ class CalloutDispatchUseCase:
                 try:
                     updated = self._reap_one(step, callout_id, record, key, key in running, now)
                 except _CALLOUT_ERRORS as e:
-                    updated = self._record_failure(step.id, callout_id, record, str(e))
+                    updated = self._record_failure(step.id, callout_id, record, str(e), now)
                 if updated is None:
                     continue
                 runs[callout_id] = updated
@@ -102,7 +102,7 @@ class CalloutDispatchUseCase:
 
     def _reap_one(self, step, callout_id, record, key, is_running, now):
         if not is_running:
-            return self._record_failure(step.id, callout_id, record, INTERRUPTED_MESSAGE)
+            return self._record_failure(step.id, callout_id, record, INTERRUPTED_MESSAGE, now)
         result = self._runner.poll(key)
         if result is None:
             return None
@@ -111,24 +111,24 @@ class CalloutDispatchUseCase:
         if result.timed_out:
             return self._record_failure(
                 step.id, callout_id, record,
-                "timed out after %ss" % (record.get("timeout") or "the configured limit"))
+                "timed out after %ss" % (record.get("timeout") or "the configured limit"), now)
         if result.exit_code is None:
             return self._record_failure(
                 step.id, callout_id, record,
-                "could not run the command: %s" % (result.stderr_tail or "no exit status"))
+                "could not run the command: %s" % (result.stderr_tail or "no exit status"), now)
         if result.exit_code != 0:
             return self._record_failure(
-                step.id, callout_id, record, "exited with code %s" % result.exit_code)
+                step.id, callout_id, record, "exited with code %s" % result.exit_code, now)
         parsed = validate_callout_response(result.stdout)
         if not isinstance(parsed, CalloutResponse):
             return self._record_failure(
-                step.id, callout_id, record, "invalid response: %s" % parsed)
+                step.id, callout_id, record, "invalid response: %s" % parsed, now)
         if parsed.status == STATUS_FAILED:
             return self._record_failure(
-                step.id, callout_id, record, parsed.message, parsed.errors)
+                step.id, callout_id, record, parsed.message, now, parsed.errors)
         record = dict(record)
         record.update(
-            status=STATUS_OK, message=parsed.message or None,
+            status=STATUS_OK, message=parsed.message or None, finished=now,
             artifacts=[
                 {"label": a.label, "kind": a.kind, "value": a.value} for a in parsed.artifacts])
         return record
@@ -136,11 +136,11 @@ class CalloutDispatchUseCase:
     def _reap_preflight(self, step, callout_id, record, result, now):
         errors = preflight_errors(result, record.get("preflight_timeout"))
         if errors:
-            return self._record_failure(step.id, callout_id, record, "", errors)
+            return self._record_failure(step.id, callout_id, record, "", now, errors)
         callout = self._callout(callout_id)
         if callout is None:
             return self._record_failure(
-                step.id, callout_id, record, "callout is no longer configured")
+                step.id, callout_id, record, "callout is no longer configured", now)
         presents = self._presents(step)
         record = dict(record)
         record.update(phase=PHASE_RUN, deadline=now + callout.timeout)
@@ -187,7 +187,7 @@ class CalloutDispatchUseCase:
                     started.append(key)
                 except _CALLOUT_ERRORS as e:
                     runs[callout.id] = self._record_failure(
-                        step.id, callout.id, runs[callout.id], str(e))
+                        step.id, callout.id, runs[callout.id], str(e), now)
                     self._write(step.id, runs)
         return started
 

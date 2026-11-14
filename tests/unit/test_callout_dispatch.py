@@ -340,6 +340,70 @@ class TestPreflight(unittest.TestCase):
             ("callout:b", "failed: bad"), ("callout:b:error:1", "bad - fix: do x")])
 
 
+class TestFinished(unittest.TestCase):
+    def test_a_running_record_has_no_finished(self):
+        rig = CalloutRig([callout("a", "pr")])
+        step = rig.gate()
+
+        rig.use_case.execute(100)
+
+        self.assertNotIn("finished", rig.records(step)["a"])
+
+    def test_an_ok_record_carries_the_tick_time(self):
+        rig = CalloutRig([callout("a", "pr")])
+        step = rig.gate()
+        rig.use_case.execute(100)
+        rig.pass_preflight(step, 105)
+        rig.runner.finish(rig.key(step), ok(("View", "link", "myapp://1")))
+
+        rig.use_case.execute(117)
+
+        self.assertEqual(rig.records(step)["a"]["finished"], 117)
+
+    def test_a_failed_record_carries_the_tick_time(self):
+        rig = CalloutRig([callout("a", "pr")])
+        step = rig.gate()
+        rig.use_case.execute(100)
+        rig.pass_preflight(step, 105)
+        rig.runner.finish(rig.key(step), ScriptResult(exit_code=3))
+
+        rig.use_case.execute(121)
+
+        self.assertEqual(rig.records(step)["a"]["finished"], 121)
+
+    def test_a_failed_preflight_record_carries_the_tick_time(self):
+        rig = CalloutRig([callout("a", "pr")])
+        step = rig.gate()
+        rig.use_case.execute(100)
+        rig.runner.finish(rig.preflight_key(step), preflight_failed(("bad", "fix")))
+
+        rig.use_case.execute(125)
+
+        self.assertEqual(rig.records(step)["a"]["finished"], 125)
+
+    def test_an_interrupted_record_carries_the_tick_time(self):
+        rig = CalloutRig([callout("a", "pr")])
+        step = rig.gate()
+        rig.use_case.execute(100)
+        rig.runner.orphan_running()
+
+        rig.use_case.execute(133)
+
+        self.assertEqual(rig.records(step)["a"]["finished"], 133)
+
+    def test_a_start_time_failure_carries_the_tick_time(self):
+        class Raising(FakeScriptRunner):
+            def start(self, *a, **k):
+                raise OSError("no such file")
+
+        rig = CalloutRig([callout("a", "pr")], runner=Raising())
+        step = rig.gate()
+
+        rig.use_case.execute(140)
+
+        self.assertEqual(rig.records(step)["a"]["finished"], 140)
+
+
 class _DetailFlow:
     def flow_for(self, node):
         from lightcycle.domain.flow.flow import Flow
