@@ -3,12 +3,13 @@ from typing import Dict, FrozenSet, List, Optional, Tuple
 
 from lightcycle.domain.runs.pass_record import pass_number
 from lightcycle.domain.work.artifact import Artifact
+from lightcycle.domain.work.callout_runs import CALLOUT_RUNS
 from lightcycle.domain.work.behind_marker import BEHIND_NOT_UPDATED
 from lightcycle.domain.work.gate_hold import GATE_HOLD
 
 BOOKKEEPING_TYPES = frozenset({
     "session-id", "trusted-authors", "pr-head-sha", "ci-judged-sha", "admitted-comments",
-    BEHIND_NOT_UPDATED, GATE_HOLD, "schedule-state", "resolves", "resolved-by", "log",
+    BEHIND_NOT_UPDATED, GATE_HOLD, CALLOUT_RUNS, "schedule-state", "resolves", "resolved-by", "log",
 })
 
 

@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
@@ -17,6 +18,9 @@ OUT_PREFIX = "out:"
 KIND_FIELD = "field"
 KIND_INPUT = "input"
 KIND_OUTPUT = "output"
+KIND_CALLOUT = "callout"
+CALLOUT_ROW_PREFIX = "callout:"
+_LINK = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://\S+$")
 
 
 @dataclass(frozen=True)
@@ -24,9 +28,16 @@ class DetailEntry:
     key: str
     kind: str
     value: Optional[str] = None
+    label: Optional[str] = None
+    artifact_kind: Optional[str] = None
 
     def as_dict(self) -> dict:
-        return {"key": self.key, "kind": self.kind, "value": self.value}
+        out = {"key": self.key, "kind": self.kind, "value": self.value}
+        if self.label is not None:
+            out["label"] = self.label
+        if self.artifact_kind is not None:
+            out["artifact_kind"] = self.artifact_kind
+        return out
 
 
 def parse_detail(value) -> Optional[Tuple[str, ...]]:
@@ -46,6 +57,33 @@ def detail_value_is_url(value) -> bool:
     if "\n" in text or " " in text:
         return False
     return text.startswith(("http://", "https://")) and len(text.split("://", 1)[1]) > 0
+
+
+def detail_value_is_link(value) -> bool:
+    if not value:
+        return False
+    return bool(_LINK.match(str(value).strip()))
+
+
+def callout_entries(runs):
+    entries = []
+    for callout_id, record in runs.items():
+        if not isinstance(record, dict):
+            continue
+        key = "%s%s" % (CALLOUT_ROW_PREFIX, callout_id)
+        status = record.get("status")
+        if status == "running":
+            entries.append(DetailEntry(key=key, kind=KIND_CALLOUT, value="running", label=key))
+        elif status == "failed":
+            entries.append(DetailEntry(
+                key=key, kind=KIND_CALLOUT, value="failed: %s" % record.get("message"),
+                label=key))
+        elif status == "ok":
+            for n, artifact in enumerate(record.get("artifacts") or [], 1):
+                entries.append(DetailEntry(
+                    key="%s:%d" % (key, n), kind=KIND_CALLOUT, value=artifact["value"],
+                    label=artifact["label"], artifact_kind=artifact["kind"]))
+    return entries
 
 
 def kind_of(name):

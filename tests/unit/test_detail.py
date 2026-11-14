@@ -7,6 +7,7 @@ from lightcycle.domain.work.detail import (
     default_detail,
     detail_presents,
     detail_shape_problem,
+    detail_value_is_link,
     detail_value_is_url,
     legacy_presents_key,
     parse_detail,
@@ -193,6 +194,19 @@ class TestDetailValueIsUrl(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestDetailValueIsLink(unittest.TestCase):
+    def test_any_scheme_with_a_rest_is_a_link(self):
+        self.assertTrue(detail_value_is_link("myapp://open?x=1"))
+        self.assertTrue(detail_value_is_link("https://a.b"))
+
+    def test_values_that_are_not_one_scheme_token_are_not_links(self):
+        for value in ("example.com", "a b://x", "myapp://", "https://a.b\nhttps://c.d", "", None):
+            self.assertFalse(detail_value_is_link(value), value)
+
+    def test_the_url_rule_stays_http_only(self):
+        self.assertFalse(detail_value_is_url("myapp://open?x=1"))
 
 
 class TestParkPanelDisplayRules(unittest.TestCase):

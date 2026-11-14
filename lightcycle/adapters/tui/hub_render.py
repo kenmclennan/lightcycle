@@ -205,7 +205,9 @@ DETAIL_FIELD_LABELS = {
 }
 
 
-def _detail_field_label(key):
+def _detail_field_label(key, labels=None):
+    if labels and labels.get(key):
+        return labels[key]
     return DETAIL_FIELD_LABELS.get(key) or key.upper()
 
 
@@ -368,6 +370,14 @@ def _hierarchy_default_row_id(store, node):
         return node.id
     cur = current_step(store, node.id)
     return cur.id if cur is not None else node.id
+
+
+def detail_labels(entries):
+    return {e.key: e.label for e in entries if e.label}
+
+
+def detail_link_keys(entries):
+    return {e.key for e in entries if e.artifact_kind == "link"}
 
 
 def detail_fields(entries):
@@ -795,10 +805,12 @@ def resolve_detail_file(fields, key, fs):
     return path if fs.is_file(path) else None
 
 
-def detail_row_cells(field, layout=None, row_budget=None, titles=None, is_file=False):
+def detail_row_cells(
+    field, layout=None, row_budget=None, titles=None, is_file=False, labels=None, is_link=False,
+):
     key, value = field
-    label = _detail_field_label(key)
-    linked = is_file or key in ("pr", "stack", "spec-pr", "worktree", "ci-checks")
+    label = _detail_field_label(key, labels)
+    linked = is_file or is_link or key in ("pr", "stack", "spec-pr", "worktree", "ci-checks")
     style = COLOURS["cyan"] if linked else COLOURS["text"]
     block = detail_value_is_block(value)
     if layout is not None and layout.stacked:
