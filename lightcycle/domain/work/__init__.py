@@ -44,6 +44,7 @@ from lightcycle.domain.work.timestamp import parse_timestamp
 from lightcycle.domain.work.run_log import (
     guard_log_label,
     hook_log_label,
+    callout_log_label,
     script_log_label,
 )
 from lightcycle.domain.work.worker_log import worker_log_filename
@@ -74,6 +75,7 @@ __all__ = [
     "parse_timestamp",
     "guard_log_label",
     "hook_log_label",
+    "callout_log_label",
     "script_log_label",
     "worker_log_filename",
     "ATTACH_FORBIDDEN_TYPES", "WORKER_VERBS", "worker_permitted",

@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 from lightcycle.application.work.behind_reason import behind_reason
+from lightcycle.application.work.callout_hold import callout_hold_step_ids
 from lightcycle.application.work.gate_hold import GateHold
 from lightcycle.application.work.human_node_row import HumanNodeRow
 from lightcycle.application.work.watched_steps import watched_step_ids
@@ -29,8 +30,8 @@ class InboxUseCase:
 
     def execute(self, input: InboxInput) -> InboxResponse:
         resolver = self._resolver()
-        watched = watched_step_ids(self._store)
-        steps = [t for t in self._store.all_steps() if t.id not in watched]
+        hidden = watched_step_ids(self._store) | callout_hold_step_ids(self._store)
+        steps = [t for t in self._store.all_steps() if t.id not in hidden]
         rows = NodeQueue(steps).for_human(
             resolver, {"action", "blocked"}, input.n)
         return InboxResponse(rows=[self._row(k, o, t, resolver) for (k, o), t in rows])

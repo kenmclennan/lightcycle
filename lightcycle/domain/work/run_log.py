@@ -11,6 +11,10 @@ def script_log_label(step_id):
     return "script-%s" % _safe(step_id)
 
 
+def callout_log_label(step_id, callout_id):
+    return "callout-%s-%s" % (_safe(step_id), _safe(callout_id))
+
+
 def guard_log_label(schedule_id):
     return "guard-%s" % _safe(schedule_id)
 
