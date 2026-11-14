@@ -1327,6 +1327,25 @@ class TestDoctorSchedules(unittest.TestCase):
         config.reload()
         self.assertEqual(config.obsolete_config_keys(), ())
 
+class TestDoctorCallouts(unittest.TestCase):
+    def test_invalid_callout_block_is_reported(self):
+        report = _lifecycle_doctor({}, "callout-x:\n  command: /bin/x\n  subject: step\n")
+
+        found = [p for p in report.problems["config"] if p.kind == "callout-invalid"]
+
+        self.assertTrue(any("subject" in p.message for p in found))
+        self.assertTrue(any("timeout" in p.message for p in found))
+        self.assertTrue(all("callout-x" in p.fix for p in found))
+        self.assertFalse(any(p.kind == "config-key-obsolete" for p in report.problems["config"]))
+
+    def test_a_valid_callout_block_reports_nothing(self):
+        block = "callout-x:\n  command: /bin/x\n  subject: pr\n  wait: false\n  timeout: 5\n"
+
+        report = _lifecycle_doctor({}, block)
+
+        self.assertFalse([p for p in report.problems["config"] if "callout" in p.message])
+
+
 _LIFECYCLE_META = {
     "lifecycle": {"install": "scripts/install.sh"},
     "config": {"api-token": "required"},

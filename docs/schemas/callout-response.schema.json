@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Callout response (protocol 1)",
+  "type": "object",
+  "required": ["status"],
+  "properties": {
+    "status": { "enum": ["ok", "failed"] },
+    "message": { "type": "string" },
+    "artifacts": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "required": ["label", "kind", "value"],
+        "properties": {
+          "label": { "type": "string", "minLength": 1, "maxLength": 80 },
+          "kind": { "enum": ["link", "text", "markdown"] },
+          "value": { "type": "string", "minLength": 1, "maxLength": 65536 }
+        }
+      }
+    }
+  },
+  "if": { "properties": { "status": { "const": "failed" } } },
+  "then": { "required": ["message"], "properties": { "message": { "minLength": 1 } } }
+}

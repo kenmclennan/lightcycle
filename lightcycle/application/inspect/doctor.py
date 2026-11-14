@@ -26,10 +26,11 @@ from lightcycle.domain.pool import HEALTH_IMAGE_STATES, png_size
 from lightcycle.domain.guidance.conventions import (
     CONVENTIONS_VERSION, SKIPPED_NAMES, check_entries,
 )
+from lightcycle.config_callouts import callout_problems
 from lightcycle.frontmatter import split_frontmatter
 from lightcycle.ports.git import GitReadError
 from lightcycle.domain.health import (
-    Problem, blank_key_fix, fsck, obsolete_key_fix, schedule_not_enabled_fix,
+    Problem, blank_key_fix, callout_invalid_fix, fsck, obsolete_key_fix, schedule_not_enabled_fix,
 )
 from lightcycle.domain.health.gh_tooling import gh_tooling_problems
 from lightcycle.domain.health.fork import forks, main_path_stages
@@ -108,7 +109,7 @@ class DoctorUseCase:
             "workflows": self._origin_problems() + self._hook_failure_problems(),
             "config": (
                 self._config_problems() + self._retired_job_problems()
-                + self._schedule_problems() + self._reload_problems() + lifecycle_config),
+                + self._schedule_problems() + self._callout_problems() + self._reload_problems() + lifecycle_config),
             "orphans": self._orphan_problems() + self._layer_branch_problems(nodes),
             "teardown": self._teardown_refusal_problems(),
             "facets": self._guidance_registration_problems() + self._facet_problems(),
@@ -409,6 +410,15 @@ class DoctorUseCase:
             for r in self._schedule_resolver.resolve()
             if r.schedule.source == SOURCE_BUNDLE and r.schedule.workflow in retired
         ]
+
+    def _callout_problems(self):
+        problems = []
+        for callout_id, block in self._config.callout_blocks().items():
+            for text in callout_problems(block, callout_id):
+                problems.append(Problem(
+                    "config", "callout %s: %s" % (callout_id, text),
+                    kind="callout-invalid", fix=callout_invalid_fix(callout_id)))
+        return problems
 
     def _schedule_problems(self):
         return [

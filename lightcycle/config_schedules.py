@@ -1,3 +1,5 @@
+from lightcycle.config_callouts import CALLOUT_KEY_PREFIX
+
 SCHEDULE_KEY_PREFIX = "schedule-"
 WORKFLOW_KEY_PREFIX = "workflow-"
 
@@ -22,4 +24,5 @@ def workflow_config(values, origin, name):
 def is_obsolete_key(key, value, seed_names):
     return (
         key not in seed_names and not key.startswith(SCHEDULE_KEY_PREFIX)
+        and not (key.startswith(CALLOUT_KEY_PREFIX) and isinstance(value, dict))
         and not (key.startswith(WORKFLOW_KEY_PREFIX) and isinstance(value, dict)))

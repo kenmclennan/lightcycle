@@ -25,3 +25,9 @@ def schedule_not_enabled_fix(selector):
         "add a schedule-<id> block to the config with lc config --edit, naming workflow %s and "
         "one of your registered projects (lc schedule list shows the suggested cron and guard); "
         "the upgrade skill walks it" % selector)
+
+
+def callout_invalid_fix(callout_id):
+    return (
+        "edit the callout-%s block with lc config --edit so command, subject, wait and timeout "
+        "are all set and valid; the engine never runs a block with a problem" % callout_id)

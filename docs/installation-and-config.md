@@ -97,6 +97,7 @@ This table documents every `_SEED_KEYS` entry - `tests/unit/test_docs_reference_
 | `script-max-running` | seeded at `4`: how many workflow script stages may run at once; the rest wait for a later tick; must be at least `1` |
 | `schedules-paused` | one switch that pauses every schedule, seeded at `false`: while `true` the pool tick evaluates no guard and files nothing, and a schedule due several times while paused fires at most once after the key goes back to `false`. An unreadable value pauses too. Never changes any schedule's `enabled` line |
 | `schedule-<id>` | a block, one per schedule. A fresh config seeds four, `schedule-retro-audit`, `schedule-material-audit`, `schedule-daily-summary` and `schedule-ratchet-sweep` (workflow `lightcycle/ratchet-sweep`, Mondays 09:00, shortcode `AUD`, guard `repos-active`), enabled and filed under the `guidance` project; on an existing config nothing is added and `lc doctor` reports `schedule-not-enabled` for each retired job you have no block for. Indented `key: value` lines, edited by hand - `lc init` on an existing file, upgrade seeding and `lc doctor` never write or rewrite it. `enabled` (required, `true` or `false`; `false` records the schedule as off and it stays off), `workflow` (required, `<origin>/<name>`), `project` (required, a registered project with a shortcode), `cron` (five-field cron in local time: `*`, numbers, `a-b`, comma lists, `/n` steps; no names or macros), `guard` (`pending-reflections` with `min: <n>`, `materials-changed`, `day-unsummarised`, `repos-active`, or `script:scripts/<file>` - a bundle script, see `docs/architecture.md`), `shortcode` (default the project's), `labels` (space-separated), `name` (optional, `[a-z0-9-]+`: the project every item the schedule files carries, so the inbox and TUI show what the schedule is for while `project` still picks the `repo` and the default shortcode; the seeded blocks carry `audit` or `summary`). `name`, `cron` and `guard` fall back to the workflow bundle's `schedule:` suggestion field by field |
+| `callout-<id>` | a block, one per callout, never seeded and never read from a workflow bundle: indented `key: value` lines edited by hand and reloaded live like `schedule-<id>`. Four keys, all required, none defaulted: `command` (one executable path, `~` expanded, no arguments and no shell), `subject` (`pr`, `description` or `artifact:<name>`), `wait` (`true` holds the gate out of `lc inbox` until the callout finishes or times out) and `timeout` (whole seconds, at least 1). `lc doctor` reports a block with a problem as `callout-invalid`, and the engine never runs it. See `docs/callouts.md` |
 | `workflow-<origin>-<name>` | a block, one per workflow that reads config, never seeded: indented `key: value` lines edited by hand and reloaded live like `schedule-<id>`. The workflow's `config:` front matter declares which keys it reads and which are `required`; `lc doctor` flags a required key that is missing or blank, and two workflows whose names map to one block. Only declared keys reach a hook or schedule guard, as `LC_WORKFLOW_CONFIG_<KEY>`; a script stage and an agent step receive only the declared keys their step file lists in `config: [<key>, ...]` (a script stage as `LC_WORKFLOW_CONFIG_<KEY>`, an agent claim as `workflow_config`, `{}` when none are listed or set) |
 | `guidance-dormant-days` | days without a delivery before `lc guidance` flags a `stable` entry `never-delivered` (an entry never delivered flags only once it has existed that long), seeded at `60`; override with `LC_GUIDANCE_DORMANT_DAYS`; must be `>= 1` |
 | `review-rounds-cap` | consecutive review-reject rounds on one step a workflow's review-rounds-cap transition tolerates before it fires |
@@ -129,6 +130,16 @@ schedule-weekly-audit:
   guard: materials-changed
   shortcode: AUD
   labels: audit weekly
+```
+
+Example callout block:
+
+```yaml
+callout-pr-view:
+  command: ~/bin/render-pr
+  subject: pr
+  wait: false
+  timeout: 60
 ```
 
 `lc schedule list [--json]` shows every schedule (the last text column and the JSON `name` key give its purpose name, `-` or null when none), including bundle suggestions your config does not enable. `lc schedule run <id>` asks the running pool to fire an enabled `schedule-<id>` block on its next tick instead of waiting for the cron: the request is stored, so it survives a pool restart, and `lc schedule list` shows `run requested` until the pool takes it. The guard still decides: the request skips only the cron check, and it is used up once the guard has been evaluated, with the reason written to the pool's stderr when the guard does not pass. The command refuses, recording nothing, for an unknown id, a schedule that is not enabled, `schedules-paused` on, or a schedule with an open item.
