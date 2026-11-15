@@ -1,6 +1,7 @@
 import shlex
 import subprocess
 import sys
+import urllib.parse
 import webbrowser
 
 from lightcycle.ports.launcher import LauncherPort
@@ -8,13 +9,6 @@ from lightcycle.ports.launcher import LauncherPort
 
 def _os_open_command():
     return "open" if sys.platform == "darwin" else "xdg-open"
-
-
-def open_url(url):
-    try:
-        return bool(webbrowser.open(url))
-    except Exception:
-        return False
 
 
 def open_path(path):
@@ -25,6 +19,15 @@ def open_path(path):
     except Exception:
         return False
     return result.returncode == 0
+
+
+def open_url(url):
+    if urllib.parse.urlparse(url).scheme.lower() not in ("http", "https"):
+        return open_path(url)
+    try:
+        return bool(webbrowser.open(url))
+    except Exception:
+        return False
 
 
 def edit(editor, path):

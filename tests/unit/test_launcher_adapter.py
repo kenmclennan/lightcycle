@@ -20,6 +20,36 @@ class TestOpenUrl(unittest.TestCase):
             self.assertFalse(LauncherAdapter().open_url("https://gh/pr/1"))
 
 
+class TestOpenUrlNonWebScheme(unittest.TestCase):
+    URL = "recognizer://open?repo=x&view=y"
+
+    def test_runs_the_os_opener_and_never_the_browser(self):
+        with patch("lightcycle.adapters.launcher.sys.platform", "darwin"), patch(
+            "lightcycle.adapters.launcher.webbrowser.open"
+        ) as mock_browser, patch(
+            "lightcycle.adapters.launcher.subprocess.run", return_value=MagicMock(returncode=0)
+        ) as mock_run:
+            self.assertTrue(LauncherAdapter().open_url(self.URL))
+            mock_run.assert_called_once_with(
+                ["open", self.URL], capture_output=True, check=False, timeout=10
+            )
+            mock_browser.assert_not_called()
+
+    def test_returns_false_on_a_nonzero_exit(self):
+        with patch(
+            "lightcycle.adapters.launcher.subprocess.run", return_value=MagicMock(returncode=1)
+        ):
+            self.assertFalse(LauncherAdapter().open_url(self.URL))
+
+    def test_https_still_goes_to_the_browser(self):
+        with patch("lightcycle.adapters.launcher.webbrowser.open", return_value=True) as mock_open, patch(
+            "lightcycle.adapters.launcher.subprocess.run"
+        ) as mock_run:
+            self.assertTrue(LauncherAdapter().open_url("https://gh/pr/1"))
+            mock_open.assert_called_once_with("https://gh/pr/1")
+            mock_run.assert_not_called()
+
+
 class TestOpenPath(unittest.TestCase):
     def test_uses_open_on_macos(self):
         with patch("lightcycle.adapters.launcher.sys.platform", "darwin"), patch(
