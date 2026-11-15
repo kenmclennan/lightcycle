@@ -1,5 +1,7 @@
 from lightcycle.domain.contracts.step_contract import StepContract
-from lightcycle.domain.flow.hooks import HOOK_MIN_ARITY, PR_FEEDBACK, cap_target_occurrences
+from lightcycle.domain.flow.hooks import (
+    HOOK_MIN_ARITY, PR_FEEDBACK, PR_FEEDBACK_ROUTE, cap_target_occurrences,
+)
 from lightcycle.domain.work.detail import (
     EXECUTION_FIELDS,
     IN_PREFIX,
@@ -180,6 +182,44 @@ class FlowContracts:
             self._collect_unresolved_hook_target(unresolved, hook, occ, target_index, known)
         return sorted(unresolved)
 
+    def feedback_route_problems(self):
+        graph = self._graph
+        gates_of = {}
+        for occ in graph.hook_occurrences(PR_FEEDBACK):
+            if len(occ) >= HOOK_MIN_ARITY[PR_FEEDBACK]:
+                gates_of.setdefault(occ[1], []).append(occ[0])
+        problems = []
+        for occ in graph.hook_occurrences(PR_FEEDBACK_ROUTE):
+            if len(occ) < HOOK_MIN_ARITY[PR_FEEDBACK_ROUTE]:
+                continue
+            stage, outcome, watched = occ[0], occ[1], occ[2]
+            gates = gates_of.get(stage, [])
+            if not gates:
+                problems.append((
+                    stage, outcome,
+                    "%s is not the feedback step of any pr_feedback hook, so it watches no gate"
+                    % stage))
+            if outcome not in (graph.edges.get(stage) or {}):
+                problems.append((
+                    stage, outcome, "%s is not an outcome of %s (no edges: line)" % (outcome, stage)))
+            for gate in gates:
+                gate_edges = graph.edges.get(gate) or {}
+                if watched not in gate_edges:
+                    problems.append((
+                        stage, outcome,
+                        "%s does not accept the outcome %s that %s would close it with"
+                        % (gate, watched, outcome)))
+                elif not gate_edges[watched]:
+                    problems.append((
+                        stage, outcome,
+                        "%s routes %s to no next step, so the routed close would leave "
+                        "nothing to work on" % (gate, watched)))
+                elif graph.ends_pass(gate, watched):
+                    problems.append((
+                        stage, outcome,
+                        "%s %s ends the pass, which a routed close cannot undo" % (gate, watched)))
+        return sorted(problems)
+
     def malformed_hook_occurrences(self):
         malformed = []
         for hook, min_len in HOOK_MIN_ARITY.items():
@@ -271,6 +311,7 @@ class FlowContracts:
             and not self.hook_phase_mismatches()
             and not self.unresolved_hook_targets()
             and not self.malformed_hook_occurrences()
+            and not self.feedback_route_problems()
             and not self.presents_problems()
             and not self.detail_problems()
         )
@@ -296,6 +337,7 @@ class FlowContracts:
             "hook_phase_mismatches": self.hook_phase_mismatches(),
             "unresolved_hook_targets": self.unresolved_hook_targets(),
             "malformed_hook_occurrences": self.malformed_hook_occurrences(),
+            "feedback_route_problems": self.feedback_route_problems(),
             "presents_problems": self.presents_problems(),
             "detail_problems": self.detail_problems(),
             "ok": self.ok(),

@@ -5,6 +5,7 @@ from contextlib import redirect_stderr, redirect_stdout
 
 from lightcycle import cli
 from lightcycle.commands import flow as flow_cmds
+from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
 from tests.support.fake_workers import FakeWorkers
 from tests.support.step_factory import create_owned_step
@@ -33,7 +34,7 @@ class _Container:
         self.git = None
         self.fs = None
         self.workflow_source = None
-        self.workflow_bundle = None
+        self.workflow_bundle = FakeFs()
         self.scaffold = None
 
 

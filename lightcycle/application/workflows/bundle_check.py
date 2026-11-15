@@ -87,6 +87,8 @@ def check_bundle_references(bundle):
             messages.append(
                 "%s on %r has %d token(s), needs at least %d" % (hook, gate, got, want)
             )
+        for stage, outcome, problem in contracts.feedback_route_problems():
+            messages.append("pr_feedback_route on %r %r: %s" % (stage, outcome, problem))
         for frm, outcome, target in contracts.undeclared_edge_targets():
             messages.append(undeclared_target_message(frm, outcome, target))
         if contracts.unknown_display():

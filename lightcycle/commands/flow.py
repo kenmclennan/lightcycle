@@ -15,7 +15,9 @@ from lightcycle.application.work import (
     ReopenItemInput,
     ReopenItemUseCase,
 )
-from lightcycle.application.errors import UseCaseError
+from lightcycle.application.errors import RouteUnavailable, UseCaseError
+from lightcycle.application.flow.feedback_route import FeedbackRoute
+from lightcycle.application.flow.refused_route import RefusedRoute
 from lightcycle.application.pool.halt_step import HaltInput, HaltStepUseCase
 from lightcycle.application.work.refuse_held_step import RefuseHeldStepUseCase
 from lightcycle.application.work.refuse_gate_hold import RefuseGateHoldUseCase
@@ -91,6 +93,11 @@ def _log_teardown_refusal(message):
     container().worker_log.append_run_log("%s  %-7s  %s\n" % (ts, "refused", message))
 
 
+def _record_refused_route(step_id, outcome, route):
+    if route is not None:
+        RefusedRoute(container().store).record(step_id, outcome)
+
+
 def cmd_done(argv):
     a = build_parser(COMMANDS["done"]).parse_args(argv)
     note = " ".join(a.note) if a.note else None
@@ -98,6 +105,9 @@ def cmd_done(argv):
     if node_type is None:
         sys.stderr.write("unknown node '%s'\n" % a.id)
         return 1
+    route = None
+    if node_type == "step":
+        route = FeedbackRoute.watched_close(container().store, _flow(), a.id, a.outcome)
     given = set()
     if note:
         given.add("note")
@@ -105,14 +115,18 @@ def cmd_done(argv):
         given.add("disposition")
     refusal = refuse_fields(node_type, given, table=DONE_FIELDS_BY_TYPE)
     if refusal is not None:
+        _record_refused_route(a.id, a.outcome, route)
         sys.stderr.write("%s\n" % render_field_refusal(refusal))
         return 2
     rc = refuse_over_cap([("--note", note)])
     if rc is not None:
+        _record_refused_route(a.id, a.outcome, route)
         return rc
     try:
         if node_type == "step":
             RefuseGateHoldUseCase(container().store).execute(a.id)
+            if route is not None and route[0] is not None:
+                RefuseGateHoldUseCase(container().store).execute(route[0])
             gate = RecordMergedGateRunUseCase(
                 container().store, container().github, _flow())
             gate_input = RecordMergedGateRunInput(step=a.id, outcome=a.outcome)
@@ -145,6 +159,8 @@ def cmd_done(argv):
                 CloseItemInput(item=a.id, reason=a.outcome, disposition=disposition, note=note)
             )
     except UseCaseError as e:
+        if not isinstance(e, RouteUnavailable):
+            _record_refused_route(a.id, a.outcome, route)
         sys.stderr.write("%s\n" % e)
         if isinstance(e, TeardownRefused):
             _log_teardown_refusal(str(e))

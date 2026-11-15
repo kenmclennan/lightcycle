@@ -18,9 +18,12 @@ _MENTION_TIME = 1500.0
 _WORKFLOW_TEXT = (
     "entry: await-merge\n\n"
     "edges:\n"
-    "  await-merge  changes  await-merge\n\n"
+    "  await-merge  changes  await-merge\n"
+    "  handle-feedback  done\n"
+    "  handle-feedback  rework\n\n"
     "hooks:\n"
     "  pr_feedback    await-merge  handle-feedback\n"
+    "  pr_feedback_route  handle-feedback  rework  changes\n"
     "  mention_token  await-merge  @lc\n"
 )
 
@@ -138,6 +141,30 @@ def _routes_and_closes(ctx, outcome):
     fb_id = json.loads(out)["id"]
     rc, out, err = ctx["h"].run("done", fb_id, "done")
     assert rc == 0, err
+
+
+@when(parsers.parse('the handle-feedback step closes with "{outcome}" and a note'))
+def _closes_with_routing_outcome(ctx, outcome):
+    rc, out, err = ctx["h"].run("claim", "agent")
+    assert rc == 0, err
+    fb_id = json.loads(out)["id"]
+    rc, out, err = ctx["h"].run("done", fb_id, outcome, "--note", "rework needed")
+    assert rc == 0, err
+    ctx["fb_step"] = fb_id
+
+
+@then(parsers.parse('the watched step is closed with outcome "{outcome}"'))
+def _watched_closed_with(ctx, outcome):
+    node = ctx["h"].store.get_node(ctx["watched_step"])
+    assert node.state == State.DONE
+    assert node.outcome == outcome
+
+
+@then(parsers.parse('the handle-feedback step is closed with outcome "{outcome}"'))
+def _fb_closed_with(ctx, outcome):
+    node = ctx["h"].store.get_node(ctx["fb_step"])
+    assert node.state == State.DONE
+    assert node.outcome == outcome
 
 
 @then("the watched step is not in the human inbox")

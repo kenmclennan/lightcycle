@@ -12,6 +12,7 @@ from lightcycle.domain.flow.hooks import (
     PR_HEAD_MOVED,
     PR_STACK_SHAPE,
     PR_FEEDBACK,
+    PR_FEEDBACK_ROUTE,
     PR_MERGE,
     parse_caps,
 )
@@ -34,6 +35,7 @@ class StepDef:
     ci_failure: Optional[str] = None
     mention_token: Optional[str] = None
     caps: dict = field(default_factory=dict)
+    feedback_routes: dict = field(default_factory=dict)
     workspace: Optional[str] = None
     phase: Optional[str] = None
     hooks: frozenset = frozenset()
@@ -51,6 +53,8 @@ class StepDef:
     def __post_init__(self):
         object.__setattr__(self, "routes", MappingProxyType(dict(self.routes)))
         object.__setattr__(self, "caps", MappingProxyType(dict(self.caps)))
+        object.__setattr__(
+            self, "feedback_routes", MappingProxyType(dict(self.feedback_routes)))
 
     @classmethod
     def from_graph(cls, graph, stage) -> "StepDef":
@@ -60,11 +64,17 @@ class StepDef:
                     return occ[index]
             return None
 
+        feedback_routes = {
+            occ[1]: occ[2]
+            for occ in graph.hook_occurrences(PR_FEEDBACK_ROUTE)
+            if occ[0] == stage and len(occ) >= HOOK_MIN_ARITY[PR_FEEDBACK_ROUTE]
+        }
+
         hooks = frozenset(
             "on_" + name
             for name, occs in graph.hooks.items()
             for occ in occs
-            if occ and occ[0] == stage
+            if occ and occ[0] == stage and name != PR_FEEDBACK_ROUTE
         )
 
         return cls(
@@ -79,6 +89,7 @@ class StepDef:
             ci_failure=first(CI_FAILURE),
             mention_token=first(MENTION_TOKEN),
             caps=parse_caps(graph, stage),
+            feedback_routes=feedback_routes,
             workspace=graph.workspaces.get(stage),
             phase=graph.phases.get(stage),
             hooks=hooks,

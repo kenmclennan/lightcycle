@@ -26,6 +26,7 @@ edges:
 hooks:
   pr_merge              ready-merge  merged
   pr_feedback           ready-merge  handle-feedback
+  pr_feedback_route     handle-feedback  rework  changes
   pr_conflict           ready-merge  conflicted
   pr_head_moved         ready-merge  head-moved
   pr_stack_shape        ready-merge  stack-shape
@@ -56,6 +57,14 @@ class TestFlowFromGraph(unittest.TestCase):
     def setUp(self):
         self.graph = parse_graph(GRAPH_TEXT)
         self.flow = Flow.from_graph(self.graph, STEP_METAS)
+
+    def test_pr_feedback_route_parses_into_the_feedback_stage_routes(self):
+        self.assertEqual(
+            dict(self.flow.step_def("handle-feedback").feedback_routes), {"rework": "changes"})
+
+    def test_a_stage_with_no_pr_feedback_route_has_none(self):
+        self.assertEqual(dict(self.flow.step_def("build").feedback_routes), {})
+        self.assertEqual(dict(self.flow.step_def("ready-merge").feedback_routes), {})
 
     def test_a_stage_whose_step_file_declares_a_model_is_owned_by_the_agent_role(self):
         self.assertEqual(self.flow.step_def("build").owner, "agent")
