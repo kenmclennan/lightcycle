@@ -4,6 +4,7 @@ from typing import Callable, Optional
 PR_MERGE = "pr_merge"
 PR_CLOSE = "pr_close"
 PR_FEEDBACK = "pr_feedback"
+PR_FEEDBACK_ROUTE = "pr_feedback_route"
 PR_CONFLICT = "pr_conflict"
 PR_HEAD_MOVED = "pr_head_moved"
 PR_STACK_SHAPE = "pr_stack_shape"
@@ -20,6 +21,7 @@ HOOK_MIN_ARITY = {
     PR_MERGE: 2,
     PR_CLOSE: 2,
     PR_FEEDBACK: 2,
+    PR_FEEDBACK_ROUTE: 3,
     PR_CONFLICT: 2,
     PR_HEAD_MOVED: 2,
     PR_STACK_SHAPE: 2,
