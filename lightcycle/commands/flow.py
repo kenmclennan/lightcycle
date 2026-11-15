@@ -16,6 +16,7 @@ from lightcycle.application.work import (
     ReopenItemUseCase,
 )
 from lightcycle.application.errors import UseCaseError
+from lightcycle.application.flow.feedback_route import FeedbackRoute
 from lightcycle.application.pool.halt_step import HaltInput, HaltStepUseCase
 from lightcycle.application.work.refuse_held_step import RefuseHeldStepUseCase
 from lightcycle.application.work.refuse_gate_hold import RefuseGateHoldUseCase
@@ -98,6 +99,9 @@ def cmd_done(argv):
     if node_type is None:
         sys.stderr.write("unknown node '%s'\n" % a.id)
         return 1
+    route = None
+    if node_type == "step":
+        route = FeedbackRoute.watched_close(container().store, _flow(), a.id, a.outcome)
     given = set()
     if note:
         given.add("note")
@@ -113,6 +117,8 @@ def cmd_done(argv):
     try:
         if node_type == "step":
             RefuseGateHoldUseCase(container().store).execute(a.id)
+            if route is not None and route[0] is not None:
+                RefuseGateHoldUseCase(container().store).execute(route[0])
             gate = RecordMergedGateRunUseCase(
                 container().store, container().github, _flow())
             gate_input = RecordMergedGateRunInput(step=a.id, outcome=a.outcome)

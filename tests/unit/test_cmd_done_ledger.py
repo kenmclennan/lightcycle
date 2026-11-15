@@ -8,7 +8,10 @@ from lightcycle.application.errors import UseCaseError
 from lightcycle.commands import flow as flow_cmds
 from tests.support.fake_store import FakeStore
 from tests.support.step_factory import create_owned_step
+from lightcycle.application.work.gate_hold import GateHold
+from lightcycle.domain.work import State
 from tests.unit.test_cmd_close import _Container
+from tests.unit.test_feedback_routed_close import flow_service, outcome_notes, world
 
 
 def _call(fn, *args):
@@ -88,3 +91,48 @@ class TestCmdDonePassesMergedPrsToComplete(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         sent = complete.return_value.execute.call_args[0][0]
         self.assertEqual(sent.merged_prs, frozenset({"https://x/pull/1"}))
+
+
+class _SpawnlessConfig:
+    def max_title_length(self):
+        return 200
+
+    def spawn_id(self):
+        return None
+
+
+class TestCmdDoneRoutedFeedbackClose(unittest.TestCase):
+    def setUp(self):
+        self.store, self.item, self.gate, self.fb = world()
+        container = _ClockedContainer(self.store)
+        container.config = _SpawnlessConfig()
+        cli.set_container(container)
+        self.addCleanup(cli.set_container, None)
+        patch = mock.patch.object(
+            flow_cmds, "_flow", return_value=flow_service(self.store))
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def _assert_both_unchanged(self):
+        self.assertEqual(self.store.get_node(self.fb).state, State.RUNNING)
+        self.assertEqual(self.store.get_node(self.gate).state, State.WAITING)
+        self.assertEqual(outcome_notes(self.store, self.fb), [])
+        self.assertEqual(outcome_notes(self.store, self.gate), [])
+
+    def test_a_routed_close_with_a_note_over_the_caps_leaves_both_steps_unchanged(self):
+        self._assert_both_unchanged()
+
+        rc, out, err = _call(cli.cmd_done, self.fb, "rework", "--note", " ".join(["word"] * 60))
+
+        self.assertEqual(rc, 2)
+        self._assert_both_unchanged()
+
+    def test_a_routed_close_on_a_held_gate_is_refused_and_leaves_both_steps_unchanged(self):
+        GateHold(self.store).place(self.gate, "held for a decision")
+        self._assert_both_unchanged()
+
+        rc, out, err = _call(cli.cmd_done, self.fb, "rework", "--note", "fix the thing")
+
+        self.assertEqual(rc, 1)
+        self.assertIn(self.gate, err)
+        self._assert_both_unchanged()

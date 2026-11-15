@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import FrozenSet, Optional
 
-from lightcycle.application.errors import UseCaseError
+from lightcycle.application.errors import RouteUnavailable, UseCaseError
 from lightcycle.application.flow.escapes import EscapeRecorder
 from lightcycle.application.flow.engine_steps import (
     AUDIT_STEP, DAILY_SUMMARY_STEP, FINDINGS_STEP, HELD_COMMENT_ORIGIN_LABEL, HELD_COMMENT_STEP,
@@ -11,6 +11,7 @@ from lightcycle.application.flow.engine_steps import (
 from lightcycle.domain.feedback import RETROED_LABEL
 from lightcycle.domain.flow.hooks import CI_FAILED_CAP
 from lightcycle.application.flow.next_step import NextStepResolver
+from lightcycle.application.flow.feedback_route import FeedbackRoute
 from lightcycle.application.flow.passes import PassBook
 from lightcycle.application.flow.rebase_retries import earlier_rebase_retries, repeated_checks
 from lightcycle.application.flow.schedule_completion import ScheduleCompletion
@@ -184,6 +185,37 @@ class CompleteStepUseCase:
         if repair:
             return self._complete(
                 t, input, writes=self._workflow_writes(t, input, None, True), repair=True)
+        route = FeedbackRoute.watched_close(self._store, self._flow, t.id, input.outcome)
+        if route is not None:
+            return self._complete_routed(t, input, name, route)
+        return self._complete_unrouted(t, input, name)
+
+    def _complete_routed(self, t, input: CompleteInput, name, route) -> CompleteResponse:
+        watched_id, watched_outcome = route
+        if watched_id is None:
+            raise RouteUnavailable(
+                "%s watches no gate, so there is nothing to route %s to; close it done instead."
+                % (t.id, input.outcome)
+            )
+        watched = self._store.get_node(watched_id)
+        if watched is None or watched.state == State.DONE:
+            raise RouteUnavailable(
+                "%s is already done (outcome %s), so there is nothing to route %s to; "
+                "close %s done instead."
+                % (watched_id, getattr(watched, "outcome", None), input.outcome, t.id)
+            )
+        with self._store.transaction():
+            routed = self.execute(
+                CompleteInput(step=watched_id, outcome=watched_outcome, note=input.note))
+            if routed.next_step is None:
+                raise UseCaseError(
+                    "could not close %s with %s for %s; nothing was stored."
+                    % (watched_id, watched_outcome, input.outcome)
+                )
+            response = self._complete_unrouted(t, input, name)
+        return response
+
+    def _complete_unrouted(self, t, input: CompleteInput, name) -> CompleteResponse:
         self._refuse_repeated_rebase(t, input, name)
         transition = self._resolver.resolve(t, input.outcome, name)
         declared = self._flow.outcomes_for(t.stage, name)

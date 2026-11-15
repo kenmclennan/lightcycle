@@ -31,6 +31,13 @@ Feature: The PR-feedback cycle spawns and settles handle-feedback steps
     And the handle-feedback step is marked done without clearing the feedback
     Then the watched step is in the human inbox
 
+  Scenario: A rework close routes the watched step in one transition
+    When the pool ticks
+    And the handle-feedback step closes with "rework" and a note
+    Then the watched step is closed with outcome "changes"
+    And the handle-feedback step is closed with outcome "rework"
+    And a fresh await-merge step is in the human inbox
+
   Scenario: A reworked PR returns the item to a fresh await-merge step in the human inbox
     When the pool ticks
     And the handle-feedback step routes the watched step to "changes" and closes
