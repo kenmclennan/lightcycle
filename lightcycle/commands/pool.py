@@ -44,8 +44,10 @@ def cmd_ps(argv):
 
 def cmd_sweep(argv):
     build_parser(COMMANDS["sweep"]).parse_args(argv)
+    now = time.time()
+    sleeps = container().observe_sleep().execute(now, time.monotonic())
     result = container().sweep().execute(
-        time.time(), container().config.max_boot_seconds(), container().config.stall_seconds()
+        now, container().config.max_boot_seconds(), container().config.stall_seconds(), sleeps
     )
     for bid in result.swept:
         print("swept %s" % bid)

@@ -13,6 +13,7 @@ from tests.support.fake_fs import FakeFs
 from tests.support.fake_git import FakeGit
 from tests.support.fake_github import FakeGitHub
 from tests.support.fake_github_budget_status import FakeGithubBudgetStatus
+from tests.support.fake_sleep_ledger import FakeSleepLedger
 from tests.support.fake_tick_timing_status import FakeTickTimingStatus
 from tests.support.fake_github_poll_runner import (
     BlockingGithubPollRunner,
@@ -145,6 +146,7 @@ class PoolRig:
                 fakes.pop("github_budget_status", None) or FakeGithubBudgetStatus()),
             "tick_timing_status": (
                 fakes.pop("tick_timing_status", None) or FakeTickTimingStatus()),
+            "sleep_ledger": fakes.pop("sleep_ledger", None) or FakeSleepLedger(),
         }
         self._extras.update(fakes)
         self.config = _write_config(self.home, config or {})
@@ -162,7 +164,7 @@ class PoolRig:
             config=self.config, store=self.store, git=self.git, spawner=self.spawner,
             workers=self.workers, fs=self.fs, github=self.github,
             github_poll_runner=self.poll_runner, script_runner=self.script_runner,
-            run_groups=self.run_groups, clock=self.clock, monotonic=self.clock,
+            run_groups=self.run_groups, clock=self.clock, monotonic=getattr(self.clock, "awake", self.clock),
             **self._extras)
         return Container(**{k: v for k, v in wanted.items() if k in params and v is not None})
 

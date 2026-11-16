@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Optional
 
+from lightcycle.domain.pool.sleep import awake_elapsed
+
 
 @dataclass(frozen=True)
 class Worker:
@@ -31,13 +33,13 @@ class Worker:
     def is_alive(self, probe):
         return bool(probe(self.pid if self.pid is not None else -1, self.pid_started))
 
-    def is_booting(self, now, max_boot):
-        return self.step is None and (now - self.started) < max_boot
+    def is_booting(self, now, max_boot, sleeps=()):
+        return self.step is None and awake_elapsed(self.started, now, sleeps) < max_boot
 
-    def is_stalled(self, now, max_boot, stall_seconds, mtime_probe):
-        if self.step is None or self.is_booting(now, max_boot):
+    def is_stalled(self, now, max_boot, stall_seconds, mtime_probe, sleeps=()):
+        if self.step is None or self.is_booting(now, max_boot, sleeps):
             return False
         mtime = mtime_probe(self.log)
         if mtime is None:
             return False
-        return (now - mtime) > stall_seconds
+        return awake_elapsed(mtime, now, sleeps) > stall_seconds

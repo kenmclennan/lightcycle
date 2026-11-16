@@ -94,7 +94,7 @@ class SweepUseCase:
             return True
         return False
 
-    def execute(self, now, max_boot, stall_seconds) -> SweepResponse:
+    def execute(self, now, max_boot, stall_seconds, sleeps=()) -> SweepResponse:
         probe = self._workers.pid_alive
         try:
             pool = WorkerPool(self._workers.workers_state())
@@ -106,11 +106,12 @@ class SweepUseCase:
         pre_claim_dead = pool.dead_steps_outside(probe, claimed_ids)
         covered = pool.covered_steps(probe)
         live_spawnids = pool.live_spawnids(probe)
-        booting = pool.any_booting(probe, now, max_boot)
+        booting = pool.any_booting(probe, now, max_boot, sleeps)
         stalled = [
             w
             for w in pool.stalled(
-                probe, now, max_boot, stall_seconds, lambda path: self._worker_log.log_mtime(path)
+                probe, now, max_boot, stall_seconds,
+                lambda path: self._worker_log.log_mtime(path), sleeps,
             )
             if claimed_owner.get(w.step) == w.spawnid
         ]
@@ -159,7 +160,7 @@ class SweepUseCase:
             last_line = self._last_nonempty_line(lines)
             if self._advance_spin(step_id, now, no_work, last_line, dead.spawnid):
                 parked.append(step_id)
-        orphans = pool.orphans(probe, now, max_boot, claimed_owner)
+        orphans = pool.orphans(probe, now, max_boot, claimed_owner, sleeps)
         for w in orphans:
             self._workers.kill(w.pid)
         try:

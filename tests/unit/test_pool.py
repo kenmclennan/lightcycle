@@ -97,7 +97,7 @@ class CountingMonitor:
     def __init__(self):
         self.calls = 0
 
-    def execute(self):
+    def execute(self, sleeps=()):
         self.calls += 1
         return NoOpMonitor().execute()
 
@@ -118,7 +118,7 @@ class FakeBreakerGate:
         self._breaker = breaker
         self._spin_open = spin_open
 
-    def execute(self, now):
+    def execute(self, now, sleeps=()):
         return BreakerGateResponse(breaker=self._breaker, spin_open=self._spin_open)
 
 
@@ -744,6 +744,81 @@ class TestSweep(unittest.TestCase):
         self.assertEqual(workers.checked, ["stalled-sp"])
         self.assertIn(step, result.swept)
         self.assertEqual(s.get_node(step).state, "queued")
+
+    def _quiet_worker(self, started=100):
+        s = FakeStore()
+        step = create_owned_step(s, "t", stage="build", role="agent")
+        s.update_state(step, "in_progress")
+        s.assign(step, "quiet-sp")
+        workers = FakeWorkers(
+            workers=[
+                {"spawnid": "quiet-sp", "pid": 999, "step": step, "started": started,
+                 "log": "/l/1.log"}
+            ],
+            alive_pids={999},
+        )
+        return s, step, workers
+
+    def test_a_two_hour_suspend_reclaims_no_quiet_worker(self):
+        t0 = 10000
+        now = t0 + 7210
+        s, step, workers = self._quiet_worker()
+        fs = FakeFs(log_mtimes={"/l/1.log": t0})
+        sleeps = ((t0 + 10, t0 + 7210),)
+
+        result = make_sweep(s, workers, worker_log=fs, stream=ClaudeStreamAdapter()).execute(
+            now=now, max_boot=120, stall_seconds=1800, sleeps=sleeps)
+
+        self.assertEqual(workers.killed, [])
+        self.assertEqual(result.swept, [])
+
+    def test_a_two_hour_suspend_without_the_ledger_would_kill_it(self):
+        t0 = 10000
+        s, step, workers = self._quiet_worker()
+        fs = FakeFs(log_mtimes={"/l/1.log": t0})
+
+        result = make_sweep(s, workers, worker_log=fs, stream=ClaudeStreamAdapter()).execute(
+            now=t0 + 7210, max_boot=120, stall_seconds=1800)
+
+        self.assertEqual(workers.killed, [999])
+        self.assertIn(step, result.swept)
+
+    def test_a_worker_quiet_for_the_limit_is_stalled_only_past_it(self):
+        t0 = 10000
+        sleeps = ((t0 + 100, t0 + 7100),)
+        for awake_quiet, killed in ((1800, []), (1801, [999])):
+            s, step, workers = self._quiet_worker()
+            fs = FakeFs(log_mtimes={"/l/1.log": t0})
+            make_sweep(s, workers, worker_log=fs, stream=ClaudeStreamAdapter()).execute(
+                now=t0 + 7000 + awake_quiet, max_boot=120, stall_seconds=1800, sleeps=sleeps)
+            self.assertEqual(workers.killed, killed, awake_quiet)
+
+    def test_pre_suspend_quiet_plus_post_wake_quiet_is_stalled(self):
+        t0 = 10000
+        s, step, workers = self._quiet_worker()
+        fs = FakeFs(log_mtimes={"/l/1.log": t0})
+        sleeps = ((t0 + 1700, t0 + 8900),)
+
+        make_sweep(s, workers, worker_log=fs, stream=ClaudeStreamAdapter()).execute(
+            now=t0 + 9001, max_boot=120, stall_seconds=1800, sleeps=sleeps)
+
+        self.assertEqual(workers.killed, [999])
+
+    def test_a_booting_worker_is_not_orphaned_across_a_suspend(self):
+        started = 10000
+        s = FakeStore()
+        workers = FakeWorkers(
+            workers=[{"spawnid": "boot-sp", "pid": 999, "step": None, "started": started,
+                      "log": "/l/1.log"}],
+            alive_pids={999},
+        )
+        sleeps = ((started + 10, started + 7200),)
+
+        result = make_sweep(s, workers, worker_log=FakeFs(), stream=ClaudeStreamAdapter()).execute(
+            now=started + 7210, max_boot=120, stall_seconds=1800, sleeps=sleeps)
+
+        self.assertEqual(workers.killed, [])
+        self.assertEqual(result.killed, [])
 
     def test_leaves_a_worker_alone_whose_log_grew_within_the_stall_threshold(self):
         s = FakeStore()
@@ -1445,7 +1520,7 @@ class _Monitor:
     def __init__(self, response):
         self._response = response
 
-    def execute(self):
+    def execute(self, sleeps=()):
         return self._response
 
 
