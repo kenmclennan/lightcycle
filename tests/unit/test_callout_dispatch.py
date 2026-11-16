@@ -412,3 +412,63 @@ class _DetailFlow:
 
     def phase_for(self, node):
         return None
+
+
+class TestSuspendRetry(unittest.TestCase):
+    TIMED_OUT = ScriptResult(exit_code=None, timed_out=True, started_at=100.0, finished_at=500.0)
+    ACROSS = ((200.0, 400.0),)
+
+    def _run_phase(self):
+        rig = CalloutRig([callout("a", "pr")])
+        step = rig.gate()
+        rig.use_case.execute(100)
+        rig.pass_preflight(step, 101)
+        return rig, step
+
+    def test_a_run_timeout_across_a_suspend_restarts_once(self):
+        rig, step = self._run_phase()
+        started = len(rig.runner.started)
+        rig.runner.finish(rig.key(step), self.TIMED_OUT)
+
+        rig.use_case.execute(102, self.ACROSS)
+
+        record = rig.records(step)["a"]
+        self.assertEqual(record["status"], "running")
+        self.assertTrue(record["suspend_retried"])
+        self.assertEqual(len(rig.runner.started), started + 1)
+        self.assertEqual(rig.stdin(started)["verb"], "run")
+
+    def test_a_preflight_timeout_across_a_suspend_restarts_once(self):
+        rig = CalloutRig([callout("a", "pr")])
+        step = rig.gate()
+        rig.use_case.execute(100)
+        rig.runner.finish(rig.preflight_key(step), self.TIMED_OUT)
+
+        rig.use_case.execute(102, self.ACROSS)
+
+        record = rig.records(step)["a"]
+        self.assertEqual((record["status"], record["phase"]), ("running", "preflight"))
+        self.assertTrue(record["suspend_retried"])
+        self.assertEqual(len(rig.runner.started), 2)
+        self.assertEqual(rig.stdin(1)["verb"], "preflight")
+
+    def test_a_second_callout_timeout_fails(self):
+        rig, step = self._run_phase()
+        rig.runner.finish(rig.key(step), self.TIMED_OUT)
+        rig.use_case.execute(102, self.ACROSS)
+        rig.runner.finish(rig.key(step), self.TIMED_OUT)
+
+        rig.use_case.execute(103, self.ACROSS)
+
+        record = rig.records(step)["a"]
+        self.assertEqual(record["status"], "failed")
+        self.assertIn("timed out", record["message"])
+
+    def test_a_timeout_with_no_suspend_fails_at_once(self):
+        rig, step = self._run_phase()
+        rig.runner.finish(rig.key(step), self.TIMED_OUT)
+
+        rig.use_case.execute(102)
+
+        self.assertEqual(rig.records(step)["a"]["status"], "failed")
+

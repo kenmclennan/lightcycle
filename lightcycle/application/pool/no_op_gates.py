@@ -19,7 +19,7 @@ from lightcycle.ports.git import GitReadError
 
 
 class NoOpMonitor:
-    def execute(self):
+    def execute(self, sleeps=()):
         return MonitorPrsResponse(merged=[])
 
 
@@ -64,7 +64,7 @@ class NoOpGhCallGate:
 
 
 class NoOpScriptGate:
-    def execute(self, now):
+    def execute(self, now, sleeps=()):
         return ScriptStagesResponse()
 
     def reset(self):
@@ -85,12 +85,12 @@ class NoOpStrandedGate:
 
 
 class NoOpCalloutGate:
-    def execute(self, now):
+    def execute(self, now, sleeps=()):
         return CalloutDispatchResponse()
 
 
 class NoOpBreakerGate:
-    def execute(self, now):
+    def execute(self, now, sleeps=()):
         return BreakerGateResponse(breaker=Breaker())
 
 

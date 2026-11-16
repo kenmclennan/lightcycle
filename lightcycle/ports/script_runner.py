@@ -10,6 +10,8 @@ class ScriptResult:
     stderr_tail: str = ""
     timed_out: bool = False
     log_path: Optional[str] = None
+    started_at: Optional[float] = None
+    finished_at: Optional[float] = None
 
 
 class ScriptRunnerPort(ABC):

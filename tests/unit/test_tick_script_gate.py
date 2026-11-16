@@ -17,7 +17,7 @@ class RecordingScriptGate:
         self.resets = 0
         self.fail = fail
 
-    def execute(self, now):
+    def execute(self, now, sleeps=()):
         self.seen.append(now)
         if self.fail:
             raise self.fail

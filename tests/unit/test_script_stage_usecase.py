@@ -448,6 +448,59 @@ class TestViolationsPark(unittest.TestCase):
         self.assertEqual(rig.gate.execute(2).started, [])
 
 
+class TestSuspendRetry(unittest.TestCase):
+    TIMED_OUT = ScriptResult(exit_code=None, timed_out=True, started_at=100.0, finished_at=500.0)
+
+    def _reaped(self, rig, step, result, sleeps):
+        rig.runner.finish(rig.key(step), result)
+        return rig.gate.execute(1, sleeps)
+
+    def test_a_timeout_across_a_suspend_is_requeued_once(self):
+        rig = Rig()
+        step = rig.step()
+        rig.gate.execute(0)
+
+        resp = self._reaped(rig, step, self.TIMED_OUT, ((200.0, 400.0),))
+
+        node = rig.store.get_node(step)
+        self.assertEqual(resp.parked, [])
+        self.assertEqual(node.state, State.QUEUED)
+        self.assertTrue(is_engine_step(node))
+        self.assertEqual(len(rig.runner.started), 2)
+        marks = [a for a in rig.store.item_artifacts(step) if a.type == "suspend-retry"]
+        self.assertEqual([(a.value, a.internal) for a in marks], [("1", True)])
+        self.assertIn("re-queued once", node.notes or "")
+
+    def test_a_second_timeout_parks(self):
+        rig = Rig()
+        step = rig.step()
+        rig.gate.execute(0)
+        self._reaped(rig, step, self.TIMED_OUT, ((200.0, 400.0),))
+
+        resp = self._reaped(rig, step, self.TIMED_OUT, ((200.0, 400.0),))
+
+        self.assertEqual(resp.parked, ["step:%s" % step])
+        self.assertEqual(rig.store.get_node(step).role, "human")
+
+    def test_a_timeout_with_no_suspend_parks(self):
+        rig = Rig()
+        step = rig.step()
+        rig.gate.execute(0)
+
+        resp = self._reaped(rig, step, self.TIMED_OUT, ())
+
+        self.assertEqual(resp.parked, ["step:%s" % step])
+
+    def test_a_sleep_ending_exactly_at_the_start_parks_at_once(self):
+        rig = Rig()
+        step = rig.step()
+        rig.gate.execute(0)
+
+        resp = self._reaped(rig, step, self.TIMED_OUT, ((0.0, 100.0),))
+
+        self.assertEqual(resp.parked, ["step:%s" % step])
+
+
 class TestMixedOutcomes(unittest.TestCase):
     def test_one_completes_and_two_park_each_naming_its_own_stage(self):
         stages = {
