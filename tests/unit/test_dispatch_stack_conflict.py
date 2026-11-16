@@ -122,13 +122,74 @@ class TestConflictOverAStack(unittest.TestCase):
         self.assertEqual(result.conflicted, [])
         self.assertNotEqual(rig.node().state, "done")
 
-    def test_a_merged_layer_is_excluded_and_position_counts_it(self):
+    def test_a_merged_layer_is_excluded_and_position_counts_it_once_confirmed(self):
         layers = with_state(build_stack(3), 1, "merged")
         rig = _Rig(conflicted=[1, 2], layers=layers)
 
         rig.tick()
+        rig.tick()
 
         self.assertIn("layer 2 of 3 (%s)" % layer_url(2), rig.note())
+
+    def test_a_conflict_beside_a_merged_layer_is_not_reported_on_first_sight(self):
+        rig = _Rig(conflicted=[2], layers=with_state(build_stack(3), 1, "merged"))
+
+        result = rig.tick()
+
+        self.assertEqual(result.conflicted, [])
+        self.assertNotEqual(rig.node().state, "done")
+
+    def test_a_conflict_beside_a_merged_layer_is_reported_when_confirmed_by_a_fresher_read(self):
+        rig = _Rig(conflicted=[2], layers=with_state(build_stack(3), 1, "merged"))
+
+        rig.tick()
+        result = rig.tick()
+
+        self.assertEqual(result.conflicted, [rig.item])
+        self.assertIn("layer 2 of 3", rig.note())
+
+    def test_a_conflict_that_clears_after_a_layer_merged_is_never_reported(self):
+        rig = _Rig(conflicted=[2], layers=with_state(build_stack(3), 1, "merged"))
+
+        rig.tick()
+        rig.github._conflicted.clear()
+        self.assertEqual(rig.tick().conflicted, [])
+        rig.github._conflicted.add(layer_url(2))
+
+        self.assertEqual(rig.tick().conflicted, [])
+        self.assertEqual(rig.tick().conflicted, [rig.item])
+
+    def test_all_layers_merged_reports_no_conflict(self):
+        layers = with_state(with_state(with_state(build_stack(3), 1, "merged"), 2, "merged"), 3, "merged")
+        rig = _Rig(conflicted=[1, 2, 3], layers=layers)
+
+        self.assertEqual(rig.tick().conflicted, [])
+        self.assertEqual(rig.tick().conflicted, [])
+
+    def test_an_unmerged_stack_still_reports_a_conflict_on_first_sight(self):
+        rig = _Rig(conflicted=[2])
+
+        self.assertEqual(rig.tick().conflicted, [rig.item])
+
+    def test_a_merged_layer_beside_a_clean_layer_and_a_conflicted_one_reports_the_conflicted_one_once_confirmed(self):
+        rig = _Rig(conflicted=[3], layers=with_state(build_stack(3), 1, "merged"))
+
+        self.assertEqual(rig.tick().conflicted, [])
+        rig.tick()
+
+        self.assertIn("layer 3 of 3", rig.note())
+
+    def test_an_unstacked_merged_pr_is_not_reported_conflicted(self):
+        rig = _Rig(conflicted=[1], stacked=False)
+        rig.github._merged.add(layer_url(1))
+
+        self.assertEqual(rig.tick().conflicted, [])
+        self.assertNotEqual(rig.node().state, "done")
+
+    def test_a_failed_merged_read_does_not_hide_an_unstacked_conflict(self):
+        rig = _Rig(conflicted=[1], stacked=False, failing=["is_merged"])
+
+        self.assertEqual(rig.tick().conflicted, [rig.item])
 
     def test_an_unread_stack_reports_nothing(self):
         rig = _Rig(conflicted=[2], failing=["stack_view"])

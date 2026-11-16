@@ -5,6 +5,7 @@ from lightcycle.application.flow.cap_restart import last_gate_firing_key, step_o
 from lightcycle.application.flow.complete_step import CompleteInput
 from lightcycle.application.flow.escapes import EscapeRecorder
 from lightcycle.application.pool.pr_lookups import (
+    false_on_failure,
     flow_for,
     run_of,
     skip_unpinned,
@@ -87,6 +88,7 @@ class DispatchPrFeedbackUseCase:
         self._poll_epoch = poll_epoch
         self._unread_note_polls = unread_note_polls
         self._streaks = {}
+        self._pending_conflicts = {}
         self._store = store
         self._github = github
         self._flow_service = flow_service
@@ -301,6 +303,7 @@ class DispatchPrFeedbackUseCase:
         reads = reads or PrSyncReads(self._github)
         reworked, conflicted = [], []
         seen = set()
+        scanned = set()
         for step in self._store.all_nodes():
             if step.type != "step" or step.state == State.DONE:
                 continue
@@ -353,12 +356,16 @@ class DispatchPrFeedbackUseCase:
             hit, base_sync, note = None, None, None
             if not advanced and conflict_outcome:
                 if run.stack:
-                    found = scan_stack(self._github, reads, run, step, _is_conflicted)
+                    scanned.add(step.id)
+                    found = scan_stack(
+                        self._github, reads, run, step, _is_conflicted,
+                        self._pending_conflicts)
                     if found is not None:
                         hit, base_sync, note = True, found.trunk_sync, found.note()
                 else:
                     sync = reads.read(pr_value)
-                    if _is_conflicted(sync, step):
+                    if _is_conflicted(sync, step) and not false_on_failure(
+                            self._github.is_merged(pr_value)):
                         hit, base_sync = True, sync
             if hit and held:
                 self._gate_hold.observe(
@@ -395,6 +402,8 @@ class DispatchPrFeedbackUseCase:
                             stacked=bool(run.stack)),
                     )
                 conflicted.append(step.item)
+        for step_id in [k for k in self._pending_conflicts if k not in scanned]:
+            del self._pending_conflicts[step_id]
         for step_id in [k for k in self._streaks if k not in seen]:
             del self._streaks[step_id]
         return DispatchPrFeedbackResponse(reworked=reworked, conflicted=conflicted)
