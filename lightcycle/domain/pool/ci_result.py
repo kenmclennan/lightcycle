@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from lightcycle.domain.pool.sleep import awake_elapsed
+
 _PASSING_CONCLUSIONS = ("success", "skipped", "neutral")
 _CANCELLED = "cancelled"
 
@@ -51,22 +53,22 @@ def unrun_checks(expected, checks):
     return tuple(sorted(label for label in expected if label not in reported))
 
 
-def timed_out_check(checks, now, ceiling, since=0.0):
+def timed_out_check(checks, now, ceiling, since=0.0, sleeps=()):
     if ceiling is None:
         return None
     return next(
         (c for c in checks
          if not is_concluded(c)
          and (c.started_at if c.started_at > 0 else since) > 0
-         and now - (c.started_at if c.started_at > 0 else since) > ceiling),
+         and awake_elapsed(c.started_at if c.started_at > 0 else since, now, sleeps) > ceiling),
         None,
     )
 
 
-def _empty_outcome(now, ceiling, since, runs, expected, start_window, quiet_wait):
+def _empty_outcome(now, ceiling, since, runs, expected, start_window, quiet_wait, sleeps=()):
     if since <= 0 or runs is None:
         return "pending"
-    elapsed = now - since
+    elapsed = awake_elapsed(since, now, sleeps)
     if runs > 0:
         return "timeout" if ceiling is not None and elapsed > ceiling else "pending"
     if expected is None:
@@ -78,14 +80,15 @@ def _empty_outcome(now, ceiling, since, runs, expected, start_window, quiet_wait
 
 def ci_outcome(
     checks, required=None, now=0.0, ceiling=None, since=0.0, *,
-    runs=None, expected=None, start_window=None, quiet_wait=None,
+    runs=None, expected=None, start_window=None, quiet_wait=None, sleeps=(),
 ):
     judged = judged_checks(checks, required, since)
     if not judged:
-        return _empty_outcome(now, ceiling, since, runs, expected, start_window, quiet_wait)
+        return _empty_outcome(
+            now, ceiling, since, runs, expected, start_window, quiet_wait, sleeps)
     if failing_check(judged):
         return "failure"
-    if timed_out_check(judged, now, ceiling, since) is not None:
+    if timed_out_check(judged, now, ceiling, since, sleeps) is not None:
         return "timeout"
     if any(not is_concluded(c) for c in judged):
         return "pending"

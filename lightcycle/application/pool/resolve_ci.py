@@ -11,6 +11,7 @@ from lightcycle.domain.pool import (
     MISSING_STATUS, cancelled_check, check_label, ci_outcome, failing_check, judged_checks, pr_workflows_expected, status_mismatch,
     timed_out_check, unrun_checks,
 )
+from lightcycle.domain.pool.sleep import awake_elapsed
 from lightcycle.domain.work import State
 from lightcycle.ports.github import NotYetRead, PrSync, ReadFailure
 
@@ -37,6 +38,7 @@ class _Pass:
     ci_unread: list = field(default_factory=list)
     seen: set = field(default_factory=set)
     awaited: set = field(default_factory=set)
+    sleeps: tuple = ()
 
 
 @dataclass
@@ -54,6 +56,7 @@ class _Verdict:
     expectation: Any
     base: str
     unrun: tuple = ()
+    sleeps: tuple = ()
 
 
 def _reason(call, failure):
@@ -285,14 +288,14 @@ class ResolveCiUseCase:
                     return None
                 expectation, base = found
         outcome = ci_outcome(
-            checks, required, now, ceiling, since, runs=runs,
+            checks, required, now, ceiling, since, runs=runs, sleeps=ctx.sleeps,
             expected=expectation.expected if expectation else None,
             start_window=self._ci_start_window_seconds(),
             quiet_wait=self._ci_no_workflows_wait_seconds(),
         )
         return _Verdict(
             pr_value, key, sha, outcome, checks, judged, required, since, now, runs, expectation,
-            base,
+            base, sleeps=ctx.sleeps,
         )
 
     def _head_still(self, v):
@@ -304,7 +307,7 @@ class ResolveCiUseCase:
                 return False
             self._park_stalled(
                 step, where, v.sha, self._ci_start_window_seconds(), v.base, v.expectation,
-                int(v.now - v.since),
+                int(awake_elapsed(v.since, v.now, v.sleeps)),
             )
             self._first_judged.pop(v.key, None)
             self._expected.pop(v.key, None)
@@ -318,23 +321,23 @@ class ResolveCiUseCase:
 
     def _timeout_note(self, v, where):
         ceiling = self._ci_ceiling_seconds()
-        hung = timed_out_check(v.judged, v.now, ceiling, v.since)
+        hung = timed_out_check(v.judged, v.now, ceiling, v.since, v.sleeps)
         url = " %s" % hung.url if hung and hung.url else ""
         if hung is None:
             return (
                 "CI timed out on %s: %d workflow run(s) listed for the head but no check run "
                 "appeared after %ds, past the ceiling of %ds (ci-check-ceiling-seconds), %s."
-            ) % (v.sha, v.runs, int(v.now - v.since), ceiling, where)
+            ) % (v.sha, v.runs, int(awake_elapsed(v.since, v.now, v.sleeps)), ceiling, where)
         if hung.status == MISSING_STATUS:
             return (
                 "CI timed out on %s: required check '%s' never appeared after %ds, past the "
                 "ceiling of %ds (ci-check-ceiling-seconds), %s."
-            ) % (v.sha, hung.name, int(v.now - v.since), ceiling, where)
+            ) % (v.sha, hung.name, int(awake_elapsed(v.since, v.now, v.sleeps)), ceiling, where)
         started = hung.started_at if hung.started_at > 0 else v.since
         return (
             "CI timed out on %s: check '%s'%s still %s after %ds, past the "
             "ceiling of %ds (ci-check-ceiling-seconds), %s."
-        ) % (v.sha, check_label(hung), url, hung.status.replace("_", " "), int(v.now - started),
+        ) % (v.sha, check_label(hung), url, hung.status.replace("_", " "), int(awake_elapsed(started, v.now, v.sleeps)),
              ceiling, where)
 
     def _failure_note(self, v, where):
@@ -478,7 +481,7 @@ class ResolveCiUseCase:
                         label for label in unrun
                         if not files_by_label[label] or files_by_label[label] in expectation.expected)
                 if unrun:
-                    if window is not None and v.now - v.since > window:
+                    if window is not None and awake_elapsed(v.since, v.now, v.sleeps) > window:
                         v = replace(v, unrun=unrun)
                     else:
                         v = replace(v, outcome="pending")
@@ -507,9 +510,9 @@ class ResolveCiUseCase:
         labelled = self._mark_unrun(step, labelled, ctx)
         self._finish_stacked(step, sd, labelled, ci_resolved)
 
-    def execute(self) -> ResolveCiResponse:
+    def execute(self, sleeps=()) -> ResolveCiResponse:
         ci_resolved = []
-        ctx = _Pass()
+        ctx = _Pass(sleeps=tuple(sleeps))
         for step in self._store.all_nodes():
             if step.type != "step" or step.state == State.DONE or step.role != "engine":
                 continue

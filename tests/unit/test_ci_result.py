@@ -274,3 +274,27 @@ class TestUnrunChecks(unittest.TestCase):
 
     def test_no_reported_checks_makes_every_label_unrun(self):
         self.assertEqual(unrun_checks({"b", "a"}, ()), ("a", "b"))
+
+
+class TestAwakeTime(unittest.TestCase):
+    def test_ceiling_counts_awake_time(self):
+        checks = (_running("build", 1000.0),)
+
+        self.assertEqual(ci_outcome(checks, None, 5000.0, 3600), "timeout")
+        self.assertEqual(
+            ci_outcome(checks, None, 5000.0, 3600, sleeps=((1000.0, 4990.0),)), "pending")
+        self.assertIsNone(timed_out_check(checks, 5000.0, 3600, sleeps=((1000.0, 4990.0),)))
+
+    def test_start_window_counts_awake_time(self):
+        kwargs = dict(since=1000.0, runs=0, expected=("ci.yml",), start_window=600)
+
+        self.assertEqual(ci_outcome((), now=5000.0, **kwargs), "stalled")
+        self.assertEqual(
+            ci_outcome((), now=5000.0, sleeps=((1000.0, 4990.0),), **kwargs), "pending")
+
+    def test_no_workflows_wait_counts_awake_time(self):
+        kwargs = dict(since=1000.0, runs=0, expected=(), quiet_wait=60)
+
+        self.assertEqual(ci_outcome((), now=5000.0, **kwargs), "success")
+        self.assertEqual(
+            ci_outcome((), now=5000.0, sleeps=((1000.0, 4990.0),), **kwargs), "pending")

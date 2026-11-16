@@ -530,6 +530,25 @@ class TestRequiredChecksAndCeiling(unittest.TestCase):
 
         self.assertEqual(store.get_node(step).state, State.QUEUED)
 
+    def test_the_timeout_note_reports_awake_elapsed(self):
+        gh = _gh([_hung("build", 1000.0, url="http://x/1")], required={"build"})
+        store, item, step, uc = _ci_setup(gh)
+
+        uc.execute(((1500.0, 5000.0),))
+
+        node = store.get_node(step)
+        self.assertEqual(node.outcome, "failed")
+        self.assertIn("5500s", node.report)
+        self.assertNotIn("9000s", node.report)
+
+    def test_a_sleep_keeps_a_wall_clock_overdue_check_waiting(self):
+        gh = _gh([_hung("build", 1000.0)], required={"build"})
+        store, item, step, uc = _ci_setup(gh)
+
+        uc.execute(((1000.0, 9000.0),))
+
+        self.assertEqual(store.get_node(step).state, State.QUEUED)
+
     def test_check_past_the_ceiling_fails_naming_check_and_ceiling(self):
         gh = _gh([_hung("build", 6399.0, url="http://x/1")], required={"build"})
         store, item, step, uc = _ci_setup(gh)

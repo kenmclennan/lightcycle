@@ -56,14 +56,14 @@ class MonitorPrsUseCase:
             views=ci_views, trusted_authors=trusted_authors,
         )
 
-    def execute(self) -> MonitorPrsResponse:
+    def execute(self, sleeps=()) -> MonitorPrsResponse:
         resolved = self._resolve.execute()
         shaped = self._detect_stack_shape.execute()
         reads = PrSyncReads(self._github)
         dispatched = self._dispatch.execute(reads)
         moved = self._detect_head_moved.execute(reads)
         behind = self._update_behind.execute(reads)
-        ci = self._resolve_ci.execute()
+        ci = self._resolve_ci.execute(sleeps)
         return MonitorPrsResponse(
             merged=resolved.merged, abandoned=resolved.abandoned,
             reworked=dispatched.reworked, conflicted=dispatched.conflicted,
