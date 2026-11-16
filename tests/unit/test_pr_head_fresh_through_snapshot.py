@@ -38,7 +38,7 @@ def _divergent_snapshot(github):
         "updatedAt": "2026-01-01T00:00:00Z",
     })
     run = MagicMock(side_effect=[_proc(payload), _proc("%s\trefs/pull/7/head\n" % _GIT)])
-    with patch("lightcycle.adapters.github.subprocess.run", run):
+    with patch("lightcycle.adapters.github.run_in_group", run):
         view = GitHubEventsAdapter().pr_view(_URL)
     snapshot = PrSnapshot(github)
     snapshot.publish(_URL, PrEntry(state=view.state, view=view, updated_at=view.updated_at))

@@ -20,7 +20,7 @@ def _captured_argvs():
             stdout = "%s\t%s\n" % ("c" * 40, argv[-1])
         return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
 
-    with patch("lightcycle.adapters.github.subprocess.run", side_effect=_record):
+    with patch("lightcycle.adapters.github.run_in_group", side_effect=_record):
         adapter.is_merged(_PR)
         adapter.is_closed_unmerged(_PR)
         adapter.last_push_time(_PR)

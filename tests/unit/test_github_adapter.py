@@ -34,7 +34,7 @@ class TestReviews(unittest.TestCase):
             }
         )
         with patch(
-            "lightcycle.adapters.github.subprocess.run", return_value=_proc(payload)
+            "lightcycle.adapters.github.run_in_group", return_value=_proc(payload)
         ):
             reviews = self.adapter.reviews(_PR, since=0.0)
 
@@ -54,7 +54,7 @@ class TestReviews(unittest.TestCase):
             }
         )
         with patch(
-            "lightcycle.adapters.github.subprocess.run", return_value=_proc(payload)
+            "lightcycle.adapters.github.run_in_group", return_value=_proc(payload)
         ):
             reviews = self.adapter.reviews(_PR, since=0.0)
 
@@ -70,7 +70,7 @@ class TestReviews(unittest.TestCase):
             }
         )
         with patch(
-            "lightcycle.adapters.github.subprocess.run", return_value=_proc(payload)
+            "lightcycle.adapters.github.run_in_group", return_value=_proc(payload)
         ):
             reviews = self.adapter.reviews(_PR, since=0.0)
 
@@ -89,7 +89,7 @@ class TestReviews(unittest.TestCase):
             for i in range(3)
         )
         with patch(
-            "lightcycle.adapters.github.subprocess.run", return_value=_proc(payload)
+            "lightcycle.adapters.github.run_in_group", return_value=_proc(payload)
         ):
             reviews = self.adapter.reviews(_PR, since=0.0)
 
@@ -98,7 +98,7 @@ class TestReviews(unittest.TestCase):
 
     def test_since_cutoff_is_embedded_in_constructed_jq(self):
         with patch(
-            "lightcycle.adapters.github.subprocess.run", return_value=_proc("")
+            "lightcycle.adapters.github.run_in_group", return_value=_proc("")
         ) as mock_run:
             self.adapter.reviews(_PR, since=9999999999.0)
 
@@ -108,7 +108,7 @@ class TestReviews(unittest.TestCase):
 
     def test_constructed_jq_projects_only_read_fields(self):
         with patch(
-            "lightcycle.adapters.github.subprocess.run", return_value=_proc("")
+            "lightcycle.adapters.github.run_in_group", return_value=_proc("")
         ) as mock_run:
             self.adapter.reviews(_PR, since=0.0)
 
@@ -118,7 +118,7 @@ class TestReviews(unittest.TestCase):
 
     def test_tolerates_pending_review_without_submitted_at(self):
         with patch(
-            "lightcycle.adapters.github.subprocess.run", return_value=_proc("")
+            "lightcycle.adapters.github.run_in_group", return_value=_proc("")
         ) as mock_run:
             self.adapter.reviews(_PR, since=0.0)
 
@@ -127,7 +127,7 @@ class TestReviews(unittest.TestCase):
 
     def test_command_failure_returns_a_distinguishable_read_failure(self):
         with patch(
-            "lightcycle.adapters.github.subprocess.run",
+            "lightcycle.adapters.github.run_in_group",
             return_value=_proc("", returncode=1, stderr="gh: bad jq filter"),
         ):
             reviews = self.adapter.reviews(_PR, since=0.0)
@@ -157,7 +157,7 @@ class TestPullComments(unittest.TestCase):
             }
         )
         with patch(
-            "lightcycle.adapters.github.subprocess.run", return_value=_proc(payload)
+            "lightcycle.adapters.github.run_in_group", return_value=_proc(payload)
         ):
             comments = self.adapter.pull_comments(_PR, since=0.0)
 
@@ -179,7 +179,7 @@ class TestPullComments(unittest.TestCase):
             }
         )
         with patch(
-            "lightcycle.adapters.github.subprocess.run", return_value=_proc(payload)
+            "lightcycle.adapters.github.run_in_group", return_value=_proc(payload)
         ):
             comments = self.adapter.pull_comments(_PR, since=0.0)
 
@@ -200,7 +200,7 @@ class TestPullComments(unittest.TestCase):
             }
         )
         with patch(
-            "lightcycle.adapters.github.subprocess.run", return_value=_proc(payload)
+            "lightcycle.adapters.github.run_in_group", return_value=_proc(payload)
         ):
             comments = self.adapter.pull_comments(_PR, since=0.0)
 
@@ -213,7 +213,7 @@ class TestPullComments(unittest.TestCase):
              "pull_request_review_id": 555}
         )
         with patch(
-            "lightcycle.adapters.github.subprocess.run", return_value=_proc(payload)
+            "lightcycle.adapters.github.run_in_group", return_value=_proc(payload)
         ):
             comments = self.adapter.pull_comments(_PR, since=0.0)
 
@@ -224,7 +224,7 @@ class TestPullComments(unittest.TestCase):
             {"id": 100, "author": "reviewer", "body": "nit", "created_at": 1704153600.0}
         )
         with patch(
-            "lightcycle.adapters.github.subprocess.run", return_value=_proc(payload)
+            "lightcycle.adapters.github.run_in_group", return_value=_proc(payload)
         ):
             comments = self.adapter.pull_comments(_PR, since=0.0)
 
@@ -246,7 +246,7 @@ class TestPullComments(unittest.TestCase):
             for i in range(3)
         )
         with patch(
-            "lightcycle.adapters.github.subprocess.run", return_value=_proc(payload)
+            "lightcycle.adapters.github.run_in_group", return_value=_proc(payload)
         ):
             comments = self.adapter.pull_comments(_PR, since=0.0)
 
@@ -255,7 +255,7 @@ class TestPullComments(unittest.TestCase):
 
     def test_since_cutoff_is_embedded_in_constructed_jq(self):
         with patch(
-            "lightcycle.adapters.github.subprocess.run", return_value=_proc("")
+            "lightcycle.adapters.github.run_in_group", return_value=_proc("")
         ) as mock_run:
             self.adapter.pull_comments(_PR, since=9999999999.0)
 
@@ -265,7 +265,7 @@ class TestPullComments(unittest.TestCase):
 
     def test_constructed_jq_projects_only_read_fields(self):
         with patch(
-            "lightcycle.adapters.github.subprocess.run", return_value=_proc("")
+            "lightcycle.adapters.github.run_in_group", return_value=_proc("")
         ) as mock_run:
             self.adapter.pull_comments(_PR, since=0.0)
 
@@ -275,7 +275,7 @@ class TestPullComments(unittest.TestCase):
 
     def test_command_failure_returns_a_distinguishable_read_failure(self):
         with patch(
-            "lightcycle.adapters.github.subprocess.run",
+            "lightcycle.adapters.github.run_in_group",
             return_value=_proc("", returncode=1, stderr="gh: bad jq filter"),
         ):
             comments = self.adapter.pull_comments(_PR, since=0.0)
@@ -302,7 +302,7 @@ class TestComments(unittest.TestCase):
             }
         )
         with patch(
-            "lightcycle.adapters.github.subprocess.run", return_value=_proc(payload)
+            "lightcycle.adapters.github.run_in_group", return_value=_proc(payload)
         ):
             comments = self.adapter.comments_since(_PR, since=0.0)
 
@@ -322,7 +322,7 @@ class TestComments(unittest.TestCase):
             }
         )
         with patch(
-            "lightcycle.adapters.github.subprocess.run", return_value=_proc(payload)
+            "lightcycle.adapters.github.run_in_group", return_value=_proc(payload)
         ):
             comments = self.adapter.comments_since(_PR, since=0.0)
 
@@ -342,7 +342,7 @@ class TestComments(unittest.TestCase):
             for i in range(3)
         )
         with patch(
-            "lightcycle.adapters.github.subprocess.run", return_value=_proc(payload)
+            "lightcycle.adapters.github.run_in_group", return_value=_proc(payload)
         ):
             comments = self.adapter.comments_since(_PR, since=0.0)
 
@@ -351,7 +351,7 @@ class TestComments(unittest.TestCase):
 
     def test_since_cutoff_is_embedded_in_constructed_jq(self):
         with patch(
-            "lightcycle.adapters.github.subprocess.run", return_value=_proc("")
+            "lightcycle.adapters.github.run_in_group", return_value=_proc("")
         ) as mock_run:
             self.adapter.comments_since(_PR, since=9999999999.0)
 
@@ -361,7 +361,7 @@ class TestComments(unittest.TestCase):
 
     def test_constructed_jq_projects_only_read_fields(self):
         with patch(
-            "lightcycle.adapters.github.subprocess.run", return_value=_proc("")
+            "lightcycle.adapters.github.run_in_group", return_value=_proc("")
         ) as mock_run:
             self.adapter.comments_since(_PR, since=0.0)
 
@@ -371,7 +371,7 @@ class TestComments(unittest.TestCase):
 
     def test_command_failure_returns_a_distinguishable_read_failure(self):
         with patch(
-            "lightcycle.adapters.github.subprocess.run",
+            "lightcycle.adapters.github.run_in_group",
             return_value=_proc("", returncode=1, stderr="gh: bad jq filter"),
         ):
             comments = self.adapter.comments_since(_PR, since=0.0)
@@ -409,7 +409,7 @@ class TestLastPushTime(unittest.TestCase):
 
     def test_constructed_jq_requests_only_committer_date(self):
         mock_run = _head_then(_proc(""))
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             self.adapter.last_push_time(_PR)
 
         args = mock_run.call_args.args[0]
@@ -419,7 +419,7 @@ class TestLastPushTime(unittest.TestCase):
 
     def test_reads_the_head_commit_not_the_commits_list(self):
         mock_run = _fallback_then(_proc("2024-01-02T00:00:00Z\n"))
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             self.adapter.last_push_time(_PR)
 
         args = mock_run.call_args.args[0]
@@ -428,14 +428,14 @@ class TestLastPushTime(unittest.TestCase):
 
     def test_populated_commit_returns_parsed_timestamp(self):
         mock_run = _head_then(_proc("2024-01-02T00:00:00Z\n"))
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             result = self.adapter.last_push_time(_PR)
 
         self.assertGreater(result, 0.0)
 
     def test_head_sha_failure_is_returned(self):
         with patch(
-            "lightcycle.adapters.github.subprocess.run",
+            "lightcycle.adapters.github.run_in_group",
             return_value=_proc("", returncode=1, stderr="gh: auth error"),
         ):
             result = self.adapter.last_push_time(_PR)
@@ -446,7 +446,7 @@ class TestLastPushTime(unittest.TestCase):
         mock_run = MagicMock(side_effect=[
             _ls_remote(_NEW_SHA), _proc("2024-01-02T00:00:00Z\n"),
         ])
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             result = self.adapter.last_push_time(_PR)
 
         argvs = [c.args[0] for c in mock_run.call_args_list]
@@ -456,7 +456,7 @@ class TestLastPushTime(unittest.TestCase):
 
     def test_git_argv_and_environment(self):
         mock_run = _head_then(_proc("2024-01-02T00:00:00Z\n"))
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             self.adapter.last_push_time(_PR)
 
         call = mock_run.call_args_list[0]
@@ -480,7 +480,7 @@ class TestLastPushTime(unittest.TestCase):
                     failure, _proc(json.dumps({"headRefOid": "headsha"})),
                     _proc("2024-01-02T00:00:00Z\n"),
                 ])
-                with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+                with patch("lightcycle.adapters.github.run_in_group", mock_run):
                     result = self.adapter.last_push_time(_PR)
 
                 self.assertGreater(result, 0.0)
@@ -491,27 +491,27 @@ class TestLastPushTime(unittest.TestCase):
             _proc("", returncode=128, stderr="fatal"),
             _proc("", returncode=1, stderr="gh: auth error"),
         ])
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             result = self.adapter.last_push_time(_PR)
 
         self.assertEqual(result, ReadFailure(1, "gh: auth error"))
 
     def test_empty_head_sha_returns_read_failure(self):
         mock_run = MagicMock(return_value=_proc(json.dumps({"headRefOid": ""})))
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             result = self.adapter.last_push_time(_PR)
 
         self.assertIsInstance(result, ReadFailure)
 
     def test_no_commits_returns_read_failure(self):
-        with patch("lightcycle.adapters.github.subprocess.run", _head_then(_proc(""))):
+        with patch("lightcycle.adapters.github.run_in_group", _head_then(_proc(""))):
             result = self.adapter.last_push_time(_PR)
 
         self.assertIsInstance(result, ReadFailure)
 
     def test_unparseable_date_returns_read_failure(self):
         with patch(
-            "lightcycle.adapters.github.subprocess.run", _head_then(_proc("not-a-date\n"))
+            "lightcycle.adapters.github.run_in_group", _head_then(_proc("not-a-date\n"))
         ):
             result = self.adapter.last_push_time(_PR)
 
@@ -519,7 +519,7 @@ class TestLastPushTime(unittest.TestCase):
 
     def test_command_failure_returns_a_distinguishable_read_failure(self):
         mock_run = _head_then(_proc("", returncode=1, stderr="gh: auth error"))
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             result = self.adapter.last_push_time(_PR)
 
         self.assertEqual(result, ReadFailure(1, "gh: auth error"))
@@ -537,7 +537,7 @@ class TestDiffSignature(unittest.TestCase):
     def _signature(self, files):
         pr_view = _proc(json.dumps({"baseRefName": "main"}))
         compare = _proc(json.dumps(files))
-        with patch("lightcycle.adapters.github.subprocess.run",
+        with patch("lightcycle.adapters.github.run_in_group",
                    MagicMock(side_effect=[pr_view, compare])):
             return self.adapter.diff_signature(_PR, "abc123")
 
@@ -570,7 +570,7 @@ class TestDiffSignature(unittest.TestCase):
     def test_non_zero_exit_is_a_read_failure(self):
         pr_view = _proc(json.dumps({"baseRefName": "main"}))
         compare = _proc("", returncode=1, stderr="gh: boom")
-        with patch("lightcycle.adapters.github.subprocess.run",
+        with patch("lightcycle.adapters.github.run_in_group",
                    MagicMock(side_effect=[pr_view, compare])):
             result = self.adapter.diff_signature(_PR, "abc123")
 
@@ -578,7 +578,7 @@ class TestDiffSignature(unittest.TestCase):
 
     def test_an_explicit_base_skips_the_base_lookup(self):
         mock_run = MagicMock(side_effect=[_proc("[]")])
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             self.adapter.diff_signature(_PR, "abc123", "trunk")
 
         self.assertEqual(mock_run.call_count, 1)
@@ -596,7 +596,7 @@ class TestChangedFiles(unittest.TestCase):
 
     def test_constructed_jq_requests_only_filenames(self):
         mock_run = self._mock_run("[]")
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             self.adapter.changed_files(_PR, "abc123")
 
         compare_call = mock_run.call_args_list[1]
@@ -606,14 +606,14 @@ class TestChangedFiles(unittest.TestCase):
 
     def test_populated_files_returns_matching_frozenset(self):
         mock_run = self._mock_run(json.dumps(["src/a.py", "src/b.py"]))
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             files = self.adapter.changed_files(_PR, "abc123")
 
         self.assertEqual(files, frozenset({"src/a.py", "src/b.py"}))
 
     def test_no_files_key_returns_empty_frozenset(self):
         mock_run = self._mock_run("[]")
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             files = self.adapter.changed_files(_PR, "abc123")
 
         self.assertEqual(files, frozenset())
@@ -622,7 +622,7 @@ class TestChangedFiles(unittest.TestCase):
         pr_view = _proc(json.dumps({"baseRefName": "main"}))
         compare = _proc("", returncode=1, stderr="gh: bad jq filter")
         mock_run = MagicMock(side_effect=[pr_view, compare])
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             files = self.adapter.changed_files(_PR, "abc123")
 
         self.assertEqual(files, ReadFailure(1, "gh: bad jq filter"))
@@ -630,7 +630,7 @@ class TestChangedFiles(unittest.TestCase):
     def test_pr_view_call_failure_returns_a_distinguishable_read_failure(self):
         pr_view = _proc("", returncode=1, stderr="gh: auth error")
         mock_run = MagicMock(side_effect=[pr_view])
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             files = self.adapter.changed_files(_PR, "abc123")
 
         self.assertEqual(files, ReadFailure(1, "gh: auth error"))
@@ -643,7 +643,7 @@ class TestChangedFiles(unittest.TestCase):
     def test_unparseable_base_ref_returns_read_failure(self):
         pr_view = _proc("not json")
         mock_run = MagicMock(side_effect=[pr_view])
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             files = self.adapter.changed_files(_PR, "abc123")
 
         self.assertIsInstance(files, ReadFailure)
@@ -651,7 +651,7 @@ class TestChangedFiles(unittest.TestCase):
     def test_empty_base_ref_returns_read_failure(self):
         pr_view = _proc(json.dumps({"baseRefName": ""}))
         mock_run = MagicMock(side_effect=[pr_view])
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             files = self.adapter.changed_files(_PR, "abc123")
 
         self.assertIsInstance(files, ReadFailure)
@@ -660,7 +660,7 @@ class TestChangedFiles(unittest.TestCase):
         pr_view = _proc(json.dumps({"baseRefName": "main"}))
         compare = _proc("not json")
         mock_run = MagicMock(side_effect=[pr_view, compare])
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             files = self.adapter.changed_files(_PR, "abc123")
 
         self.assertIsInstance(files, ReadFailure)
@@ -680,7 +680,7 @@ class TestCheckRuns(unittest.TestCase):
             {"name": "build", "status": "completed", "conclusion": "success"},
             {"name": "test", "status": "completed", "conclusion": "failure"},
         ])
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             runs = self.adapter.check_runs(_PR, "sha1")
 
         self.assertEqual(
@@ -696,7 +696,7 @@ class TestCheckRuns(unittest.TestCase):
             {"name": "test", "status": "completed", "conclusion": "failure",
              "url": "https://github.com/x/y/actions/runs/1/job/2"},
         ])
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             runs = self.adapter.check_runs(_PR, "sha1")
 
         self.assertEqual(runs[0].url, "https://github.com/x/y/actions/runs/1/job/2")
@@ -704,7 +704,7 @@ class TestCheckRuns(unittest.TestCase):
     def _with_runs(self, payload, runs_proc):
         lines = "\n".join(json.dumps({**c, "total": len(payload)}) for c in payload)
         return patch(
-            "lightcycle.adapters.github.subprocess.run",
+            "lightcycle.adapters.github.run_in_group",
             MagicMock(side_effect=[_proc(lines), runs_proc]),
         )
 
@@ -759,7 +759,7 @@ class TestCheckRuns(unittest.TestCase):
             {"name": "codacy", "status": "completed", "conclusion": "success",
              "url": "https://app.codacy.com/x"},
         ])
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             result = self.adapter.check_runs(_PR, "sha1")
 
         self.assertEqual(mock_run.call_count, 1)
@@ -795,7 +795,7 @@ class TestCheckRuns(unittest.TestCase):
              "started_at": "2026-10-20T13:57:15Z"},
             {"name": "b", "status": "queued", "conclusion": None, "started_at": None},
         ])
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             runs = self.adapter.check_runs(_PR, "sha1")
 
         self.assertEqual(runs[0].started_at, 1792504635.0)
@@ -807,7 +807,7 @@ class TestCheckRuns(unittest.TestCase):
              "completed_at": "2026-10-20T13:57:15Z"},
             {"name": "b", "status": "queued", "conclusion": None, "completed_at": None},
         ])
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             runs = self.adapter.check_runs(_PR, "sha1")
 
         self.assertEqual(runs[0].completed_at, 1792504635.0)
@@ -816,21 +816,21 @@ class TestCheckRuns(unittest.TestCase):
 
     def test_empty_check_runs_list(self):
         mock_run = self._run([])
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             runs = self.adapter.check_runs(_PR, "sha1")
 
         self.assertEqual(runs, ())
 
     def test_non_zero_exit_returns_read_failure(self):
         mock_run = MagicMock(return_value=_proc("", returncode=1, stderr="gh: auth error"))
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             runs = self.adapter.check_runs(_PR, "sha1")
 
         self.assertEqual(runs, ReadFailure(1, "gh: auth error"))
 
     def test_invalid_json_returns_read_failure(self):
         mock_run = MagicMock(return_value=_proc("not json", returncode=0))
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             runs = self.adapter.check_runs(_PR, "sha1")
 
         self.assertIsInstance(runs, ReadFailure)
@@ -841,7 +841,7 @@ class TestCheckRuns(unittest.TestCase):
             for i in range(150)
         ]
         mock_run = self._run(payload)
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             runs = self.adapter.check_runs(_PR, "sha1")
 
         self.assertEqual(len(runs), 150)
@@ -849,7 +849,7 @@ class TestCheckRuns(unittest.TestCase):
 
     def test_requests_paginated_pages_of_100(self):
         mock_run = self._run([])
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             self.adapter.check_runs(_PR, "sha1")
 
         args = mock_run.call_args.args[0]
@@ -860,7 +860,7 @@ class TestCheckRuns(unittest.TestCase):
         mock_run = self._run(
             [{"name": "a", "status": "completed", "conclusion": "success"}], total=31
         )
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             runs = self.adapter.check_runs(_PR, "sha1")
 
         self.assertIsInstance(runs, ReadFailure)
@@ -880,31 +880,31 @@ class TestReadFailureMethodsTimeOutCleanly(unittest.TestCase):
         self.adapter = GitHubEventsAdapter()
 
     def test_last_push_time_returns_read_failure_on_timeout(self):
-        with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):
+        with patch("lightcycle.adapters.github.run_in_group", side_effect=_timeout()):
             result = self.adapter.last_push_time(_PR)
 
         self.assertIsInstance(result, ReadFailure)
 
     def test_comments_since_returns_read_failure_on_timeout(self):
-        with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):
+        with patch("lightcycle.adapters.github.run_in_group", side_effect=_timeout()):
             result = self.adapter.comments_since(_PR, since=0.0)
 
         self.assertIsInstance(result, ReadFailure)
 
     def test_pull_comments_returns_read_failure_on_timeout(self):
-        with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):
+        with patch("lightcycle.adapters.github.run_in_group", side_effect=_timeout()):
             result = self.adapter.pull_comments(_PR, since=0.0)
 
         self.assertIsInstance(result, ReadFailure)
 
     def test_changed_files_returns_read_failure_on_timeout(self):
-        with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):
+        with patch("lightcycle.adapters.github.run_in_group", side_effect=_timeout()):
             result = self.adapter.changed_files(_PR, "abc123")
 
         self.assertIsInstance(result, ReadFailure)
 
     def test_check_runs_returns_read_failure_on_timeout(self):
-        with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):
+        with patch("lightcycle.adapters.github.run_in_group", side_effect=_timeout()):
             result = self.adapter.check_runs(_PR, "sha1")
 
         self.assertIsInstance(result, ReadFailure)
@@ -916,7 +916,7 @@ class TestPrFiles(unittest.TestCase):
 
     def test_it_reads_the_pull_files_list_with_a_timeout_and_returns_the_lines(self):
         mock_run = MagicMock(return_value=_proc("a.py\nsrc/b.py\n"))
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             files = self.adapter.pr_files(_PR)
 
         argv = mock_run.call_args.args[0]
@@ -926,14 +926,14 @@ class TestPrFiles(unittest.TestCase):
         self.assertEqual(files, frozenset({"a.py", "src/b.py"}))
 
     def test_a_nonzero_exit_returns_a_read_failure(self):
-        with patch("lightcycle.adapters.github.subprocess.run",
+        with patch("lightcycle.adapters.github.run_in_group",
                    return_value=_proc("", returncode=1, stderr="gh: Not Found")):
             files = self.adapter.pr_files(_PR)
 
         self.assertEqual(files, ReadFailure(1, "gh: Not Found"))
 
     def test_a_timeout_returns_a_read_failure(self):
-        with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):
+        with patch("lightcycle.adapters.github.run_in_group", side_effect=_timeout()):
             files = self.adapter.pr_files(_PR)
 
         self.assertIsInstance(files, ReadFailure)
@@ -944,7 +944,7 @@ class TestPrFiles(unittest.TestCase):
 
 class TestReviewsTimeout(unittest.TestCase):
     def test_reviews_returns_read_failure_on_timeout(self):
-        with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):
+        with patch("lightcycle.adapters.github.run_in_group", side_effect=_timeout()):
             result = GitHubEventsAdapter().reviews(_PR, since=0.0)
 
         self.assertIsInstance(result, ReadFailure)
@@ -955,21 +955,21 @@ class TestIsMerged(unittest.TestCase):
         self.adapter = GitHubEventsAdapter()
 
     def test_is_merged_returns_read_failure_on_timeout(self):
-        with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):
+        with patch("lightcycle.adapters.github.run_in_group", side_effect=_timeout()):
             result = self.adapter.is_merged(_PR)
 
         self.assertIsInstance(result, ReadFailure)
 
     def test_non_zero_exit_returns_read_failure(self):
         mock_run = MagicMock(return_value=_proc("", returncode=1, stderr="gh: auth error"))
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             result = self.adapter.is_merged(_PR)
 
         self.assertEqual(result, ReadFailure(1, "gh: auth error"))
 
     def test_invalid_json_returns_read_failure(self):
         mock_run = MagicMock(return_value=_proc("not json", returncode=0))
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             result = self.adapter.is_merged(_PR)
 
         self.assertIsInstance(result, ReadFailure)
@@ -980,21 +980,21 @@ class TestIsClosedUnmerged(unittest.TestCase):
         self.adapter = GitHubEventsAdapter()
 
     def test_is_closed_unmerged_returns_read_failure_on_timeout(self):
-        with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):
+        with patch("lightcycle.adapters.github.run_in_group", side_effect=_timeout()):
             result = self.adapter.is_closed_unmerged(_PR)
 
         self.assertIsInstance(result, ReadFailure)
 
     def test_non_zero_exit_returns_read_failure(self):
         mock_run = MagicMock(return_value=_proc("", returncode=1, stderr="gh: auth error"))
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             result = self.adapter.is_closed_unmerged(_PR)
 
         self.assertEqual(result, ReadFailure(1, "gh: auth error"))
 
     def test_invalid_json_returns_read_failure(self):
         mock_run = MagicMock(return_value=_proc("not json", returncode=0))
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             result = self.adapter.is_closed_unmerged(_PR)
 
         self.assertIsInstance(result, ReadFailure)
@@ -1005,21 +1005,21 @@ class TestHeadSha(unittest.TestCase):
         self.adapter = GitHubEventsAdapter()
 
     def test_head_sha_returns_read_failure_on_timeout(self):
-        with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):
+        with patch("lightcycle.adapters.github.run_in_group", side_effect=_timeout()):
             result = self.adapter.head_sha(_PR)
 
         self.assertIsInstance(result, ReadFailure)
 
     def test_non_zero_exit_returns_read_failure(self):
         mock_run = MagicMock(return_value=_proc("", returncode=1, stderr="gh: auth error"))
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             result = self.adapter.head_sha(_PR)
 
         self.assertEqual(result, ReadFailure(1, "gh: auth error"))
 
     def test_invalid_json_returns_read_failure(self):
         mock_run = MagicMock(return_value=_proc("not json", returncode=0))
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             result = self.adapter.head_sha(_PR)
 
         self.assertIsInstance(result, ReadFailure)
@@ -1032,7 +1032,7 @@ class TestPrSyncState(unittest.TestCase):
     def _read(self, data, head=None):
         view = _proc(json.dumps(data))
         mock_run = MagicMock(side_effect=[view, _ls_remote(head) if head else _proc("", returncode=1)])
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             return self.adapter.pr_sync_state(_PR), mock_run
 
     def test_behind_payload(self):
@@ -1067,7 +1067,7 @@ class TestPrSyncState(unittest.TestCase):
             MagicMock(return_value=_proc("not json")),
             MagicMock(side_effect=_timeout()),
         ):
-            with patch("lightcycle.adapters.github.subprocess.run", run):
+            with patch("lightcycle.adapters.github.run_in_group", run):
                 self.assertIsInstance(self.adapter.pr_sync_state(_PR), ReadFailure)
 
 
@@ -1076,7 +1076,7 @@ class TestRequiresUpToDate(unittest.TestCase):
         self.adapter = GitHubEventsAdapter()
 
     def _run(self, *procs):
-        return patch("lightcycle.adapters.github.subprocess.run",
+        return patch("lightcycle.adapters.github.run_in_group",
                      MagicMock(side_effect=list(procs)))
 
     def test_ruleset_strict(self):
@@ -1132,7 +1132,7 @@ class TestRequiresUpToDate(unittest.TestCase):
                 )
 
     def test_timeouts(self):
-        with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):
+        with patch("lightcycle.adapters.github.run_in_group", side_effect=_timeout()):
             self.assertIsInstance(
                 self.adapter.requires_up_to_date("x/y@main"), ReadFailure
             )
@@ -1153,7 +1153,7 @@ class TestRequiredChecks(unittest.TestCase):
         self.adapter = GitHubEventsAdapter()
 
     def _run(self, *procs):
-        return patch("lightcycle.adapters.github.subprocess.run",
+        return patch("lightcycle.adapters.github.run_in_group",
                      MagicMock(side_effect=list(procs)))
 
     def _ruleset(self, *contexts):
@@ -1213,7 +1213,7 @@ class TestRateLimit(unittest.TestCase):
         self.adapter = GitHubEventsAdapter()
 
     def _read(self, proc):
-        with patch("lightcycle.adapters.github.subprocess.run", return_value=proc) as run:
+        with patch("lightcycle.adapters.github.run_in_group", return_value=proc) as run:
             return self.adapter.rate_limit(), run
 
     def test_reads_the_core_bucket_through_one_gh_api_rate_limit_call(self):
@@ -1265,7 +1265,7 @@ class TestUpdateBranch(unittest.TestCase):
 
     def test_argv_pins_expected_head_and_rebases(self):
         mock_run = MagicMock(return_value=_proc("{}"))
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             result = self.adapter.update_branch(_PR, "abc123")
 
         self.assertIsNone(result)
@@ -1277,11 +1277,11 @@ class TestUpdateBranch(unittest.TestCase):
 
     def test_refusal_is_read_failure(self):
         mock_run = MagicMock(return_value=_proc("", returncode=1, stderr="HTTP 422"))
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             self.assertEqual(self.adapter.update_branch(_PR, "abc"), ReadFailure(1, "HTTP 422"))
 
     def test_timeout_is_read_failure(self):
-        with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):
+        with patch("lightcycle.adapters.github.run_in_group", side_effect=_timeout()):
             self.assertIsInstance(self.adapter.update_branch(_PR, "abc"), ReadFailure)
 
 
@@ -1298,7 +1298,7 @@ class TestIssueState(unittest.TestCase):
 
     def test_closed_issue_returns_state_and_passes_a_timeout(self):
         mock_run = MagicMock(return_value=_proc(json.dumps({"state": "CLOSED"})))
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             result = self.adapter.issue_state(_ISSUE)
 
         self.assertEqual(result, "CLOSED")
@@ -1308,20 +1308,20 @@ class TestIssueState(unittest.TestCase):
 
     def test_non_zero_exit_returns_read_failure(self):
         mock_run = MagicMock(return_value=_proc("", returncode=1, stderr="not found"))
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             result = self.adapter.issue_state(_ISSUE)
 
         self.assertEqual(result, ReadFailure(1, "not found"))
 
     def test_timeout_returns_read_failure(self):
-        with patch("lightcycle.adapters.github.subprocess.run", side_effect=_timeout()):
+        with patch("lightcycle.adapters.github.run_in_group", side_effect=_timeout()):
             result = self.adapter.issue_state(_ISSUE)
 
         self.assertIsInstance(result, ReadFailure)
 
     def test_invalid_json_returns_read_failure(self):
         mock_run = MagicMock(return_value=_proc("nope"))
-        with patch("lightcycle.adapters.github.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.github.run_in_group", mock_run):
             result = self.adapter.issue_state(_ISSUE)
 
         self.assertIsInstance(result, ReadFailure)
@@ -1350,7 +1350,7 @@ class TestListPrs(unittest.TestCase):
         ]
         cutoff = 1767312000.0
 
-        with patch("lightcycle.adapters.github.subprocess.run",
+        with patch("lightcycle.adapters.github.run_in_group",
                    return_value=_listing_page(page)) as run:
             listed = self.adapter.list_prs("x/y", cutoff)
 
@@ -1367,7 +1367,7 @@ class TestListPrs(unittest.TestCase):
         full = [_row(n, "2026-02-01T00:00:00Z") for n in range(100)]
         tail = [_row(200, "2026-01-01T00:00:00Z")]
 
-        with patch("lightcycle.adapters.github.subprocess.run",
+        with patch("lightcycle.adapters.github.run_in_group",
                    side_effect=[_listing_page(full), _listing_page(tail)]) as run:
             listed = self.adapter.list_prs("x/y", 1769904000.0)
 
@@ -1375,14 +1375,14 @@ class TestListPrs(unittest.TestCase):
         self.assertEqual(run.call_count, 2)
 
     def test_stops_after_a_short_page_even_when_every_row_is_newer(self):
-        with patch("lightcycle.adapters.github.subprocess.run",
+        with patch("lightcycle.adapters.github.run_in_group",
                    return_value=_listing_page([_row(1, "2026-02-01T00:00:00Z")])) as run:
             self.adapter.list_prs("x/y", 0.0)
 
         self.assertEqual(run.call_count, 1)
 
     def test_a_failing_call_is_a_read_failure(self):
-        with patch("lightcycle.adapters.github.subprocess.run",
+        with patch("lightcycle.adapters.github.run_in_group",
                    return_value=_proc(returncode=1, stderr="boom")):
             self.assertIsInstance(self.adapter.list_prs("x/y", 0.0), ReadFailure)
 
@@ -1396,7 +1396,7 @@ class TestRepoInlineComments(unittest.TestCase):
                 "https://api.github.com/repos/x/y/pulls/9",
             ])
 
-        with patch("lightcycle.adapters.github.subprocess.run",
+        with patch("lightcycle.adapters.github.run_in_group",
                    return_value=_proc(out)) as run:
             urls = GitHubEventsAdapter().repo_inline_comments("x/y", 1767225600.0)
 
@@ -1407,7 +1407,7 @@ class TestRepoInlineComments(unittest.TestCase):
             "&direction=desc&per_page=100", run.call_args.args[0])
 
     def test_asks_gh_for_objects_not_bare_strings(self):
-        with patch("lightcycle.adapters.github.subprocess.run",
+        with patch("lightcycle.adapters.github.run_in_group",
                    return_value=_proc("")) as run:
             GitHubEventsAdapter().repo_inline_comments("x/y", 1767225600.0)
 
@@ -1415,14 +1415,14 @@ class TestRepoInlineComments(unittest.TestCase):
         self.assertEqual(jq, ".[] | {url: .pull_request_url}")
 
     def test_an_empty_result_is_an_empty_set(self):
-        with patch("lightcycle.adapters.github.subprocess.run", return_value=_proc("")):
+        with patch("lightcycle.adapters.github.run_in_group", return_value=_proc("")):
             urls = GitHubEventsAdapter().repo_inline_comments("x/y", 1767225600.0)
 
         self.assertEqual(urls, frozenset())
 
     def test_a_raw_string_line_from_a_scalar_filter_is_a_read_failure(self):
         raw = "https://api.github.com/repos/x/y/pulls/7\n"
-        with patch("lightcycle.adapters.github.subprocess.run", return_value=_proc(raw)):
+        with patch("lightcycle.adapters.github.run_in_group", return_value=_proc(raw)):
             rows = GitHubEventsAdapter()._gh_api_lines("repos/x/y/pulls/comments", ".[] | .pull_request_url")
 
         self.assertIsInstance(rows, ReadFailure)
@@ -1434,19 +1434,19 @@ class TestBranchTipAndPrView(unittest.TestCase):
         self.adapter = GitHubEventsAdapter()
 
     def test_authenticated_login_with_empty_stdout_is_a_read_failure(self):
-        with patch("lightcycle.adapters.github.subprocess.run", return_value=_proc("")):
+        with patch("lightcycle.adapters.github.run_in_group", return_value=_proc("")):
             self.assertIsInstance(self.adapter.authenticated_login(), ReadFailure)
 
     def test_authenticated_login_returns_the_login(self):
-        with patch("lightcycle.adapters.github.subprocess.run", return_value=_proc("octocat\n")):
+        with patch("lightcycle.adapters.github.run_in_group", return_value=_proc("octocat\n")):
             self.assertEqual(self.adapter.authenticated_login(), "octocat")
 
     def test_branch_tip_returns_the_sha(self):
-        with patch("lightcycle.adapters.github.subprocess.run", return_value=_proc("abc123\n")):
+        with patch("lightcycle.adapters.github.run_in_group", return_value=_proc("abc123\n")):
             self.assertEqual(self.adapter.branch_tip("x/y", "main"), "abc123")
 
     def test_branch_tip_failure_is_a_read_failure(self):
-        with patch("lightcycle.adapters.github.subprocess.run",
+        with patch("lightcycle.adapters.github.run_in_group",
                    return_value=_proc(returncode=1, stderr="404")):
             self.assertIsInstance(self.adapter.branch_tip("x/y", "main"), ReadFailure)
 
@@ -1459,7 +1459,7 @@ class TestBranchTipAndPrView(unittest.TestCase):
 
         run = MagicMock(side_effect=[_proc(payload), _proc("", returncode=1)])
 
-        with patch("lightcycle.adapters.github.subprocess.run", run):
+        with patch("lightcycle.adapters.github.run_in_group", run):
             view = self.adapter.pr_view(_PR)
 
         self.assertEqual(view.state, "OPEN")
@@ -1484,7 +1484,7 @@ class TestBranchTipAndPrView(unittest.TestCase):
 
     def _branch_view(self, git, **extra):
         run = MagicMock(side_effect=[self._view_payload(**extra), git])
-        with patch("lightcycle.adapters.github.subprocess.run", run):
+        with patch("lightcycle.adapters.github.run_in_group", run):
             return self.adapter.pr_view(_PR), run
 
     def test_pr_view_names_both_refs_in_one_ls_remote_call(self):
@@ -1538,17 +1538,17 @@ class TestBranchTipAndPrView(unittest.TestCase):
                     lines += "%s\trefs/heads/feat/x\n" % branch
                 run = MagicMock(side_effect=[
                     self._view_payload(headRefName="feat/x", isCrossRepository=False), _proc(lines)])
-                with patch("lightcycle.adapters.github.subprocess.run", run):
+                with patch("lightcycle.adapters.github.run_in_group", run):
                     self.assertIs(self.adapter.head_lags_branch(_PR), expected)
 
     def test_head_lags_branch_passes_a_read_failure_through(self):
-        with patch("lightcycle.adapters.github.subprocess.run",
+        with patch("lightcycle.adapters.github.run_in_group",
                    return_value=_proc("", returncode=1, stderr="boom")):
             self.assertIsInstance(self.adapter.head_lags_branch(_PR), ReadFailure)
 
     def _view_with_git(self, git, head=_OLD_SHA):
         run = MagicMock(side_effect=[self._view_payload(head), git])
-        with patch("lightcycle.adapters.github.subprocess.run", run):
+        with patch("lightcycle.adapters.github.run_in_group", run):
             return self.adapter.pr_view(_PR), run
 
     def test_pr_view_takes_the_git_head_and_marks_merge_state_unknown(self):
@@ -1576,7 +1576,7 @@ class TestBranchTipAndPrView(unittest.TestCase):
         for name, git in failures.items():
             with self.subTest(name):
                 run = MagicMock(side_effect=[self._view_payload(), git])
-                with patch("lightcycle.adapters.github.subprocess.run", run):
+                with patch("lightcycle.adapters.github.run_in_group", run):
                     view = self.adapter.pr_view(_PR)
 
                 self.assertEqual(view.head_sha, _OLD_SHA)
@@ -1586,7 +1586,7 @@ class TestBranchTipAndPrView(unittest.TestCase):
     def test_pr_view_failure_makes_no_git_call(self):
         run = MagicMock(side_effect=[_proc("", returncode=1, stderr="boom")])
 
-        with patch("lightcycle.adapters.github.subprocess.run", run):
+        with patch("lightcycle.adapters.github.run_in_group", run):
             result = self.adapter.pr_view(_PR)
 
         self.assertIsInstance(result, ReadFailure)
@@ -1598,11 +1598,11 @@ class TestBranchTipAndPrView(unittest.TestCase):
         self.assertEqual(view.head_sha, _NEW_SHA)
 
     def test_pr_view_with_bad_json_is_a_read_failure(self):
-        with patch("lightcycle.adapters.github.subprocess.run", return_value=_proc("{}")):
+        with patch("lightcycle.adapters.github.run_in_group", return_value=_proc("{}")):
             self.assertIsInstance(self.adapter.pr_view(_PR), ReadFailure)
 
     def test_changed_files_with_a_base_makes_only_the_compare_call(self):
-        with patch("lightcycle.adapters.github.subprocess.run",
+        with patch("lightcycle.adapters.github.run_in_group",
                    return_value=_proc('["a.py"]')) as run:
             files = self.adapter.changed_files(_PR, "sha1", "main")
 
@@ -1613,7 +1613,7 @@ class TestBranchTipAndPrView(unittest.TestCase):
 
 class TestWorkflowSources(unittest.TestCase):
     def _run(self, side_effect):
-        with patch("lightcycle.adapters.github.subprocess.run", side_effect=side_effect) as run:
+        with patch("lightcycle.adapters.github.run_in_group", side_effect=side_effect) as run:
             return GitHubEventsAdapter().workflow_sources(_PR, "sha1"), run
 
     def test_a_listing_and_file_reads_give_the_workflow_files(self):
@@ -1654,7 +1654,7 @@ class TestWorkflowSources(unittest.TestCase):
 
 class TestWorkflowRuns(unittest.TestCase):
     def test_sums_the_two_pull_request_events(self):
-        with patch("lightcycle.adapters.github.subprocess.run", side_effect=[_proc("1\n"), _proc("2\n")]) as run:
+        with patch("lightcycle.adapters.github.run_in_group", side_effect=[_proc("1\n"), _proc("2\n")]) as run:
             result = GitHubEventsAdapter().workflow_runs(_PR, "sha1")
         self.assertEqual(result, 3)
         urls = [c.args[0][2] for c in run.call_args_list]
@@ -1664,7 +1664,7 @@ class TestWorkflowRuns(unittest.TestCase):
         ])
 
     def test_a_failed_call_is_a_read_failure(self):
-        with patch("lightcycle.adapters.github.subprocess.run", return_value=_proc("", 1, "boom")):
+        with patch("lightcycle.adapters.github.run_in_group", return_value=_proc("", 1, "boom")):
             result = GitHubEventsAdapter().workflow_runs(_PR, "sha1")
         self.assertEqual(result, ReadFailure(1, "boom"))
 
@@ -1687,7 +1687,7 @@ class TestStackView(unittest.TestCase):
         self.adapter = GitHubEventsAdapter()
 
     def _view(self, entries, **kw):
-        with patch("lightcycle.adapters.github.subprocess.run",
+        with patch("lightcycle.adapters.github.run_in_group",
                    return_value=_proc(_stack_body(entries, **kw))) as run:
             return self.adapter.stack_view(_STACK_URL), run
 
@@ -1719,21 +1719,21 @@ class TestStackView(unittest.TestCase):
         self.assertEqual(layers, ())
 
     def test_a_non_zero_exit_is_a_read_failure(self):
-        with patch("lightcycle.adapters.github.subprocess.run",
+        with patch("lightcycle.adapters.github.run_in_group",
                    return_value=_proc("", returncode=1, stderr="gh: Not Found")):
             self.assertEqual(self.adapter.stack_view(_STACK_URL), ReadFailure(1, "gh: Not Found"))
 
     def test_unparseable_json_is_a_read_failure(self):
-        with patch("lightcycle.adapters.github.subprocess.run", return_value=_proc("not json")):
+        with patch("lightcycle.adapters.github.run_in_group", return_value=_proc("not json")):
             self.assertIsInstance(self.adapter.stack_view(_STACK_URL), ReadFailure)
 
     def test_a_malformed_stack_url_fails_without_running_gh(self):
-        with patch("lightcycle.adapters.github.subprocess.run") as run:
+        with patch("lightcycle.adapters.github.run_in_group") as run:
             result = self.adapter.stack_view("https://github.com/acme/widget/pull/3")
 
         self.assertEqual(result.returncode, -1)
         run.assert_not_called()
 
     def test_a_body_missing_the_expected_fields_is_a_read_failure(self):
-        with patch("lightcycle.adapters.github.subprocess.run", return_value=_proc("{}")):
+        with patch("lightcycle.adapters.github.run_in_group", return_value=_proc("{}")):
             self.assertIsInstance(self.adapter.stack_view(_STACK_URL), ReadFailure)
