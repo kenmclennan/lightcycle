@@ -80,7 +80,7 @@ class TickUseCase:
         self, store, workers, spawner, config, monitor, breaker_gate,
         hook_completions, backup_gate, flow_service, memory_gate, guidance_gate,
         github_poll_gate, github_budget, config_reload, sweep, cadence, accrual, worker_log,
-        release_gate, stranded_gate, callout_gate,
+        release_gate, stranded_gate, callout_gate, sleeps,
     ):
         self._store = store
         self._workers = workers
@@ -104,6 +104,7 @@ class TickUseCase:
         self._release_gate = release_gate
         self._stranded_gate = stranded_gate
         self._callout_gate = callout_gate
+        self._sleeps = sleeps
         self._budget_low = False
 
     def _log_refusals(self, refused, now):
@@ -145,28 +146,30 @@ class TickUseCase:
             self._github_poll_gate.settle()
 
     def execute(self, input: TickInput) -> TickResponse:
+        sleeps = self._sleeps()
         config_result = self._reload_config()
         self._flow_service.clear_cache()
         self._workers.reap()
         released_result = self._release_interrupted()
         stranded_result = self._stranded_gate.execute()
-        monitor_result = self._monitor.execute()
+        monitor_result = self._monitor.execute(sleeps)
         self._github_poll_gate.execute(input.now)
-        cadence_result = self._cadence.execute(input.now)
+        cadence_result = self._cadence.execute(input.now, sleeps)
         schedules_result = cadence_result.schedules
         lifecycle_result = cadence_result.lifecycle
         scripts_result = cadence_result.scripts
-        callouts_result = self._callout_gate.execute(input.now)
+        callouts_result = self._callout_gate.execute(input.now, sleeps)
         self._log_refusals(
             monitor_result.refused + (scripts_result.refused if scripts_result else []),
             input.now)
-        breaker_result = self._breaker_gate.execute(input.now)
+        breaker_result = self._breaker_gate.execute(input.now, sleeps)
         breaker = breaker_result.breaker
         backup_result = self._backup_gate.execute(input.now)
         guidance_result = self._guidance_sync(input.now)
         self._accrual.execute(input.now)
+        sleeps = self._sleeps()
         swept = self._sweep.execute(
-            input.now, self._config.max_boot_seconds(), self._config.stall_seconds()
+            input.now, self._config.max_boot_seconds(), self._config.stall_seconds(), sleeps
         )
         probe = self._workers.pid_alive
         max_agents = self._config.max_agents()
@@ -175,7 +178,8 @@ class TickUseCase:
             running = pool.covered_steps(probe)
             slots = pool.free_slots(max_agents, probe)
             alive_count = max_agents - slots
-            inflight_dict = pool.inflight(probe, input.now, self._config.max_boot_seconds())
+            inflight_dict = pool.inflight(
+                probe, input.now, self._config.max_boot_seconds(), sleeps)
             memory_result = self._memory_gate.execute(pool, probe)
         except RegistryUnreadable:
             running = set()

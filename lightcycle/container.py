@@ -293,6 +293,7 @@ class Container:
                 GhCallAccrualUseCase(self.store, self.worker_log, self.workers, self.config),
             ),
             worker_log=self.worker_log,
+            sleeps=lambda: self.observe_sleep().execute(self.clock(), self.monotonic()),
         )
 
     def observe_sleep(self):

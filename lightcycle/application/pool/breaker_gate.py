@@ -61,7 +61,7 @@ class BreakerGateUseCase:
             )
         return outcome["tripped"], outcome["spin_opened"]
 
-    def _probe_signal(self, w, now):
+    def _probe_signal(self, w, now, sleeps=()):
         event = self._stream.parse_rate_limit_event(self._worker_log.iter_lines(w.log))
         if event and event.is_rejected:
             return "rejected"
@@ -72,11 +72,12 @@ class BreakerGateUseCase:
             self._config.max_boot_seconds(),
             self._config.stall_seconds(),
             lambda path: self._worker_log.log_mtime(path),
+            sleeps,
         ):
             return "stalled"
         return None
 
-    def execute(self, now) -> BreakerGateResponse:
+    def execute(self, now, sleeps=()) -> BreakerGateResponse:
         state = Breaker.from_state(self._breaker_port.load())
         try:
             pool = WorkerPool(self._workers.workers_state())
@@ -150,7 +151,7 @@ class BreakerGateUseCase:
             stalled = []
             if not any_success:
                 for w in pool.alive(probe):
-                    signal = self._probe_signal(w, now)
+                    signal = self._probe_signal(w, now, sleeps)
                     if signal == "success":
                         any_success = True
                         break
