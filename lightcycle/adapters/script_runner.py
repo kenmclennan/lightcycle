@@ -45,7 +45,8 @@ class ScriptRunnerAdapter(ScriptRunnerPort):
             stdin_text.encode("utf-8"), timeout, self._groups, on_spawn)
         return ScriptResult(
             exit_code=run.exit_code, stdout=run.stdout, stderr_tail=run.stderr_tail,
-            timed_out=run.timed_out, log_path=run.log_path)
+            timed_out=run.timed_out, log_path=run.log_path,
+            started_at=run.started_at, finished_at=run.finished_at)
 
     def run(self, script_path, cwd, env, stdin_text, timeout, log_label):
         log_path = new_log_path(self._config, log_label)

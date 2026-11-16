@@ -18,25 +18,25 @@ class WorkerPool:
     def live_spawnids(self, probe):
         return {w.spawnid for w in self._workers if w.spawnid and w.is_alive(probe)}
 
-    def inflight(self, probe, now, max_boot):
+    def inflight(self, probe, now, max_boot, sleeps=()):
         counts = {}
         for w in self.alive(probe):
-            if w.is_booting(now, max_boot):
+            if w.is_booting(now, max_boot, sleeps):
                 counts[w.role] = counts.get(w.role, 0) + 1
         return counts
 
     def covered_steps(self, probe):
         return {w.step for w in self.alive(probe) if w.step}
 
-    def any_booting(self, probe, now, max_boot):
-        return any(w.is_booting(now, max_boot) for w in self.alive(probe))
+    def any_booting(self, probe, now, max_boot, sleeps=()):
+        return any(w.is_booting(now, max_boot, sleeps) for w in self.alive(probe))
 
-    def orphans(self, probe, now, max_boot, claimed_owner):
+    def orphans(self, probe, now, max_boot, claimed_owner, sleeps=()):
         return [
             w
             for w in self.alive(probe)
             if w.spawnid
-            and not w.is_booting(now, max_boot)
+            and not w.is_booting(now, max_boot, sleeps)
             and self._claim_mismatch(w.step, w.spawnid, claimed_owner)
         ]
 
@@ -44,9 +44,11 @@ class WorkerPool:
     def _claim_mismatch(step, spawnid, claimed_owner):
         return claimed_owner.get(step) != spawnid
 
-    def stalled(self, probe, now, max_boot, stall_seconds, mtime_probe):
+    def stalled(self, probe, now, max_boot, stall_seconds, mtime_probe, sleeps=()):
         return [
-            w for w in self.alive(probe) if w.is_stalled(now, max_boot, stall_seconds, mtime_probe)
+            w
+            for w in self.alive(probe)
+            if w.is_stalled(now, max_boot, stall_seconds, mtime_probe, sleeps)
         ]
 
     def holding(self, probe, step_id, spawnid):

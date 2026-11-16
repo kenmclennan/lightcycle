@@ -636,7 +636,7 @@ class TestGitAdapterFailedStaging(unittest.TestCase):
             return real(cmd, *a, **kw)
 
         err = io.StringIO()
-        with mock.patch("lightcycle.adapters.gitio.subprocess.run", fake):
+        with mock.patch("lightcycle.adapters.gitio.run_in_group", fake):
             with contextlib.redirect_stderr(err):
                 ok = call()
         return ok, commits, err.getvalue()
@@ -681,7 +681,7 @@ class TestGitAdapterFailedStaging(unittest.TestCase):
             return real(cmd, *a, **kw)
 
         err = io.StringIO()
-        with mock.patch("lightcycle.adapters.gitio.subprocess.run", fake):
+        with mock.patch("lightcycle.adapters.gitio.run_in_group", fake):
             with contextlib.redirect_stderr(err):
                 outcome = GitAdapter().add_worktree(repo, path, "feat/p", "main", 0, 0)
 

@@ -24,40 +24,40 @@ class TestMachineAdapterSelfRss(unittest.TestCase):
 
     def test_returns_the_parsed_integer_when_ps_succeeds(self):
         with patch(
-            "lightcycle.adapters.machine.subprocess.run", return_value=_proc(b"123456\n")
+            "lightcycle.adapters.machine.run_in_group", return_value=_proc(b"123456\n")
         ):
             self.assertEqual(self.adapter.self_rss(), 123456)
 
     def test_returns_none_when_the_subprocess_call_fails(self):
         with patch(
-            "lightcycle.adapters.machine.subprocess.run",
+            "lightcycle.adapters.machine.run_in_group",
             side_effect=OSError("no such command"),
         ):
             self.assertIsNone(self.adapter.self_rss())
 
     def test_returns_none_when_the_subprocess_call_times_out(self):
         with patch(
-            "lightcycle.adapters.machine.subprocess.run",
+            "lightcycle.adapters.machine.run_in_group",
             side_effect=subprocess.TimeoutExpired(cmd="ps", timeout=2),
         ):
             self.assertIsNone(self.adapter.self_rss())
 
     def test_returns_none_when_ps_exits_non_zero(self):
         with patch(
-            "lightcycle.adapters.machine.subprocess.run",
+            "lightcycle.adapters.machine.run_in_group",
             return_value=_proc(b"", returncode=1),
         ):
             self.assertIsNone(self.adapter.self_rss())
 
     def test_returns_none_when_the_output_does_not_parse_as_an_integer(self):
         with patch(
-            "lightcycle.adapters.machine.subprocess.run", return_value=_proc(b"not-a-number\n")
+            "lightcycle.adapters.machine.run_in_group", return_value=_proc(b"not-a-number\n")
         ):
             self.assertIsNone(self.adapter.self_rss())
 
     def test_invokes_ps_with_its_own_pid(self):
         mock_run = MagicMock(return_value=_proc(b"1\n"))
-        with patch("lightcycle.adapters.machine.subprocess.run", mock_run):
+        with patch("lightcycle.adapters.machine.run_in_group", mock_run):
             self.adapter.self_rss()
 
         argv = mock_run.call_args.args[0]
@@ -346,7 +346,7 @@ class TestWorkerPidsGetpgidFallback(unittest.TestCase):
 
         with patch("os.getpgid", side_effect=ProcessLookupError()), \
              patch(
-                 "lightcycle.adapters.machine.subprocess.run",
+                 "lightcycle.adapters.machine.run_in_group",
                  return_value=_proc(b"4242\n5000\n"),
              ):
             groups = _worker_pids([worker], pid_argv_for)
@@ -369,7 +369,7 @@ class TestMachineAdapterCwdPidsUnder(unittest.TestCase):
             b"p6\nfcwd\nn/elsewhere\n"
         )
         with patch(
-            "lightcycle.adapters.machine.subprocess.run", return_value=_proc(out),
+            "lightcycle.adapters.machine.run_in_group", return_value=_proc(out),
         ):
             found = self.adapter.cwd_pids_under("/repo/.worktrees")
 
@@ -380,7 +380,7 @@ class TestMachineAdapterCwdPidsUnder(unittest.TestCase):
 
     def test_returns_empty_dict_when_lsof_exits_non_zero(self):
         with patch(
-            "lightcycle.adapters.machine.subprocess.run",
+            "lightcycle.adapters.machine.run_in_group",
             return_value=_proc(b"", returncode=1),
         ):
             self.assertEqual(self.adapter.cwd_pids_under("/repo/.worktrees"), {})

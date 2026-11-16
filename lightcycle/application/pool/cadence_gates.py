@@ -36,18 +36,18 @@ class CadenceGatesUseCase:
             sys.stderr.write("warning: lifecycle check failed: %s\n" % e)
             return None
 
-    def _scripts(self, now):
+    def _scripts(self, now, sleeps):
         try:
-            return self._script_gate.execute(now)
+            return self._script_gate.execute(now, sleeps)
         except (OSError, GitReadError, ValueError, ConfigError) as e:
             sys.stderr.write("warning: script stage check failed: %s\n" % e)
             return None
 
-    def execute(self, now) -> CadenceGatesResponse:
+    def execute(self, now, sleeps=()) -> CadenceGatesResponse:
         return CadenceGatesResponse(
             schedules=self._schedules(now),
             lifecycle=self._lifecycle(now),
-            scripts=self._scripts(now),
+            scripts=self._scripts(now, sleeps),
         )
 
     def reset(self):

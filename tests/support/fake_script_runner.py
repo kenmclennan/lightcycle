@@ -17,6 +17,7 @@ class FakeScriptRunner(ScriptRunnerPort):
         self._finished = {}
         self._log_paths = {}
         self._orphans = {}
+        self._started_at = {}
 
     def program(self, key, result):
         self._programmed[key] = result
@@ -58,6 +59,7 @@ class FakeScriptRunner(ScriptRunnerPort):
         self.calls.append(call)
         self.started.append(call)
         self._running[key] = call
+        self._started_at[key] = self._clock() if self._clock is not None else None
         self._log_paths[key] = "%s.log" % log_label
         return self._log_paths[key]
 
@@ -72,6 +74,10 @@ class FakeScriptRunner(ScriptRunnerPort):
         result = self._finished.pop(key)
         if result.log_path is None:
             result = dataclasses.replace(result, log_path=self._log_paths[key])
+        started_at = self._started_at.pop(key, None)
+        if self._clock is not None and result.started_at is None and result.finished_at is None:
+            result = dataclasses.replace(
+                result, started_at=started_at, finished_at=self._clock())
         return result
 
     def running(self):

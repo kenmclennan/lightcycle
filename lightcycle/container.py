@@ -12,6 +12,7 @@ from lightcycle.adapters.gh_shim import GhShimAdapter
 from lightcycle.adapters.github import GitHubEventsAdapter
 from lightcycle.adapters.github_budget_status import GithubBudgetStatusAdapter
 from lightcycle.adapters.tui.kitty_health_icon import KittyHealthIconAdapter, TuiTerminalWriter
+from lightcycle.adapters.sleep_ledger import SleepLedgerAdapter
 from lightcycle.adapters.tick_timing_status import TickTimingStatusAdapter
 from lightcycle.adapters.gitio import GitAdapter
 from lightcycle.adapters.launcher import LauncherAdapter
@@ -73,6 +74,7 @@ from lightcycle.application.pool.hook_completions import HookCompletionsUseCase
 from lightcycle.application.pool.live_usage import LiveUsageAccrualUseCase
 from lightcycle.application.pool.memory_gate import MemoryGateUseCase
 from lightcycle.application.pool.monitor_prs import MonitorPrsUseCase
+from lightcycle.application.pool.observe_sleep import ObserveSleepUseCase
 from lightcycle.application.pool.release_interrupted_runs import ReleaseInterruptedRunsUseCase
 from lightcycle.application.pool.sweep import SweepUseCase
 from lightcycle.application.pool.tick import TickUseCase
@@ -89,7 +91,7 @@ class Container:
         drain=None, guidance_sync_status=None, config_reload_status=None,
         lifecycle_runner=None, script_runner=None, github_poll_runner=None,
         github_budget_status=None, gh_shim=None, run_groups=None,
-        tick_timing_status=None, health_icon=None, terminal_writer=None,
+        tick_timing_status=None, sleep_ledger=None, health_icon=None, terminal_writer=None,
         clock=time.time, monotonic=time.monotonic, sleep=time.sleep,
     ):
         self.clock = clock
@@ -146,6 +148,9 @@ class Container:
         self.tick_timing_status = (
             tick_timing_status if tick_timing_status is not None
             else TickTimingStatusAdapter(self.config)
+        )
+        self.sleep_ledger = (
+            sleep_ledger if sleep_ledger is not None else SleepLedgerAdapter(self.config)
         )
         self.terminal_writer = (
             terminal_writer if terminal_writer is not None else TuiTerminalWriter()
@@ -288,7 +293,11 @@ class Container:
                 GhCallAccrualUseCase(self.store, self.worker_log, self.workers, self.config),
             ),
             worker_log=self.worker_log,
+            sleeps=lambda: self.observe_sleep().execute(self.clock(), self.monotonic()),
         )
+
+    def observe_sleep(self):
+        return ObserveSleepUseCase(self.sleep_ledger)
 
     def sweep(self, flow=None, worktrees=None):
         flow = flow if flow is not None else self.flow_service()

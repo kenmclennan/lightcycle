@@ -4,6 +4,7 @@ import subprocess
 import tempfile
 import tomllib
 
+from lightcycle.adapters.process_group import run_in_group
 from lightcycle.domain.workflows.identity import parse_pin
 from lightcycle.ports.workflow_source import (
     FetchedBundle,
@@ -84,7 +85,7 @@ class WorkflowSourceAdapter(WorkflowSourcePort):
         checkout = tempfile.mkdtemp(prefix="lc-workflow-src-")
         try:
             try:
-                subprocess.run(["git", "clone", "--quiet", url, checkout],
+                run_in_group(["git", "clone", "--quiet", url, checkout],
                                check=True, capture_output=True, text=True,
                                timeout=_CLONE_TIMEOUT_SECONDS)
             except subprocess.CalledProcessError as e:
@@ -94,7 +95,7 @@ class WorkflowSourceAdapter(WorkflowSourcePort):
                 raise WorkflowSourceError("could not clone %s: timed out" % url) from e
             if ref:
                 try:
-                    subprocess.run(["git", "-C", checkout, "checkout", "--quiet", ref],
+                    run_in_group(["git", "-C", checkout, "checkout", "--quiet", ref],
                                    check=True, capture_output=True, text=True,
                                    timeout=_CHECKOUT_TIMEOUT_SECONDS)
                 except subprocess.CalledProcessError:
@@ -103,7 +104,7 @@ class WorkflowSourceAdapter(WorkflowSourcePort):
                     raise WorkflowSourceError(
                         "checking out ref %r in %s timed out" % (ref, url)) from e
             try:
-                sha = subprocess.run(["git", "-C", checkout, "rev-parse", "HEAD"],
+                sha = run_in_group(["git", "-C", checkout, "rev-parse", "HEAD"],
                                      check=True, capture_output=True, text=True,
                                      timeout=_REV_PARSE_TIMEOUT_SECONDS).stdout.strip()
             except subprocess.CalledProcessError as e:
@@ -168,7 +169,7 @@ class WorkflowSourceAdapter(WorkflowSourcePort):
         unreachable = RemoteProbe(reason="%s is not reachable right now" % url)
         patterns = [ref, ref + "^{}"] if ref else ["HEAD"]
         try:
-            result = subprocess.run(
+            result = run_in_group(
                 ["git", "ls-remote", "--exit-code", url] + patterns,
                 capture_output=True, text=True, timeout=10,
             )

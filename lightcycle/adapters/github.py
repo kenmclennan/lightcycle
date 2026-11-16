@@ -6,6 +6,7 @@ import re
 import subprocess
 from typing import Optional, Tuple, Union
 
+from lightcycle.adapters.process_group import run_in_group
 from lightcycle.ports.github import (
     CheckRun, Comment, GitHubEventsPort, ListedPr, PrSync, PrView, RateLimit, ReadFailure, Review,
     StackLayer, WorkflowFile,
@@ -50,7 +51,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
 
     def _pr_state(self, pr: str) -> Union[str, ReadFailure]:
         try:
-            result = subprocess.run(
+            result = run_in_group(
                 ["gh", "pr", "view", pr, "--json", "state"], capture_output=True, text=True,
                 timeout=_GH_TIMEOUT_SECONDS,
             )
@@ -66,7 +67,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
 
     def issue_state(self, url: str) -> Union[str, ReadFailure]:
         try:
-            result = subprocess.run(
+            result = run_in_group(
                 ["gh", "issue", "view", url, "--json", "state"], capture_output=True, text=True,
                 timeout=_GH_TIMEOUT_SECONDS,
             )
@@ -91,7 +92,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
     def _fresh_head_sha(self, owner: str, repo: str, number: str) -> Optional[str]:
         ref = "refs/pull/%s/head" % number
         try:
-            result = subprocess.run(
+            result = run_in_group(
                 ["git", "ls-remote", "https://github.com/%s/%s.git" % (owner, repo), ref],
                 capture_output=True, text=True, timeout=_GH_TIMEOUT_SECONDS,
                 env={**self._base_env, "GIT_TERMINAL_PROMPT": "0"},
@@ -108,7 +109,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
 
     def _ls_remote_refs(self, owner: str, repo: str, refs) -> dict:
         try:
-            result = subprocess.run(
+            result = run_in_group(
                 ["git", "ls-remote", "https://github.com/%s/%s.git" % (owner, repo), *refs],
                 capture_output=True, text=True, timeout=_GH_TIMEOUT_SECONDS,
                 env={**self._base_env, "GIT_TERMINAL_PROMPT": "0"},
@@ -143,7 +144,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
         if not sha:
             return ReadFailure(-1, "gh returned no head sha for %r" % pr)
         try:
-            result = subprocess.run(
+            result = run_in_group(
                 [
                     "gh", "api", "/repos/%s/%s/commits/%s" % (owner, repo, sha),
                     "--jq", ".commit.committer.date // empty",
@@ -177,7 +178,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
             % since
         )
         try:
-            r = subprocess.run(
+            r = run_in_group(
                 [
                     "gh", "api", "--paginate",
                     "/repos/%s/%s/issues/%s/comments?per_page=100" % (owner, repo, number),
@@ -225,7 +226,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
             % since
         )
         try:
-            r = subprocess.run(
+            r = run_in_group(
                 [
                     "gh", "api", "--paginate",
                     "/repos/%s/%s/pulls/%s/comments?per_page=100" % (owner, repo, number),
@@ -271,7 +272,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
 
     def head_sha(self, pr: str) -> Union[str, ReadFailure]:
         try:
-            result = subprocess.run(
+            result = run_in_group(
                 ["gh", "pr", "view", pr, "--json", "headRefOid"], capture_output=True, text=True,
                 timeout=_GH_TIMEOUT_SECONDS,
             )
@@ -289,7 +290,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
         if base is not None:
             return base or ReadFailure(-1, "gh pr view returned an empty baseRefName for %r" % pr)
         try:
-            result = subprocess.run(
+            result = run_in_group(
                 ["gh", "pr", "view", pr, "--json", "baseRefName"],
                 capture_output=True, text=True, timeout=_GH_TIMEOUT_SECONDS,
             )
@@ -316,7 +317,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
         if isinstance(base, ReadFailure):
             return base
         try:
-            r = subprocess.run(
+            r = run_in_group(
                 [
                     "gh", "api", "/repos/%s/%s/compare/%s...%s" % (owner, repo, base, sha),
                     "--jq", "[.files[]?.filename]",
@@ -340,7 +341,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
             return ReadFailure(-1, "pr is not a parseable GitHub PR URL: %r" % pr)
         owner, repo, number = parts
         try:
-            r = subprocess.run(
+            r = run_in_group(
                 [
                     "gh", "api", "--paginate",
                     "/repos/%s/%s/pulls/%s/files?per_page=100" % (owner, repo, number),
@@ -366,7 +367,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
         if isinstance(base, ReadFailure):
             return base
         try:
-            r = subprocess.run(
+            r = run_in_group(
                 [
                     "gh", "api", "/repos/%s/%s/compare/%s...%s" % (owner, repo, base, sha),
                     "--jq", "[.files[]? | {filename, patch, sha}]",
@@ -457,7 +458,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
         owner, repo, _number = parts
         directory = "repos/%s/%s/contents/.github/workflows" % (owner, repo)
         try:
-            listing = subprocess.run(
+            listing = run_in_group(
                 ["gh", "api", "%s?ref=%s" % (directory, sha),
                  "--jq", '[.[]? | select(.type=="file") | .name]'],
                 capture_output=True, text=True, timeout=_GH_TIMEOUT_SECONDS,
@@ -477,7 +478,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
             if not name.endswith((".yml", ".yaml")):
                 continue
             try:
-                raw = subprocess.run(
+                raw = run_in_group(
                     ["gh", "api", "-H", "Accept: application/vnd.github.raw",
                      "%s/%s?ref=%s" % (directory, name, sha)],
                     capture_output=True, text=True, timeout=_GH_TIMEOUT_SECONDS,
@@ -496,7 +497,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
         total = 0
         for event in ("pull_request", "pull_request_target"):
             try:
-                r = subprocess.run(
+                r = run_in_group(
                     ["gh", "api",
                      "repos/%s/%s/actions/runs?head_sha=%s&event=%s" % (owner, repo, sha, event),
                      "--jq", ".total_count"],
@@ -526,7 +527,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
             % since
         )
         try:
-            r = subprocess.run(
+            r = run_in_group(
                 [
                     "gh", "api", "--paginate",
                     "/repos/%s/%s/pulls/%s/reviews?per_page=100" % (owner, repo, number),
@@ -562,7 +563,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
 
     def authenticated_login(self) -> Union[str, ReadFailure]:
         try:
-            r = subprocess.run(
+            r = run_in_group(
                 ["gh", "api", "user", "--jq", ".login"],
                 capture_output=True, text=True, timeout=_GH_TIMEOUT_SECONDS)
         except subprocess.TimeoutExpired:
@@ -588,7 +589,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
 
     def _gh_api_json(self, path):
         try:
-            result = subprocess.run(
+            result = run_in_group(
                 ["gh", "api", path], capture_output=True, text=True,
                 timeout=_GH_TIMEOUT_SECONDS)
         except subprocess.TimeoutExpired:
@@ -653,7 +654,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
         ):
             return True
         try:
-            result = subprocess.run(
+            result = run_in_group(
                 ["gh", "api",
                  "repos/%s/branches/%s/protection/required_status_checks" % (repo_path, base)],
                 capture_output=True, text=True, timeout=_GH_TIMEOUT_SECONDS)
@@ -683,7 +684,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
                 if isinstance(entry, dict) and entry.get("context"):
                     names.add(entry["context"])
         try:
-            result = subprocess.run(
+            result = run_in_group(
                 ["gh", "api",
                  "repos/%s/branches/%s/protection/required_status_checks" % (repo_path, base)],
                 capture_output=True, text=True, timeout=_GH_TIMEOUT_SECONDS)
@@ -711,7 +712,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
             return ReadFailure(-1, "pr is not a parseable GitHub PR URL: %r" % pr)
         owner, repo, number = parts
         try:
-            result = subprocess.run(
+            result = run_in_group(
                 ["gh", "api", "-X", "PUT",
                  "repos/%s/%s/pulls/%s/update-branch" % (owner, repo, number),
                  "-f", "expected_head_sha=%s" % expected_head_sha,
@@ -726,7 +727,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
     def _gh_api_lines(self, path, jq, paginate=False):
         argv = ["gh", "api"] + (["--paginate"] if paginate else []) + [path, "--jq", jq]
         try:
-            result = subprocess.run(
+            result = run_in_group(
                 argv, capture_output=True, text=True, timeout=_GH_TIMEOUT_SECONDS)
         except subprocess.TimeoutExpired:
             return _timeout_read_failure()
@@ -788,7 +789,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
 
     def branch_tip(self, repo: str, base: str) -> Union[str, ReadFailure]:
         try:
-            result = subprocess.run(
+            result = run_in_group(
                 ["gh", "api", "repos/%s/branches/%s" % (repo, base), "--jq", ".commit.sha"],
                 capture_output=True, text=True, timeout=_GH_TIMEOUT_SECONDS)
         except subprocess.TimeoutExpired:
@@ -806,7 +807,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
             return ReadFailure(-1, "pr is not a parseable GitHub PR URL: %r" % pr)
         owner, repo, number = parts
         try:
-            result = subprocess.run(
+            result = run_in_group(
                 [
                     "gh", "pr", "view", pr, "--json",
                     "state,headRefOid,baseRefName,mergeable,mergeStateStatus,updatedAt,"

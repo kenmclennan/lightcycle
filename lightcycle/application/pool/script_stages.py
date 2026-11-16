@@ -15,12 +15,14 @@ from lightcycle.application.workflows.script_tooling import (
 from lightcycle.application.work.release_holds import ReleaseHolds
 from lightcycle.application.work.item_outputs import ItemOutputs
 from lightcycle.application.work.step_inputs import StepInputs
+from lightcycle.domain.pool.sleep import overlaps_sleep
 from lightcycle.domain.work import State, is_engine_step, script_log_label
 from lightcycle.domain.workflows.identity import parse_pin
 from lightcycle.domain.workflows.script_stage import parse_stage_output
 from lightcycle.ports.store import NodeNotFoundError
 
 STEP_KEY_PREFIX = "step:"
+SUSPEND_RETRY_ARTIFACT = "suspend-retry"
 
 
 @dataclass(frozen=True)
@@ -54,8 +56,8 @@ class ScriptStageUseCase:
     def in_flight(self):
         return [k for k in self._runner.running() if k.startswith(STEP_KEY_PREFIX)]
 
-    def execute(self, now: float) -> ScriptStagesResponse:
-        reaped, parked, refused = self._reap()
+    def execute(self, now: float, sleeps=()) -> ScriptStagesResponse:
+        reaped, parked, refused = self._reap(sleeps)
         started, start_parked = self._start()
         return ScriptStagesResponse(
             started=started, reaped=reaped, parked=parked + start_parked, refused=refused)
@@ -70,7 +72,7 @@ class ScriptStageUseCase:
             observation=describe_violation(label, reason, result, stdout_too),
             decision="Fix the script or its config, then resolve the step."))
 
-    def _reap(self):
+    def _reap(self, sleeps=()):
         reaped, parked, refused = [], [], []
         for key in self._runner.running():
             if not key.startswith(STEP_KEY_PREFIX):
@@ -79,14 +81,14 @@ class ScriptStageUseCase:
             if result is None:
                 continue
             reaped.append(key)
-            was_parked, refusal = self._reap_one(key[len(STEP_KEY_PREFIX):], result)
+            was_parked, refusal = self._reap_one(key[len(STEP_KEY_PREFIX):], result, sleeps)
             if was_parked:
                 parked.append(key)
             if refusal:
                 refused.append(refusal)
         return reaped, parked, refused
 
-    def _reap_one(self, step_id, result):
+    def _reap_one(self, step_id, result, sleeps=()):
         try:
             step = self._store.get_node(step_id)
         except NodeNotFoundError:
@@ -98,6 +100,8 @@ class ScriptStageUseCase:
         sd = flow_for(self._flow_service, step).step_def(step.stage)
         label = self._label(step, sd)
         reason, ok = result_violation(result, self._config.script_timeout_seconds())
+        if not ok and self._retry_after_suspend(step, result, sleeps):
+            return False, None
         if not ok:
             self._park_step(step, label, reason, result)
             return True, None
@@ -116,6 +120,19 @@ class ScriptStageUseCase:
         if resp.teardown_refusal:
             return False, (step.item, resp.teardown_refusal)
         return False, None
+
+    def _retry_after_suspend(self, step, result, sleeps):
+        if not (
+            result.timed_out and result.started_at is not None and result.finished_at is not None
+            and overlaps_sleep(result.started_at, result.finished_at, sleeps)
+        ):
+            return False
+        if any(a.type == SUSPEND_RETRY_ARTIFACT for a in self._store.item_artifacts(step.id)):
+            return False
+        self._store.replace_artifact(step.id, SUSPEND_RETRY_ARTIFACT, "1", internal=True)
+        self._store.note_condition(
+            step.id, "script timed out across a suspend; re-queued once")
+        return True
 
     def _start(self):
         started, parked = [], []

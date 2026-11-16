@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 
+from lightcycle.adapters.process_group import run_in_group
 from lightcycle.domain.health.gh_tooling import GhTooling
 from lightcycle.domain.pool.machine_headroom import MachineHeadroom
 from lightcycle.ports.machine import MachinePort
@@ -17,7 +18,7 @@ _STATUS_VM_HWM_RE = re.compile(r"^VmHWM:\s*(\d+) kB", re.MULTILINE)
 
 def _run(argv):
     try:
-        result = subprocess.run(
+        result = run_in_group(
             argv, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=_SUBPROCESS_TIMEOUT,
         )
     except (OSError, subprocess.SubprocessError):

@@ -30,19 +30,19 @@ class TestParseRemoteVersion(unittest.TestCase):
 
 class TestListProcesses(unittest.TestCase):
     def test_raises_when_ps_cannot_be_run(self):
-        with patch("lightcycle.adapters.upgrade.subprocess.run", side_effect=OSError("no such file")):
+        with patch("lightcycle.adapters.upgrade.run_in_group", side_effect=OSError("no such file")):
             with self.assertRaises(ProcessListUnreadableError):
                 _adapter().list_processes()
 
     def test_raises_when_ps_exits_nonzero(self):
         result = subprocess.CompletedProcess(args=["ps"], returncode=1, stdout=b"")
-        with patch("lightcycle.adapters.upgrade.subprocess.run", return_value=result):
+        with patch("lightcycle.adapters.upgrade.run_in_group", return_value=result):
             with self.assertRaises(ProcessListUnreadableError):
                 _adapter().list_processes()
 
     def test_returns_decoded_output_when_ps_succeeds(self):
         result = subprocess.CompletedProcess(args=["ps"], returncode=0, stdout=b"123 command\n")
-        with patch("lightcycle.adapters.upgrade.subprocess.run", return_value=result):
+        with patch("lightcycle.adapters.upgrade.run_in_group", return_value=result):
             self.assertEqual(_adapter().list_processes(), "123 command\n")
 
 
@@ -57,13 +57,13 @@ class TestFetchRemoteVersion(unittest.TestCase):
 class TestInstallUpgrade(unittest.TestCase):
     def test_translates_a_nonzero_exit_into_upgrade_install_error(self):
         failure = subprocess.CalledProcessError(2, ["pipx"])
-        with patch("lightcycle.adapters.upgrade.subprocess.run", side_effect=failure):
+        with patch("lightcycle.adapters.upgrade.run_in_group", side_effect=failure):
             with self.assertRaisesRegex(UpgradeInstallError, "status 2"):
                 _adapter().install_upgrade()
 
     def test_translates_a_timeout_into_upgrade_install_error(self):
         failure = subprocess.TimeoutExpired(["pipx"], 300)
-        with patch("lightcycle.adapters.upgrade.subprocess.run", side_effect=failure):
+        with patch("lightcycle.adapters.upgrade.run_in_group", side_effect=failure):
             with self.assertRaisesRegex(UpgradeInstallError, "300 seconds"):
                 _adapter().install_upgrade()
 

@@ -39,12 +39,35 @@ class TestSimClock(unittest.TestCase):
 
         self.assertEqual(clock(), 130.0)
 
+    def test_suspend_jumps_the_wall_clock_and_not_the_awake_clock(self):
+        clock = SimClock(start=100.0)
+
+        clock.suspend(7200)
+
+        self.assertEqual((clock(), clock.awake()), (7300.0, 100.0))
+
     def test_iso_renders_the_simulated_instant(self):
         clock = SimClock(start=0.0)
 
         clock.advance(86400)
 
         self.assertEqual(clock.iso(), "1970-01-02T00:00:00+00:00")
+
+
+class TestPoolRigSuspend(unittest.TestCase):
+    def test_a_suspend_between_ticks_is_recorded_by_the_container_tick(self):
+        rig = PoolRig(_MERGE_FLOW)
+        rig.tick()
+        rig.clock.advance(5)
+        rig.tick()
+        self.assertEqual(rig._extras["sleep_ledger"].load()["sleeps"], [])
+
+        rig.clock.suspend(7200)
+        rig.tick()
+
+        sleeps = rig._extras["sleep_ledger"].load()["sleeps"]
+        self.assertEqual(len(sleeps), 1)
+        self.assertAlmostEqual(sleeps[0][1] - sleeps[0][0], 7200.0)
 
 
 class TestLatentGitHub(unittest.TestCase):

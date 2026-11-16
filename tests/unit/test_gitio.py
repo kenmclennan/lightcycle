@@ -39,7 +39,7 @@ class TestRemoteUrl(unittest.TestCase):
 
     def test_raises_when_root_is_not_a_readable_git_repo(self):
         with patch(
-            "lightcycle.adapters.gitio.subprocess.run",
+            "lightcycle.adapters.gitio.run_in_group",
             side_effect=self._run(is_repo=False, remote_result=_proc(1)),
         ):
             with self.assertRaises(GitReadError):
@@ -47,7 +47,7 @@ class TestRemoteUrl(unittest.TestCase):
 
     def test_returns_none_when_no_origin_is_configured(self):
         with patch(
-            "lightcycle.adapters.gitio.subprocess.run",
+            "lightcycle.adapters.gitio.run_in_group",
             side_effect=self._run(
                 is_repo=True,
                 remote_result=_proc(2, stderr="error: No such remote 'origin'\n"),
@@ -57,7 +57,7 @@ class TestRemoteUrl(unittest.TestCase):
 
     def test_raises_when_git_fails_for_a_reason_other_than_missing_origin(self):
         with patch(
-            "lightcycle.adapters.gitio.subprocess.run",
+            "lightcycle.adapters.gitio.run_in_group",
             side_effect=self._run(is_repo=True, remote_result=_proc(128, stderr="fatal: boom\n")),
         ):
             with self.assertRaises(GitReadError):
@@ -66,7 +66,7 @@ class TestRemoteUrl(unittest.TestCase):
 
 class TestWorktreeBase(unittest.TestCase):
     def test_raises_when_root_is_not_a_readable_git_repo(self):
-        with patch("lightcycle.adapters.gitio.subprocess.run", return_value=_proc(1)):
+        with patch("lightcycle.adapters.gitio.run_in_group", return_value=_proc(1)):
             with self.assertRaises(GitReadError):
                 gitio.worktree_base("/repo")
 
@@ -76,7 +76,7 @@ class TestWorktreeBase(unittest.TestCase):
                 return _proc(0)
             return _proc(1)
 
-        with patch("lightcycle.adapters.gitio.subprocess.run", side_effect=side_effect):
+        with patch("lightcycle.adapters.gitio.run_in_group", side_effect=side_effect):
             self.assertIsNone(gitio.worktree_base("/repo"))
 
     def test_returns_the_first_base_ref_found(self):
@@ -87,7 +87,7 @@ class TestWorktreeBase(unittest.TestCase):
                 return _proc(0)
             return _proc(1)
 
-        with patch("lightcycle.adapters.gitio.subprocess.run", side_effect=side_effect):
+        with patch("lightcycle.adapters.gitio.run_in_group", side_effect=side_effect):
             self.assertEqual(gitio.worktree_base("/repo"), "origin/main")
 
 
@@ -98,27 +98,27 @@ class TestDeleteRemoteBranch(unittest.TestCase):
                 return _proc(1)
             return _proc(0)
 
-        with patch("lightcycle.adapters.gitio.subprocess.run", side_effect=side_effect) as mock_run:
+        with patch("lightcycle.adapters.gitio.run_in_group", side_effect=side_effect) as mock_run:
             gitio.delete_remote_branch("/repo", "feat/no-tracking-ref")
             push_calls = [c for c in mock_run.call_args_list if "--delete" in c.args[0]]
             self.assertEqual(len(push_calls), 1)
             self.assertIn("feat/no-tracking-ref", push_calls[0].args[0])
 
     def test_tolerates_push_failure_when_remote_already_gone(self):
-        with patch("lightcycle.adapters.gitio.subprocess.run", return_value=_proc(1)):
+        with patch("lightcycle.adapters.gitio.run_in_group", return_value=_proc(1)):
             outcome = gitio.delete_remote_branch("/repo", "feat/auto-deleted")
         self.assertFalse(outcome.ok)
 
     def test_ok_for_exit_zero_and_for_a_ref_that_does_not_exist(self):
-        with patch("lightcycle.adapters.gitio.subprocess.run", return_value=_proc(0)):
+        with patch("lightcycle.adapters.gitio.run_in_group", return_value=_proc(0)):
             self.assertTrue(gitio.delete_remote_branch("/repo", "b").ok)
         gone = _proc(1, stderr="error: unable to delete 'b': remote ref does not exist")
-        with patch("lightcycle.adapters.gitio.subprocess.run", return_value=gone):
+        with patch("lightcycle.adapters.gitio.run_in_group", return_value=gone):
             self.assertTrue(gitio.delete_remote_branch("/repo", "b").ok)
 
     def test_not_ok_carries_the_stderr(self):
         refused = _proc(128, stderr="fatal: 'origin' does not appear to be a git repository\n")
-        with patch("lightcycle.adapters.gitio.subprocess.run", return_value=refused):
+        with patch("lightcycle.adapters.gitio.run_in_group", return_value=refused):
             outcome = gitio.delete_remote_branch("/repo", "b")
         self.assertFalse(outcome.ok)
         self.assertIn("does not appear to be a git repository", outcome.detail)
@@ -133,7 +133,7 @@ class TestRemoveWorktree(unittest.TestCase):
                 return remove_proc
             return _proc(0)
 
-        return patch("lightcycle.adapters.gitio.subprocess.run", side_effect=side_effect)
+        return patch("lightcycle.adapters.gitio.run_in_group", side_effect=side_effect)
 
     def test_raises_with_stderr_on_nonzero_exit(self):
         with self._run(_proc(128, stderr="fatal: cannot remove a locked working tree")):
@@ -161,7 +161,7 @@ class TestRemoveWorktree(unittest.TestCase):
         def side_effect(args, **kwargs):
             return _proc(1, stderr="prune boom") if "prune" in args else _proc(0)
 
-        with patch("lightcycle.adapters.gitio.subprocess.run", side_effect=side_effect):
+        with patch("lightcycle.adapters.gitio.run_in_group", side_effect=side_effect):
             with self.assertRaises(GitReadError) as ctx:
                 gitio.remove_worktree("/repo", "/repo/.worktrees/x")
         self.assertIn("prune boom", str(ctx.exception))
@@ -176,7 +176,7 @@ class TestDeleteBranch(unittest.TestCase):
                 return _proc(0 if exists else 1)
             return delete_proc
 
-        return patch("lightcycle.adapters.gitio.subprocess.run", side_effect=side_effect)
+        return patch("lightcycle.adapters.gitio.run_in_group", side_effect=side_effect)
 
     def test_raises_when_branch_delete_fails_for_an_existing_branch(self):
         with self._run(True, _proc(1, stderr="error: cannot delete branch 'b' used by worktree")):
@@ -194,7 +194,7 @@ class TestCloneIdentity(unittest.TestCase):
     def test_invokes_gh_repo_clone_and_returns_true_on_success(self):
         dest = tempfile.mkdtemp() + "/widget"
         with patch(
-            "lightcycle.adapters.gitio.subprocess.run", return_value=_proc(0)
+            "lightcycle.adapters.gitio.run_in_group", return_value=_proc(0)
         ) as mock_run:
             result = GitAdapter().clone_identity("acme/widget", dest)
             self.assertTrue(result)
@@ -205,7 +205,7 @@ class TestCloneIdentity(unittest.TestCase):
 
     def test_returns_false_on_a_nonzero_returncode(self):
         dest = tempfile.mkdtemp() + "/widget"
-        with patch("lightcycle.adapters.gitio.subprocess.run", return_value=_proc(1)):
+        with patch("lightcycle.adapters.gitio.run_in_group", return_value=_proc(1)):
             result = GitAdapter().clone_identity("acme/widget", dest)
             self.assertFalse(result)
 
@@ -215,13 +215,13 @@ class TestGitTimeoutFailsClosed(unittest.TestCase):
         return subprocess.TimeoutExpired(cmd=["git"], timeout=gitio._GIT_TIMEOUT_SECONDS)
 
     def test_timeout_yields_completed_process_with_nonzero_returncode(self):
-        with patch("lightcycle.adapters.gitio.subprocess.run", side_effect=self._timeout()):
+        with patch("lightcycle.adapters.gitio.run_in_group", side_effect=self._timeout()):
             proc = gitio.git("/repo", "rev-parse", "--git-dir")
 
         self.assertNotEqual(proc.returncode, 0)
 
     def test_is_git_repo_reads_timeout_as_not_a_repo_with_no_exception(self):
-        with patch("lightcycle.adapters.gitio.subprocess.run", side_effect=self._timeout()):
+        with patch("lightcycle.adapters.gitio.run_in_group", side_effect=self._timeout()):
             result = gitio.is_git_repo("/repo")
 
         self.assertFalse(result)

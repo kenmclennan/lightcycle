@@ -215,7 +215,7 @@ class _RecordingMonitor:
     def __init__(self, events):
         self._events = events
 
-    def execute(self):
+    def execute(self, sleeps=()):
         self._events.append("monitor")
         return MonitorPrsResponse(merged=[])
 

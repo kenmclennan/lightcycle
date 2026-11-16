@@ -21,6 +21,7 @@ from lightcycle.ports.github_poll_runner import GithubPollRunnerPort
 from lightcycle.ports.run_groups import RunGroupsPort
 from lightcycle.ports.script_runner import ScriptRunnerPort
 from lightcycle.ports.spawner import SpawnerPort
+from lightcycle.ports.sleep_ledger import SleepLedgerPort
 from lightcycle.ports.spin import SpinPort
 from lightcycle.ports.store import StorePort
 from lightcycle.ports.teardown_ledger import TeardownLedgerPort
@@ -36,6 +37,7 @@ __all__ = [
     "GhShimPort",
     "GithubBudgetStatusPort",
     "TickTimingStatusPort",
+    "SleepLedgerPort",
     "ClaudeStreamPort",
     "ConfigReloadStatusPort",
     "FsPort",

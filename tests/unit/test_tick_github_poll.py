@@ -55,7 +55,7 @@ class _ProbeMonitor:
         self._probe = probe
         self.reads = []
 
-    def execute(self):
+    def execute(self, sleeps=()):
         self.reads.append(self._probe(self._snapshot))
         return NoOpMonitor().execute()
 
@@ -91,7 +91,7 @@ class _CiMonitor:
     def __init__(self, resolve):
         self._resolve = resolve
 
-    def execute(self):
+    def execute(self, sleeps=()):
         self._resolve.execute()
         return NoOpMonitor().execute()
 

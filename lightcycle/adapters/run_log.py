@@ -18,6 +18,8 @@ class LoggedRun:
     stderr_tail: str
     timed_out: bool
     log_path: Optional[str]
+    started_at: Optional[float] = None
+    finished_at: Optional[float] = None
 
 
 def decode(raw):
@@ -167,4 +169,5 @@ def run_logged(config, label, log_path, script_path, cwd, env, stdin_bytes, time
         prune_run_logs(config, label)
     return LoggedRun(
         exit_code=exit_code, stdout=stdout, stderr_tail=stderr_text[-TAIL_CHARS:],
-        timed_out=timed_out, log_path=log_path if handle is not None else None)
+        timed_out=timed_out, log_path=log_path if handle is not None else None,
+        started_at=started_at, finished_at=time.time())

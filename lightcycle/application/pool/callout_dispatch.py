@@ -7,6 +7,7 @@ from lightcycle.application.pool.pr_lookups import flow_for, skip_unpinned
 from lightcycle.application.setup.project_registry import ProjectRegistry
 from lightcycle.application.work.callout_hold import callout_runs_of
 from lightcycle.application.work.stack_layers import StackLayers
+from lightcycle.domain.pool.sleep import overlaps_sleep
 from lightcycle.domain.work import State, callout_log_label
 from lightcycle.domain.work.callout_preflight import (
     failure_message,
@@ -60,8 +61,8 @@ class CalloutDispatchUseCase:
         self._worktrees = worktrees
         self._stack = StackLayers(github)
 
-    def execute(self, now: float) -> CalloutDispatchResponse:
-        reaped = self._reap(now)
+    def execute(self, now: float, sleeps=()) -> CalloutDispatchResponse:
+        reaped = self._reap(now, sleeps)
         started = self._start(now)
         return CalloutDispatchResponse(started=started, reaped=reaped)
 
@@ -77,7 +78,7 @@ class CalloutDispatchUseCase:
         self._store.note_condition(step_id, "callout:%s: failed - %s" % (callout_id, message))
         return record
 
-    def _reap(self, now):
+    def _reap(self, now, sleeps=()):
         reaped = []
         running = set(self._runner.running())
         for step in self._store.all_steps():
@@ -88,7 +89,8 @@ class CalloutDispatchUseCase:
                     continue
                 key = callout_key(step.id, callout_id, record.get("phase", PHASE_RUN))
                 try:
-                    updated = self._reap_one(step, callout_id, record, key, key in running, now)
+                    updated = self._reap_one(
+                        step, callout_id, record, key, key in running, now, sleeps)
                 except _CALLOUT_ERRORS as e:
                     updated = self._record_failure(step.id, callout_id, record, str(e), now)
                 if updated is None:
@@ -100,12 +102,16 @@ class CalloutDispatchUseCase:
                 self._write(step.id, runs)
         return reaped
 
-    def _reap_one(self, step, callout_id, record, key, is_running, now):
+    def _reap_one(self, step, callout_id, record, key, is_running, now, sleeps=()):
         if not is_running:
             return self._record_failure(step.id, callout_id, record, INTERRUPTED_MESSAGE, now)
         result = self._runner.poll(key)
         if result is None:
             return None
+        if self._cut_short(record, result, sleeps):
+            restarted = self._restart(step, callout_id, record, now)
+            if restarted is not None:
+                return restarted
         if record.get("phase") == PHASE_PREFLIGHT:
             return self._reap_preflight(step, callout_id, record, result, now)
         if result.timed_out:
@@ -133,6 +139,31 @@ class CalloutDispatchUseCase:
                 {"label": a.label, "kind": a.kind, "value": a.value} for a in parsed.artifacts])
         return record
 
+    def _cut_short(self, record, result, sleeps):
+        return bool(
+            result.timed_out and not record.get("suspend_retried")
+            and result.started_at is not None and result.finished_at is not None
+            and overlaps_sleep(result.started_at, result.finished_at, sleeps))
+
+    def _restart(self, step, callout_id, record, now):
+        callout = self._callout(callout_id)
+        presents = self._presents(step)
+        if callout is None or presents is None:
+            return None
+        preflight = record.get("phase") == PHASE_PREFLIGHT
+        verb = "preflight" if preflight else "run"
+        limit = record.get("preflight_timeout") if preflight else callout.timeout
+        key = callout_key(step.id, callout_id, PHASE_PREFLIGHT if preflight else PHASE_RUN)
+        self._runner.start(
+            key, callout.command, self._cwd(step), self._config.base_env(),
+            json.dumps(self._request(step, callout, presents, verb)), limit,
+            callout_log_label(step.id, callout_id))
+        record = dict(record)
+        record.update(suspend_retried=True, deadline=now + limit)
+        self._store.note_condition(
+            step.id, "callout:%s: timed out across a suspend; restarted once" % callout_id)
+        return record
+
     def _reap_preflight(self, step, callout_id, record, result, now):
         errors = preflight_errors(result, record.get("preflight_timeout"))
         if errors:
@@ -143,6 +174,7 @@ class CalloutDispatchUseCase:
                 step.id, callout_id, record, "callout is no longer configured", now)
         presents = self._presents(step)
         record = dict(record)
+        record.pop("suspend_retried", None)
         record.update(phase=PHASE_RUN, deadline=now + callout.timeout)
         self._runner.start(
             callout_key(step.id, callout_id), callout.command, self._cwd(step),

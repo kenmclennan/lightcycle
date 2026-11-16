@@ -348,14 +348,14 @@ class TestScriptStageRefusalRunLog(unittest.TestCase):
         from lightcycle.application.pool.monitor_prs import MonitorPrsResponse
 
         class Monitor:
-            def execute(self):
+            def execute(self, sleeps=()):
                 return MonitorPrsResponse(merged=[], refused=[("APP-1", "APP-1 refused: dirty")])
 
             def reset(self):
                 return None
 
         class Gate:
-            def execute(self, now):
+            def execute(self, now, sleeps=()):
                 return ScriptStagesResponse(refused=[("APP-2", "APP-2 refused: unmerged")])
 
             def reset(self):

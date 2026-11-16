@@ -614,10 +614,13 @@ def _stop_pool_lines(resp, grace_seconds):
 
 def _stop_pool():
     grace_seconds = _container.config.shutdown_grace_seconds()
+    now = time.time()
+    sleeps = _container.observe_sleep().execute(now, time.monotonic())
     resp = _container.stop_pool(flow=_flow()).execute(
-        time.time(), _container.config.max_boot_seconds(),
+        now, _container.config.max_boot_seconds(),
         _container.config.stall_seconds(),
         shutdown_grace_seconds=grace_seconds,
+        sleeps=sleeps,
     )
     return _stop_pool_lines(resp, grace_seconds)
 

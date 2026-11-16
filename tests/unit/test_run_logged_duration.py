@@ -18,7 +18,7 @@ class TestRunLoggedDuration(unittest.TestCase):
         os.chmod(script, os.stat(script).st_mode | stat.S_IXUSR)
         log_path = os.path.join(root, "script-1.log")
 
-        with patch("lightcycle.adapters.run_log.time.time", side_effect=[1_700_000_000.0]):
+        with patch("lightcycle.adapters.run_log.time.time", side_effect=[1_700_000_000.0, 1_700_100_000.0]):
             run = run_logged(None, "other", log_path, script, root, dict(os.environ), None, 30, FakeRunGroups())
 
         self.assertEqual(run.exit_code, 0)
@@ -27,6 +27,8 @@ class TestRunLoggedDuration(unittest.TestCase):
         match = re.search(r"exit 0 \((\d+\.\d)s\)", text)
         self.assertIsNotNone(match, text)
         self.assertGreaterEqual(float(match.group(1)), 0.0)
+        self.assertLess(float(match.group(1)), 60.0)
+        self.assertEqual(run.finished_at - run.started_at, 100_000.0)
         self.assertIn("started: 2023-11-1", text)
 
 
