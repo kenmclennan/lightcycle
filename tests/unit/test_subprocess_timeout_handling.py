@@ -19,12 +19,12 @@ def _timeout(*_args, **_kwargs):
 
 class TestProcessStartTime(unittest.TestCase):
     def test_a_timed_out_ps_reads_as_no_start_time(self):
-        with mock.patch("lightcycle.adapters.workers.subprocess.run", side_effect=_timeout):
+        with mock.patch("lightcycle.adapters.workers.run_in_group", side_effect=_timeout):
             self.assertIsNone(process_start_time(1234))
 
     def test_ps_is_called_with_a_timeout(self):
         done = subprocess.CompletedProcess([], 0, stdout=b"Mon Nov  9 10:00:00 2026\n")
-        with mock.patch("lightcycle.adapters.workers.subprocess.run", return_value=done) as run:
+        with mock.patch("lightcycle.adapters.workers.run_in_group", return_value=done) as run:
             self.assertEqual(process_start_time(1234), "Mon Nov  9 10:00:00 2026")
         self.assertIsNotNone(run.call_args.kwargs["timeout"])
 
@@ -34,7 +34,7 @@ class TestWorkflowSourceFetchTimeouts(unittest.TestCase):
         return WorkflowSourceAdapter(FakeConfig(), WorkflowBundleAdapter())
 
     def test_a_clone_that_times_out_names_the_url(self):
-        with mock.patch("lightcycle.adapters.workflow_source.subprocess.run", side_effect=_timeout):
+        with mock.patch("lightcycle.adapters.workflow_source.run_in_group", side_effect=_timeout):
             with self.assertRaises(WorkflowSourceError) as caught:
                 self._adapter().fetch("https://example.test/acme.git", None)
         self.assertIn("could not clone https://example.test/acme.git", str(caught.exception))
@@ -45,7 +45,7 @@ class TestWorkflowSourceFetchTimeouts(unittest.TestCase):
                 return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
             raise subprocess.TimeoutExpired(cmd, 1)
 
-        with mock.patch("lightcycle.adapters.workflow_source.subprocess.run", side_effect=run):
+        with mock.patch("lightcycle.adapters.workflow_source.run_in_group", side_effect=run):
             with self.assertRaises(WorkflowSourceError) as caught:
                 self._adapter().fetch("https://example.test/acme.git", "v1")
         message = str(caught.exception)
@@ -58,7 +58,7 @@ class TestWorkflowSourceFetchTimeouts(unittest.TestCase):
                 raise subprocess.TimeoutExpired(cmd, 1)
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
-        with mock.patch("lightcycle.adapters.workflow_source.subprocess.run", side_effect=run):
+        with mock.patch("lightcycle.adapters.workflow_source.run_in_group", side_effect=run):
             with self.assertRaises(WorkflowSourceError) as caught:
                 self._adapter().fetch("https://example.test/acme.git", None)
         self.assertIn("could not resolve HEAD", str(caught.exception))

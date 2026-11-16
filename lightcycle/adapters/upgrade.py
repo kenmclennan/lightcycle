@@ -3,6 +3,7 @@ import subprocess
 import urllib.error
 import urllib.request
 
+from lightcycle.adapters.process_group import run_in_group
 from lightcycle.ports.upgrade import (
     ProcessListUnreadableError,
     RemoteVersionUnavailableError,
@@ -27,7 +28,7 @@ class UpgradeAdapter(UpgradePort):
 
     def list_processes(self):
         try:
-            result = subprocess.run(
+            result = run_in_group(
                 ["ps", "-eo", "pid=,args="], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                 timeout=10,
             )
@@ -51,7 +52,7 @@ class UpgradeAdapter(UpgradePort):
         env = self._config.base_env()
         env["UV_VENV_CLEAR"] = "1"
         try:
-            subprocess.run(_INSTALL_CMD, check=True, env=env, timeout=300)
+            run_in_group(_INSTALL_CMD, check=True, env=env, timeout=300)
         except subprocess.CalledProcessError as e:
             raise UpgradeInstallError("install exited with status %d" % e.returncode) from e
         except subprocess.TimeoutExpired as e:
@@ -59,7 +60,7 @@ class UpgradeAdapter(UpgradePort):
 
     def installed_version(self):
         try:
-            result = subprocess.run(["lc", "--version"], capture_output=True, text=True, timeout=10)
+            result = run_in_group(["lc", "--version"], capture_output=True, text=True, timeout=10)
         except (OSError, subprocess.SubprocessError):
             return None
         match = _SEMVER_RE.search(result.stdout)

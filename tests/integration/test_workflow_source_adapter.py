@@ -117,7 +117,7 @@ class TestFetch(unittest.TestCase):
                 shutil.rmtree(os.path.join(cmd[-1], ".git"))
             return result
 
-        with mock.patch("lightcycle.adapters.workflow_source.subprocess.run",
+        with mock.patch("lightcycle.adapters.workflow_source.run_in_group",
                         side_effect=_corrupt_git_dir_after_clone):
             with self.assertRaises(WorkflowSourceError):
                 adapter.fetch(repo, None)

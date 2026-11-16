@@ -4,6 +4,7 @@ import sys
 import urllib.parse
 import webbrowser
 
+from lightcycle.adapters.process_group import run_in_group
 from lightcycle.ports.launcher import LauncherPort
 
 
@@ -13,7 +14,7 @@ def _os_open_command():
 
 def open_path(path):
     try:
-        result = subprocess.run(
+        result = run_in_group(
             [_os_open_command(), path], capture_output=True, check=False, timeout=10
         )
     except Exception:

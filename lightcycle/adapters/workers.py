@@ -6,6 +6,7 @@ import subprocess
 import sys
 from contextlib import contextmanager
 
+from lightcycle.adapters.process_group import run_in_group
 from lightcycle.domain.pool.worker import Worker
 from lightcycle.domain.work.worker_log import gh_calls_filename
 from lightcycle.ports.workers import RegistryUnreadable, WorkersPort
@@ -65,7 +66,7 @@ PS_TIMEOUT_SECONDS = 5
 
 def process_start_time(pid):
     try:
-        out = subprocess.run(
+        out = run_in_group(
             ["ps", "-o", "lstart=", "-p", str(int(pid))],
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
