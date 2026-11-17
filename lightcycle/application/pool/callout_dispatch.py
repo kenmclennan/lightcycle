@@ -7,7 +7,7 @@ from lightcycle.application.pool.pr_lookups import flow_for, skip_unpinned
 from lightcycle.application.setup.project_registry import ProjectRegistry
 from lightcycle.application.work.callout_hold import callout_runs_of
 from lightcycle.application.work.stack_layers import StackLayers
-from lightcycle.domain.pool.sleep import overlaps_sleep
+from lightcycle.domain.pool.sleep import awake_elapsed, overlaps_sleep
 from lightcycle.domain.work import State, callout_log_label
 from lightcycle.domain.work.callout_preflight import (
     failure_message,
@@ -34,6 +34,8 @@ from lightcycle.ports.github import PrView
 from lightcycle.ports.store import NodeNotFoundError, ProjectResolutionError
 
 CALLOUT_KEY_PREFIX = "callout:"
+_DEADLINE_GRACE_SECONDS = 60
+_UNRETURNED_MESSAGE = "still running 60s past its deadline; the runner never returned it"
 _CALLOUT_ERRORS = (
     OSError, RuntimeError, ValueError, KeyError, TypeError, AttributeError, UseCaseError,
     NodeNotFoundError,
@@ -107,7 +109,7 @@ class CalloutDispatchUseCase:
             return self._record_failure(step.id, callout_id, record, INTERRUPTED_MESSAGE, now)
         result = self._runner.poll(key)
         if result is None:
-            return None
+            return self._abandon_if_overdue(step, callout_id, record, key, now, sleeps)
         if self._cut_short(record, result, sleeps):
             restarted = self._restart(step, callout_id, record, now)
             if restarted is not None:
@@ -138,6 +140,15 @@ class CalloutDispatchUseCase:
             artifacts=[
                 {"label": a.label, "kind": a.kind, "value": a.value} for a in parsed.artifacts])
         return record
+
+    def _abandon_if_overdue(self, step, callout_id, record, key, now, sleeps):
+        deadline = record.get("deadline")
+        if deadline is None:
+            return None
+        if awake_elapsed(deadline, now, sleeps) <= _DEADLINE_GRACE_SECONDS:
+            return None
+        self._runner.abandon(key)
+        return self._record_failure(step.id, callout_id, record, _UNRETURNED_MESSAGE, now)
 
     def _cut_short(self, record, result, sleeps):
         return bool(

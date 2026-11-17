@@ -83,6 +83,13 @@ class FakeScriptRunner(ScriptRunnerPort):
     def running(self):
         return sorted(self._running)
 
+    def abandon(self, key):
+        known = key in self._running
+        self._running.pop(key, None)
+        self._finished.pop(key, None)
+        self._due.pop(key, None)
+        return known
+
     def plant_orphan(self, key, pid):
         self._orphans[key] = pid
 

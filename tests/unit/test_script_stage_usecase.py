@@ -239,6 +239,17 @@ class TestReapThenStart(unittest.TestCase):
         self.assertEqual(rig.runner.running(), ["guard:weekly"])
 
 
+class TestForeignKeysDoNotCount(unittest.TestCase):
+    def test_callout_and_guard_keys_do_not_count_against_script_max_running(self):
+        rig = Rig(cap=1)
+        rig.runner.start("callout:S-1:a", "s", "/c", {}, "{}", 1, "callout-a")
+        rig.runner.start("guard:weekly", "s", "/c", {}, "{}", 1, "guard-weekly")
+        step = rig.step()
+
+        self.assertEqual(rig.runner.running(), ["callout:S-1:a", "guard:weekly"])
+        self.assertEqual(rig.gate.execute(0).started, [rig.key(step)])
+
+
 class TestConfigKeys(unittest.TestCase):
     def test_the_stage_hands_its_listed_keys_to_the_environment(self):
         lifecycle = StubScriptLifecycle()
