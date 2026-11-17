@@ -188,7 +188,7 @@ class TestCmdConfig(unittest.TestCase):
         self.assertNotIn("restarted", out)
 
 
-_BLOCK = "callout-x:\n  command: %s\n  subject: pr\n  wait: false\n  timeout: 5\n"
+_BLOCK = "callout-x:\n  command: %s\n  subject: pr\n  principal-outputs: code\n  wait: false\n  timeout: 5\n"
 
 
 class TestCmdConfigCalloutRegistration(unittest.TestCase):

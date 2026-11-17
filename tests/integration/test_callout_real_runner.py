@@ -25,7 +25,9 @@ class TestCalloutThroughTheRealRunner(unittest.TestCase):
         runner = ScriptRunnerAdapter(
             Config(environ={"LC_HOME": home, "LC_WORKER_HISTORY": "20"}), RunGroupsAdapter())
         real = callout("a", "pr")
-        real = type(real)(id="a", command=script, subject="pr", wait=False, timeout=30)
+        real = type(real)(
+            id="a", command=script, subject="pr", principal_outputs=("code",), wait=False,
+            timeout=30)
         rig = CalloutRig([real], runner=runner)
         step = rig.gate()
         self.assertEqual(rig.store.get_node(step).state, State.WAITING)

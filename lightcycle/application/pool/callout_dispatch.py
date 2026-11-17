@@ -210,9 +210,14 @@ class CalloutDispatchUseCase:
             presents = self._presents(step)
             if presents is None:
                 continue
+            principal_output = self._principal_output(step)
+            if principal_output is None:
+                continue
             runs = callout_runs_of(self._store, step.id)
             for callout in callouts:
                 if callout.subject != presents or callout.id in runs:
+                    continue
+                if principal_output not in callout.principal_outputs:
                     continue
                 key = callout_key(step.id, callout.id, PHASE_PREFLIGHT)
                 limit = preflight_timeout(callout.timeout)
@@ -242,6 +247,14 @@ class CalloutDispatchUseCase:
         except _CALLOUT_ERRORS:
             return None
         return str(value).strip() if value is not None else None
+
+    def _principal_output(self, step):
+        try:
+            if skip_unpinned(self._store, self._flow_service, step):
+                return None
+            return flow_for(self._flow_service, step).principal_output(step.stage)
+        except _CALLOUT_ERRORS:
+            return None
 
     def _repo_path(self, step):
         repo = self._store.item_fields(step.item).repo
@@ -273,7 +286,8 @@ class CalloutDispatchUseCase:
             "id": item.id, "title": item.title, "repo": item.repo, "project": item.project}
         request["step"] = {
             "id": step.id, "stage": step.stage,
-            "workflow": self._flow_service.workflow_for(step)}
+            "workflow": self._flow_service.workflow_for(step),
+            "principal_output": self._principal_output(step)}
         if verb == "run":
             request["subject"] = self._subject(step, item, presents)
         request["repos"] = {

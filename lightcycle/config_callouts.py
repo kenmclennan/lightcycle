@@ -1,11 +1,12 @@
 import re
 from dataclasses import dataclass
+from typing import Tuple
 
 from lightcycle.config_ranges import parse_bool
 from lightcycle.domain.work.step_focus import parse_presents
 
 CALLOUT_KEY_PREFIX = "callout-"
-CALLOUT_KEYS = ("command", "subject", "wait", "timeout")
+CALLOUT_KEYS = ("command", "subject", "principal-outputs", "wait", "timeout")
 _ID = re.compile(r"^[a-z0-9-]+$")
 
 
@@ -14,6 +15,7 @@ class Callout:
     id: str
     command: str
     subject: str
+    principal_outputs: Tuple[str, ...]
     wait: bool
     timeout: int
 
@@ -40,6 +42,13 @@ def _timeout_problem(raw):
     return None
 
 
+def parse_principal_outputs(raw):
+    names = tuple(n.strip() for n in str(raw).split(","))
+    if not names or not all(_ID.match(n) for n in names):
+        return None
+    return names
+
+
 def callout_problems(block, callout_id):
     problems = []
     if not _ID.match(callout_id or ""):
@@ -54,6 +63,11 @@ def callout_problems(block, callout_id):
     if not _blank(subject) and parse_presents(subject) is None:
         problems.append(
             "key 'subject' must be pr, description or artifact:<name> (got %r)" % subject)
+    principal_outputs = block.get("principal-outputs")
+    if not _blank(principal_outputs) and parse_principal_outputs(principal_outputs) is None:
+        problems.append(
+            "key 'principal-outputs' must be comma-separated names matching [a-z0-9-]+ (got %r)"
+            % principal_outputs)
     wait = block.get("wait")
     if not _blank(wait):
         try:
@@ -77,6 +91,7 @@ def valid_callouts(blocks, expand_path):
             id=callout_id,
             command=expand_path(str(block["command"]).strip()),
             subject=str(block["subject"]).strip(),
+            principal_outputs=parse_principal_outputs(block["principal-outputs"]),
             wait=parse_bool("wait", block["wait"]),
             timeout=int(str(block["timeout"]).strip()),
         ))

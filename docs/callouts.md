@@ -10,14 +10,20 @@ A `callout-<id>` block in the config file, `<id>` matching `[a-z0-9-]+`. Every k
 callout-pr-view:
   command: ~/bin/render-pr
   subject: pr
+  principal-outputs: code
   wait: false
   timeout: 60
 ```
 
 - `command` - one executable path, `~` expanded. No arguments and no shell: wrap arguments in a script.
-- `subject` - what the gate presents: `pr`, `description` or `artifact:<name>`. The callout runs once for each waiting human gate whose `presents` equals it.
+- `subject` - what the gate presents: `pr`, `description` or `artifact:<name>`. The callout runs once for each waiting human gate whose `presents` equals it and whose principal output the next key lists (see [Matching](#matching)).
+- `principal-outputs` - comma-separated names matching `[a-z0-9-]+`, at least one: the principal outputs the callout runs on, for example `spec` or `spec, code`. The engine holds no list of valid names; they are the values the workflows declare.
 - `wait` - `true` holds the gate out of `lc inbox` until the callout finishes or times out. The hold ends on success, failure, timeout and a pool restart. `false` runs alongside.
 - `timeout` - whole seconds, at least 1. The runner kills the process at the limit.
+
+### Matching
+
+A callout starts at a waiting human gate only when both hold: its `subject` equals the gate's `presents`, and the gate's **principal output** is one of its `principal-outputs`. A gate's principal output is resolved from its phase: the `principal-output:` front-matter value declared by the authoring steps that share the gate's phase (the stages that share its PR). Exactly one distinct value resolves; none, or two that differ, resolve to nothing and no callout starts at that gate. A workflow that declares `principal-output:` on no step is accepted but resolves nothing, so no callout runs at its gates. A workflow that declares it on at least one step must declare it completely: `lc workflow add`, `upgrade` and `check --dir` refuse a PR-carrying phase whose stages declare none or disagree, naming the stages.
 
 `lc doctor` reports a block with a problem as `callout-invalid`; such a block never runs. It also runs each valid callout's [preflight](#preflight) and reports its problems.
 
@@ -31,13 +37,18 @@ The engine writes one JSON object to the callout's stdin, then closes it. `verb`
   "verb": "run",
   "callout": "<id>",
   "item": { "id": "...", "title": "...", "repo": "...", "project": "..." },
-  "step": { "id": "...", "stage": "...", "workflow": "<origin>/<name>@<sha>" },
+  "step": {
+    "id": "...",
+    "stage": "...",
+    "workflow": "<origin>/<name>@<sha>",
+    "principal_output": "spec"
+  },
   "subject": { "kind": "pr", "url": "...", "base": "...", "stack_layers": [] },
   "repos": { "repo_path": "...", "workspace": "..." }
 }
 ```
 
-`subject` varies by the gate's `presents`:
+`step.principal_output` is the gate's resolved principal output, the value that selected this callout; it is `null` only where no callout starts. `subject` varies by the gate's `presents`:
 
 - `pr`: `kind`, `url`, `base` and `stack_layers` (each layer has `number`, `url`, `head_ref`, `base_ref`, `head_sha`, `state`). When the stack read fails the key is `stack_error` instead.
 - `description`: `{"kind": "description", "value": "..."}`.
@@ -75,7 +86,7 @@ A callout answers a second verb, `preflight`, by checking its own prerequisites 
 }
 ```
 
-`context` is `doctor`, `register` or `gate`. In `doctor` and `register` the `item`, `step` and `repos` keys are `null`: check the repository only when `repos` is non-null. In a `gate` preflight they are filled as in a run request and `subject` is omitted. The timeout is the callout's own, capped at 30 seconds.
+`context` is `doctor`, `register` or `gate`. In `doctor` and `register` the `item`, `step` and `repos` keys are `null`: check the repository only when `repos` is non-null. In a `gate` preflight they are filled as in a run request, `step` carries `principal_output`, and `subject` is omitted. The timeout is the callout's own, capped at 30 seconds.
 
 The response is `{"status": "ok"}` or `{"status": "failed", "errors": [{"message": "...", "fix": "..."}]}`, validated against [the schema](schemas/callout-preflight.schema.json). `errors` is required when `failed` and must be empty when `ok`. A protocol 1 callout that ignores `verb` and answers with its run response is read as a passing preflight.
 
