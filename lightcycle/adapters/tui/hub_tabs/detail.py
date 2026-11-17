@@ -30,7 +30,7 @@ from lightcycle.adapters.tui.hub_render import (
     detail_link_keys,
     detail_row_cells,
     resolve_detail_file,
-    detail_value_is_block,
+    wrap_detail_label,
     PARK_PANEL_TITLE,
     park_panel_text,
     shorten_home,
@@ -57,7 +57,9 @@ class DetailTabMixin:
 
     def _detail_layout(self, table, fields):
         labels = self._last_detail_labels
-        atomic_values = {"key": [_detail_field_label(key, labels) for key, _value in fields]}
+        atomic_values = {"key": [
+            line for key, _value in fields for line in wrap_detail_label(_detail_field_label(key, labels))
+        ]}
         row_budget = screen_row_budget_for(table, len(COLUMN_GRIDS["detail"]))
         return compute_layout(row_budget, [], atomic_values, indent=DETAIL_CONTINUATION_INDENT)
 
@@ -92,8 +94,7 @@ class DetailTabMixin:
             return None
 
     def _detail_rows(self, fields, layout, row_budget):
-        blocks = "\n".join(value for _key, value in fields if detail_value_is_block(value))
-        titles = resolve_titles(self._container.store, blocks)
+        titles = resolve_titles(self._container.store, "\n".join(value for _key, value in fields))
         home = self._home_dir()
         rows = []
         for key, value in fields:
