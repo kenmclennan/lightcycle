@@ -166,8 +166,8 @@ COMMAND_GROUPS = [
         ("tui", "[--start]", "launch the interactive dashboard (priority list + pool/breaker status); --start first starts the pool in the background if it is not already running"),
     ]),
     ("Work primitives", [
-        ("new", "<type> \"title\" [item: --description/--workflow/--repo | step: --parent/--step/--note]",
-         "create an item or a step; each takes only its own fields"),
+        ("new", "<type> \"title\" [item: --description/--workflow/--repo | step: --parent/--step/--note/--replace]",
+         "create an item or a step; each takes only its own fields; a step is refused beside an open main-path step of its phase unless --replace names it"),
         ("set", "<id> [item: --title/--desc/--workflow/--state | step: --notes/--needs/--state]",
          "update an item or a step; refuses a field the other one owns"),
         ("rm", "<id> [--force]", "delete a node; refuses on a live worker, a dirty worktree or an unmerged branch "

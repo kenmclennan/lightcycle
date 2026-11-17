@@ -217,6 +217,7 @@ COMMANDS = {
         Arg("--backlog", action="append"), Arg("--step"),
         Arg("--caused-by", action="append", help="item id of the work this item fixes"),
         Arg("--found-by", help="how the defect was found, one token"),
+        Arg("--replace", help="open step of --parent to remove while filing this one"),
     )),
     "set": CommandSpec(prog="lc set", args=(
         *(Arg("--%s" % opt) for opt in (

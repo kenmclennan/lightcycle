@@ -7,6 +7,10 @@ from lightcycle.application.work.item_outputs import ItemOutputs
 from lightcycle.application.work.step_inputs import StepInputs
 from tests.support.fake_fs import FakeFs, graph_text_from_metas
 from tests.support.fake_store import FakeStore
+from pathlib import Path
+
+from lightcycle.domain.flow.graph import parse_graph
+from tests.support.fake_workers import FakeWorkers
 
 
 class _Config:
@@ -59,7 +63,7 @@ class TestCreateStepUseCase(unittest.TestCase):
         s = FakeStore()
         parent = s.create_item("an item", "a description", workflow="standard")
         s.complete_node(parent, "done")
-        use_case = CreateStepUseCase(s, _flow(s), _Config())
+        use_case = CreateStepUseCase(s, _flow(s), _Config(), FakeWorkers())
         with self.assertRaises(UseCaseError) as ctx:
             use_case.execute(CreateStepInput(title="", step="build", parent=parent))
         self.assertEqual(
@@ -74,7 +78,7 @@ class TestCreateStepUseCase(unittest.TestCase):
     def test_role_resolves_from_the_parents_pinned_workflow(self):
         s = FakeStore()
         parent = s.create_item("an item", "a description", workflow="standard")
-        resp = CreateStepUseCase(s, _flow(s), _Config()).execute(
+        resp = CreateStepUseCase(s, _flow(s), _Config(), FakeWorkers()).execute(
             CreateStepInput(title="", step="build", parent=parent)
         )
         step = s.get_node(resp.id)
@@ -85,7 +89,7 @@ class TestCreateStepUseCase(unittest.TestCase):
     def test_role_resolves_from_an_explicit_workflow(self):
         s = FakeStore()
         parent = s.create_item("an item", "a description")
-        resp = CreateStepUseCase(s, _flow(s), _Config()).execute(
+        resp = CreateStepUseCase(s, _flow(s), _Config(), FakeWorkers()).execute(
             CreateStepInput(title="", step="build", parent=parent, workflow="standard")
         )
         self.assertEqual(s.get_node(resp.id).role, "agent")
@@ -94,7 +98,7 @@ class TestCreateStepUseCase(unittest.TestCase):
         s = FakeStore()
         parent = s.create_item("an item", "a description", workflow="standard")
         with self.assertRaises(UseCaseError) as ctx:
-            CreateStepUseCase(s, _flow(s), _Config()).execute(
+            CreateStepUseCase(s, _flow(s), _Config(), FakeWorkers()).execute(
                 CreateStepInput(title="build it", step="not-a-real-step", parent=parent)
             )
         self.assertIn("build", str(ctx.exception))
@@ -103,7 +107,7 @@ class TestCreateStepUseCase(unittest.TestCase):
         s = FakeStore()
         parent = s.create_item("an item", "a description", workflow="standard")
         with self.assertRaises(UseCaseError) as ctx:
-            CreateStepUseCase(s, _flow(s), _Config()).execute(
+            CreateStepUseCase(s, _flow(s), _Config(), FakeWorkers()).execute(
                 CreateStepInput(title="x" * 81, step="build", parent=parent)
             )
         self.assertIn("title exceeds 80 chars", str(ctx.exception))
@@ -112,7 +116,7 @@ class TestCreateStepUseCase(unittest.TestCase):
         s = FakeStore()
         parent = s.create_item("an item", "a description")
         with self.assertRaises(UseCaseError) as ctx:
-            CreateStepUseCase(s, _flow_with_single_default_origin(s), _Config()).execute(
+            CreateStepUseCase(s, _flow_with_single_default_origin(s), _Config(), FakeWorkers()).execute(
                 CreateStepInput(title="", step="build", parent=parent)
             )
         self.assertIn("no workflow selected", str(ctx.exception))
@@ -120,7 +124,7 @@ class TestCreateStepUseCase(unittest.TestCase):
     def test_unknown_parent_raises(self):
         s = FakeStore()
         with self.assertRaises(UseCaseError) as ctx:
-            CreateStepUseCase(s, _flow(s), _Config()).execute(
+            CreateStepUseCase(s, _flow(s), _Config(), FakeWorkers()).execute(
                 CreateStepInput(title="build it", step="build", parent="does-not-exist")
             )
         self.assertIn("does-not-exist", str(ctx.exception))
@@ -128,7 +132,7 @@ class TestCreateStepUseCase(unittest.TestCase):
     def test_note_is_written_when_given(self):
         s = FakeStore()
         parent = s.create_item("an item", "a description", workflow="standard")
-        resp = CreateStepUseCase(s, _flow(s), _Config()).execute(
+        resp = CreateStepUseCase(s, _flow(s), _Config(), FakeWorkers()).execute(
             CreateStepInput(
                 title="", step="build", parent=parent, note=["watch", "for", "flakes"]
             )
@@ -146,7 +150,7 @@ class TestCreateStepUseCase(unittest.TestCase):
 
         s.note = _boom
         with self.assertRaises(RuntimeError):
-            CreateStepUseCase(s, _flow(s), _Config()).execute(
+            CreateStepUseCase(s, _flow(s), _Config(), FakeWorkers()).execute(
                 CreateStepInput(title="", step="build", parent=parent, note=["x"])
             )
         self.assertEqual(s._records, before)
@@ -155,7 +159,7 @@ class TestCreateStepUseCase(unittest.TestCase):
     def test_a_step_filed_with_no_pass_yet_open_is_enrolled_into_a_freshly_opened_pass_1(self):
         s = FakeStore()
         parent = s.create_item("an item", "a description", workflow="standard")
-        resp = CreateStepUseCase(s, _flow(s), _Config()).execute(
+        resp = CreateStepUseCase(s, _flow(s), _Config(), FakeWorkers()).execute(
             CreateStepInput(title="", step="build", parent=parent)
         )
         current = s.current_pass(parent)
@@ -168,7 +172,7 @@ class TestCreateStepUseCase(unittest.TestCase):
         pid1 = s.open_pass(parent)
         s.close_pass(pid1)
         pid2 = s.open_pass(parent)
-        resp = CreateStepUseCase(s, _flow(s), _Config()).execute(
+        resp = CreateStepUseCase(s, _flow(s), _Config(), FakeWorkers()).execute(
             CreateStepInput(title="", step="build", parent=parent)
         )
         self.assertEqual(s.get_node(resp.id).pass_id, pid2)
@@ -179,7 +183,7 @@ class TestCreateStepUseCase(unittest.TestCase):
         pid1 = s.open_pass(parent)
         s.close_pass(pid1)
         pid2 = s.open_pass(parent)
-        resp = CreateStepUseCase(s, _flow(s), _Config()).execute(
+        resp = CreateStepUseCase(s, _flow(s), _Config(), FakeWorkers()).execute(
             CreateStepInput(title="", step="build", parent=parent, workflow="standard")
         )
         self.assertEqual(s.get_node(resp.id).pass_id, pid2)
@@ -189,7 +193,7 @@ class TestCreateStepUseCase(unittest.TestCase):
         parent = s.create_item("an item", "a description", workflow="standard")
         before = dict(s._records)
         with self.assertRaises(UseCaseError) as ctx:
-            CreateStepUseCase(s, _flow(s), _Config()).execute(
+            CreateStepUseCase(s, _flow(s), _Config(), FakeWorkers()).execute(
                 CreateStepInput(title="build it", step="build", parent=parent)
             )
         self.assertIn("title", str(ctx.exception))
@@ -228,7 +232,7 @@ class TestCreateStepPrevious(unittest.TestCase):
         parent = s.create_item("an item", "a description", workflow="standard")
         closed = _closed_step(s, parent, "ci failed: test_x")
         self.assertTrue(s.get_node(closed).report)
-        resp = CreateStepUseCase(s, flow, _Config()).execute(
+        resp = CreateStepUseCase(s, flow, _Config(), FakeWorkers()).execute(
             CreateStepInput(title="", step="build", parent=parent, note=["try the other layer"])
         )
         self.assertEqual(s.get_node(resp.id).previous_step, closed)
@@ -245,7 +249,7 @@ class TestCreateStepPrevious(unittest.TestCase):
         later_created = s.create_step(stage="build", role="agent", item=parent)
         s.complete_node(later_created, "done")
         s.complete_node(earlier_created, "done")
-        resp = CreateStepUseCase(s, _flow(s), _Config()).execute(
+        resp = CreateStepUseCase(s, _flow(s), _Config(), FakeWorkers()).execute(
             CreateStepInput(title="", step="build", parent=parent)
         )
         self.assertEqual(s.get_node(resp.id).previous_step, earlier_created)
@@ -259,7 +263,7 @@ class TestCreateStepPrevious(unittest.TestCase):
         s.complete_node(second, "done")
         for tid in (first, second):
             s._records[tid]["closed_at"] = "2026-01-01T00:01:00+00:00"
-        resp = CreateStepUseCase(s, _flow(s), _Config()).execute(
+        resp = CreateStepUseCase(s, _flow(s), _Config(), FakeWorkers()).execute(
             CreateStepInput(title="", step="build", parent=parent)
         )
         self.assertEqual(s.get_node(resp.id).previous_step, second)
@@ -268,9 +272,156 @@ class TestCreateStepPrevious(unittest.TestCase):
         s = FakeStore(now=_tick_clock())
         flow = _flow(s)
         parent = s.create_item("an item", "a description", workflow="standard")
-        s.create_step(stage="build", role="agent", item=parent)
-        resp = CreateStepUseCase(s, flow, _Config()).execute(
-            CreateStepInput(title="", step="build", parent=parent)
+        open_step = s.create_step(stage="build", role="agent", item=parent)
+        resp = CreateStepUseCase(s, flow, _Config(), FakeWorkers()).execute(
+            CreateStepInput(title="", step="build", parent=parent, replace=open_step)
         )
         self.assertIsNone(s.get_node(resp.id).previous_step)
         self.assertIsNone(_build(s, flow, resp.id)["previous"])
+
+
+_PHASED = {
+    "cutter": {"step": "cut-delivery", "phase": "code", "routes": {"done": "write-code"}},
+    "coder": {"step": "write-code", "phase": "code", "routes": {"done": "merge"}},
+    "feedback": {"step": "handle-feedback", "phase": "code"},
+}
+
+
+def _phased_flow(store):
+    workflow = graph_text_from_metas(_PHASED, entry="cut-delivery")
+    return FlowService(FakeFs(_PHASED, workflow=workflow), store)
+
+
+def _guarded(workers=None):
+    s = FakeStore(now=_tick_clock())
+    parent = s.create_item("an item", "a description", workflow="standard")
+    use_case = CreateStepUseCase(s, _phased_flow(s), _Config(), workers or FakeWorkers())
+    return s, parent, use_case
+
+
+def _file(use_case, parent, step, **kw):
+    return use_case.execute(CreateStepInput(title="", step=step, parent=parent, **kw))
+
+
+class TestForkGuard(unittest.TestCase):
+    def test_a_second_main_path_step_in_the_phase_is_refused_and_nothing_is_stored(self):
+        s, parent, use_case = _guarded()
+        open_step = s.create_step(stage="cut-delivery", role="cutter", item=parent)
+        self.assertIn(open_step, [t.id for t in s.all_steps_including_done()])
+        before = dict(s._records)
+        with self.assertRaises(UseCaseError) as ctx:
+            _file(use_case, parent, "write-code")
+        msg = str(ctx.exception)
+        for part in (open_step, "cut-delivery", "phase code", "lc rm", "lc done", "--replace"):
+            self.assertIn(part, msg)
+        self.assertEqual(dict(s._records), before)
+
+    def test_an_off_path_step_is_allowed_beside_an_open_main_path_step(self):
+        s, parent, use_case = _guarded()
+        s.create_step(stage="cut-delivery", role="cutter", item=parent)
+        resp = _file(use_case, parent, "handle-feedback")
+        self.assertEqual(s.get_node(resp.id).stage, "handle-feedback")
+
+    def test_a_main_path_step_is_allowed_when_none_is_open_in_its_phase(self):
+        s, parent, use_case = _guarded()
+        self.assertTrue(_file(use_case, parent, "write-code").id)
+        s2, parent2, use_case2 = _guarded()
+        closed = s2.create_step(stage="cut-delivery", role="cutter", item=parent2)
+        s2.complete_node(closed, "done")
+        self.assertTrue(_file(use_case2, parent2, "write-code").id)
+
+    def test_a_pre_existing_fork_between_other_steps_does_not_block_an_off_path_step(self):
+        s, parent, use_case = _guarded()
+        s.create_step(stage="cut-delivery", role="cutter", item=parent)
+        s.create_step(stage="write-code", role="coder", item=parent)
+        self.assertTrue(_file(use_case, parent, "handle-feedback").id)
+
+    def test_guard_agrees_with_the_doctors_forks_on_the_committed_spec_driven_graph(self):
+        text = Path("tests/support/library/workflows/spec-driven.md").read_text()
+        graph = parse_graph(text)
+
+        class _Flow:
+            def __init__(self, inner):
+                self._inner = inner
+
+            def graph_for(self, node):
+                return graph
+
+            def __getattr__(self, name):
+                return getattr(self._inner, name)
+
+        metas = {"coder": {"step": "write-code", "routes": {"done": "watch-ci"}}}
+        inner = FlowService(
+            FakeFs(metas, workflow=graph_text_from_metas(metas, entry="write-code")),
+            FakeStore(),
+        )
+        node_store = FakeStore()
+        parent = node_store.create_item("an item", "a description", workflow="standard")
+        node_store.create_step(stage="watch-ci", role="agent", item=parent)
+        use_case = CreateStepUseCase(
+            node_store, _Flow(inner), _Config(), FakeWorkers()
+        )
+        before = dict(node_store._records)
+        with self.assertRaises(UseCaseError):
+            _file(use_case, parent, "write-code")
+        self.assertEqual(dict(node_store._records), before)
+
+
+class TestReplace(unittest.TestCase):
+    def test_replace_removes_the_named_open_step_and_files_the_new_one_together(self):
+        s, parent, use_case = _guarded()
+        old = s.create_step(stage="cut-delivery", role="cutter", item=parent)
+        self.assertIn(old, [t.id for t in s.all_steps_including_done()])
+        resp = _file(use_case, parent, "write-code", replace=old)
+        ids = [t.id for t in s.all_steps_including_done()]
+        self.assertNotIn(old, ids)
+        self.assertIn(resp.id, ids)
+        self.assertEqual(s.get_node(resp.id).pass_id, s.current_pass(parent).id)
+
+    def test_replace_rolls_back_the_delete_when_filing_fails(self):
+        s, parent, use_case = _guarded()
+        old = s.create_step(stage="cut-delivery", role="cutter", item=parent)
+
+        def boom(*a, **k):
+            raise RuntimeError("note write failed")
+
+        s.note = boom
+        with self.assertRaises(RuntimeError):
+            _file(use_case, parent, "write-code", note=["x"], replace=old)
+        self.assertIn(old, [t.id for t in s.all_steps_including_done()])
+
+    def test_replace_refuses_an_unknown_other_item_closed_or_live_claimed_step(self):
+        workers = FakeWorkers(
+            workers=[{"spawnid": "sp1", "pid": 7, "started": 1, "step": None}],
+            alive_pids=(7,),
+        )
+        s, parent, use_case = _guarded(workers)
+        other = s.create_item("another", "a description", workflow="standard")
+        foreign = s.create_step(stage="cut-delivery", role="cutter", item=other)
+        closed = s.create_step(stage="cut-delivery", role="cutter", item=parent)
+        s.complete_node(closed, "done")
+        live = s.create_step(stage="cut-delivery", role="cutter", item=parent)
+        s.claim_ready("cutter", "sp1", item=parent)
+        workers.seed([{"spawnid": "sp1", "pid": 7, "started": 1, "step": live}])
+        for target, needle in (
+            ("NOPE-1", "no such step"),
+            (foreign, "belongs to item"),
+            (closed, "already closed"),
+            (live, "claimed by a live worker"),
+        ):
+            before = dict(s._records)
+            with self.assertRaises(UseCaseError) as ctx:
+                _file(use_case, parent, "write-code", replace=target)
+            self.assertIn(needle, str(ctx.exception))
+            self.assertEqual(dict(s._records), before)
+
+    def test_replace_of_a_step_that_is_not_the_fork_cause_is_refused_and_removes_nothing(self):
+        s, parent, use_case = _guarded()
+        a = s.create_step(stage="cut-delivery", role="cutter", item=parent)
+        b = s.create_step(stage="write-code", role="coder", item=parent)
+        off = s.create_step(stage="handle-feedback", role="feedback", item=parent)
+        with self.assertRaises(UseCaseError):
+            _file(use_case, parent, "write-code", replace=off)
+        ids = [t.id for t in s.all_steps_including_done()]
+        for kept in (a, b, off):
+            self.assertIn(kept, ids)

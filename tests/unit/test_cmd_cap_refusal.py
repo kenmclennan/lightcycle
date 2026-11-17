@@ -106,7 +106,7 @@ class TestCloseRefusesAnOverLongNote(unittest.TestCase):
 class TestNewStepRefusesAnOverLongNote(unittest.TestCase):
     def setUp(self):
         self.h = Harness(["coder", "reviewer"])
-        self.item, _ = _activated(self.h)
+        self.item, self.entry_step = _activated(self.h)
 
     def _step_count(self):
         return len(self.h.store.all_nodes())
@@ -122,6 +122,7 @@ class TestNewStepRefusesAnOverLongNote(unittest.TestCase):
         self.assertEqual(self._step_count(), before)
 
     def test_short_note_creates_the_step(self):
+        self.h.store.complete_node(self.entry_step, "done")
         before = self._step_count()
         rc, out, err = self.h.run(
             "new", "step", "", "--step", "build", "--parent", self.item, "--note", SHORT
