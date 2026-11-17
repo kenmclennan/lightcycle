@@ -2,7 +2,7 @@ import sys
 from dataclasses import dataclass
 
 from lightcycle.application.errors import UseCaseError
-from lightcycle.domain.pool import WorkerPool
+from lightcycle.application.work.live_worker import live_claimed_step
 from lightcycle.ports.git import GitReadError
 from lightcycle.ports.workers import RegistryUnreadable
 
@@ -27,17 +27,6 @@ class RemoveNodeUseCase:
         self._worktrees = worktrees
         self._git = git
 
-    def _live_step(self, step_ids):
-        if not step_ids:
-            return None
-        pool = WorkerPool(self._workers.workers_state())
-        covered = pool.covered_steps(self._workers.pid_alive)
-        live_spawnids = pool.live_spawnids(self._workers.pid_alive)
-        for t in self._store.claimed_steps():
-            if t.id in step_ids and (t.id in covered or t.claimed_by in live_spawnids):
-                return t.id
-        return None
-
     def _worktree_dirty(self, node_id):
         if not self._worktrees.has_worktree_history(node_id):
             return False
@@ -57,7 +46,7 @@ class RemoveNodeUseCase:
         if node.type == "step":
             step_ids.add(node.id)
         try:
-            live = self._live_step(step_ids)
+            live = live_claimed_step(self._store, self._workers, step_ids)
         except RegistryUnreadable as e:
             raise UseCaseError(
                 "refusing to delete %s: could not verify no live worker holds a claimed step "

@@ -62,6 +62,9 @@ def cmd_new(argv):
     if a.type == "step" and a.description:
         sys.stderr.write("--description belongs to an item, not a step; use --note\n")
         return 2
+    if a.type == "item" and a.replace:
+        sys.stderr.write("--replace belongs to a step, not an item\n")
+        return 2
     if a.type == "item" and a.note:
         sys.stderr.write("--note belongs to a step, not an item; use --description\n")
         return 2
@@ -106,10 +109,12 @@ def cmd_new(argv):
         if rc is not None:
             return rc
         try:
-            resp = CreateStepUseCase(container().store, _flow(), container().config).execute(
+            resp = CreateStepUseCase(
+                container().store, _flow(), container().config, container().workers
+            ).execute(
                 CreateStepInput(
                     title=a.title, step=a.step, parent=a.parent, workflow=a.workflow,
-                    note=a.note,
+                    note=a.note, replace=a.replace,
                 )
             )
         except UseCaseError as e:
