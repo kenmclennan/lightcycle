@@ -58,8 +58,6 @@ from lightcycle.adapters.tui.hub_render import (
     COST_NOT_RUN_MESSAGE,
     COST_NO_TOOLS_MESSAGE,
     DESCRIPTION_EMPTY_MESSAGE,
-    DETAIL_BLOCK_THRESHOLD,
-    DETAIL_BODY_SUFFIX,
     DETAIL_CONTINUATION_INDENT,
     DETAIL_EMPTY_MESSAGE,
     DETAIL_FIELD_LABELS,
@@ -123,7 +121,6 @@ from lightcycle.adapters.tui.hub_render import (
     _rates_used_text,
     _reason_lines_text,
     _row_node,
-    _stacked_block_cell,
     _stacked_prose_cell,
     _stage_cost_text,
     _stat_line_item,
@@ -144,7 +141,6 @@ from lightcycle.adapters.tui.hub_render import (
     detail_fields,
     detail_row_cells,
     resolve_detail_file,
-    detail_value_is_block,
     display_role,
     escalation_panel_text,
     escalation_reason_text,
@@ -216,8 +212,6 @@ __all__ = [
     "ContextTable",
     "CostPane",
     "DESCRIPTION_EMPTY_MESSAGE",
-    "DETAIL_BLOCK_THRESHOLD",
-    "DETAIL_BODY_SUFFIX",
     "DETAIL_CONTINUATION_INDENT",
     "DETAIL_EMPTY_MESSAGE",
     "DETAIL_FIELD_LABELS",
@@ -291,7 +285,6 @@ __all__ = [
     "_rates_used_text",
     "_reason_lines_text",
     "_row_node",
-    "_stacked_block_cell",
     "_stacked_prose_cell",
     "_stage_cost_text",
     "_stat_line_item",
@@ -311,7 +304,6 @@ __all__ = [
     "context_section_title",
     "detail_fields",
     "detail_row_cells",
-    "detail_value_is_block",
     "display_role",
     "escalation_panel_text",
     "escalation_reason_text",
@@ -941,8 +933,6 @@ class NodeHubScreen(HubScreenMarker, LogTabMixin, HierarchyTabMixin, OutputsTabM
             return
 
     def _open_selected_detail_field(self, key_value) -> None:
-        if key_value.endswith(DETAIL_BODY_SUFFIX):
-            key_value = key_value[: -len(DETAIL_BODY_SUFFIX)]
         value = next(
             (v for k, v in self._last_detail_fields if k == key_value), None
         )

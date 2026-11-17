@@ -1,4 +1,5 @@
 import os
+import textwrap
 from datetime import datetime
 import re
 from dataclasses import dataclass
@@ -105,9 +106,6 @@ CONTEXT_RECONSTRUCTED_NOTE = (
 )
 
 
-DETAIL_BLOCK_THRESHOLD = 80
-
-
 TOAST_DURATION_SECONDS = 2.0
 
 
@@ -185,7 +183,7 @@ OUTPUTS_CONTINUATION_INDENT = 2
 DETAIL_CONTINUATION_INDENT = 2
 
 
-DETAIL_BODY_SUFFIX = "#body"
+DETAIL_LABEL_COLUMN_MAX = 16
 
 
 CONTEXT_CONTINUATION_INDENT = 2
@@ -208,8 +206,15 @@ DETAIL_FIELD_LABELS = {
 
 def _detail_field_label(key, labels=None):
     if labels and labels.get(key):
-        return labels[key]
+        return labels[key].upper()
     return DETAIL_FIELD_LABELS.get(key) or key.upper()
+
+
+def wrap_detail_label(label):
+    return textwrap.wrap(
+        label, DETAIL_LABEL_COLUMN_MAX, subsequent_indent="  ",
+        break_long_words=True, break_on_hyphens=False,
+    ) or [""]
 
 
 COST_CONTINUATION_INDENT = 2
@@ -836,18 +841,6 @@ def output_row_cells(line, layout=None, row_budget=None):
     return (name, Text(line.value, style=_output_value_style(line)), step, pass_cell)
 
 
-def detail_value_is_block(value):
-    return bool(value) and ("\n" in value or len(value) > DETAIL_BLOCK_THRESHOLD)
-
-
-def _stacked_block_cell(key_field, indent, body, row_budget, style):
-    cell = Text() + key_field
-    for paragraph in body.splitlines() or [""]:
-        for line in wrap_continuation(paragraph, row_budget - indent):
-            cell = cell + Text("\n" + " " * indent) + Text(line, style=style)
-    return cell
-
-
 def resolve_detail_file(fields, key, fs):
     if key == "worktree":
         return None
@@ -864,24 +857,14 @@ def detail_row_cells(
     field, layout=None, row_budget=None, titles=None, is_file=False, labels=None, is_link=False,
 ):
     key, value = field
-    label = _detail_field_label(key, labels)
+    label_lines = wrap_detail_label(_detail_field_label(key, labels))
+    label_text = Text("\n".join(label_lines), style=COLOURS["dim"])
     linked = is_file or is_link or key in ("pr", "stack", "spec-pr", "worktree", "ci-checks")
     style = COLOURS["cyan"] if linked else COLOURS["text"]
-    block = detail_value_is_block(value)
+    prose = prose_text(value, titles or {}, style)
     if layout is not None and layout.stacked:
-        key_field = pad_field(Text(label, style=COLOURS["dim"]), layout.atomic_widths["key"])
-        if block:
-            return [(key, (_stacked_block_cell(key_field, DETAIL_CONTINUATION_INDENT, value, row_budget, style),))]
-        return [(
-            key,
-            (stacked_cell(key_field, DETAIL_CONTINUATION_INDENT, value, row_budget, prose_style=style),),
-        )]
-    if block:
-        return [
-            (key, (Text(label, style=COLOURS["dim"]), Text(""))),
-            (key + DETAIL_BODY_SUFFIX, (Text(""), prose_text(value, titles or {}, style))),
-        ]
-    return [(key, (Text(label, style=COLOURS["dim"]), Text(value, style=style)))]
+        return [(key, (_stacked_prose_cell(label_text, DETAIL_CONTINUATION_INDENT, prose, row_budget),))]
+    return [(key, (label_text, prose))]
 
 
 def context_section_title(section, inputs_live):

@@ -8,8 +8,8 @@ from lightcycle.adapters.tui.app import BacklogTable, DoneTable, PriorityTable
 from lightcycle.adapters.tui.hub import (
     CONTEXT_EMPTY_MESSAGE,
     DETAIL_EMPTY_MESSAGE,
-    detail_value_is_block,
 )
+from lightcycle.adapters.tui.hub_render import detail_row_cells
 from tests.support.screen_render import (
     CONTEXT_REFLECTION, CONTEXT_SPEC_REPORT, DEFAULT_SIZE, GATE_DESCRIPTION,
     GATE_FINDINGS_LINES, MERGE_PR, MERGE_REPORT, SCREENS, UNRENDERABLE, _LOG_EXCERPT,
@@ -316,14 +316,6 @@ def test_a_gate_declaring_detail_for_findings_shows_the_same_block():
         assert line in frame
 
 
-def test_a_findings_block_sits_on_the_rows_under_its_key():
-    rows = render("hub#gate-presents-findings", size=(100, 30)).split("\n")
-    key_row = next(i for i, row in enumerate(rows) if "IN:FINDINGS" in row)
-
-    assert GATE_FINDINGS_LINES[0] not in rows[key_row]
-    assert GATE_FINDINGS_LINES[0] in rows[key_row + 1]
-
-
 def test_a_merge_gate_detail_shows_the_pr_and_the_reviews_report():
     frame = render("hub#gate-merge", size=(100, 30))
 
@@ -401,24 +393,90 @@ def test_a_done_agent_step_opens_on_context_with_inputs_outputs_and_records():
     assert "guidance-delivered" in frame
 
 
-def test_a_value_of_80_characters_is_a_line_and_81_is_a_block():
-    assert not detail_value_is_block("x" * 80)
-    assert detail_value_is_block("x" * 81)
-    assert detail_value_is_block("one\ntwo")
-    assert not detail_value_is_block("")
+def _gate_rows(session):
+    try:
+        strips = session.run(lambda: session.app.screen._compositor.render_strips())
+        return [_plain_row(strip) for strip in strips]
+    finally:
+        session.close()
 
 
-def test_an_80_character_report_renders_on_its_keys_row_and_81_under_it():
-    for length, same_row in ((80, True), (81, False)):
-        report = "r" * length
-        session = _hub_gate_merge((100, 30), report=report)
-        try:
-            strips = session.run(lambda: session.app.screen._compositor.render_strips())
-            rows = [_plain_row(strip) for strip in strips]
-        finally:
-            session.close()
+def test_an_80_and_an_81_character_report_both_start_on_their_keys_row():
+    for length in (80, 81, 200):
+        report = " ".join(["r" * 9] * 30)[:length]
+        rows = _gate_rows(_hub_gate_merge((100, 30), report=report))
         key_row = next(i for i, row in enumerate(rows) if "IN:REPORT" in row)
-        assert (report in rows[key_row]) is same_row, length
+        assert report[:20] in rows[key_row], length
+        if length == 200:
+            assert rows[key_row + 1].strip("│ ") != ""
+
+
+def test_a_findings_value_starts_on_its_keys_row():
+    rows = render("hub#gate-presents-findings", size=(100, 30)).split("\n")
+    key_row = next(i for i, row in enumerate(rows) if "IN:FINDINGS" in row)
+
+    assert GATE_FINDINGS_LINES[0] in rows[key_row]
+
+
+def test_a_multi_line_value_continues_at_the_value_column():
+    rows = _gate_rows(_hub_gate_merge((100, 30), report="one\ntwo"))
+    key_row = next(i for i, row in enumerate(rows) if "IN:REPORT" in row)
+
+    assert "one" in rows[key_row]
+    assert rows[key_row + 1].index("two") == rows[key_row].index("one")
+
+
+def test_a_callout_label_renders_upper_case():
+    rows = [r.strip("│ ") for r in render("hub#gate-callout-artifacts", size=(100, 30)).split("\n")]
+
+    assert any(r.startswith("REVIEW VIEW") for r in rows)
+    assert not any(r.startswith("Review view") or r.startswith("Spec proposal") for r in rows)
+
+
+def test_a_label_wider_than_the_column_wraps_inside_it():
+    rows = _gate_rows(_hub_gate_merge((100, 30), callouts=True))
+    first = next(i for i, row in enumerate(rows) if "SPEC PROPOSAL" in row)
+    value_column = rows[first].index("recognizer://")
+
+    assert rows[first + 1].strip("│").startswith("   VIEW")
+    assert rows[first + 1][value_column - 1] == " "
+    assert rows[first + 1][value_column:].strip("│ ") != ""
+    assert rows[first][value_column - 2 : value_column] == "  "
+
+
+def test_no_detail_row_renders_its_label_alone():
+    cases = (
+        _hub_gate_merge((100, 30), callouts=True),
+        _hub_gate_merge((100, 30), report="r" * 81),
+        _hub_gate_merge((100, 30), report="one\ntwo"),
+    )
+    for session in cases:
+        rows = _gate_rows(session)
+        for label in ("PR", "BRANCH", "IN:REPORT"):
+            row = next((r for r in rows if r.strip("│ ").startswith(label)), None)
+            assert row is not None, label
+            assert row.strip("│ ")[len(label):].strip() != "", label
+
+
+def test_a_narrow_terminal_keeps_the_stacked_detail_with_the_value_beneath_the_label():
+    rows = render("hub#gate-callout-artifacts", size=(36, 40)).split("\n")
+    label_row = next(i for i, row in enumerate(rows) if row.strip("│ ") == "REVIEW VIEW")
+
+    assert rows[label_row + 1].strip("│").startswith("   Review view skipped")
+    assert not any(row.strip("│ ") == "Review view" for row in rows)
+
+
+def test_a_detail_value_is_one_table_row_per_field():
+    assert len(detail_row_cells(("report", "x" * 81))) == 1
+    assert len(detail_row_cells(("report", "one\ntwo"))) == 1
+
+
+def test_detail_values_resolve_references_in_short_values():
+    rows = _gate_rows(_hub_gate_merge((100, 30), report="see [[LC-143.3]] and [[LC-2]]"))
+    text = " ".join(" ".join(r.strip("│ ").split()) for r in rows)
+
+    assert "(LC-143.3)" in text
+    assert "LC-2 (not found)" in text
 
 
 def test_a_block_body_wraps_wider_on_a_wider_terminal():

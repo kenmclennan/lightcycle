@@ -1218,7 +1218,19 @@ def _hub_gate_declares_findings_detail(size):
 MERGE_STACK = "https://lightcycle.example/stack/LC-143"
 
 
-def _hub_gate_merge(size, detail=("pr", "in:report"), report=MERGE_REPORT, stack=None):
+CALLOUT_REVIEW_VIEW = (
+    "Review view skipped: https://github.com/kenmclennan/lightcycle-specs/pull/1161 is in "
+    "kenmclennan/lightcycle-specs, not the item's repository kenmclennan/lightcycle."
+)
+CALLOUT_SPEC_PROPOSAL_VIEW = (
+    "recognizer://open?repo=%2FUsers%2Fkenmclennan%2Fworkspace%2Fprojects%2Flightcycle"
+    "&view=review-spec-LC-1571"
+)
+
+
+def _hub_gate_merge(
+    size, detail=("pr", "in:report"), report=MERGE_REPORT, stack=None, callouts=False,
+):
     store = DemoStore(now=lambda: _at(6))
     item = store.item("LC-143.3", SCAN_TITLE, workflow=WORKFLOW)
     review = store.step("LC-143.3.5", stage="code-review", role="agent", item=item)
@@ -1234,6 +1246,20 @@ def _hub_gate_merge(size, detail=("pr", "in:report"), report=MERGE_REPORT, stack
     store.set_pr(rid, MERGE_PR)
     if stack:
         store.set_stack(rid, stack)
+    if callouts:
+        base = NOW.timestamp()
+        store.replace_artifact(gate, CALLOUT_RUNS, dump_runs({
+            "review": {
+                "status": "ok", "wait": False, "started": base - 100, "finished": base - 60,
+                "deadline": base + 100, "timeout": 200, "message": None,
+                "artifacts": [
+                    {"label": "Review view", "kind": "text", "value": CALLOUT_REVIEW_VIEW},
+                    {
+                        "label": "Spec proposal view", "kind": "url",
+                        "value": CALLOUT_SPEC_PROPOSAL_VIEW,
+                    },
+                ]},
+        }), internal=True)
     fs = FakeFs(metas={"code-await-merge": {"step": "code-await-merge", "phase": "code"}})
     session = _launch(store, size=size, fs=fs)
     container = session.app._container
@@ -1249,6 +1275,10 @@ def _hub_gate_merge_stacked(size):
 
 def _hub_gate_merge_unstacked(size):
     return _hub_gate_merge(size, detail=("pr", "stack", "in:report"))
+
+
+def _hub_gate_callout_artifacts(size):
+    return _hub_gate_merge(size, callouts=True)
 
 
 def _hub_gate_merge_missing_input(size):
@@ -1735,6 +1765,7 @@ SCREENS = {
     "hub#gate-presents-findings": _hub_gate_presents_findings,
     "hub#gate-declares-findings-detail": _hub_gate_declares_findings_detail,
     "hub#gate-merge": _hub_gate_merge,
+    "hub#gate-callout-artifacts": _hub_gate_callout_artifacts,
     "hub#gate-merge-missing-input": _hub_gate_merge_missing_input,
     "hub#gate-merge-stacked": _hub_gate_merge_stacked,
     "hub#gate-merge-unstacked": _hub_gate_merge_unstacked,
