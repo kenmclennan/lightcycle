@@ -701,3 +701,67 @@ class TestPassEndContracts(unittest.TestCase):
         c = self._contracts(self._BASE)
         self.assertEqual(c.unknown_pass_ends(), [])
         self.assertEqual(c.unreachable_pass_ends(), [])
+
+
+def _principal_metas(coder=None, reviewer=None, watcher=None):
+    metas = {k: dict(v, phase="code") for k, v in CONTRACT_METAS.items()}
+    for role, value in (("coder", coder), ("reviewer", reviewer), ("pr-watcher", watcher)):
+        if value is not None:
+            metas[role]["principal-output"] = value
+    return metas
+
+
+class TestPrincipalOutputProblems(unittest.TestCase):
+    def test_principal_output_problems_accepts_one_declaration_in_a_pr_phase(self):
+        a = contracts(_principal_metas(coder="code"))
+        self.assertEqual(a.principal_output_problems(), [])
+        self.assertTrue(a.ok())
+
+    def test_principal_output_problems_accepts_two_stages_with_one_value(self):
+        a = contracts(_principal_metas(coder="code", reviewer="code"))
+        self.assertEqual(a.principal_output_problems(), [])
+
+    def test_principal_output_problems_accepts_a_workflow_declaring_nothing(self):
+        a = contracts(_principal_metas())
+        self.assertEqual(a.principal_output_problems(), [])
+        self.assertTrue(a.ok())
+
+    def test_principal_output_problems_refuses_a_pr_phase_with_no_declaration(self):
+        metas = _principal_metas(coder="code")
+        metas["coder"]["phase"] = "spec"
+        metas["reviewer"]["phase"] = "spec"
+        a = contracts(metas)
+        (phase, message), = a.principal_output_problems()
+        self.assertEqual(phase, "code")
+        self.assertIn("phase 'code' carries a PR (stage open-pr produces pr)", message)
+        self.assertIn("open-pr", message)
+        self.assertFalse(a.ok())
+
+    def test_principal_output_problems_refuses_disagreeing_stages_naming_both(self):
+        a = contracts(_principal_metas(coder="spec", reviewer="code"))
+        (phase, message), = a.principal_output_problems()
+        self.assertEqual(phase, "code")
+        self.assertIn("build: spec", message)
+        self.assertIn("review: code", message)
+        self.assertFalse(a.ok())
+
+    def test_principal_output_problems_refuses_a_value_that_is_not_a_kebab_name(self):
+        a = contracts(_principal_metas(coder="Spec"))
+        self.assertTrue(any(
+            stage == "build" and "'Spec'" in message
+            for stage, message in a.principal_output_problems()))
+
+    def test_principal_output_problems_names_only_the_empty_phase_of_two(self):
+        metas = _principal_metas(coder="code")
+        metas["pr-watcher"]["phase"] = "spec"
+        metas["reviewer"]["phase"] = "spec"
+        metas["reviewer"]["produces"] = {"pr": "required"}
+        metas["reviewer"]["principal-output"] = None
+        a = contracts(metas)
+        problems = a.principal_output_problems()
+        self.assertEqual([stage for stage, _ in problems], ["spec"])
+
+    def test_principal_output_problems_is_in_as_dict(self):
+        a = contracts(_principal_metas(coder="spec", reviewer="code"))
+        self.assertEqual(
+            a.as_dict()["principal_output_problems"], a.principal_output_problems())

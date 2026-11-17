@@ -421,6 +421,63 @@ class TestAlwaysRunKeyChecks(unittest.TestCase):
         self.assertIn("declares always-run: but source.toml has no requires-engine", err)
 
 
+class TestPrincipalOutputKeyChecks(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        cli.set_container(_Container())
+
+    def _declare(self, root, stages_values):
+        for stage, value in stages_values.items():
+            step = os.path.join(root, "steps", stage + ".md")
+            with open(step) as f:
+                text = f.read()
+            with open(step, "w") as f:
+                f.write(text.replace("---\n", "---\nprincipal-output: %s\n" % value, 1))
+
+    def _phase(self, root):
+        spec = ("spec-writer", "spec-open-pr", "spec-await-merge")
+        code = (
+            "write-code", "code-open-pr", "watch-ci", "review-code", "code-await-merge",
+            "resolve-conflict", "handle-feedback", "cleanup", "review-ci")
+        block = "\nphase:\n" + "".join(
+            "  %s  %s\n" % (stage, name)
+            for name, stages in (("spec", spec), ("code", code)) for stage in stages)
+        path = os.path.join(root, "workflows", "spec-driven.md")
+        with open(path) as f:
+            text = f.read()
+        text = text.replace("  pr_feedback           spec-await-merge  handle-feedback\n", "")
+        with open(path, "w") as f:
+            f.write(text + block)
+
+    def _build(self, stages_values, requires=True):
+        root = _bundle(self.tmp)
+        self._phase(root)
+        self._declare(root, stages_values)
+        if requires:
+            with open(os.path.join(root, "source.toml"), "a") as f:
+                f.write('requires-engine = ">=0.6.0"\n')
+        return root
+
+    def test_the_key_without_requires_engine_is_reported(self):
+        rc, _out, err = run_check(
+            "--dir", self._build({"write-code": "code"}, requires=False), "spec-driven")
+        self.assertEqual(rc, 1)
+        self.assertIn("declares principal-output: but source.toml has no requires-engine", err)
+
+    def test_a_bundle_declaring_nothing_passes(self):
+        rc, _out, err = run_check("--dir", self._build({}), "spec-driven")
+        self.assertEqual(rc, 0, err)
+
+    def test_a_pr_phase_with_two_different_values_names_both_stages(self):
+        root = self._build({"write-code": "code", "review-code": "spec"})
+        rc, _out, err = run_check("--dir", root, "spec-driven")
+        self.assertEqual(rc, 1)
+        self.assertIn("disagree on principal-output", err)
+        self.assertIn("write-code: code", err)
+        self.assertIn("review-code: spec", err)
+
+
 class TestStepConfigKeyChecks(TestAlwaysRunKeyChecks):
     def _build(self, value, requires):
         root = _bundle(self.tmp)

@@ -1,3 +1,5 @@
+import re
+
 from lightcycle.domain.contracts.step_contract import StepContract
 from lightcycle.domain.flow.hooks import (
     HOOK_MIN_ARITY, PR_FEEDBACK, PR_FEEDBACK_ROUTE, cap_target_occurrences,
@@ -12,6 +14,9 @@ from lightcycle.domain.work.detail import (
     parse_detail,
 )
 from lightcycle.domain.work.step_focus import parse_presents, presents_artifact
+
+
+_PRINCIPAL_OUTPUT = re.compile(r"^[a-z0-9-]+$")
 
 
 class FlowContracts:
@@ -264,6 +269,39 @@ class FlowContracts:
                     "presents %r names an artifact no step in the workflow produces" % value))
         return sorted(problems)
 
+    def principal_output_problems(self):
+        declared = {
+            s: self._flow.step_def(s).principal_output for s in self._steps
+            if self._flow.step_def(s).principal_output is not None}
+        if not declared:
+            return []
+        problems = []
+        for stage, value in declared.items():
+            if not _PRINCIPAL_OUTPUT.match(value):
+                problems.append((
+                    stage, "principal-output %r must match [a-z0-9-]+" % value))
+        phases = {}
+        for stage in self._steps:
+            phase = self._flow.step_def(stage).phase
+            if phase is not None:
+                phases.setdefault(phase, []).append(stage)
+        for phase, stages in sorted(phases.items()):
+            carriers = sorted(
+                s for s in stages if "pr" in self._contract[s].produced_types())
+            if not carriers:
+                continue
+            values = {s: declared[s] for s in sorted(stages) if s in declared}
+            if not values:
+                problems.append((phase, (
+                    "phase %r carries a PR (stage %s produces pr) but none of its stages "
+                    "declares principal-output; stages: %s"
+                    % (phase, carriers[0], ", ".join(sorted(stages))))))
+            elif len(set(values.values())) > 1:
+                problems.append((phase, (
+                    "phase %r stages disagree on principal-output: %s"
+                    % (phase, ", ".join("%s: %s" % kv for kv in values.items())))))
+        return sorted(problems)
+
     def detail_problems(self):
         produced_anywhere = set()
         for stage in self._steps:
@@ -314,6 +352,7 @@ class FlowContracts:
             and not self.feedback_route_problems()
             and not self.presents_problems()
             and not self.detail_problems()
+            and not self.principal_output_problems()
         )
 
     def as_dict(self):
@@ -340,5 +379,6 @@ class FlowContracts:
             "feedback_route_problems": self.feedback_route_problems(),
             "presents_problems": self.presents_problems(),
             "detail_problems": self.detail_problems(),
+            "principal_output_problems": self.principal_output_problems(),
             "ok": self.ok(),
         }
