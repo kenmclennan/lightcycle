@@ -7,9 +7,8 @@ _PHRASES = {
     "teardown": ("item close refused", "item closes refused"),
     "facets": ("facet problem", "facet problems"),
     "guidance": ("guidance problem", "guidance problems"),
+    "workflows": ("workflow problem", "workflow problems"),
 }
-_BEHIND = ("workflow out of date", "workflows out of date")
-_WORKFLOW_OTHER = ("workflow problem", "workflow problems")
 
 
 def _part(count, phrases):
@@ -22,18 +21,10 @@ def doctor_summary(problems) -> str:
     for category, findings in problems.items():
         if category == "github" or not findings:
             continue
-        if category == "workflows":
-            behind = sum(1 for p in findings if p.kind == "origin-behind")
-            other = len(findings) - behind
-            if behind:
-                parts.append(_part(behind, _BEHIND))
-            if other:
-                parts.append(_part(other, _WORKFLOW_OTHER))
-        else:
-            parts.append(_part(
-                len(findings),
-                _PHRASES.get(category, ("%s problem" % category, "%s problems" % category)),
-            ))
+        parts.append(_part(
+            len(findings),
+            _PHRASES.get(category, ("%s problem" % category, "%s problems" % category)),
+        ))
         total += len(findings)
     if len(parts) >= 3:
         return "%d problems" % total

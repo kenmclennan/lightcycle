@@ -1207,10 +1207,55 @@ def _doctor_report(*categories, healthy=("orphans", "config", "store", "github")
 
 def _behind_report(count):
     return DoctorReport(problems={"workflows": [
-        Problem(category="workflows", message="origin%d: behind main" % i, kind="origin-behind",
+        Problem(category="workflows", message="origin%d: behind main" % i, kind=None,
                 fix="lc workflow upgrade origin%d" % i)
         for i in range(count)
     ]})
+
+
+def _updates_report(count):
+    return DoctorReport(
+        problems={c: [] for c in ("orphans", "config", "store", "github")},
+        updates=[
+            Problem(category="workflows", message="origin%d: behind main" % i, kind="origin-behind",
+                    fix="lc workflow upgrade origin%d" % i)
+            for i in range(count)
+        ],
+    )
+
+
+class TestFooterWorkflowUpdatesSegment(unittest.TestCase):
+    def _launch(self, doctor_check):
+        session = launch(make_test_container(doctor_check_seconds=3600), doctor_check=doctor_check)
+        self.addCleanup(session.close)
+        return session
+
+    def test_origins_behind_their_ref_show_an_amber_segment_not_a_doctor_problem(self):
+        session = self._launch(lambda: _updates_report(2))
+
+        widget, text, style = _rendered_segment(session, "#status-workflows")
+        doctor, doctor_text, _ = _rendered_segment(session, "#status-doctor")
+
+        self.assertTrue(widget.display)
+        self.assertEqual(text.strip(), "%s 2 workflow updates" % FOOTER_GLYPHS["upgrade-available"].glyph)
+        self.assertEqual(_colour_of(style), COLOURS["amber"].lower())
+        self.assertFalse(doctor.display)
+        self.assertEqual(doctor_text.strip(), "")
+
+    def test_one_update_is_singular(self):
+        session = self._launch(lambda: _updates_report(1))
+
+        _, text, _ = _rendered_segment(session, "#status-workflows")
+
+        self.assertEqual(text.strip(), "%s 1 workflow update" % FOOTER_GLYPHS["upgrade-available"].glyph)
+
+    def test_is_hidden_with_no_updates(self):
+        session = self._launch(lambda: _doctor_report())
+
+        widget, text, _ = _rendered_segment(session, "#status-workflows")
+
+        self.assertFalse(widget.display)
+        self.assertEqual(text.strip(), "")
 
 
 class TestFooterDoctorSegment(unittest.TestCase):
@@ -1237,9 +1282,9 @@ class TestFooterDoctorSegment(unittest.TestCase):
     def test_says_how_many_workflows_are_out_of_date(self):
         glyph = FOOTER_GLYPHS["doctor-problems"].glyph
         two = self._launch(lambda: _behind_report(2))
-        self.assertEqual(self._segment(two)[1], "%s doctor 0s ago · 2 workflows out of date" % glyph)
+        self.assertEqual(self._segment(two)[1], "%s doctor 0s ago · 2 workflow problems" % glyph)
         one = self._launch(lambda: _behind_report(1))
-        self.assertEqual(self._segment(one)[1], "%s doctor 0s ago · 1 workflow out of date" % glyph)
+        self.assertEqual(self._segment(one)[1], "%s doctor 0s ago · 1 workflow problem" % glyph)
 
     def test_says_what_is_wrong_in_a_single_problem_category(self):
         session = self._launch(lambda: _doctor_report("orphans"))
@@ -4210,7 +4255,7 @@ class TestDoctorReportView(unittest.TestCase):
         session = self._launch(lambda: _behind_report(2))
         session.press("D")
         header = session.app.screen.query_one("#doctor-report-header")
-        self.assertIn("doctor · 2 workflows out of date", str(header.render()))
+        self.assertIn("doctor · 2 workflow problems", str(header.render()))
 
     def test_the_header_shows_when_the_report_was_checked(self):
         import datetime

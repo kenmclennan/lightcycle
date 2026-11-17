@@ -478,28 +478,33 @@ class TestDoctorUseCase(unittest.TestCase):
         if remote is not None:
             source.remotes["acme"] = remote
         report = _uc(FakeStore(), source, _cfg(**_ALL_KEYS), FakeWorkflowBundle()).execute(DoctorInput())
-        return source, report.problems["workflows"]
+        return source, report
 
-    def test_origin_behind_its_ref_reports_one_problem_with_upgrade_fix(self):
-        source, problems = self._behind_report("main", "a" * 40, "b" * 40)
-        self.assertEqual(len(problems), 1)
-        self.assertEqual(problems[0].kind, "origin-behind")
-        self.assertEqual(problems[0].fix, "lc workflow upgrade acme")
-        self.assertIn("a" * 12, problems[0].message)
-        self.assertIn("b" * 12, problems[0].message)
+    def test_origin_behind_its_ref_is_an_update_with_upgrade_fix_and_no_problem(self):
+        source, report = self._behind_report("main", "a" * 40, "b" * 40)
+        self.assertEqual(report.problems["workflows"], [])
+        self.assertTrue(report.healthy())
+        (update,) = report.updates
+        self.assertEqual(update.kind, "origin-behind")
+        self.assertEqual(update.fix, "lc workflow upgrade acme")
+        self.assertIn("a" * 12, update.message)
+        self.assertIn("b" * 12, update.message)
         self.assertEqual(source.probe_calls, ["acme"])
 
-    def test_origin_at_remote_sha_reports_no_problem(self):
-        source, problems = self._behind_report("main", "a" * 40, "a" * 40)
-        self.assertEqual(problems, [])
+    def test_origin_at_remote_sha_reports_nothing(self):
+        source, report = self._behind_report("main", "a" * 40, "a" * 40)
+        self.assertEqual(report.updates, [])
+        self.assertEqual(report.problems["workflows"], [])
 
     def test_origin_without_ref_is_never_behind(self):
-        source, problems = self._behind_report("", "a" * 40, "b" * 40)
-        self.assertEqual(problems, [])
+        source, report = self._behind_report("", "a" * 40, "b" * 40)
+        self.assertEqual(report.updates, [])
+        self.assertEqual(report.problems["workflows"], [])
 
     def test_probe_with_no_sha_and_no_reason_is_not_behind(self):
-        source, problems = self._behind_report("main", "a" * 40, None)
-        self.assertEqual(problems, [])
+        source, report = self._behind_report("main", "a" * 40, None)
+        self.assertEqual(report.updates, [])
+        self.assertEqual(report.problems["workflows"], [])
 
     def test_unreachable_origin_is_not_also_reported_behind(self):
         source = FakeWorkflowSource()
