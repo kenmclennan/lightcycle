@@ -105,6 +105,7 @@ class Flow:
         sends_back = {}
         scripts = {}
         presents = {}
+        principal_outputs = {}
         details = {}
         config_keys = {}
         for stage in stages:
@@ -120,6 +121,9 @@ class Flow:
             declared = meta.get("presents")
             if declared:
                 presents[stage] = str(declared).strip()
+            declared_principal = meta.get("principal-output")
+            if declared_principal:
+                principal_outputs[stage] = str(declared_principal).strip()
             parsed_detail = parse_detail(meta.get("detail"))
             if parsed_detail:
                 details[stage] = parsed_detail
@@ -149,6 +153,7 @@ class Flow:
                 sends_back=sends_back.get(stage, ()),
                 script=scripts.get(stage),
                 presents=presents.get(stage),
+                principal_output=principal_outputs.get(stage),
                 detail=details.get(stage),
                 config_keys=config_keys.get(stage, ()),
             )
@@ -158,6 +163,15 @@ class Flow:
 
     def step_def(self, stage) -> StepDef:
         return self._steps.get(stage) or StepDef()
+
+    def principal_output(self, stage) -> Optional[str]:
+        phase = self.step_def(stage).phase
+        if phase is None:
+            return None
+        values = {
+            d.principal_output for d in self._steps.values()
+            if d.phase == phase and d.principal_output is not None}
+        return next(iter(values)) if len(values) == 1 else None
 
     def rebase_retry(self, stage):
         routes = self.step_def(stage).routes

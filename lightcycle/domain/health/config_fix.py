@@ -29,5 +29,7 @@ def schedule_not_enabled_fix(selector):
 
 def callout_invalid_fix(callout_id):
     return (
-        "edit the callout-%s block with lc config --edit so command, subject, wait and timeout "
-        "are all set and valid; the engine never runs a block with a problem" % callout_id)
+        "edit the callout-%s block with lc config --edit so command, subject, principal-outputs, "
+        "wait and timeout are all set and valid (principal-outputs lists the principal outputs it "
+        "runs on, for example spec or code); the engine never runs a block with a problem"
+        % callout_id)

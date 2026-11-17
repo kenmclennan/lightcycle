@@ -100,6 +100,8 @@ def check_bundle_references(bundle):
             messages.append("step %r: %s" % (stage, message))
         for stage, message in contracts.detail_problems():
             messages.append("step %r: %s" % (stage, message))
+        for stage, message in contracts.principal_output_problems():
+            messages.append("%s: %s" % (stage, message))
         if contracts.unknown_pass_ends():
             messages.append(
                 "pass-end declared for a stage this bundle does not reference: %s"

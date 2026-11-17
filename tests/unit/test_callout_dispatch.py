@@ -2,6 +2,7 @@ import json
 import unittest
 
 from lightcycle.application.work.step_detail import StepDetail
+from lightcycle.domain.flow.step_def import StepDef
 from lightcycle.domain.work import State
 from lightcycle.ports.github import StackLayer
 from lightcycle.ports.script_runner import ScriptResult
@@ -9,7 +10,77 @@ from tests.support.callout_rig import CalloutRig, callout, ok, preflight_failed,
 from tests.support.fake_script_runner import FakeScriptRunner
 
 
+TWO_PHASES = {
+    "spec-write": StepDef(phase="spec", principal_output="spec"),
+    "spec-gate": StepDef(presents="pr", phase="spec"),
+    "code-write": StepDef(phase="code", principal_output="code"),
+    "code-gate": StepDef(presents="pr", phase="code"),
+}
+
+
+def two_phase_rig(callouts):
+    rig = CalloutRig(callouts, defs=TWO_PHASES)
+    return rig, rig.gate(stage="spec-gate"), rig.gate(stage="code-gate")
+
+
 class TestWhichGatesStart(unittest.TestCase):
+    def test_a_callout_runs_only_at_the_gate_whose_principal_output_it_lists(self):
+        rig, spec_gate, code_gate = two_phase_rig([
+            callout("a", principal_outputs=("spec",)),
+            callout("b", principal_outputs=("code",))])
+
+        rig.use_case.execute(100)
+
+        self.assertEqual(
+            sorted(c["key"] for c in rig.runner.started),
+            sorted([rig.preflight_key(spec_gate, "a"), rig.preflight_key(code_gate, "b")]))
+
+    def test_the_request_step_carries_the_principal_output(self):
+        rig, spec_gate, _code_gate = two_phase_rig([callout("a", principal_outputs=("spec",))])
+
+        rig.use_case.execute(100)
+        preflight = rig.stdin(0)
+        rig.pass_preflight(spec_gate, 101)
+        run = rig.stdin(1)
+
+        self.assertEqual(preflight["context"], "gate")
+        self.assertEqual(preflight["step"]["principal_output"], "spec")
+        self.assertEqual(run["verb"], "run")
+        self.assertEqual(run["step"]["principal_output"], "spec")
+
+    def test_a_callout_listing_several_outputs_runs_at_each(self):
+        rig, spec_gate, code_gate = two_phase_rig([
+            callout("a", principal_outputs=("spec", "code"))])
+
+        rig.use_case.execute(100)
+
+        self.assertEqual(
+            sorted(c["key"] for c in rig.runner.started),
+            sorted([rig.preflight_key(spec_gate, "a"), rig.preflight_key(code_gate, "a")]))
+
+    def test_a_gate_with_no_resolvable_principal_output_starts_nothing(self):
+        defs = {
+            "x-write": StepDef(phase="mixed", principal_output="spec"),
+            "y-write": StepDef(phase="mixed", principal_output="code"),
+            "mixed-gate": StepDef(presents="pr", phase="mixed"),
+            "bare-gate": StepDef(presents="pr", phase="bare"),
+        }
+        rig = CalloutRig([callout("a", principal_outputs=("spec", "code"))], defs=defs)
+        rig.gate(stage="mixed-gate")
+        rig.gate(stage="bare-gate")
+
+        rig.use_case.execute(100)
+
+        self.assertEqual(rig.runner.started, [])
+
+    def test_a_matching_subject_with_a_non_matching_principal_output_starts_nothing(self):
+        rig = CalloutRig([callout("a", "pr", principal_outputs=("spec",))])
+        rig.gate()
+
+        rig.use_case.execute(100)
+
+        self.assertEqual(rig.runner.started, [])
+
     def test_only_the_callout_keyed_on_the_gates_subject_starts(self):
         rig = CalloutRig([callout("a", "pr"), callout("b", "description")], presents="pr")
         step = rig.gate()

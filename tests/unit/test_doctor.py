@@ -1346,15 +1346,25 @@ class TestDoctorCallouts(unittest.TestCase):
         self.assertTrue(all("callout-x" in p.fix for p in found))
         self.assertFalse(any(p.kind == "config-key-obsolete" for p in report.problems["config"]))
 
-    def test_a_valid_callout_block_reports_nothing(self):
+    def test_a_block_without_principal_outputs_is_a_config_finding(self):
         block = "callout-x:\n  command: /bin/x\n  subject: pr\n  wait: false\n  timeout: 5\n"
+
+        report = _lifecycle_doctor({}, block)
+
+        found = [p for p in report.problems["config"] if p.kind == "callout-invalid"]
+        self.assertTrue(found)
+        self.assertTrue(any("principal-outputs" in p.message for p in found))
+        self.assertTrue(all("callout-x" in p.fix and "principal-outputs" in p.fix for p in found))
+
+    def test_a_valid_callout_block_reports_nothing(self):
+        block = "callout-x:\n  command: /bin/x\n  subject: pr\n  principal-outputs: code\n  wait: false\n  timeout: 5\n"
 
         report = _lifecycle_doctor({}, block)
 
         self.assertFalse([p for p in report.problems["config"] if "callout" in p.message])
 
     def test_failed_callout_preflight_is_reported(self):
-        valid = "callout-x:\n  command: /bin/x\n  subject: pr\n  wait: false\n  timeout: 5\n"
+        valid = "callout-x:\n  command: /bin/x\n  subject: pr\n  principal-outputs: code\n  wait: false\n  timeout: 5\n"
         invalid = "callout-y:\n  command: /bin/y\n  subject: step\n"
         stub = FakeCalloutPreflight({"x": [
             CalloutError("pandoc is not installed", "brew install pandoc"),
@@ -1369,7 +1379,7 @@ class TestDoctorCallouts(unittest.TestCase):
         self.assertIn("callout x: pandoc is not installed", found[0].message)
 
     def test_a_passing_callout_preflight_reports_nothing(self):
-        valid = "callout-x:\n  command: /bin/x\n  subject: pr\n  wait: false\n  timeout: 5\n"
+        valid = "callout-x:\n  command: /bin/x\n  subject: pr\n  principal-outputs: code\n  wait: false\n  timeout: 5\n"
         stub = FakeCalloutPreflight()
 
         report = _lifecycle_doctor({}, valid, preflight=stub)

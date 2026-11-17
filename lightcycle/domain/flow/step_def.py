@@ -43,6 +43,7 @@ class StepDef:
     display: Optional[str] = None
     script: Optional[str] = None
     presents: Optional[str] = None
+    principal_output: Optional[str] = None
     detail: Optional[Tuple[str, ...]] = None
     github_heavy: bool = False
     always_run: bool = False

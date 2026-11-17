@@ -492,7 +492,7 @@ class TestCalloutKeys(unittest.TestCase):
         c = _cfg(projects="/p")
         path = c.config_path()
         with open(path, "a") as f:
-            f.write("callout-x:\n  command: /bin/x\n  subject: pr\n  wait: true\n  timeout: 5\n")
+            f.write("callout-x:\n  command: /bin/x\n  subject: pr\n  principal-outputs: code\n  wait: true\n  timeout: 5\n")
             f.write("callout-scalar: oops\n")
         c.reload()
 

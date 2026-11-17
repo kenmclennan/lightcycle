@@ -26,7 +26,7 @@ class ClaimInput:
 
 
 _STRUCTURAL_META_KEYS = ("model", "accepts", "produces", "presents", "detail", "github", "always-run",
-                         "review", "sends-back", "config")
+                         "review", "sends-back", "config", "principal-output")
 
 
 @dataclass(frozen=True)

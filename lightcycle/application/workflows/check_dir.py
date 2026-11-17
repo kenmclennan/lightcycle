@@ -174,6 +174,10 @@ class CheckWorkflowDirUseCase:
                     problems.append(
                         "step %s declares always-run: but source.toml has no requires-engine; "
                         "older engines would ignore it" % role)
+            if "principal-output" in step_meta and manifest.requires_engine is None:
+                problems.append(
+                    "step %s declares principal-output: but source.toml has no requires-engine; "
+                    "older engines would ignore it" % role)
         problems.extend(self._outcome_marker_problems(bundle, manifest))
         lifecycle_found = {}
         scripts = WorkflowScripts(self._bundle, self._fs, self._config)

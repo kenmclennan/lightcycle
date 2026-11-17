@@ -49,10 +49,10 @@ class StubWorktrees:
         return None
 
 
-def callout(callout_id="a", subject="pr", wait=False, timeout=30):
+def callout(callout_id="a", subject="pr", wait=False, timeout=30, principal_outputs=("code",)):
     return Callout(
-        id=callout_id, command="/bin/%s" % callout_id, subject=subject, wait=wait,
-        timeout=timeout)
+        id=callout_id, command="/bin/%s" % callout_id, subject=subject,
+        principal_outputs=tuple(principal_outputs), wait=wait, timeout=timeout)
 
 
 def ok(*artifacts):
@@ -71,11 +71,14 @@ def preflight_failed(*errors):
 
 
 class CalloutRig:
-    def __init__(self, callouts, presents="pr", runner=None, github=None):
+    def __init__(self, callouts, presents="pr", runner=None, github=None, defs=None):
         self.store = FakeStore()
         self.runner = runner or FakeScriptRunner()
         self.github = github or FakeGitHub()
-        defs = {"gate": StepDef(presents=presents, phase="code")}
+        defs = defs or {
+            "write": StepDef(phase="code", principal_output="code"),
+            "gate": StepDef(presents=presents, phase="code"),
+        }
         self.flow = StubFlowService(defs)
         self.config = StubConfig(callouts)
         self.use_case = CalloutDispatchUseCase(
