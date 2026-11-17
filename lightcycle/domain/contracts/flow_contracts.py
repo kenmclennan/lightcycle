@@ -273,8 +273,6 @@ class FlowContracts:
         declared = {
             s: self._flow.step_def(s).principal_output for s in self._steps
             if self._flow.step_def(s).principal_output is not None}
-        if not declared:
-            return []
         problems = []
         for stage, value in declared.items():
             if not _PRINCIPAL_OUTPUT.match(value):

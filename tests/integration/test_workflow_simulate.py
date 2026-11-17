@@ -213,9 +213,9 @@ display:
 """
 
 _TWO_PHASE_STEPS = {
-    "spec-writer": "---\nmodel: sonnet\naccepts:\n  brief: required\nproduces:\n  spec: required\n"
+    "spec-writer": "---\nmodel: sonnet\nprincipal-output: spec\naccepts:\n  brief: required\nproduces:\n  spec: required\n"
                    "---\n\nWrite the spec.\n",
-    "write-code": "---\nmodel: sonnet\naccepts:\n  spec: required\nproduces:\n  branch: required\n"
+    "write-code": "---\nmodel: sonnet\nprincipal-output: code\naccepts:\n  spec: required\nproduces:\n  branch: required\n"
                   "---\n\nWrite the code.\n",
     "open-pr": "---\nmodel: sonnet\naccepts:\n  branch: optional\nproduces:\n  pr: required\n"
                "  branch: required\n---\n\nOpen a PR.\n",
@@ -276,6 +276,9 @@ class TestGoodBundlePasses(SimulateTestCase):
         self.assertEqual(rc, 0)
 
 
+_STEPS_PHASED = dict(_STEPS, **{
+    "write-code": _STEPS["write-code"].replace("model: sonnet\n", "model: sonnet\nprincipal-output: code\n", 1)})
+
 _WORKFLOW_TEXT_PHASED = _WORKFLOW_TEXT.replace(
     "edges:\n",
     "phase:\n"
@@ -296,7 +299,7 @@ _WORKFLOW_TEXT_PHASED = _WORKFLOW_TEXT.replace(
 
 class TestPhasedGoodBundlePasses(SimulateTestCase):
     def test_pr_feedback_and_ci_failed_cap_with_matching_phases_still_passes(self):
-        selector = self._install(_WORKFLOW_TEXT_PHASED, _STEPS)
+        selector = self._install(_WORKFLOW_TEXT_PHASED, _STEPS_PHASED)
 
         rc = cli._workflow_simulate(selector)
 
@@ -591,7 +594,7 @@ class TestPreExistingSimulateFixturesStillPassUnmodified(SimulateTestCase):
         self.assertEqual(cli._workflow_simulate(selector), 0)
 
     def test_phased_good_bundle_still_passes(self):
-        selector = self._install(_WORKFLOW_TEXT_PHASED, _STEPS)
+        selector = self._install(_WORKFLOW_TEXT_PHASED, _STEPS_PHASED)
         self.assertEqual(cli._workflow_simulate(selector), 0)
 
     def test_routing_soundness_violation_still_fires(self):
