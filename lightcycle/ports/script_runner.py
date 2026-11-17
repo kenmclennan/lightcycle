@@ -34,3 +34,7 @@ class ScriptRunnerPort(ABC):
     @abstractmethod
     def orphaned(self):
         pass
+
+    @abstractmethod
+    def abandon(self, key):
+        pass

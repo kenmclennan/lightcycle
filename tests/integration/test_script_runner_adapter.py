@@ -4,6 +4,7 @@ import shutil
 import stat
 import subprocess
 import tempfile
+import threading
 import time
 import unittest
 from urllib.parse import quote
@@ -143,6 +144,50 @@ class TestBackground(ScriptRunnerTestCase):
         with self.assertRaises(ValueError):
             self.runner.start("k", path, self.dir, self.env(), "", 1, "script-t")
         self.wait("k")
+
+
+class TestRunnerFailure(ScriptRunnerTestCase):
+    def test_an_execute_that_raises_gives_a_failed_result_and_frees_the_key(self):
+        path = self.script("true\n")
+
+        def boom(*args, **kwargs):
+            raise RuntimeError("kaput")
+
+        self.runner._execute = boom
+        log_path = self.runner.start("k", path, self.dir, self.env(), "", 30, "script-t")
+        self.runner._threads["k"].join()
+
+        result = self.runner.poll("k")
+
+        self.assertIsNone(result.exit_code)
+        self.assertIn("runner failed: RuntimeError", result.stderr_tail)
+        self.assertEqual(self.runner.running(), [])
+        with open(log_path) as f:
+            logged = f.read()
+        self.assertIn("k", logged)
+        self.assertIn("RuntimeError", logged)
+
+    def test_an_abandoned_key_is_forgotten_and_its_late_result_is_discarded(self):
+        path = self.script("true\n")
+        release = threading.Event()
+
+        def blocked(*args, **kwargs):
+            release.wait(30)
+            return None
+
+        self.runner._execute = blocked
+        self.runner.start("k", path, self.dir, self.env(), "", 30, "script-t")
+        thread = self.runner._threads["k"]
+
+        self.assertTrue(self.runner.abandon("k"))
+        self.assertEqual(self.runner.running(), [])
+        self.assertFalse(self.runner.abandon("k"))
+        release.set()
+        thread.join()
+
+        with self.assertRaises(KeyError):
+            self.runner.poll("k")
+        self.assertEqual(self.runner._results, {})
 
 
 class TestRunLog(ScriptRunnerTestCase):

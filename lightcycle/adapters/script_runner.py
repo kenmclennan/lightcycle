@@ -1,6 +1,7 @@
 import json
 import os
 import threading
+import traceback
 from urllib.parse import quote, unquote
 
 from lightcycle.adapters.run_log import new_log_path, run_logged
@@ -52,13 +53,41 @@ class ScriptRunnerAdapter(ScriptRunnerPort):
         log_path = new_log_path(self._config, log_label)
         return self._execute(log_path, script_path, cwd, env, stdin_text, timeout, log_label)
 
+    def _owns(self, key):
+        return self._threads.get(key) is threading.current_thread()
+
+    def _failed_result(self, key, args, error):
+        log_path = args[0]
+        trace = "".join(traceback.format_exception(error))
+        try:
+            with open(log_path, "a") as f:
+                f.write("\n--- runner failure ---\nkey: %s\n%s" % (key, trace))
+        except OSError:
+            pass
+        return ScriptResult(
+            exit_code=None, stdout="",
+            stderr_tail="runner failed: %s: %s" % (type(error).__name__, error),
+            timed_out=False, log_path=log_path)
+
     def _body(self, key, args):
         try:
             result = self._execute(*args, on_spawn=lambda proc: self._write_record(key, proc))
-        finally:
-            self._remove_record(key)
+        except Exception as error:
+            result = self._failed_result(key, args, error)
         with self._lock:
+            if not self._owns(key):
+                return
             self._results[key] = result
+        self._remove_record(key)
+
+    def abandon(self, key):
+        with self._lock:
+            known = key in self._threads
+            self._threads.pop(key, None)
+            self._results.pop(key, None)
+        if known:
+            self._remove_record(key)
+        return known
 
     def start(self, key, script_path, cwd, env, stdin_text, timeout, log_label):
         with self._lock:

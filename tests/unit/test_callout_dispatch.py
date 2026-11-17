@@ -113,6 +113,50 @@ class TestWhichGatesStart(unittest.TestCase):
         self.assertEqual(len(rig.runner.started), 1)
 
 
+class TestUnreturnedRun(unittest.TestCase):
+    def _running(self):
+        rig = CalloutRig([callout("a", "pr")])
+        step = rig.gate()
+        rig.use_case.execute(100)
+        rig.pass_preflight(step, 101)
+        return rig, step
+
+    def test_a_record_the_runner_never_returns_is_failed_past_its_deadline_grace(self):
+        rig, step = self._running()
+        deadline = rig.records(step)["a"]["deadline"]
+
+        rig.use_case.execute(deadline + 60)
+
+        self.assertEqual(rig.records(step)["a"]["status"], "running")
+        self.assertEqual(rig.runner.running(), [rig.key(step)])
+
+        rig.use_case.execute(deadline + 61)
+
+        record = rig.records(step)["a"]
+        self.assertEqual(record["status"], "failed")
+        self.assertIn("still running 60s past its deadline", record["message"])
+        self.assertEqual(rig.runner.running(), [])
+
+    def test_a_running_record_with_no_deadline_is_left_alone(self):
+        rig, step = self._running()
+        record = rig.records(step)["a"]
+        del record["deadline"]
+        rig.store.replace_artifact(
+            step, "callout-runs", json.dumps({"a": record}), internal=True)
+
+        rig.use_case.execute(10**6)
+
+        self.assertEqual(rig.records(step)["a"]["status"], "running")
+
+    def test_sleeps_covering_the_grace_do_not_fail_the_record(self):
+        rig, step = self._running()
+        deadline = rig.records(step)["a"]["deadline"]
+
+        rig.use_case.execute(deadline + 500, sleeps=[(deadline, deadline + 500)])
+
+        self.assertEqual(rig.records(step)["a"]["status"], "running")
+
+
 class TestFailures(unittest.TestCase):
     def _fails(self, result):
         rig = CalloutRig([callout("a", "pr")])
