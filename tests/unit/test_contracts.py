@@ -183,6 +183,7 @@ class TestPhaseContracts(unittest.TestCase):
         metas["coder"]["phase"] = "code"
         metas["reviewer"]["phase"] = "code"
         metas["pr-watcher"]["phase"] = "code"
+        metas["coder"]["principal-output"] = "code"
         a = contracts(metas)
         self.assertEqual(a.phase_gaps(), [])
         self.assertEqual(a.unknown_phases(), [])
@@ -721,10 +722,13 @@ class TestPrincipalOutputProblems(unittest.TestCase):
         a = contracts(_principal_metas(coder="code", reviewer="code"))
         self.assertEqual(a.principal_output_problems(), [])
 
-    def test_principal_output_problems_accepts_a_workflow_declaring_nothing(self):
+    def test_principal_output_problems_refuses_a_workflow_declaring_nothing_naming_stages(self):
         a = contracts(_principal_metas())
-        self.assertEqual(a.principal_output_problems(), [])
-        self.assertTrue(a.ok())
+        (phase, message), = a.principal_output_problems()
+        self.assertEqual(phase, "code")
+        self.assertIn("phase 'code' carries a PR (stage open-pr produces pr)", message)
+        self.assertIn("build", message)
+        self.assertFalse(a.ok())
 
     def test_principal_output_problems_refuses_a_pr_phase_with_no_declaration(self):
         metas = _principal_metas(coder="code")

@@ -465,9 +465,11 @@ class TestPrincipalOutputKeyChecks(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertIn("declares principal-output: but source.toml has no requires-engine", err)
 
-    def test_a_bundle_declaring_nothing_passes(self):
+    def test_a_bundle_declaring_nothing_is_refused_naming_the_stages(self):
         rc, _out, err = run_check("--dir", self._build({}), "spec-driven")
-        self.assertEqual(rc, 0, err)
+        self.assertEqual(rc, 1)
+        self.assertIn("none of its stages declares principal-output", err)
+        self.assertIn("write-code", err)
 
     def test_a_pr_phase_with_two_different_values_names_both_stages(self):
         root = self._build({"write-code": "code", "review-code": "spec"})

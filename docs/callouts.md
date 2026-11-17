@@ -23,7 +23,7 @@ callout-pr-view:
 
 ### Matching
 
-A callout starts at a waiting human gate only when both hold: its `subject` equals the gate's `presents`, and the gate's **principal output** is one of its `principal-outputs`. A gate's principal output is resolved from its phase: the `principal-output:` front-matter value declared by the authoring steps that share the gate's phase (the stages that share its PR). Exactly one distinct value resolves; none, or two that differ, resolve to nothing and no callout starts at that gate. A workflow that declares `principal-output:` on no step is accepted but resolves nothing, so no callout runs at its gates. A workflow that declares it on at least one step must declare it completely: `lc workflow add`, `upgrade` and `check --dir` refuse a PR-carrying phase whose stages declare none or disagree, naming the stages.
+A callout starts at a waiting human gate only when both hold: its `subject` equals the gate's `presents`, and the gate's **principal output** is one of its `principal-outputs`. A gate's principal output is resolved from its phase: the `principal-output:` front-matter value declared by the authoring steps that share the gate's phase (the stages that share its PR). Exactly one distinct value resolves; none, or two that differ, resolve to nothing and no callout starts at that gate. A workflow must declare it completely: `lc workflow add`, `upgrade` and `check --dir` refuse a PR-carrying phase whose stages declare none or disagree, naming the stages, including a workflow that declares `principal-output:` on no step.
 
 `lc doctor` reports a block with a problem as `callout-invalid`; such a block never runs. It also runs each valid callout's [preflight](#preflight) and reports its problems.
 
