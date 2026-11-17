@@ -49,10 +49,10 @@ def cmd_doctor(argv):
     a = build_parser(COMMANDS["doctor"]).parse_args(argv)
     report = container().doctor().execute(DoctorInput())
     if a.json:
-        print(json.dumps(
-            {cat: [p.as_dict() for p in probs] for cat, probs in report.problems.items()},
-            indent=2,
-        ))
+        payload = {cat: [p.as_dict() for p in probs] for cat, probs in report.problems.items()}
+        if report.updates:
+            payload["updates"] = [p.as_dict() for p in report.updates]
+        print(json.dumps(payload, indent=2))
         return 0 if report.healthy() else 1
     for cat, probs in report.problems.items():
         if not probs:
@@ -60,6 +60,10 @@ def cmd_doctor(argv):
             continue
         print("%s:" % cat)
         for line in problem_lines(probs):
+            print(line)
+    if report.updates:
+        print("updates available:")
+        for line in problem_lines(report.updates):
             print(line)
     print("healthy" if report.healthy() else "unhealthy")
     return 0 if report.healthy() else 1

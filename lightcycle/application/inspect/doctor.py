@@ -61,6 +61,7 @@ class DoctorInput:
 class DoctorReport:
     problems: Dict[str, List[Problem]]
     notes: Dict[str, str] = field(default_factory=dict)
+    updates: List[Problem] = field(default_factory=list)
 
     def healthy(self) -> bool:
         return not any(self.problems.values())
@@ -100,15 +101,16 @@ class DoctorUseCase:
         contracts = (
             contracts + self._requirement_problems() + self._suggestion_problems()
             + lifecycle_contract)
+        origin_problems, origin_updates = self._origin_findings()
         github_problems, github_note = self._github_budget_problems()
         github_problems = (
             github_problems + self._pr_feedback_problems(nodes)
             + gh_tooling_problems(self._machine.gh_tooling()))
-        return DoctorReport(notes=github_note, problems={
+        return DoctorReport(notes=github_note, updates=origin_updates, problems={
             "store": fsck(nodes) + self._fork_problems(nodes),
             "pins": pins,
             "contract": contracts,
-            "workflows": self._origin_problems() + self._hook_failure_problems(),
+            "workflows": origin_problems + self._hook_failure_problems(),
             "config": (
                 self._config_problems() + self._retired_job_problems()
                 + self._schedule_problems() + self._callout_problems() + self._callout_preflight_problems() + self._reload_problems() + lifecycle_config),
@@ -287,8 +289,9 @@ class DoctorUseCase:
                     % (origin, sha, requirement.describe(), engine_version)))
         return problems
 
-    def _origin_problems(self):
+    def _origin_findings(self):
         problems = []
+        updates = []
         if "default-origin" not in self._config.missing_config_keys():
             origin = self._config.default_origin()
             if self._workflow_source.current_sha(origin) is None:
@@ -304,12 +307,12 @@ class DoctorUseCase:
                 problems.append(Problem("workflows", "%s: %s" % (name, probe.reason)))
             elif (registry.ref and registry.current and probe.sha
                     and probe.sha != registry.current):
-                problems.append(Problem(
+                updates.append(Problem(
                     "workflows",
                     "%s: behind %s - pulled %s, remote %s"
                     % (name, registry.ref, registry.current[:12], probe.sha[:12]),
                     kind="origin-behind", fix="lc workflow upgrade %s" % name))
-        return problems
+        return problems, updates
 
     def _hook_failure_problems(self):
         problems = []

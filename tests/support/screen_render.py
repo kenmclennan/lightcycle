@@ -1072,7 +1072,7 @@ def _doctor_report_view(size):
     report = DoctorReport(problems={"workflows": [Problem(
         "workflows",
         "flynns-workflows: behind main - pulled 1cf796873241, remote ba40bbe64130",
-        kind="origin-behind",
+        kind=None,
         fix="lc workflow upgrade flynns-workflows",
     )]})
     session = _launch(FakeStore(), size=size, doctor_check=lambda: report)

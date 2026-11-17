@@ -20,6 +20,7 @@ class StatusBar(Horizontal):
         yield Static(id="status-doctor")
         yield Static(id="status-config")
         yield Static(id="status-version")
+        yield Static(id="status-workflows")
         yield Static(id="status-upgrade")
 
     def report(
@@ -43,6 +44,7 @@ class StatusBar(Horizontal):
         doctor_failed=False,
         doctor_age_seconds=None,
         pool_tick_health=None,
+        workflow_updates=0,
     ):
         if pool_transition_kind == "start":
             glyph_key = "pool-start-timed-out" if pool_transition_expired else "pool-starting"
@@ -138,6 +140,21 @@ class StatusBar(Horizontal):
             config_widget.display = False
 
         self.query_one("#status-version", Static).update(Text("v%s" % version, style=COLOURS["dim"]))
+
+        workflows_widget = self.query_one("#status-workflows", Static)
+        if workflow_updates:
+            update_glyph, update_colour = FOOTER_GLYPHS["upgrade-available"]
+            workflows_widget.update(
+                Text(
+                    "%s %d workflow update%s"
+                    % (update_glyph, workflow_updates, "" if workflow_updates == 1 else "s"),
+                    style=COLOURS[update_colour],
+                )
+            )
+            workflows_widget.display = True
+        else:
+            workflows_widget.update("")
+            workflows_widget.display = False
 
         upgrade_widget = self.query_one("#status-upgrade", Static)
         if upgrade_version is not None:

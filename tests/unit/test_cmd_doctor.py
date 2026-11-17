@@ -236,18 +236,32 @@ class TestCmdDoctor(unittest.TestCase):
         source.remotes["acme2"] = "b" * 40
         return source
 
-    def test_json_behind_origin_carries_kind_and_fix(self):
+    def test_json_behind_origin_is_an_update_with_kind_and_fix_and_exit_zero(self):
         cli.set_container(FakeContainer(FakeStore(), workflow_source=self._behind_source()))
         rc, out, err = call(cli.cmd_doctor, "--json")
-        self.assertEqual(rc, 1)
-        (finding,) = json.loads(out)["workflows"]
+        self.assertEqual(rc, 0)
+        data = json.loads(out)
+        self.assertEqual(data["workflows"], [])
+        (finding,) = data["updates"]
         self.assertEqual(finding["kind"], "origin-behind")
         self.assertEqual(finding["fix"], "lc workflow upgrade acme2")
 
-    def test_text_behind_origin_prints_the_fix_line(self):
+    def test_text_behind_origin_prints_update_line_with_fix_and_stays_healthy(self):
         cli.set_container(FakeContainer(FakeStore(), workflow_source=self._behind_source()))
         rc, out, err = call(cli.cmd_doctor)
+        self.assertEqual(rc, 0)
+        self.assertIn("updates available:", out)
         self.assertIn("    fix: lc workflow upgrade acme2", out)
+        self.assertIn("healthy", out.splitlines()[-1])
+        self.assertNotIn("unhealthy", out)
+
+    def test_failed_probe_still_makes_doctor_unhealthy(self):
+        source = self._behind_source()
+        source.fail_resolve("acme2", "acme2 is not reachable right now")
+        cli.set_container(FakeContainer(FakeStore(), workflow_source=source))
+        rc, out, err = call(cli.cmd_doctor)
+        self.assertEqual(rc, 1)
+        self.assertIn("unhealthy", out)
 
     def test_obsolete_config_key_reports_in_config_category(self):
         class ObsoleteFakeConfig(FakeConfig):

@@ -47,22 +47,9 @@ class TestDoctorSummary(unittest.TestCase):
     def test_guidance(self):
         self._singular_and_plural("guidance", "guidance problem", "guidance problems")
 
-    def test_origin_behind_workflows(self):
-        self.assertEqual(
-            doctor_summary({"workflows": _findings("workflows", 2, "origin-behind")}),
-            "2 workflows out of date")
-        self.assertEqual(
-            doctor_summary({"workflows": _findings("workflows", 1, "origin-behind")}),
-            "1 workflow out of date")
-
     def test_other_workflow_findings(self):
         self.assertEqual(doctor_summary({"workflows": _findings("workflows", 1)}), "1 workflow problem")
         self.assertEqual(doctor_summary({"workflows": _findings("workflows", 3)}), "3 workflow problems")
-
-    def test_both_workflow_parts_together(self):
-        problems = {"workflows": (
-            _findings("workflows", 1, "origin-behind") + _findings("workflows", 1))}
-        self.assertEqual(doctor_summary(problems), "1 workflow out of date, 1 workflow problem")
 
     def test_two_categories_join_in_report_order(self):
         problems = {"config": _findings("config", 1), "orphans": _findings("orphans", 3)}
@@ -79,13 +66,6 @@ class TestDoctorSummary(unittest.TestCase):
     def test_two_parts_do_not_collapse(self):
         problems = {"store": _findings("store", 1), "config": _findings("config", 2)}
         self.assertEqual(doctor_summary(problems), "1 store problem, 2 config problems")
-
-    def test_the_two_workflow_parts_count_toward_the_collapse(self):
-        problems = {
-            "workflows": _findings("workflows", 1, "origin-behind") + _findings("workflows", 1),
-            "config": _findings("config", 1),
-        }
-        self.assertEqual(doctor_summary(problems), "3 problems")
 
     def test_github_alone_is_empty(self):
         self.assertEqual(doctor_summary({"github": _findings("github", 2)}), "")

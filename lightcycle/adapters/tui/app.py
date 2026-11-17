@@ -538,6 +538,9 @@ class LightcycleApp(App):
     #status-config {{
         display: none;
     }}
+    #status-workflows {{
+        display: none;
+    }}
     #status-upgrade {{
         display: none;
     }}
@@ -857,6 +860,7 @@ class LightcycleApp(App):
             doctor_failed=self._doctor_failed,
             doctor_age_seconds=self._doctor_age_seconds(),
             pool_tick_health=tick_health,
+            workflow_updates=len(self._doctor_report.updates) if self._doctor_report is not None else 0,
         )
 
     def _refresh_status_bar(self) -> None:
