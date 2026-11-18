@@ -668,22 +668,6 @@ class TestRequiredChecksAndCeiling(unittest.TestCase):
         self.assertEqual(store.get_node(step).outcome, "failed")
         self.assertIn("codacy", store.get_node(step).report)
 
-    def test_failed_required_read_judges_all_checks(self):
-        gh = _gh([_ok("build"), _hung("codacy", 1000.0)], required={"build"}, failing={"required_checks"})
-        store, item, step, uc = _ci_setup(gh)
-
-        uc.execute()
-
-        self.assertEqual(store.get_node(step).outcome, "failed")
-
-    def test_unpublished_sync_state_judges_all_checks(self):
-        gh = _gh([_ok("build"), _hung("codacy", 1000.0)], required={"build"}, failing={"pr_sync_state"})
-        store, item, step, uc = _ci_setup(gh)
-
-        uc.execute()
-
-        self.assertEqual(store.get_node(step).outcome, "failed")
-
     def test_failing_non_required_check_is_not_named(self):
         gh = _gh([_ok("build"), CheckRun("codacy", "completed", "failure")], required={"build"})
         store, item, step, uc = _ci_setup(gh)
@@ -1669,3 +1653,136 @@ class TestResolveCiStackLagHolds(unittest.TestCase):
 
         self.assertEqual(second.ci_resolved, [rig.item])
         self.assertEqual(rig.node().state, State.DONE)
+
+
+class _RulesFailingGitHub(FakeGitHub):
+    def __init__(self, *args, failing_bases=(), **kw):
+        super().__init__(*args, **kw)
+        self.failing_bases = set(failing_bases)
+
+    def required_checks(self, base_key):
+        if base_key in self.failing_bases:
+            return ReadFailure(1, "boom")
+        return super().required_checks(base_key)
+
+
+class _NotYetRulesGitHub(_ScriptedGitHub):
+    def required_checks(self, base_key):
+        return NotYetRead()
+
+
+class TestResolveCiRulesRead(unittest.TestCase):
+    def test_a_rules_read_that_fails_once_holds_then_judges_against_required(self):
+        gh = _gh([_ok("build"), _hung("codacy", 1000.0)], required={"build"}, failing={"required_checks"})
+        store, item, step, uc = _ci_setup(gh)
+
+        first = uc.execute()
+
+        self.assertNotEqual(store.get_node(step).state, State.DONE)
+        self.assertEqual(first.ci_resolved, [])
+
+        gh._failing_calls = set()
+        uc.execute()
+
+        self.assertEqual(store.get_node(step).outcome, "succeeded")
+
+    def test_a_rules_read_that_keeps_failing_reports_one_ci_unread_line(self):
+        gh = _gh([_ok("build")], required={"build"}, failing={"required_checks"})
+        store, item, step, uc, clock = TestCiUnreadDiagnostics()._setup(gh)
+
+        self.assertEqual(TestCiUnreadDiagnostics._run(None, uc, clock, 0.0), [])
+        self.assertEqual(
+            TestCiUnreadDiagnostics._run(None, uc, clock, 61.0), [(step, "rules-read-failed", "boom")])
+        self.assertEqual(TestCiUnreadDiagnostics._run(None, uc, clock, 70.0), [])
+        self.assertNotEqual(store.get_node(step).state, State.DONE)
+
+    def test_a_snapshot_without_rules_reports_rules_not_yet_read(self):
+        gh = _NotYetRulesGitHub("sha1", _GREEN)
+        store, item, step, uc, clock = TestCiUnreadDiagnostics()._setup(gh)
+
+        TestCiUnreadDiagnostics._run(None, uc, clock, 0.0)
+
+        self.assertEqual(
+            TestCiUnreadDiagnostics._run(None, uc, clock, 61.0),
+            [(step, "rules-not-yet-read", "no snapshot yet")])
+        self.assertNotEqual(store.get_node(step).state, State.DONE)
+
+    def test_an_unreadable_sync_state_holds_the_pr_instead_of_judging_all_checks(self):
+        gh = _gh([_ok("build"), _hung("codacy", 1000.0)], required={"build"}, failing={"pr_sync_state"})
+        store, item, step, uc, clock = TestCiUnreadDiagnostics()._setup(gh)
+
+        TestCiUnreadDiagnostics._run(None, uc, clock, 0.0)
+
+        self.assertEqual(
+            TestCiUnreadDiagnostics._run(None, uc, clock, 61.0),
+            [(step, "sync-read-failed", "boom")])
+        self.assertNotEqual(store.get_node(step).state, State.DONE)
+
+    def test_only_the_step_whose_base_rules_fail_is_reported_and_the_other_resolves(self):
+        store = FakeStore()
+        flow = _FlowAdapter(_FLOW)
+        stuck_url = "https://github.com/acme/widget/pull/9"
+        stuck_item = store.create_item("stuck", "a description")
+        plant_pr(store, stuck_item, stuck_url, branch="feat/stuck")
+        stuck = store.create_step(stage="poll-ci", role="engine", item=stuck_item)
+        ok_item = store.create_item("fine", "a description")
+        plant_pr(store, ok_item, _URL, branch=_BRANCH)
+        fine = store.create_step(stage="poll-ci", role="engine", item=ok_item)
+        gh = _RulesFailingGitHub(
+            head_shas={_URL: "sha1", stuck_url: "sha1"},
+            check_runs_by_sha={(_URL, "sha1"): (_ok("build"),), (stuck_url, "sha1"): (_ok("build"),)},
+            required_by_base={"acme/widget@main": {"build"}, "acme/widget@broken": {"build"}},
+            failing_bases={"acme/widget@broken"},
+        )
+        gh._base_keys[stuck_url] = "acme/widget@broken"
+        clock = _Clock()
+        uc = ResolveCiUseCase(
+            store, gh, flow, CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None),
+            clock=clock, poll_seconds=lambda: 60,
+            ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
+        clock.now = 0.0
+        first = uc.execute()
+        clock.now = 61.0
+        second = uc.execute()
+
+        self.assertEqual(first.ci_resolved, [ok_item])
+        self.assertEqual(store.get_node(fine).state, State.DONE)
+        self.assertNotEqual(store.get_node(stuck).state, State.DONE)
+        self.assertEqual([u.step for u in second.ci_unread], [stuck])
+        self.assertEqual([u.reason for u in second.ci_unread], ["rules-read-failed"])
+
+    def test_a_base_with_no_rules_still_resolves(self):
+        gh = _gh([_ok("build")])
+        store, item, step, uc = _ci_setup(gh)
+
+        uc.execute()
+
+        self.assertEqual(store.get_node(step).outcome, "succeeded")
+
+    def _stack_rig(self, failing_layer):
+        rig = _StackedCiRig(
+            checks={n: [_wf("build")] for n in (1, 2, 3)}, required={"build"})
+        rig.github.__class__ = _RulesFailingGitHub
+        rig.github.failing_bases = {"acme/widget@%s" % rig.layers[failing_layer - 1].base_ref}
+        rig.clock = [10000.0]
+        rig.uc._wall_clock = lambda: rig.clock[0]
+        rig.uc._ci_ceiling_seconds = lambda: 10 ** 9
+        return rig
+
+    def test_a_stack_layer_whose_rules_read_fails_holds_the_step(self):
+        for layer in (1, 2):
+            rig = self._stack_rig(layer)
+
+            rig.uc.execute()
+            rig.clock[0] += 601
+            rig.uc.execute()
+
+            self.assertNotEqual(rig.node().state, State.DONE)
+            self.assertEqual(rig.artifacts("ci-not-run"), [])
+
+            rig.github.failing_bases = set()
+            rig.uc.execute()
+            rig.clock[0] += 601
+            rig.uc.execute()
+
+            self.assertEqual(rig.node().outcome, "succeeded")

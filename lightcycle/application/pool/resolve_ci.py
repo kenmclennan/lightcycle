@@ -138,9 +138,11 @@ class ResolveCiUseCase:
     def _required(self, pr_value):
         sync = self._github.pr_sync_state(pr_value)
         if not isinstance(sync, PrSync):
-            return None
+            return None, _reason("sync", sync), sync
         value = self._github.required_checks(sync.base_key)
-        return None if isinstance(value, ReadFailure) else value
+        if isinstance(value, ReadFailure):
+            return None, _reason("rules", value), value
+        return value, None, None
 
     def _expectation(self, step, pr_value, sha, still_unread, ci_unread, key):
         cached = self._expected.get(key)
@@ -263,7 +265,10 @@ class ResolveCiUseCase:
                 step, _reason("checks", checks), checks, ctx.still_unread, ctx.ci_unread, key)
             return None
         if required is _OWN:
-            required = self._required(pr_value)
+            required, reason, failure = self._required(pr_value)
+            if reason is not None:
+                self._note_unread(step, reason, failure, ctx.still_unread, ctx.ci_unread, key)
+                return None
         ceiling = self._ci_ceiling_seconds()
         now = self._wall_clock()
         judged_sha, since = self._first_judged.get(key, (None, now))
