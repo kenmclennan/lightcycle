@@ -2013,3 +2013,240 @@ class TestCancelledRerun(unittest.TestCase):
         store.update_state(step, State.DONE)
         uc.execute()
         self.assertNotIn(step, uc._cancel_parked)
+
+
+_GATE_META = {
+    "step": "code-await-merge",
+    "routes": {"merged": "finish", "head-moved": "poll-ci"},
+    "on_pr_merge": "merged",
+    "on_pr_head_moved": "head-moved",
+}
+
+_GATE_FLOW = flow_from_metas({
+    "poller": {
+        "engine": True, "step": "poll-ci",
+        "routes": {"succeeded": "code-await-merge", "failed": "watch-ci"},
+        "on_ci_success": "succeeded", "on_ci_failure": "failed",
+    },
+    "watcher": {"model": "sonnet", "step": "watch-ci"},
+    "gate": _GATE_META,
+})
+
+_GATE_FLOW_NO_HOOK = flow_from_metas({
+    "poller": {
+        "engine": True, "step": "poll-ci",
+        "routes": {"succeeded": "code-await-merge", "failed": "watch-ci"},
+        "on_ci_success": "succeeded", "on_ci_failure": "failed",
+    },
+    "watcher": {"model": "sonnet", "step": "watch-ci"},
+    "gate": {
+        "step": "code-await-merge", "routes": {"merged": "finish"}, "on_pr_merge": "merged",
+    },
+})
+
+
+class _GateRig(_StackedCiRig):
+    def __init__(self, count=2, merged=(), checks=None, required=None, flow=None, judged=None):
+        super().__init__(
+            count=count, checks=checks, required=required,
+            state_by_layer={n: "merged" for n in merged}, flow=flow or _GATE_FLOW)
+        import json
+
+        open_layers = [l for l in self.layers if l.state == "open"]
+        seeded = open_layers if judged is None else self.layers[: judged]
+        if judged is not False:
+            self.store.add_artifact(
+                self.step, "ci-judged-layers",
+                json.dumps({l.url: l.head_sha for l in seeded}, sort_keys=True), internal=True)
+        self.store.complete_node(self.step, "succeeded")
+        self.gate = self.store.create_step(stage="code-await-merge", role="human", item=self.item)
+        self.clock = [0.0]
+        self.uc._clock = lambda: self.clock[0]
+
+    def gate_node(self):
+        return self.store.get_node(self.gate)
+
+    def gate_values(self, atype):
+        return [a.value for a in self.store.item_artifacts(self.gate) if a.type == atype]
+
+    def set_checks(self, number, runs):
+        layer = next(l for l in self.layers if l.number == number)
+        self.github._check_runs_by_sha[(layer.url, layer.head_sha)] = tuple(runs)
+
+    def inbox_ids(self):
+        from lightcycle.application.work import InboxInput, InboxUseCase
+
+        flow = _FlowAdapter(_GATE_FLOW)
+        rows = InboxUseCase(self.store, flow).execute(InboxInput()).rows
+        return [r.step.id for r in rows]
+
+
+class TestResolveCiStackGate(unittest.TestCase):
+    def test_a_two_layer_stack_whose_bottom_layer_merges_waits_on_layer_two_and_reopens_when_its_required_checks_pass(self):
+        rig = _GateRig(count=2, merged=(1,), checks={2: ()}, required={"build"}, judged=2)
+        rig.github._required_by_base["acme/widget@main"] = {"build"}
+
+        rig.uc.execute()
+
+        self.assertEqual(len(rig.gate_values("layer-ci-wait")), 1)
+        self.assertNotEqual(rig.gate_node().state, State.DONE)
+        self.assertNotIn(rig.gate, rig.inbox_ids())
+
+        rig.set_checks(2, [_check("build", "success")])
+        rig.uc.execute()
+
+        self.assertEqual(rig.gate_values("layer-ci-wait"), [])
+        self.assertEqual(rig.gate_values("layer-ci-merged"), ["1"])
+        self.assertIn(rig.gate, rig.inbox_ids())
+
+    def test_layer_two_failing_after_the_retarget_completes_the_gate_with_head_moved(self):
+        rig = _GateRig(count=2, merged=(1,), checks={2: [_check("build", "failure")]}, judged=2)
+
+        rig.uc.execute()
+
+        node = rig.gate_node()
+        self.assertEqual(node.state, State.DONE)
+        self.assertEqual(node.outcome, "head-moved")
+        self.assertIn("layer 2 of 2", node.report)
+
+    def test_layer_two_failing_with_no_head_moved_hook_parks_the_gate(self):
+        rig = _GateRig(
+            count=2, merged=(1,), checks={2: [_check("build", "failure")]}, judged=2,
+            flow=_GATE_FLOW_NO_HOOK)
+
+        rig.uc.execute()
+
+        node = rig.gate_node()
+        self.assertNotEqual(node.state, State.DONE)
+        self.assertIn("layer 2 of 2", node.park.reason)
+        self.assertIn(rig.gate, rig.inbox_ids())
+
+    def test_a_layer_head_moved_with_an_unchanged_diff_waits_on_its_ci_and_reopens_when_it_passes(self):
+        import json
+
+        rig = _GateRig(count=2, checks={1: [_check("build", "success")], 2: [_check("build", None, status="in_progress")]})
+        layer2 = rig.layers[1]
+        rig.store.replace_artifact(
+            rig.gate, "layer-ci-moved", json.dumps({layer2.url: layer2.head_sha}), internal=True)
+
+        rig.uc.execute()
+
+        self.assertEqual(len(rig.gate_values("layer-ci-wait")), 1)
+        self.assertNotIn(rig.gate, rig.inbox_ids())
+
+        rig.set_checks(2, [_check("build", "success")])
+        rig.uc.execute()
+
+        self.assertEqual(rig.gate_values("layer-ci-wait"), [])
+        self.assertEqual(rig.gate_values("layer-ci-moved"), [])
+        self.assertEqual(len(rig.gate_values("merge-next")), 1)
+        self.assertIn(rig.gate, rig.inbox_ids())
+
+    def test_a_moved_layer_failing_completes_the_gate_naming_its_moved_head(self):
+        import json
+
+        rig = _GateRig(count=2, checks={2: [_check("build", "failure")]})
+        layer2 = rig.layers[1]
+        rig.store.replace_artifact(
+            rig.gate, "layer-ci-moved", json.dumps({layer2.url: layer2.head_sha}), internal=True)
+
+        rig.uc.execute()
+
+        node = rig.gate_node()
+        self.assertEqual(node.outcome, "head-moved")
+        self.assertIn("after its head moved", node.report)
+
+    def test_a_layer_not_yet_retargeted_is_not_judged_and_is_parked_past_the_start_window(self):
+        from tests.support.stacked import layer_url
+
+        rig = _GateRig(count=2, merged=(1,), checks={2: [_check("build", "success")]}, judged=2)
+        rig.github._base_keys[layer_url(2)] = "acme/widget@layer-1"
+
+        rig.uc.execute()
+        self.assertEqual(len(rig.gate_values("layer-ci-wait")), 1)
+        self.assertNotIn(
+            ("check_runs", layer_url(2), "sha-2"), rig.github.calls)
+
+        rig.clock[0] = 600
+        rig.uc.execute()
+        self.assertIsNone(rig.gate_node().park.needs)
+
+        rig.clock[0] = 601
+        rig.uc.execute()
+        self.assertIn("still based on layer-1", rig.gate_node().park.reason)
+        self.assertIn(rig.gate, rig.inbox_ids())
+
+    def test_the_layer_to_merge_next_is_named_before_any_merge_and_after_the_wait(self):
+        rig = _GateRig(count=2, checks={1: [_check("build", "success")]})
+
+        rig.uc.execute()
+        first = rig.gate_values("merge-next")
+        self.assertEqual(len(first), 1)
+        self.assertEqual(first[0], "layer 1 of 2 (https://github.com/acme/widget/pull/1)")
+
+        merged = _GateRig(count=2, merged=(1,), checks={2: ()}, judged=2)
+        merged.github._required_by_base["acme/widget@main"] = {"build"}
+        merged.uc.execute()
+        self.assertEqual(merged.gate_values("merge-next"), [])
+        merged.set_checks(2, [_check("build", "success")])
+        merged.uc.execute()
+        after = merged.gate_values("merge-next")
+        self.assertEqual(len(after), 1)
+        self.assertEqual(after[0], "layer 2 of 2 (https://github.com/acme/widget/pull/2)")
+
+    def test_two_layers_merging_before_one_tick_make_one_wait_on_the_third_layer(self):
+        rig = _GateRig(count=6, merged=(1, 2), checks={3: ()}, judged=6)
+        rig.github._required_by_base["acme/widget@main"] = {"build"}
+
+        rig.uc.execute()
+
+        self.assertEqual(
+            rig.gate_values("layer-ci-wait"),
+            ["layer 3 of 6 (https://github.com/acme/widget/pull/3)"])
+
+    def test_a_gate_with_no_open_layer_clears_the_wait_and_parks_nothing(self):
+        rig = _GateRig(count=2, merged=(1, 2), judged=2)
+        rig.store.replace_artifact(rig.gate, "layer-ci-wait", "layer 2 of 2 (x)", internal=True)
+
+        rig.uc.execute()
+
+        self.assertEqual(rig.gate_values("layer-ci-wait"), [])
+        self.assertIsNone(rig.gate_node().park.needs)
+
+    def test_merged_now_equal_to_the_recorded_baseline_does_not_wait(self):
+        rig = _GateRig(count=2, merged=(1,), checks={2: ()}, judged=2)
+        rig.store.replace_artifact(rig.gate, "layer-ci-merged", "1", internal=True)
+
+        rig.uc.execute()
+
+        self.assertEqual(rig.gate_values("layer-ci-wait"), [])
+        self.assertEqual(len(rig.gate_values("merge-next")), 1)
+
+    def test_a_gate_in_flight_with_no_record_and_a_merge_already_counted_in_the_judged_layers_does_not_wait(self):
+        rig = _GateRig(count=3, merged=(1,), checks={2: ()}, judged=2)
+
+        rig.uc.execute()
+
+        self.assertEqual(rig.gate_values("layer-ci-wait"), [])
+
+    def test_a_gate_with_neither_record_nor_judged_layers_records_the_merged_count_and_does_not_wait(self):
+        rig = _GateRig(count=2, merged=(1,), checks={2: ()}, judged=False)
+
+        rig.uc.execute()
+
+        self.assertEqual(rig.gate_values("layer-ci-merged"), ["1"])
+        self.assertEqual(rig.gate_values("layer-ci-wait"), [])
+
+    def test_a_held_gate_neither_waits_nor_completes_and_records_the_would_be_action(self):
+        from lightcycle.application.work.gate_hold import GateHold
+
+        rig = _GateRig(count=2, merged=(1,), checks={2: [_check("build", "failure")]}, judged=2)
+        GateHold(rig.store).place(rig.gate, "holding")
+
+        rig.uc.execute()
+
+        node = rig.gate_node()
+        self.assertNotEqual(node.state, State.DONE)
+        self.assertIsNone(node.park.needs)
+        self.assertEqual(rig.gate_values("layer-ci-wait"), [])
+        self.assertIn("held: layer CI failed on layer 2 of 2", node.notes)

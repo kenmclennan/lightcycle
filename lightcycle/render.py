@@ -124,6 +124,8 @@ def _strategy_suffix(r):
         return "  findings:%s" % _truncate(r.step.notes.splitlines()[0])
     if r.held:
         return "  held: %s  pr:%s" % (r.held, r.pr) if r.pr else "  held: %s" % r.held
+    if r.merge_next:
+        return "  merge next: %s  pr:%s" % (r.merge_next, r.pr) if r.pr else "  merge next: %s" % r.merge_next
     if r.behind and r.pr:
         return "  %s: %s  pr:%s" % (BEHIND_NOT_UPDATED_PHRASE, r.behind, r.pr)
     if r.pr:

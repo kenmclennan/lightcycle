@@ -327,6 +327,45 @@ class TestHeadMovedOverAStack(unittest.TestCase):
         recorded = json.loads(_value(h.store, h.gate, "pr-layer-heads"))
         self.assertEqual(recorded[_pr_layer(2)], "sha-2-rebased")
 
+    def test_a_cascaded_head_records_the_layer_for_the_ci_wait(self):
+        h = _StackedHarness()
+        h.sign(2, "sha-2", "same")
+        h.run()
+        h.move(2, "sha-2-rebased")
+        h.sign(2, "sha-2-rebased", "same")
+
+        h.run()
+
+        raw = _value(h.store, h.gate, "layer-ci-moved")
+        self.assertIsNotNone(raw)
+        self.assertEqual(json.loads(raw), {_pr_layer(2): "sha-2-rebased"})
+        self.assertNotEqual(h.base.state(h.gate), "done")
+
+    def test_a_held_gate_records_no_moved_layer_for_a_cascaded_head(self):
+        from lightcycle.application.work.gate_hold import GateHold
+
+        h = _StackedHarness()
+        h.sign(2, "sha-2", "same")
+        h.run()
+        GateHold(h.store).place(h.gate, "holding")
+        h.move(2, "sha-2-rebased")
+        h.sign(2, "sha-2-rebased", "same")
+
+        h.run()
+
+        self.assertIsNone(_value(h.store, h.gate, "layer-ci-moved"))
+
+    def test_a_pushed_head_writes_no_moved_layer(self):
+        h = _StackedHarness()
+        h.sign(2, "sha-2", "before")
+        h.run()
+        h.move(2, "sha-2-pushed")
+        h.sign(2, "sha-2-pushed", "after")
+
+        h.run()
+
+        self.assertIsNone(_value(h.store, h.gate, "layer-ci-moved"))
+
     def test_a_pushed_head_fires_naming_the_layer(self):
         h = _StackedHarness()
         h.sign(2, "sha-2", "before")

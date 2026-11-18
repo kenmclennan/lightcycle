@@ -3,11 +3,14 @@ from dataclasses import dataclass, field
 from typing import List
 
 from lightcycle.application.flow.complete_step import CompleteInput
-from lightcycle.application.pool.pr_lookups import _MIN_TIMESTAMP, flow_for, run_of, skip_unpinned
+from lightcycle.application.pool.pr_lookups import (
+    flow_for, latest_artifact, latest_judged_artifact, run_of, skip_unpinned,
+)
 from lightcycle.application.pool.stack_reads import read_stack
 from lightcycle.application.work.gate_hold import GateHold, route_name
 from lightcycle.domain.pool import stack_shape
-from lightcycle.domain.work import State, node_id_key, parse_timestamp
+from lightcycle.domain.work.layer_ci_wait import LAYER_CI_MOVED
+from lightcycle.domain.work import State
 from lightcycle.ports.github import NotYetRead, ReadFailure
 
 CI_JUDGED_SHA = "ci-judged-sha"
@@ -30,31 +33,10 @@ class DetectHeadMovedUseCase:
         self._gate_hold = GateHold(store)
 
     def _artifact(self, step_id, atype):
-        found = None
-        for artifact in self._store.item_artifacts(step_id):
-            if artifact.type == atype:
-                found = artifact.value
-        return found
-
-    def _is_ci_stage(self, flow, node):
-        sd = flow.step_def(node.stage)
-        return sd.ci_success is not None or sd.ci_failure is not None
+        return latest_artifact(self._store, step_id, atype)
 
     def _judged(self, step, flow, atype):
-        phase = flow.step_def(step.stage).phase
-        latest = None
-        latest_key = None
-        for child in self._store.children(step.item):
-            if child.type != "step" or child.state != State.DONE:
-                continue
-            if flow.step_def(child.stage).phase != phase or not self._is_ci_stage(flow, child):
-                continue
-            key = (parse_timestamp(child.created_at) or _MIN_TIMESTAMP, node_id_key(child.id))
-            if latest_key is None or key > latest_key:
-                latest, latest_key = child, key
-        if latest is None:
-            return None
-        return self._artifact(latest.id, atype)
+        return latest_judged_artifact(self._store, flow, step, atype)
 
     def _judged_sha(self, step, flow):
         return self._judged(step, flow, CI_JUDGED_SHA)
@@ -114,6 +96,7 @@ class DetectHeadMovedUseCase:
                 return False
         updated = dict(recorded)
         pushed = []
+        cascaded = {}
         for layer in stack.layers:
             head = heads.get(layer.url)
             if head is None:
@@ -130,10 +113,16 @@ class DetectHeadMovedUseCase:
                 pushed.append("head of %s moved from %s to %s" % (names[layer.url], old, head))
             else:
                 self._github.check_runs(layer.url, head)
+                cascaded[layer.url] = head
         held = self._gate_hold.is_held(step.id)
         if updated != recorded and not held:
             self._store.add_artifact(
                 step.id, PR_LAYER_HEADS, json.dumps(updated, sort_keys=True), internal=True)
+        if cascaded and not held:
+            moved_now = self._decode_heads(self._artifact(step.id, LAYER_CI_MOVED)) or {}
+            moved_now.update(cascaded)
+            self._store.replace_artifact(
+                step.id, LAYER_CI_MOVED, json.dumps(moved_now, sort_keys=True), internal=True)
         if not pushed:
             return False
         if held:
