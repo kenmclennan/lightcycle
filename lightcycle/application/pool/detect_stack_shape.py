@@ -2,12 +2,20 @@ from dataclasses import dataclass, field
 from typing import List
 
 from lightcycle.application.flow.complete_step import CompleteInput
+from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.application.pool.pr_lookups import flow_for, run_of, skip_unpinned
 from lightcycle.application.pool.stack_reads import read_stack
 from lightcycle.application.work.gate_hold import GateHold, route_name
 from lightcycle.domain.pool import stack_shape
 from lightcycle.domain.work import State
 from lightcycle.ports.github import PrSync
+
+
+_DECISION = (
+    "The stack changed in a way the engine did not expect. Inspect the stack on GitHub, "
+    "then close this step with the outcome that fits what you find, as the step's "
+    "instructions describe."
+)
 
 
 @dataclass(frozen=True)
@@ -83,9 +91,14 @@ class DetectStackShapeUseCase:
             handled.add(run.id)
             with self._store.transaction():
                 self._store.set_stack_seen(run.id, encoded)
-                self._complete.execute(CompleteInput(
-                    step=step.id, outcome=sd.pr_stack_shape,
-                    note=stack_shape.describe(diff.differences),
+                description = stack_shape.describe(diff.differences)
+                response = self._complete.execute(CompleteInput(
+                    step=step.id, outcome=sd.pr_stack_shape, note=description,
                 ))
+                if response.next_step:
+                    ParkStepUseCase(self._store).execute_once(ParkInput(
+                        step=response.next_step, observation=description,
+                        decision=_DECISION,
+                    ))
             fired.append(step.item)
         return DetectStackShapeResponse(shape_changed=fired)

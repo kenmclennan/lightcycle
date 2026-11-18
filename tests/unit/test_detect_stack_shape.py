@@ -4,6 +4,7 @@ from dataclasses import replace
 from tests.support.null_collaborators import NoopWorktrees
 
 from lightcycle.application.flow import CompleteStepUseCase
+from lightcycle.application.flow.complete_step import CompleteInput
 from lightcycle.application.pool.detect_stack_shape import DetectStackShapeUseCase
 from lightcycle.domain.work import State
 from lightcycle.ports.github import ReadFailure
@@ -163,6 +164,57 @@ class TestDetectStackShape(unittest.TestCase):
         rig.change(merged)
         self.assertEqual(rig.tick().shape_changed, [])
         self.assertNotEqual(rig.store.get_node(rig.step).state, State.DONE)
+
+    def test_a_retarget_onto_the_trunk_after_the_merge_tick_is_not_a_shape_change(self):
+        rig = self._baselined()
+        merged = with_state(rig.layers, 1, "merged")
+        rig.change(merged, overrides={2: "layer-1"})
+
+        self.assertEqual(rig.tick().shape_changed, [])
+
+        rig.change(merged, overrides={2: "main"})
+        self.assertEqual(rig.tick().shape_changed, [])
+        self.assertNotEqual(rig.store.get_node(rig.step).state, State.DONE)
+        self.assertEqual(rig.record()[0]["base"], "main")
+
+    def _review_stack(self, rig):
+        steps = [n for n in rig.store.children(rig.item) if n.stage == "review-stack"]
+        self.assertEqual(len(steps), 1)
+        return steps[0]
+
+    def test_a_shape_change_parks_the_review_stack_step_with_a_reason_and_needs(self):
+        rig = self._baselined()
+        rig.change(with_state(rig.layers, 2, "closed"))
+        rig.tick()
+
+        parked = self._review_stack(rig)
+
+        self.assertTrue(parked.park.reason.startswith("stack shape changed:"))
+        self.assertIn("layer 2 of 3 (%s) closed without merging" % layer_url(2), parked.park.reason)
+        self.assertTrue(parked.park.needs)
+        for outcome in ("reopen", "fold", "drop"):
+            self.assertNotIn(outcome, parked.park.needs)
+        rig.tick()
+        self.assertEqual(self._review_stack(rig).park, parked.park)
+
+    def test_a_parked_review_stack_step_still_closes_with_its_outcome(self):
+        flow = flow_from_metas({
+            "watcher": {
+                "model": "sonnet", "step": "watch-step",
+                "routes": {"merged": "done-step", "stack-changed": "review-stack"},
+                "on_pr_merge": "merged", "on_pr_stack_shape": "stack-changed",
+            },
+            "review-stack": {"step": "review-stack", "routes": {"reopen": "watcher"}},
+        })
+        rig = _Rig(build_stack(3), flow=flow)
+        rig.tick()
+        rig.change(with_state(rig.layers, 2, "closed"))
+        rig.tick()
+        parked = self._review_stack(rig)
+
+        rig.complete.execute(CompleteInput(step=parked.id, outcome="reopen"))
+
+        self.assertEqual(rig.store.get_node(parked.id).state, State.DONE)
 
     def test_a_newly_merged_lower_layer_writes_the_progress_note_once(self):
         rig = self._baselined()
