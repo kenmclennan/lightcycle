@@ -22,6 +22,22 @@ def _compare(previous, layers, bases):
 
 
 class TestCompareTrunk(unittest.TestCase):
+    def test_the_bottom_layer_retargeted_onto_another_base_is_a_shape_change(self):
+        layers = rederive(build_stack(3))
+        layers = tuple(replace(l, base_ref="release/1") if l.number == 1 else l for l in layers)
+
+        diff = _compare(_baseline(), layers, {1: "release/1", 2: "layer-1", 3: "layer-2"})
+
+        self.assertEqual(len(diff.differences), 1)
+        self.assertIn("layer 1 of 3", diff.differences[0])
+        self.assertIn("retargeted onto release/1", diff.differences[0])
+        self.assertIn("main", diff.differences[0])
+
+    def test_the_bottom_layer_observed_on_the_recorded_trunk_is_not_a_shape_change(self):
+        diff = _compare(_baseline(), build_stack(3), {1: TRUNK, 2: "layer-1", 3: "layer-2"})
+
+        self.assertEqual(diff.differences, [])
+
     def test_a_layer_on_the_trunk_after_the_bottom_merges_is_not_a_shape_change(self):
         layers = _stale(rederive(with_state(build_stack(3), 1, "merged")), 2)
 

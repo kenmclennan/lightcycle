@@ -217,6 +217,10 @@ class TestSyncReadingSettledAndReadAt(unittest.TestCase):
         self.assertFalse(sync.settled)
         self.assertTrue(sync.conflicted)
 
+    def test_pr_sync_state_carries_the_draft_flag(self):
+        self.assertTrue(self._sync(draft=True).draft)
+        self.assertFalse(self._sync().draft)
+
     def test_an_unknown_merge_state_is_unsettled_and_conflicted_is_unchanged(self):
         sync = self._sync(mergeable="CONFLICTING", merge_state_status="UNKNOWN")
 

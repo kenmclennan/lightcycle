@@ -283,6 +283,7 @@ class PrSnapshot(GitHubEventsPort):
             base_key=view.base_key,
             settled=view.mergeable != "UNKNOWN" and view.merge_state_status != "UNKNOWN",
             read_at=entry_read_at,
+            draft=view.draft,
         )
 
     def last_push_time(self, pr):

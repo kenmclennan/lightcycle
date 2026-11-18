@@ -187,7 +187,7 @@ class DispatchPrFeedbackUseCase:
         admitted, approved, lines = [], {}, []
         cutoff = 0.0
         for position, layer in enumerate(read.layers, start=1):
-            if layer.state != "open":
+            if layer.state == "closed":
                 continue
             found, reason = self._outstanding_feedback(step, layer.url, flow, run)
             if found.failed or reason is not None:
