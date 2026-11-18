@@ -1900,3 +1900,116 @@ class TestResolveCiStackWithNoOpenLayer(unittest.TestCase):
 
         self.assertNotEqual(rig.store.get_node(rig.item).state, State.DONE)
         self.assertIn("a.py", rig.node().park.reason)
+
+
+def _stale_cancel(completed_at=5000.0, url="https://x/runs/1"):
+    return CheckRun(
+        name="build", status="completed", conclusion="cancelled", url=url, completed_at=completed_at)
+
+
+def _unblock(store, step):
+    from lightcycle.application.flow.route_step import RouteStepService
+
+    RouteStepService(store).route(step, "engine")
+
+
+class TestCancelledRerun(unittest.TestCase):
+    def _rig(self, runs):
+        gh = _gh(runs)
+        store, item, step, uc = _ci_setup(gh)
+        clock = [10000.0]
+        uc._wall_clock = lambda: clock[0]
+        return gh, store, step, uc, clock
+
+    def test_an_unblocked_cancel_is_held_until_a_newer_result(self):
+        gh, store, step, uc, clock = self._rig([_stale_cancel()])
+
+        uc.execute()
+        self.assertEqual(store.get_node(step).state, State.WAITING)
+        _unblock(store, step)
+        result = uc.execute()
+
+        node = store.get_node(step)
+        self.assertEqual((node.state, node.role), (State.QUEUED, "engine"))
+        self.assertEqual(result.ci_resolved, [])
+        gh._check_runs_by_sha[(_URL, "sha1")] = (_hung("build", 10100.0),)
+        uc.execute()
+        self.assertEqual(store.get_node(step).state, State.QUEUED)
+        gh._check_runs_by_sha[(_URL, "sha1")] = (_ok("build"),)
+        uc.execute()
+        self.assertEqual(store.get_node(step).outcome, "succeeded")
+
+    def test_a_new_cancel_after_a_rerun_parks_again(self):
+        gh, store, step, uc, clock = self._rig([_stale_cancel()])
+
+        uc.execute()
+        _unblock(store, step)
+        uc.execute()
+        self.assertEqual(store.get_node(step).state, State.QUEUED)
+        gh._check_runs_by_sha[(_URL, "sha1")] = (_stale_cancel(9000.0, "https://x/runs/2"),)
+        uc.execute()
+
+        self.assertEqual(store.get_node(step).state, State.WAITING)
+
+    def test_the_hold_expires_at_the_ceiling(self):
+        gh, store, step, uc, clock = self._rig([_stale_cancel()])
+
+        uc.execute()
+        _unblock(store, step)
+        uc.execute()
+        clock[0] += 3600
+        uc.execute()
+        self.assertEqual(store.get_node(step).state, State.QUEUED)
+        clock[0] += 1
+        uc.execute()
+
+        self.assertEqual(store.get_node(step).state, State.WAITING)
+
+    def test_a_stack_layer_cancel_is_held_after_an_unblock(self):
+        rig = _StackedCiRig(count=2, checks={
+            1: [_check("build", "success")], 2: [_stale_cancel()]})
+        rig.clock = [10000.0]
+        rig.uc._wall_clock = lambda: rig.clock[0]
+
+        rig.uc.execute()
+        self.assertEqual(rig.node().state, State.WAITING)
+        _unblock(rig.store, rig.step)
+        rig.uc.execute()
+        self.assertEqual(rig.node().state, State.QUEUED)
+        runs = rig.github._check_runs_by_sha
+        key = next(k for k in runs if runs[k] and runs[k][0].conclusion == "cancelled")
+        runs[key] = (_check("build", "success"),)
+        rig.uc.execute()
+
+        self.assertEqual(rig.node().outcome, "succeeded")
+
+    def test_a_failure_beats_a_remembered_cancel(self):
+        gh, store, step, uc, clock = self._rig([_stale_cancel()])
+
+        uc.execute()
+        _unblock(store, step)
+        gh._check_runs_by_sha[(_URL, "sha1")] = (
+            _stale_cancel(), CheckRun(name="test", status="completed", conclusion="failure"))
+        uc.execute()
+
+        self.assertEqual(store.get_node(step).outcome, "failed")
+
+    def test_the_remembered_cancel_is_pruned(self):
+        gh, store, step, uc, clock = self._rig([_stale_cancel()])
+
+        uc.execute()
+        self.assertIn(step, uc._cancel_parked)
+        _unblock(store, step)
+        gh._head_shas[_URL] = "sha2"
+        gh._check_runs_by_sha[(_URL, "sha2")] = (_hung("build", 10100.0),)
+        uc.execute()
+        self.assertNotIn(step, uc._cancel_parked)
+
+        gh._head_shas[_URL] = "sha1"
+        gh._check_runs_by_sha[(_URL, "sha1")] = (_stale_cancel(),)
+        uc.execute()
+        self.assertEqual(store.get_node(step).state, State.WAITING)
+        self.assertIn(step, uc._cancel_parked)
+        store.update_state(step, State.DONE)
+        uc.execute()
+        self.assertNotIn(step, uc._cancel_parked)
