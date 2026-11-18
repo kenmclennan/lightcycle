@@ -7,6 +7,7 @@ from lightcycle.cli_commands import COMMANDS, build_parser
 from lightcycle.domain.work import (
     DONE_FIELDS_BY_TYPE, refuse_fields,
 )
+from lightcycle.application.work.record_live_stacks import RecordLiveStacksUseCase
 from lightcycle.application.work.stack_layers import StackLayers
 from lightcycle.application.work.close_item import TeardownRefused
 from lightcycle.application.work import (
@@ -155,6 +156,7 @@ def cmd_done(argv):
                 )
                 return 2
             RefuseHeldStepUseCase(container().store, container().workers).execute(a.id)
+            RecordLiveStacksUseCase(container().store, container().github).execute(a.id)
             CloseItemUseCase(container().store, _worktrees()).execute(
                 CloseItemInput(item=a.id, reason=a.outcome, disposition=disposition, note=note)
             )

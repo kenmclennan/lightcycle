@@ -30,6 +30,7 @@ class _Container:
         self.workers = FakeWorkers()
         self.config = _FakeConfig()
         self.git = None
+        self.github = None
         self.fs = None
         self.workflow_source = None
         self.workflow_bundle = FakeFs()

@@ -136,3 +136,75 @@ class TestCmdDoneRoutedFeedbackClose(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertIn(self.gate, err)
         self._assert_both_unchanged()
+
+
+_REPO = "/elsewhere/app"
+_LAYERS = ("layer-1", "layer-2", "layer-3")
+
+
+class TestCmdDoneOnAStackedItem(unittest.TestCase):
+    def _world(self, states, stack_read_fails=False, seeded=None):
+        from lightcycle.application.services.worktree import WorktreeService
+        from lightcycle.domain.pool import stack_shape
+        from tests.support.fake_git import FakeGit
+        from tests.support.fake_github import FakeGitHub
+        from tests.support.null_collaborators import NoFlow
+        from tests.support.stacked import STACK_URL, build_stack
+        from tests.unit.test_close_item_teardown_guard import _Cfg
+
+        store = FakeStore()
+        item = store.create_item("stacked", "a description")
+        store.add_artifact(item, "repo", _REPO)
+        rid = store.open_run(item, store.open_pass(item), None)
+        store.set_branch(rid, "layer-3")
+        store.set_stack(rid, STACK_URL)
+        if seeded:
+            store.set_stack_seen(rid, stack_shape.encode(seeded))
+        layers = build_stack(3, states=states)
+        github = FakeGitHub(stacks={STACK_URL: layers})
+        if stack_read_fails:
+            github._failing_calls = {"stack_view"}
+        branches = {(_REPO, b) for b in _LAYERS}
+        git = FakeGit(branches=branches, ref="origin/main", beyond={k: ["a1"] for k in branches})
+        svc = WorktreeService(store, git, fs=None, config=_Cfg(), flow=NoFlow())
+
+        class _Container(_ClockedContainer):
+            pass
+
+        container = _Container(store)
+        container.github = github
+        container.worker_log = mock.Mock()
+        cli.set_container(container)
+        self.addCleanup(cli.set_container, None)
+        patcher = mock.patch.object(flow_cmds, "_worktrees", lambda: svc)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return store, item, git
+
+    def test_done_merged_on_a_squash_merged_three_layer_stack_succeeds_with_branches_present(self):
+        store, item, git = self._world({1: "merged", 2: "merged", 3: "merged"})
+
+        rc, out, err = _call(cli.cmd_done, item, "merged", "--disposition", "completed")
+
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(store.get_node(item).state, State.DONE)
+        self.assertEqual([a for a in store.item_artifacts(item) if a.type == "teardown-refused"], [])
+        deleted = sorted(c[2] for c in git.calls if c[0] == "delete_branch")
+        self.assertEqual(deleted, sorted(_LAYERS))
+
+    def test_done_merged_refuses_only_the_layer_recorded_open_when_the_stack_cannot_be_read(self):
+        seeded = [
+            {"number": 1, "state": "merged", "head_ref": "layer-1", "base": "main"},
+            {"number": 2, "state": "open", "head_ref": "layer-2", "base": "layer-1"},
+            {"number": 3, "state": "merged", "head_ref": "layer-3", "base": "layer-2"},
+        ]
+        store, item, git = self._world(
+            {1: "merged", 2: "merged", 3: "merged"}, stack_read_fails=True, seeded=seeded)
+
+        rc, out, err = _call(cli.cmd_done, item, "merged", "--disposition", "completed")
+
+        self.assertEqual(rc, 1)
+        self.assertIn("layer-2", err)
+        self.assertNotIn("layer-1 ", err)
+        self.assertNotIn("branch layer-3", err)
+        self.assertNotEqual(store.get_node(item).state, State.DONE)
