@@ -45,6 +45,11 @@ class _Pass:
     sleeps: tuple = ()
 
 
+def _cancelled_identities(judged):
+    return frozenset(
+        (check_label(c), c.url, c.completed_at) for c in judged if c.conclusion == "cancelled")
+
+
 @dataclass
 class _Verdict:
     pr: str
@@ -93,6 +98,7 @@ class ResolveCiUseCase:
         self._noted = {}
         self._first_epoch = {}
         self._first_judged = {}
+        self._cancel_parked = {}
         self._lagging = {}
         self._expected = {}
         self._stack_expected = {}
@@ -196,8 +202,8 @@ class ResolveCiUseCase:
                 "failed, so no code change is called for."
             ) % (check_label(check), url, sha, where),
             decision=(
-                "Rerun the cancelled job, then unblock this step; unblocking restarts the wait "
-                "for a fresh result."
+                "Rerun the cancelled job, then unblock this step; unblocking waits up to the CI check ceiling "
+                "for a newer result and parks again only if the same cancelled result is still the latest."
             ),
             tried="Judged every check on the head; none failed and the cancelled one is not a failure.",
         ))
@@ -303,10 +309,27 @@ class ResolveCiUseCase:
             start_window=self._ci_start_window_seconds(),
             quiet_wait=self._ci_no_workflows_wait_seconds(),
         )
+        outcome = self._hold_stale_cancel(key, sha, outcome, judged, now, ceiling, since, ctx)
         return _Verdict(
             pr_value, key, sha, outcome, checks, judged, required, since, now, runs, expectation,
             base, sleeps=ctx.sleeps,
         )
+
+    def _hold_stale_cancel(self, key, sha, outcome, judged, now, ceiling, since, ctx):
+        entry = self._cancel_parked.get(key)
+        if entry is None:
+            return outcome
+        if entry[0] != sha:
+            del self._cancel_parked[key]
+            return outcome
+        if outcome != "cancelled":
+            return outcome
+        if awake_elapsed(since, now, ctx.sleeps) > ceiling:
+            return outcome
+        current = _cancelled_identities(judged)
+        if current and current <= entry[1]:
+            return "pending"
+        return outcome
 
     def _head_still(self, v):
         return self._github.head_sha(v.pr) == v.sha
@@ -324,8 +347,9 @@ class ResolveCiUseCase:
             return True
         if not self._head_still(v):
             return False
-        self._park_cancelled(
-            step, where, v.sha, cancelled_check(judged_checks(v.checks, v.required, v.since)))
+        judged = judged_checks(v.checks, v.required, v.since)
+        self._park_cancelled(step, where, v.sha, cancelled_check(judged))
+        self._cancel_parked[v.key] = (v.sha, _cancelled_identities(judged))
         self._first_judged.pop(v.key, None)
         return True
 
@@ -619,5 +643,9 @@ class ResolveCiUseCase:
             del self._expected[key]
         for key in [k for k in self._stack_expected if k not in ctx.seen]:
             del self._stack_expected[key]
+        for key in list(self._cancel_parked):
+            node = self._store.get_node(key.split("@")[0])
+            if node is None or node.state == State.DONE:
+                del self._cancel_parked[key]
         self._mismatch_noted &= ctx.seen
         return ResolveCiResponse(ci_resolved=ci_resolved, ci_unread=ctx.ci_unread)
