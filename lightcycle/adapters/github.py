@@ -585,6 +585,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
             head_sha=view.head_sha,
             base_key=view.base_key,
             settled=view.mergeable != "UNKNOWN" and view.merge_state_status != "UNKNOWN",
+            draft=view.draft,
         )
 
     def _gh_api_json(self, path):
@@ -811,7 +812,7 @@ class GitHubEventsAdapter(GitHubEventsPort):
                 [
                     "gh", "pr", "view", pr, "--json",
                     "state,headRefOid,baseRefName,mergeable,mergeStateStatus,updatedAt,"
-                    "headRefName,isCrossRepository",
+                    "headRefName,isCrossRepository,isDraft",
                 ],
                 capture_output=True, text=True, timeout=_GH_TIMEOUT_SECONDS)
         except subprocess.TimeoutExpired:
@@ -849,4 +850,5 @@ class GitHubEventsAdapter(GitHubEventsPort):
             merge_state_status=merge_state_status,
             updated_at=updated,
             branch_sha=branch_sha,
+            draft=bool(data.get("isDraft")),
         )

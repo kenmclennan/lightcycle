@@ -70,6 +70,7 @@ class PrSync:
     base_key: str
     settled: bool = True
     read_at: Optional[float] = None
+    draft: bool = False
 
 
 @dataclass(frozen=True)
@@ -90,6 +91,7 @@ class PrView:
     merge_state_status: str
     updated_at: float
     branch_sha: str = ""
+    draft: bool = False
 
 
 @dataclass(frozen=True)

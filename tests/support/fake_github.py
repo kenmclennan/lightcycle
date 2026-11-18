@@ -9,7 +9,7 @@ class FakeGitHub(GitHubEventsPort):
                  behind_prs=(), strict_bases=(), base_keys=None, login="operator",
                  updated_ats=None, failing_prs=(), required_by_base=None,
                  update_pushed_at=None, workflows_by_sha=None, runs_by_sha=None, stacks=None,
-                 signatures=None, files_by_pr=None, lagging_prs=(), branch_shas=None):
+                 signatures=None, files_by_pr=None, lagging_prs=(), branch_shas=None, draft_prs=()):
         self._login = login
         self._stacks = dict(stacks or {})
         self._signatures = dict(signatures or {})
@@ -18,6 +18,7 @@ class FakeGitHub(GitHubEventsPort):
         self._merged = set(merged_prs)
         self._closed = set(closed_prs)
         self._conflicted = set(conflicted_prs)
+        self._draft_prs = set(draft_prs)
         self._push_time = push_time
         self._timed_comments = timed_comments or []
         self._timed_reviews = timed_reviews or []
@@ -135,7 +136,7 @@ class FakeGitHub(GitHubEventsPort):
             base_ref=base_key.partition("@")[2], base_key=base_key,
             mergeable=mergeable, merge_state_status=merge_state,
             updated_at=self._updated_ats.get(pr, 0.0),
-            branch_sha=self._branch_shas.get(pr, ""))
+            branch_sha=self._branch_shas.get(pr, ""), draft=pr in self._draft_prs)
 
     def authenticated_login(self):
         if "authenticated_login" in self._failing_calls:
@@ -242,6 +243,7 @@ class FakeGitHub(GitHubEventsPort):
             conflicted=pr in self._conflicted,
             head_sha=self._head_shas.get(pr, ""),
             base_key=self._base_keys.get(pr, "acme/widget@main"),
+            draft=pr in self._draft_prs,
         )
 
     def requires_up_to_date(self, base_key):

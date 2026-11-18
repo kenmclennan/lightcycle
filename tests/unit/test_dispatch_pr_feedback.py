@@ -1234,10 +1234,10 @@ def _inline_on(ts, cid, author="reviewer", body="please rename this"):
 
 
 class TestFeedbackOverAStack(unittest.TestCase):
-    def _rig(self, comments_by_pr=None, unread=(), count=3):
+    def _rig(self, comments_by_pr=None, unread=(), count=3, states=None):
         from tests.support.stacked import STACK_URL, build_stack, head_shas_for
 
-        layers = build_stack(count)
+        layers = build_stack(count, states)
         github = _PerLayerGitHub(
             comments_by_pr=comments_by_pr, unread=unread, push_time=1000.0,
             stacks={STACK_URL: layers}, head_shas=head_shas_for(layers))
@@ -1337,3 +1337,55 @@ class TestFeedbackOverAStack(unittest.TestCase):
 
         self.assertEqual(result.reworked, [])
         self.assertEqual(held_calls, [layer_url(1)])
+
+    def test_a_comment_on_a_merged_layer_is_dispatched_as_that_layer(self):
+        from tests.support.stacked import layer_url
+
+        store, item, step, uc, layers = self._rig(
+            {layer_url(1): [_inline_on(1500.0, "c1")]}, states={1: "merged"})
+
+        result = uc.execute()
+
+        self.assertEqual(result.reworked, [item])
+        (spawned,) = self._feedback_steps(store)
+        lines = self._artifact(store, spawned.id, "feedback-layers").splitlines()
+        self.assertTrue(lines[0].startswith("1/3 %s " % layer_url(1)))
+
+    def test_an_unread_merged_layer_holds_the_whole_stack(self):
+        from tests.support.stacked import layer_url
+
+        store, item, step, uc, layers = self._rig(
+            {layer_url(3): [_inline_on(1500.0, "c3")]}, unread={layer_url(1)},
+            states={1: "merged"})
+
+        epochs = iter(range(10, 100, 10))
+        uc._poll_epoch = lambda: next(epochs)
+        for _ in range(4):
+            result = uc.execute()
+
+        self.assertEqual(result.reworked, [])
+        self.assertEqual(self._feedback_steps(store), [])
+        self.assertIsNone(store.current_run(item, None).comments_dispatched_through)
+        self.assertIn(layer_url(1), store.get_node(step).notes or "")
+
+    def test_a_closed_layer_is_still_not_read(self):
+        from tests.support.stacked import layer_url
+
+        store, item, step, uc, layers = self._rig(
+            {layer_url(2): [_inline_on(1500.0, "c2")]}, states={2: "closed"})
+
+        result = uc.execute()
+
+        self.assertEqual(result.reworked, [])
+
+    def test_a_merged_layer_comment_already_dispatched_is_not_dispatched_again(self):
+        from tests.support.stacked import layer_url
+
+        store, item, step, uc, layers = self._rig(
+            {layer_url(1): [_inline_on(1500.0, "c1")]}, states={1: "merged"})
+
+        first = uc.execute()
+        second = uc.execute()
+
+        self.assertEqual(first.reworked, [item])
+        self.assertEqual(second.reworked, [])

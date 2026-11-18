@@ -208,6 +208,19 @@ class TestDetectStackShape(unittest.TestCase):
         self.assertNotEqual(rig.store.get_node(rig.step).state, State.DONE)
         self.assertEqual(rig.record()[0]["base"], "main")
 
+    def test_retargeting_the_whole_stack_fires_once(self):
+        rig = self._baselined()
+        self.assertEqual(rig.record()[0]["base"], "main")
+        moved = tuple(
+            replace(l, base_ref="release/1") if l.number == 1 else l for l in rig.layers)
+        rig.change(moved, overrides={1: "release/1"})
+
+        self.assertEqual(rig.tick().shape_changed, [rig.item])
+        self.assertEqual(rig.record()[0]["base"], "release/1")
+
+        rig.store.create_step(stage="watch-step", role="agent", item=rig.item)
+        self.assertEqual(rig.tick().shape_changed, [])
+
     def _review_stack(self, rig):
         steps = [n for n in rig.store.children(rig.item) if n.stage == "review-stack"]
         self.assertEqual(len(steps), 1)

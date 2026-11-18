@@ -164,7 +164,13 @@ def compare(previous, layers, current, dissolved) -> ShapeDiff:
                 )
         if layer.state == "open" and was is not None:
             observed = current[position - 1].get("base")
-            if (observed is not None and observed != layer.base_ref
+            if (not open_below and trunk is not None and observed is not None
+                    and observed != trunk and observed not in merged_heads):
+                differences.append(
+                    "%s was retargeted onto %s, which is not the trunk %s"
+                    % (name, observed, trunk)
+                )
+            elif (open_below or trunk is None) and (observed is not None and observed != layer.base_ref
                     and observed != was.get("base") and observed not in merged_heads
                     and not _onto_trunk(trunk, observed, open_below)):
                 differences.append(

@@ -1472,8 +1472,22 @@ class TestBranchTipAndPrView(unittest.TestCase):
         self.assertEqual(run.call_count, 2)
         self.assertIn(
             "state,headRefOid,baseRefName,mergeable,mergeStateStatus,updatedAt,"
-            "headRefName,isCrossRepository",
+            "headRefName,isCrossRepository,isDraft",
             run.call_args_list[0].args[0])
+
+    def test_pr_view_reads_is_draft(self):
+        for extra, expected in (({"isDraft": True}, True), ({"isDraft": False}, False), ({}, False)):
+            view, run = self._branch_view(_proc("", returncode=1), **extra)
+
+            self.assertIs(view.draft, expected)
+            self.assertIn("isDraft", run.call_args_list[0].args[0][-1])
+
+    def test_pr_sync_state_carries_a_draft_view(self):
+        run = MagicMock(side_effect=[self._view_payload(isDraft=True), _proc("", returncode=1)])
+        with patch("lightcycle.adapters.github.run_in_group", run):
+            sync = self.adapter.pr_sync_state(_PR)
+
+        self.assertIs(sync.draft, True)
 
     def _view_payload(self, head=_OLD_SHA, **extra):
         return _proc(json.dumps({

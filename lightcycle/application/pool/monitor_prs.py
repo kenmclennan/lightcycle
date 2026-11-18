@@ -5,6 +5,7 @@ from lightcycle.application.pool.check_content_pin import CheckContentPinUseCase
 from lightcycle.application.pool.dispatch_pr_feedback import DispatchPrFeedbackUseCase
 from lightcycle.application.pool.detect_head_moved import DetectHeadMovedUseCase
 from lightcycle.application.pool.detect_stack_shape import DetectStackShapeUseCase
+from lightcycle.application.pool.note_draft_prs import NoteDraftPrsUseCase
 from lightcycle.application.pool.update_behind_prs import UpdateBehindPrsUseCase
 from lightcycle.application.pool.pr_sync_reads import PrSyncReads
 from lightcycle.application.pool.resolve_ci import CiUnread, ResolveCiUseCase
@@ -46,6 +47,7 @@ class MonitorPrsUseCase:
             trusted_authors=trusted_authors, held_shortcode=held_shortcode,
             poll_epoch=ci_views.poll_epoch, unread_note_polls=ci_unconfirmed_note_polls,
         )
+        self._note_drafts = NoteDraftPrsUseCase(store, github, flow_service)
         self._detect_head_moved = DetectHeadMovedUseCase(store, github, flow_service, complete)
         self._detect_stack_shape = DetectStackShapeUseCase(store, github, flow_service, complete)
         self._update_behind = UpdateBehindPrsUseCase(store, github, flow_service, writes)
@@ -62,6 +64,7 @@ class MonitorPrsUseCase:
         resolved = self._resolve.execute()
         reads = PrSyncReads(self._github)
         dispatched = self._dispatch.execute(reads)
+        self._note_drafts.execute(reads)
         moved = self._detect_head_moved.execute(reads)
         behind = self._update_behind.execute(reads)
         ci = self._resolve_ci.execute(sleeps)
