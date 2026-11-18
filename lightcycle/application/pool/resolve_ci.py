@@ -101,6 +101,7 @@ class ResolveCiUseCase:
         self._skip_idle = SkipIdleCiWatchUseCase(
             store, github, flow_service, complete, trusted_authors=trusted_authors)
         self._unread = {}
+        self._unread_run = {}
         self._noted = {}
         self._first_epoch = {}
         self._first_judged = {}
@@ -121,10 +122,39 @@ class ResolveCiUseCase:
         now = self._clock()
         since, _, logged = self._unread.get(key, (now, reason, None))
         still_unread.add(key)
+        self._unread[key] = (since, reason, logged)
+        run_reason, run_since = self._unread_run.get(key, (reason, now))
+        if run_reason != reason:
+            run_since = now
+        self._unread_run[key] = (reason, run_since)
+        if now - run_since > self._ci_ceiling_seconds() and self._store.get_node(step.id).role == "engine":
+            self._park_unread(step, key, reason, failure, int(now - run_since))
+            self._unread_run.pop(key, None)
+            return
         if now - since > self._poll_seconds() and reason != logged:
             logged = reason
             ci_unread.append(CiUnread(step.id, reason, getattr(failure, "stderr", "") or ""))
         self._unread[key] = (since, reason, logged)
+
+    def _park_unread(self, step, key, reason, failure, elapsed):
+        if "@" in key:
+            pr_value = key.partition("@")[2]
+        else:
+            pr_value = run_of(self._store, self._flow_service, step).pr
+        text = getattr(failure, "stderr", "") or "none reported"
+        ParkStepUseCase(self._store).execute(ParkInput(
+            step=step.id,
+            observation=(
+                "poll-ci could not read GitHub for PR %s: %s has failed for %ds, past the ceiling of "
+                "%ds (ci-check-ceiling-seconds). Last error: %s."
+            ) % (pr_value, reason, elapsed, self._ci_ceiling_seconds(), text),
+            decision=(
+                "Find out why GitHub cannot be read - for example run gh auth status and check the token "
+                "has the scopes the poll needs (the rules read needs the repository administration or "
+                "rules scope) - fix it, then unblock this step. Unblocking restarts the wait for a fresh ceiling."
+            ),
+            tried="Re-read on every poll for %ds." % elapsed,
+        ))
 
     def _note_unconfirmed(self, step, pr_value, key):
         now = self._clock()
@@ -612,8 +642,12 @@ class ResolveCiUseCase:
         for position, layer in open_layers:
             key = "%s@%s" % (step.id, layer.url)
             v = self._judge(step, layer.url, key, _OWN, ctx)
+            if self._store.get_node(step.id).role != "engine":
+                return
             labelled.append(("layer %d of %d" % (position, total), v))
         labelled = self._mark_unrun(step, labelled, ctx)
+        if self._store.get_node(step.id).role != "engine":
+            return
         self._finish_stacked(step, sd, labelled, ci_resolved)
 
     def _set_if_changed(self, step, atype, value):
@@ -806,6 +840,8 @@ class ResolveCiUseCase:
         self._watch_gate_layers(ctx)
         for key in [k for k in self._unread if k not in ctx.still_unread]:
             del self._unread[key]
+        for key in [k for k in self._unread_run if k not in ctx.still_unread]:
+            del self._unread_run[key]
         for key in [k for k in self._noted if k not in ctx.still_unread]:
             del self._noted[key]
         self._views.hold_prs(ctx.awaited)
