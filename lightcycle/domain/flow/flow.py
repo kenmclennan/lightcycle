@@ -197,6 +197,15 @@ class Flow:
             if "on_pr_merge" in sd.hooks or "on_pr_close" in sd.hooks
         )
 
+    def stack_review_stages(self):
+        targets = set()
+        for sd in self._steps.values():
+            if sd.pr_stack_shape:
+                target = sd.routes.get(sd.pr_stack_shape)
+                if target:
+                    targets.add(target)
+        return targets
+
     def workspace_of(self, stage):
         sd = self.step_def(stage)
         return sd.workspace if sd.workspace is not None else self._workspace_default

@@ -120,6 +120,20 @@ class TestMergeBlocker(unittest.TestCase):
 
 
 class TestStackShapeHelpers(unittest.TestCase):
+    def test_out_of_order_merges_names_each_merged_layer_above_an_open_one(self):
+        self.assertEqual(stack_shape.out_of_order_merges(build_stack(3)), [])
+        cascade = with_state(build_stack(3), 1, "merged")
+        self.assertEqual(stack_shape.out_of_order_merges(cascade), [])
+        above = with_state(build_stack(3), 3, "merged")
+        self.assertEqual(
+            stack_shape.out_of_order_merges(above),
+            ["layer 3 of 3 (%s) merged while a layer below it is still open" % layer_url(3)])
+        two = with_state(with_state(build_stack(3), 2, "merged"), 3, "merged")
+        found = stack_shape.out_of_order_merges(two)
+        self.assertEqual(len(found), 2)
+        self.assertIn("layer 2 of 3", found[0])
+        self.assertIn("layer 3 of 3", found[1])
+
     def test_closed_layer_labels_names_each_closed_layer(self):
         layers = with_state(with_state(build_stack(3), 1, "closed"), 3, "closed")
         self.assertEqual(

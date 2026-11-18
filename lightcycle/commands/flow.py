@@ -19,6 +19,7 @@ from lightcycle.application.work import (
 from lightcycle.application.errors import RouteUnavailable, UseCaseError
 from lightcycle.application.flow.feedback_route import FeedbackRoute
 from lightcycle.application.flow.refused_route import RefusedRoute
+from lightcycle.application.flow.rebaseline_stack_on_reopen import RebaselineStackOnReopenUseCase
 from lightcycle.application.pool.halt_step import HaltInput, HaltStepUseCase
 from lightcycle.application.work.refuse_held_step import RefuseHeldStepUseCase
 from lightcycle.application.work.refuse_gate_hold import RefuseGateHoldUseCase
@@ -128,6 +129,8 @@ def cmd_done(argv):
             RefuseGateHoldUseCase(container().store).execute(a.id)
             if route is not None and route[0] is not None:
                 RefuseGateHoldUseCase(container().store).execute(route[0])
+            RebaselineStackOnReopenUseCase(
+                container().store, container().github, _flow()).execute(a.id, a.outcome)
             gate = RecordMergedGateRunUseCase(
                 container().store, container().github, _flow())
             gate_input = RecordMergedGateRunInput(step=a.id, outcome=a.outcome)

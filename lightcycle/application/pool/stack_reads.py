@@ -23,6 +23,15 @@ def read_stack(github, url) -> StackRead:
     return StackRead(layers=layers)
 
 
+def rebaseline(store, github, run):
+    stack = read_stack(github, run.stack)
+    if not stack.layers:
+        store.set_stack_seen(run.id, None)
+        return
+    store.set_stack_seen(
+        run.id, stack_shape.encode(stack_shape.record_of(stack.layers, {}, None)))
+
+
 def record_final_stack(store, run, stack):
     previous = stack_shape.decode(run.stack_seen)
     heads = tuple(dict.fromkeys(

@@ -326,3 +326,32 @@ class TestDetectStackShape(unittest.TestCase):
         self.assertIsInstance(rig.github.stack_view(STACK_URL), ReadFailure)
 
         self.assertEqual(rig.tick().shape_changed, [])
+
+
+class TestFirstReadOutOfOrder(unittest.TestCase):
+    def test_a_first_read_with_a_merged_layer_above_an_open_one_fires(self):
+        rig = _Rig(with_state(build_stack(3), 3, "merged"))
+
+        result = rig.tick()
+
+        self.assertEqual(result.shape_changed, [rig.item])
+        node = rig.store.get_node(rig.step)
+        self.assertEqual(node.state, State.DONE)
+        self.assertEqual(node.outcome, "stack-changed")
+        self.assertIn("layer 3 of 3", node.report)
+        self.assertIn("merged while a layer below it is still open", node.report)
+        self.assertEqual([e["number"] for e in rig.record()], [1, 2, 3])
+
+    def test_a_first_read_with_a_cascade_shape_stays_a_silent_baseline(self):
+        rig = _Rig(with_state(build_stack(3), 1, "merged"))
+
+        self.assertEqual(rig.tick().shape_changed, [])
+        self.assertNotEqual(rig.store.get_node(rig.step).state, State.DONE)
+        self.assertEqual(rig.record()[0]["state"], "merged")
+
+    def test_a_first_read_out_of_order_on_a_stage_with_no_hook_stays_silent(self):
+        rig = _Rig(with_state(build_stack(3), 3, "merged"), flow=_NO_HOOK)
+
+        self.assertEqual(rig.tick().shape_changed, [])
+        self.assertNotEqual(rig.store.get_node(rig.step).state, State.DONE)
+        self.assertEqual(rig.record()[2]["state"], "merged")

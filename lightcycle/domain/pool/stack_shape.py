@@ -69,6 +69,21 @@ def abandoned(layers, pr) -> bool:
     return layers[-1].state == "closed" and layers[-1].url == pr
 
 
+OUT_OF_ORDER_MERGE = "%s merged while a layer below it is still open"
+
+
+def out_of_order_merges(layers) -> list:
+    total = len(layers)
+    found = []
+    open_below = False
+    for position, layer in enumerate(layers, start=1):
+        if layer.state == "merged" and open_below:
+            found.append(OUT_OF_ORDER_MERGE % label(position, total, layer.url))
+        elif layer.state == "open":
+            open_below = True
+    return found
+
+
 def closed_layer_labels(layers) -> list:
     total = len(layers)
     return [
@@ -140,7 +155,7 @@ def compare(previous, layers, current, dissolved) -> ShapeDiff:
                 differences.append("%s closed without merging" % name)
             elif was["state"] == "open" and layer.state == "merged":
                 if open_below:
-                    differences.append("%s merged while a layer below it is still open" % name)
+                    differences.append(OUT_OF_ORDER_MERGE % name)
                 else:
                     newly_merged.append(name)
             else:

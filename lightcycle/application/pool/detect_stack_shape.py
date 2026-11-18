@@ -66,10 +66,14 @@ class DetectStackShapeUseCase:
             current = stack_shape.record_of(read.layers, bases, previous)
             held = self._gate_hold.is_held(step.id)
             if previous is None:
-                if not held:
-                    self._store.set_stack_seen(run.id, stack_shape.encode(current))
-                continue
-            diff = stack_shape.compare(previous, read.layers, current, read.dissolved)
+                out_of_order = stack_shape.out_of_order_merges(read.layers)
+                if not out_of_order or not sd.pr_stack_shape:
+                    if not held:
+                        self._store.set_stack_seen(run.id, stack_shape.encode(current))
+                    continue
+                diff = stack_shape.ShapeDiff(out_of_order, [])
+            else:
+                diff = stack_shape.compare(previous, read.layers, current, read.dissolved)
             encoded = stack_shape.encode(current)
             if not diff.differences:
                 if current != previous and not held:
