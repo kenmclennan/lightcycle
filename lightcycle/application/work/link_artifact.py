@@ -32,6 +32,7 @@ class LinkArtifactInput:
     kind: Optional[str] = None
     internal: bool = False
     step: Optional[str] = None
+    clear: bool = False
 
 
 class LinkArtifactUseCase:
@@ -40,7 +41,9 @@ class LinkArtifactUseCase:
         self._github = github
         self._flow = flow
 
-    def execute(self, input: LinkArtifactInput) -> None:
+    def execute(self, input: LinkArtifactInput) -> Optional[bool]:
+        if input.clear:
+            return self._clear(input)
         if input.value == "":
             raise UseCaseError(
                 "empty value for '%s' on '%s' is refused - attach has no way to store or "
@@ -75,6 +78,17 @@ class LinkArtifactUseCase:
             )
         if input.atype == "repo":
             self._derive_project_if_unset(input.item, input.value)
+
+    def _clear(self, input):
+        if input.atype != "stack":
+            raise UseCaseError(
+                "--clear applies only to 'stack', not '%s'" % input.atype
+            )
+        run = self._run_for(input)
+        if not run.stack:
+            return False
+        self._store.set_stack(run.id, None)
+        return True
 
     def _record_citation(self, input):
         step_id = input.item
@@ -177,6 +191,18 @@ class LinkArtifactUseCase:
             )
 
     def _route_to_run(self, input):
+        run = self._run_for(input)
+        if input.atype == "pr":
+            self._set_pr(run, input.value)
+        elif input.atype == "branch":
+            self._store.set_branch(run.id, input.value)
+        elif input.atype == "stack":
+            self._store.set_stack(run.id, input.value)
+            self._record_layers(run.id, input.value)
+        else:
+            self._store.set_comments_handled_through(run.id, input.value)
+
+    def _run_for(self, input):
         node = self._store.get_node(input.item)
         if node.type == "step":
             raise UseCaseError(
@@ -195,15 +221,7 @@ class LinkArtifactUseCase:
                 "item '%s' has no open phase run%s to attach '%s' to"
                 % (input.item, scope, input.atype)
             )
-        if input.atype == "pr":
-            self._set_pr(run, input.value)
-        elif input.atype == "branch":
-            self._store.set_branch(run.id, input.value)
-        elif input.atype == "stack":
-            self._store.set_stack(run.id, input.value)
-            self._record_layers(run.id, input.value)
-        else:
-            self._store.set_comments_handled_through(run.id, input.value)
+        return run
 
     def _record_layers(self, run_id, url):
         read = read_stack(self._github, url)

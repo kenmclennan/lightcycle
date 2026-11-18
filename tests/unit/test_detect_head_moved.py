@@ -312,6 +312,24 @@ class _StackedHarness:
 
 
 class TestHeadMovedOverAStack(unittest.TestCase):
+    def test_a_cleared_stack_takes_the_unstacked_path(self):
+        from lightcycle.application.work.link_artifact import LinkArtifactInput, LinkArtifactUseCase
+
+        h = _StackedHarness()
+        LinkArtifactUseCase(h.store, h.github, flow=None).execute(
+            LinkArtifactInput(item=h.item, atype="stack", value="", clear=True))
+        top = h.layers[-1].url
+        h.run()
+        h.run()
+        h.github.calls.clear()
+        h.heads[top] = "sha-3-moved"
+
+        result = h.run()
+
+        self.assertEqual(result.head_moved, [h.item])
+        self.assertEqual(h.base.state(h.gate), "done")
+        self.assertNotIn("stack_view", [c[0] for c in h.github.calls])
+
     def test_a_cascaded_head_updates_the_record_and_rereads_checks_only(self):
         h = _StackedHarness()
         h.sign(2, "sha-2", "same")

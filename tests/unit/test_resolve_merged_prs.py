@@ -1574,6 +1574,24 @@ class TestResolveMergedPrsOverAStack(unittest.TestCase):
         self.assertEqual(result.merged, [item])
         self.assertEqual(store.get_node(item).state, "done")
 
+    def test_a_cleared_stack_takes_the_unstacked_path(self):
+        from lightcycle.application.work.link_artifact import LinkArtifactInput, LinkArtifactUseCase
+        from tests.support.stacked import build_stack
+
+        layers = build_stack(3, states={1: "merged", 3: "merged"})
+        layers_top = layers[-1].url
+        store, item, step, github, uc = self._rig(layers)
+        LinkArtifactUseCase(store, github, flow=None).execute(
+            LinkArtifactInput(item=item, atype="stack", value="", clear=True))
+        github._merged.add(layers_top)
+        github.calls.clear()
+
+        result = uc.execute()
+
+        self.assertEqual(result.merged, [item])
+        self.assertEqual(store.get_node(item).state, "done")
+        self.assertNotIn("stack_view", [c[0] for c in github.calls])
+
     def test_all_three_layers_merged_still_closes_as_merged(self):
         from tests.support.stacked import build_stack
 

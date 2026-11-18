@@ -1064,6 +1064,23 @@ class TestContentPinOverAStack(unittest.TestCase):
         self.assertNotIn("moved.py", node.notes)
         self.assertEqual(self._pins()[two], "sha-2b")
 
+    def test_a_cleared_stack_takes_the_unstacked_path(self):
+        from lightcycle.application.work.link_artifact import LinkArtifactInput, LinkArtifactUseCase
+
+        top = _layer_url(3)
+        self._setup(files={(top, "sha-3"): frozenset({"a.py", "b.py"}),
+                           (top, "sha-3b"): frozenset({"a.py"})})
+        LinkArtifactUseCase(self.store, self.github, flow=None).execute(
+            LinkArtifactInput(item=self.item, atype="stack", value="", clear=True))
+        self.github.calls.clear()
+        self._run()
+        self.github._head_shas[top] = "sha-3b"
+
+        self._run()
+
+        self.assertEqual(self.store.get_node(self.step).state, State.WAITING)
+        self.assertNotIn("stack_view", [c[0] for c in self.github.calls])
+
 
 class TestContentPinUnstackedMakesNoLayerReads(unittest.TestCase):
     def test_a_single_pr_drop_parks_without_reading_other_layers(self):

@@ -379,21 +379,26 @@ def cmd_attach(argv):
         if value == "":
             sys.stderr.write("file '%s' is empty; pass a file with content\n" % a.file)
             return 1
+    if a.clear and a.type != "stack":
+        sys.stderr.write("--clear applies only to 'stack', not '%s'\n" % a.type)
+        return 1
     if a.type in _REFLECTION_TYPES:
         ReflectUseCase(container().store, container().fs, _worktrees()).execute(
             ReflectInput(step=a.id, feedback=value)
         )
         return 0
     try:
-        LinkArtifactUseCase(container().store, container().github, _flow()).execute(
+        result = LinkArtifactUseCase(container().store, container().github, _flow()).execute(
             LinkArtifactInput(
-                item=a.id, atype=a.type, value=value, label=a.label, replace=a.replace,
-                internal=a.internal, kind=a.kind, step=_acting_step_id(),
+                item=a.id, atype=a.type, value=value or "", label=a.label, replace=a.replace,
+                internal=a.internal, kind=a.kind, step=_acting_step_id(), clear=a.clear,
             )
         )
     except UseCaseError as e:
         sys.stderr.write("%s\n" % e)
         return 1
+    if result is False:
+        sys.stdout.write("no-op: '%s' has no %s to clear\n" % (a.id, a.type))
     return 0
 
 

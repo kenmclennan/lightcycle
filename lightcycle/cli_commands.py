@@ -236,7 +236,9 @@ COMMANDS = {
     )),
     "attach": CommandSpec(prog="lc attach", args=(
         Arg("id"), Arg("type"),
-        MutexGroup(required=True, args=(Arg("value", nargs="?"), Arg("--file"))),
+        MutexGroup(required=True, args=(
+            Arg("value", nargs="?"), Arg("--file"), Arg("--clear", action="store_true"),
+        )),
         Arg("--label"), Arg("--replace", action="store_true"),
         Arg("--internal", action="store_true"), Arg("--kind"),
     )),
