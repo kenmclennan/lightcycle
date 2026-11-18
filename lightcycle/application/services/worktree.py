@@ -3,7 +3,7 @@ import sys
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.setup.project_registry import ProjectRegistry
 from lightcycle.domain.flow.flow import PROJECT_WORKSPACE
-from lightcycle.domain.pool.stack_shape import layer_branches
+from lightcycle.domain.pool.stack_shape import layer_branches, merged_layer_branches
 from lightcycle.domain.runs import RunState, pass_number
 from lightcycle.domain.workspace import Branch, Worktree
 from lightcycle.ports.git import GitReadError
@@ -268,7 +268,10 @@ class WorktreeService:
         if target not in fetched:
             fetched.add(target)
             self._git.fetch_origin(target)
+        proven_branches = merged_layer_branches(run)
         for branch in (run.branch,) + layer_branches(run):
+            if branch in proven_branches:
+                continue
             findings = findings + self._unmerged_findings(target, branch)
         return findings
 

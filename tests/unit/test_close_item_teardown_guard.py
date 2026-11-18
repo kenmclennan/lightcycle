@@ -8,6 +8,7 @@ from lightcycle.application.services.worktree import WorktreeService
 from lightcycle.application.work.close_item import (
     TEARDOWN_REFUSED_ARTIFACT, CloseItemInput, CloseItemUseCase, TeardownRefused,
 )
+from lightcycle.domain.pool import stack_shape
 from lightcycle.domain.runs import RunState
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_git import FakeGit
@@ -261,3 +262,63 @@ class TestCascadePath(unittest.TestCase):
         _close(store, svc, item)
 
         self.assertEqual(store.get_node(item).state, "done")
+
+
+LAYERS = ("layer-1", "layer-2", BRANCH)
+
+
+def _stacked(states, dirty=False):
+    beyond = {(REPO, b): ["a1"] for b in LAYERS}
+    git = FakeGit(branches={(REPO, b) for b in LAYERS}, ref="origin/main", beyond=beyond)
+    store, svc, item, step = _world(git)
+    rid = store.open_runs_of(item)[0].id
+    record = [
+        {"number": n, "state": st, "head_ref": ref, "base": "main"}
+        for n, (ref, st) in enumerate(zip(LAYERS, states), start=1)
+    ]
+    store.set_stack_seen(rid, stack_shape.encode(record))
+    if dirty:
+        git._registered = {PATH % item}
+        git._uncommitted = {PATH % item: ["a.py"]}
+    return git, store, svc, item, step
+
+
+class TestLayerBranchesRecordedMerged(unittest.TestCase):
+    def test_a_layer_branch_recorded_merged_is_not_checked_for_commits_beyond(self):
+        git, store, svc, item, _ = _stacked(("merged", "merged", "merged"))
+
+        _close(store, svc, item)
+
+        self.assertEqual(store.get_node(item).state, "done")
+        self.assertEqual(
+            [c for c in git.calls if c[0] == "commits_beyond"], [])
+        deleted = [c[2] for c in git.calls if c[0] == "delete_branch"]
+        self.assertEqual(sorted(deleted), sorted(LAYERS))
+
+    def test_a_branch_recorded_open_is_still_refused_and_the_merged_ones_are_not_named(self):
+        git, store, svc, item, _ = _stacked(("merged", "open", "merged"))
+        self.assertTrue(svc.teardown_refusals(item))
+
+        with self.assertRaises(TeardownRefused) as ctx:
+            _close(store, svc, item)
+
+        self.assertIn("layer-2", str(ctx.exception))
+        self.assertNotIn("layer-1", str(ctx.exception))
+        self.assertNotIn(BRANCH, str(ctx.exception))
+
+    def test_a_layer_closed_unmerged_is_still_refused(self):
+        git, store, svc, item, _ = _stacked(("merged", "closed", "merged"))
+
+        with self.assertRaises(TeardownRefused) as ctx:
+            _close(store, svc, item)
+
+        self.assertIn("layer-2", str(ctx.exception))
+
+    def test_a_dirty_worktree_is_still_refused_when_every_layer_is_recorded_merged(self):
+        git, store, svc, item, _ = _stacked(("merged", "merged", "merged"), dirty=True)
+
+        with self.assertRaises(TeardownRefused) as ctx:
+            _close(store, svc, item)
+
+        self.assertIn("a.py", str(ctx.exception))
+        self.assertNotEqual(store.get_node(item).state, "done")

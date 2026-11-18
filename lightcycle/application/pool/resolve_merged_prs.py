@@ -13,12 +13,11 @@ from lightcycle.application.pool.pr_lookups import (
     latest_step,
     skip_unpinned,
 )
-from lightcycle.application.pool.stack_reads import read_stack
+from lightcycle.application.pool.stack_reads import read_stack, record_final_stack
 from lightcycle.application.work.gate_hold import GateHold
 from lightcycle.application.work.close_item import (
     RELEASE_PENDING_LABEL, CloseItemInput, CloseItemUseCase, TeardownRefused,
 )
-from lightcycle.domain.pool import stack_shape
 from lightcycle.domain.runs import RunState
 from lightcycle.ports.git import GitReadError
 
@@ -136,17 +135,6 @@ class ResolveMergedPrsUseCase:
                 self._store.label_remove(item, RELEASE_PENDING_LABEL)
         return resp
 
-    def _record_final_stack(self, run, stack):
-        previous = stack_shape.decode(run.stack_seen)
-        heads = tuple(dict.fromkeys(
-            l.head_ref for l in stack.layers if l.head_ref and l.head_ref != run.branch
-        ))
-        if stack_shape.layer_branches(run) == heads:
-            return run
-        record = stack_shape.record_of(stack.layers, {}, previous)
-        self._store.set_stack_seen(run.id, stack_shape.encode(record))
-        return self._store.get_run(run.id)
-
     def execute(self) -> ResolveMergedPrsResponse:
         merged, abandoned, refused = [], [], []
         close = CloseItemUseCase(self._store, self._worktrees)
@@ -185,7 +173,7 @@ class ResolveMergedPrsUseCase:
                         gate = active_step_at(self._store, item.id, stage)
                         if merged_by_pr[pr_value] and not (
                                 gate is not None and self._gate_hold.is_held(gate.id)):
-                            run = self._record_final_stack(run, stack)
+                            run = record_final_stack(self._store, run, stack)
                 elif merge_outcome and pr_value not in merged_by_pr:
                     merged_by_pr[pr_value] = false_on_failure(self._github.is_merged(pr_value))
                 if merge_outcome and merged_by_pr[pr_value]:

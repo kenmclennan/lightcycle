@@ -35,6 +35,18 @@ def layer_branches(run) -> tuple:
     return tuple(seen)
 
 
+def merged_layer_branches(run) -> tuple:
+    record = decode(getattr(run, "stack_seen", None))
+    if not record:
+        return ()
+    merged = []
+    for entry in record:
+        ref = entry.get("head_ref")
+        if ref and entry.get("state") == "merged" and ref not in merged:
+            merged.append(ref)
+    return tuple(merged)
+
+
 def label(position, total, url) -> str:
     return "layer %d of %d (%s)" % (position, total, url)
 

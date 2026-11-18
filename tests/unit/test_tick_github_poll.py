@@ -8,6 +8,7 @@ from lightcycle.application.pool.github_poll import GithubPollUseCase
 from lightcycle.application.pool.no_op_gates import NoOpMonitor
 from lightcycle.application.pool.pr_snapshot import PrSnapshot
 from lightcycle.application.pool.pr_writes import PrWrites
+from lightcycle.application.work.close_item import CloseItemUseCase
 from lightcycle.application.pool.resolve_ci import ResolveCiUseCase
 from lightcycle.application.pool.tick import TickInput
 from lightcycle.ports.github import CheckRun, Comment, NotYetRead, ReadFailure, Review
@@ -105,7 +106,7 @@ class TestCiStageIssuesNoGitCall(unittest.TestCase):
         plant_pr(store, item, _PR, branch="feat/thing")
         step = store.create_step(stage="poll-ci", role="engine", item=item)
         flow = _FlowAdapter(_FLOW)
-        monitor = _CiMonitor(ResolveCiUseCase(store, snapshot, flow, CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=snapshot, trusted_authors=lambda: frozenset()))
+        monitor = _CiMonitor(ResolveCiUseCase(store, snapshot, flow, CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None), close_item=CloseItemUseCase(store, NoopWorktrees()), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=snapshot, trusted_authors=lambda: frozenset()))
         git = FakeGit()
         tick = make_tick(
             store, FakeWorkers(), FakeSpawner(), _Config(), monitor=monitor,
@@ -129,7 +130,7 @@ def _ci_pool(hold_view):
     item = store.create_item("building a thing", "a description")
     plant_pr(store, item, _PR, branch="feat/thing")
     flow = _FlowAdapter(_FLOW)
-    monitor = _CiMonitor(ResolveCiUseCase(store, snapshot, flow, CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=snapshot, trusted_authors=lambda: frozenset()))
+    monitor = _CiMonitor(ResolveCiUseCase(store, snapshot, flow, CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None), close_item=CloseItemUseCase(store, NoopWorktrees()), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=snapshot, trusted_authors=lambda: frozenset()))
     tick = make_tick(
         store, FakeWorkers(), FakeSpawner(), _Config(), monitor=monitor,
         github_poll_gate=_gate(snapshot, github, InlineGithubPollRunner()),
@@ -207,7 +208,7 @@ def _head_change_pool(before_move, settle=True):
     flow = _FlowAdapter(_FLOW)
     monitor = _CiMonitor(ResolveCiUseCase(
         store, snapshot, flow, CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None),
-        clock=time.monotonic, poll_seconds=lambda: _POLL,
+        close_item=CloseItemUseCase(store, NoopWorktrees()), clock=time.monotonic, poll_seconds=lambda: _POLL,
         ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=snapshot, trusted_authors=lambda: frozenset()))
     tick = make_tick(
         store, FakeWorkers(), FakeSpawner(), _Config(), monitor=monitor,

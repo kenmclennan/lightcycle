@@ -3,6 +3,7 @@ import unittest
 from tests.support.null_collaborators import NoopWorktrees
 
 from lightcycle.application.flow.complete_step import CompleteStepUseCase
+from lightcycle.application.work.close_item import CloseItemUseCase
 from lightcycle.application.pool.resolve_ci import ResolveCiUseCase
 from lightcycle.config import ConfigError
 from lightcycle.domain.feedback import LC_MARKER
@@ -60,7 +61,7 @@ class _Rig:
         if wrap:
             complete = wrap(self.store, complete)
         self.uc = ResolveCiUseCase(
-            self.store, github, adapter, complete, clock=time.monotonic, poll_seconds=lambda: 60,
+            self.store, github, adapter, complete, close_item=CloseItemUseCase(self.store, NoopWorktrees()), clock=time.monotonic, poll_seconds=lambda: 60,
             ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0,
             views=views or AlwaysConfirmed(), trusted_authors=trusted)
 

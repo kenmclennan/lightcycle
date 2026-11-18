@@ -4,6 +4,7 @@ from tests.support.null_collaborators import NoopWorktrees
 
 from lightcycle.application.flow.complete_step import CompleteStepUseCase
 from lightcycle.application.pool.check_content_pin import CheckContentPinUseCase
+from lightcycle.application.work.close_item import CloseItemUseCase
 from lightcycle.application.pool.resolve_ci import ResolveCiUseCase
 from lightcycle.application.pool.resolve_merged_prs import ResolveMergedPrsUseCase
 from lightcycle.application.services.flow import FlowService
@@ -92,7 +93,7 @@ class TestUnpinnedWorkflowOnOneItem(unittest.TestCase):
 
     def test_ci_monitor_notes_the_bad_item_and_does_not_raise(self):
         engine_step = self.store.create_step(stage="await-merge", role="engine", item=self.bad)
-        uc = ResolveCiUseCase(self.store, FakeGitHub(), self.flow, self._complete(), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
+        uc = ResolveCiUseCase(self.store, FakeGitHub(), self.flow, self._complete(), close_item=CloseItemUseCase(self.store, NoopWorktrees()), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
 
         uc.execute()
 

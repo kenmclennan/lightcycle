@@ -6,7 +6,11 @@ from lightcycle.application.flow.complete_step import CompleteInput
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.application.pool.pr_lookups import flow_for, run_of, skip_unpinned
 from lightcycle.application.pool.skip_idle_ci_watch import SkipIdleCiWatchUseCase
-from lightcycle.application.pool.stack_reads import read_stack
+from lightcycle.application.pool.stack_reads import read_stack, record_final_stack
+from lightcycle.application.work.close_item import (
+    CloseItemInput, TeardownRefused,
+)
+from lightcycle.domain.pool import stack_shape
 from lightcycle.domain.pool import (
     MISSING_STATUS, cancelled_check, check_label, ci_outcome, failing_check, judged_checks, pr_workflows_expected, status_mismatch,
     timed_out_check, unrun_checks,
@@ -66,7 +70,7 @@ def _reason(call, failure):
 
 class ResolveCiUseCase:
     def __init__(
-        self, store, github, flow_service, complete, *, clock, poll_seconds, ci_ceiling_seconds,
+        self, store, github, flow_service, complete, *, close_item, clock, poll_seconds, ci_ceiling_seconds,
         ci_start_window_seconds, ci_no_workflows_wait_seconds, wall_clock, views, trusted_authors,
         ci_unconfirmed_note_polls,
     ):
@@ -74,6 +78,7 @@ class ResolveCiUseCase:
         self._github = github
         self._flow_service = flow_service
         self._complete = complete
+        self._close_item = close_item
         self._clock = clock
         self._poll_seconds = poll_seconds
         self._ci_ceiling_seconds = ci_ceiling_seconds
@@ -499,12 +504,65 @@ class ResolveCiUseCase:
             marked.append((name, v))
         return marked
 
+    def _settle_without_open_layer(self, step, run, stack):
+        closed = [
+            stack_shape.label(position, len(stack.layers), layer.url)
+            for position, layer in enumerate(stack.layers, start=1)
+            if layer.state == "closed"
+        ]
+        if closed:
+            ParkStepUseCase(self._store).execute_once(
+                ParkInput(
+                    step=step.id,
+                    observation="no layer is open and %s closed without merging" % ", ".join(closed),
+                    decision=(
+                        "reopen each closed layer with `gh pr reopen <url>`, or abandon the item"
+                    ),
+                )
+            )
+            return
+        flow = flow_for(self._flow_service, step)
+        outcome = self._merge_outcome(flow, flow.step_def(step.stage).phase)
+        if outcome is None:
+            return
+        disposition = flow.disposition_for(outcome)
+        if disposition is None:
+            ParkStepUseCase(self._store).execute_once(
+                ParkInput(
+                    step=step.id,
+                    observation=(
+                        "every layer merged, but the workflow does not declare a disposition "
+                        "for outcome '%s'" % outcome
+                    ),
+                    decision=(
+                        "declare 'disposition: %s completed' in the workflow bundle" % outcome
+                    ),
+                )
+            )
+            return
+        record_final_stack(self._store, run, stack)
+        merged_prs = frozenset([run.pr] + [layer.url for layer in stack.layers])
+        try:
+            self._close_item.execute(
+                CloseItemInput(
+                    item=step.item, reason=outcome, disposition=disposition, merged_prs=merged_prs
+                )
+            )
+        except TeardownRefused:
+            return
+
+    @staticmethod
+    def _merge_outcome(flow, phase):
+        for stage in flow.merge_stages():
+            sd = flow.step_def(stage)
+            if sd.phase == phase and sd.pr_merge:
+                return sd.pr_merge
+        return None
+
     def _judge_stack(self, step, sd, run, ctx, ci_resolved):
         stack = read_stack(self._github, run.stack)
         ctx.awaited.add(run.pr)
         if not stack.layers:
-            return
-        if any(layer.state == "closed" for layer in stack.layers):
             return
         total = len(stack.layers)
         open_layers = [
@@ -512,6 +570,9 @@ class ResolveCiUseCase:
             if layer.state == "open"
         ]
         if not open_layers:
+            self._settle_without_open_layer(step, run, stack)
+            return
+        if any(layer.state == "closed" for layer in stack.layers):
             return
         labelled = []
         for position, layer in open_layers:

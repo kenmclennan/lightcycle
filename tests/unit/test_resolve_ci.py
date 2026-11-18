@@ -4,6 +4,7 @@ from tests.support.null_collaborators import NoopWorktrees
 
 from lightcycle.application.flow.complete_step import CompleteInput, CompleteStepUseCase
 from lightcycle.application.pool.pr_snapshot import PrSnapshot
+from lightcycle.application.work.close_item import CloseItemUseCase
 from lightcycle.application.pool.resolve_ci import ResolveCiUseCase
 from lightcycle.domain.work import State
 from lightcycle.ports.github import CheckRun, NotYetRead, ReadFailure, WorkflowFile
@@ -103,7 +104,7 @@ class TestResolveCiJudgedSha(unittest.TestCase):
             (_URL, "sha1"): (CheckRun(name="build", status=conclusion[0], conclusion=conclusion[1]),)
         })
         flow = _FlowAdapter(_FLOW)
-        ResolveCiUseCase(store, gh, flow, CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset()).execute()
+        ResolveCiUseCase(store, gh, flow, CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None), close_item=CloseItemUseCase(store, NoopWorktrees()), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset()).execute()
         return [a.value for a in store.item_artifacts(step) if a.type == "ci-judged-sha"]
 
     def test_success_writes_the_judged_sha(self):
@@ -140,7 +141,7 @@ class TestResolveCiConfirmsHeadBeforeFailed(unittest.TestCase):
         step = store.create_step(stage="poll-ci", role="engine", item=item)
 
         flow = _FlowAdapter(_FLOW)
-        uc = ResolveCiUseCase(store, github, flow, CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
+        uc = ResolveCiUseCase(store, github, flow, CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None), close_item=CloseItemUseCase(store, NoopWorktrees()), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
         return store, item, step, uc
 
     def _judged(self, store, step):
@@ -222,7 +223,7 @@ class TestResolveCiUseCase(unittest.TestCase):
         step = store.create_step(stage="poll-ci", role="engine", item=item)
 
         complete = CompleteStepUseCase(store, _FlowAdapter(flow), worktrees=NoopWorktrees(), config=None)
-        uc = ResolveCiUseCase(store, github, _FlowAdapter(flow), complete, clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
+        uc = ResolveCiUseCase(store, github, _FlowAdapter(flow), complete, close_item=CloseItemUseCase(store, NoopWorktrees()), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
         return store, item, step, uc
 
     def test_ci_still_pending_does_not_complete(self):
@@ -356,7 +357,7 @@ class TestCiUnreadDiagnostics(unittest.TestCase):
         clock = _Clock()
         uc = ResolveCiUseCase(
             store, github, flow, CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None),
-            clock=clock, poll_seconds=lambda: 60,
+            close_item=CloseItemUseCase(store, NoopWorktrees()), clock=clock, poll_seconds=lambda: 60,
             ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
         return store, item, step, uc, clock
 
@@ -461,7 +462,7 @@ class TestCiUnreadDiagnostics(unittest.TestCase):
         split = _Split("sha1", _GREEN)
         uc = ResolveCiUseCase(
             store, split, flow, CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None),
-            clock=clock, poll_seconds=lambda: 60,
+            close_item=CloseItemUseCase(store, NoopWorktrees()), clock=clock, poll_seconds=lambda: 60,
             ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
         clock.now = 0.0
         first = uc.execute()
@@ -481,7 +482,7 @@ def _ci_setup(github):
     flow = _FlowAdapter(_FLOW)
     uc = ResolveCiUseCase(
         store, github, flow, CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None),
-        clock=time.monotonic, poll_seconds=lambda: 60,
+        close_item=CloseItemUseCase(store, NoopWorktrees()), clock=time.monotonic, poll_seconds=lambda: 60,
         ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset(),
     )
     return store, item, step, uc
@@ -710,7 +711,7 @@ class TestRequiredChecksAndCeiling(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             ResolveCiUseCase(
-                FakeStore(), FakeGitHub(), None, None, clock=time.monotonic, poll_seconds=lambda: 60,
+                FakeStore(), FakeGitHub(), None, None, close_item=None, clock=time.monotonic, poll_seconds=lambda: 60,
                 ci_ceiling_seconds=_missing, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 0.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset(),
             )
 
@@ -733,7 +734,7 @@ class TestViewConfirmationHold(unittest.TestCase):
     def _uc(self, store, github, views, clock, note_polls=3):
         flow = _FlowAdapter(_FLOW)
         return ResolveCiUseCase(
-            store, github, flow, CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None), clock=clock,
+            store, github, flow, CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None), close_item=CloseItemUseCase(store, NoopWorktrees()), clock=clock,
             poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: note_polls,
             wall_clock=lambda: 10000.0, views=views, trusted_authors=lambda: frozenset())
 
@@ -925,7 +926,7 @@ class TestResolveCiSkipsAStepAnotherPathClosed(unittest.TestCase):
                 CheckRun(name="build", status="completed", conclusion="success"),)})
         complete.execute = lambda i: calls.append(i) or real(i)
         uc = ResolveCiUseCase(
-            store, gh, flow, complete, clock=time.monotonic, poll_seconds=lambda: 60,
+            store, gh, flow, complete, close_item=CloseItemUseCase(store, NoopWorktrees()), clock=time.monotonic, poll_seconds=lambda: 60,
             ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600,
             ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3,
             wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
@@ -943,7 +944,8 @@ def _check(name, conclusion, status="completed"):
 
 
 class _StackedCiRig:
-    def __init__(self, count=3, checks=None, required=None, views=None, state_by_layer=None):
+    def __init__(self, count=3, checks=None, required=None, views=None, state_by_layer=None,
+                 flow=None, close_item=None):
         from tests.support.stacked import (
             STACK_URL, base_keys_for, build_stack, head_shas_for,
         )
@@ -958,15 +960,15 @@ class _StackedCiRig:
         runs = {}
         for layer in self.layers:
             runs[(layer.url, layer.head_sha)] = tuple((checks or {}).get(layer.number, ()))
-        bottom = next(l for l in self.layers if l.state == "open")
+        bottom = next((l for l in self.layers if l.state == "open"), self.layers[0])
         self.github = FakeGitHub(
             stacks={STACK_URL: self.layers}, head_shas=head_shas_for(self.layers),
             base_keys=base_keys_for(self.layers), check_runs_by_sha=runs,
             required_by_base={"acme/widget@%s" % bottom.base_ref: required} if required else None)
-        flow = _FlowAdapter(_FLOW)
+        flow = _FlowAdapter(flow or _FLOW)
         self.uc = ResolveCiUseCase(
             self.store, self.github, flow, CompleteStepUseCase(self.store, flow, worktrees=NoopWorktrees(), config=None),
-            clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600,
+            close_item=close_item or CloseItemUseCase(self.store, NoopWorktrees()), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600,
             ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60,
             ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0,
             views=views or AlwaysConfirmed(), trusted_authors=lambda: frozenset())
@@ -1552,7 +1554,7 @@ class TestResolveCiHeadLagsBranch(unittest.TestCase):
         clock = _Clock()
         uc = ResolveCiUseCase(
             store, github, flow, CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None),
-            clock=clock, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600,
+            close_item=CloseItemUseCase(store, NoopWorktrees()), clock=clock, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600,
             ci_start_window_seconds=window, ci_no_workflows_wait_seconds=lambda: 60,
             ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0,
             views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
@@ -1758,7 +1760,7 @@ class TestResolveCiRulesRead(unittest.TestCase):
         clock = _Clock()
         uc = ResolveCiUseCase(
             store, gh, flow, CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None),
-            clock=clock, poll_seconds=lambda: 60,
+            close_item=CloseItemUseCase(store, NoopWorktrees()), clock=clock, poll_seconds=lambda: 60,
             ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())
         clock.now = 0.0
         first = uc.execute()
@@ -1806,3 +1808,95 @@ class TestResolveCiRulesRead(unittest.TestCase):
             rig.uc.execute()
 
             self.assertEqual(rig.node().outcome, "succeeded")
+
+
+_MERGE_FLOW = flow_from_metas(
+    {
+        "poller": {
+            "engine": True, "step": "poll-ci", "routes": {"succeeded": "watch-ci"},
+            "on_ci_success": "succeeded", "on_ci_failure": "succeeded",
+        },
+        "watcher": {"model": "sonnet", "step": "watch-ci"},
+        "gate": {"step": "ready-merge", "routes": {"merged": "watch-ci"}, "on_pr_merge": "merged"},
+    },
+    disposition={"merged": "completed"},
+)
+
+_REPO = "/elsewhere/app"
+
+
+def _merge_rig(states):
+    from tests.support.fake_git import FakeGit
+    from tests.support.null_collaborators import NoFlow
+    from tests.unit.test_close_item_teardown_guard import _Cfg
+    from lightcycle.application.services.worktree import WorktreeService
+
+    branches = {(_REPO, b) for b in (_BRANCH, "layer-1", "layer-2", "layer-3")}
+    git = FakeGit(
+        branches=branches, ref="origin/main",
+        beyond={key: ["a1"] for key in branches},
+    )
+    holder = {}
+
+    class _Late:
+        def execute(self, input):
+            return holder["close"].execute(input)
+
+    rig = _StackedCiRig(state_by_layer=states, flow=_MERGE_FLOW, close_item=_Late())
+    rig.store.add_artifact(rig.item, "repo", _REPO)
+    rig.git = git
+    svc = WorktreeService(rig.store, git, fs=None, config=_Cfg(), flow=NoFlow())
+    holder["close"] = CloseItemUseCase(rig.store, svc)
+    return rig
+
+
+class TestResolveCiStackWithNoOpenLayer(unittest.TestCase):
+    def test_a_stack_with_every_layer_merged_closes_the_item_as_merged(self):
+        rig = _merge_rig({1: "merged", 2: "merged", 3: "merged"})
+
+        rig.uc.execute()
+
+        node = rig.store.get_node(rig.item)
+        self.assertEqual(node.state, State.DONE)
+        self.assertEqual(node.outcome, "merged")
+        self.assertEqual(rig.node().state, State.DONE)
+        deleted = sorted(c[2] for c in rig.git.calls if c[0] == "delete_branch")
+        self.assertEqual(deleted, sorted([_BRANCH, "layer-1", "layer-2", "layer-3"]))
+        self.assertEqual(rig.store.open_runs_of(rig.item), [])
+
+    def test_a_stack_with_no_open_layer_and_one_closed_parks_naming_the_layer(self):
+        rig = _merge_rig({1: "merged", 2: "closed", 3: "merged"})
+
+        rig.uc.execute()
+
+        park = rig.node().park
+        self.assertIn("layer 2 of 3", park.reason)
+        self.assertIn("https://github.com/acme/widget/pull/2", park.reason)
+        self.assertNotEqual(rig.store.get_node(rig.item).state, State.DONE)
+
+    def test_a_stack_with_a_merged_layer_and_an_open_one_does_not_close(self):
+        rig = _merge_rig({1: "merged", 2: "merged", 3: "open"})
+
+        rig.uc.execute()
+
+        self.assertNotEqual(rig.store.get_node(rig.item).state, State.DONE)
+
+    def test_an_unreadable_stack_closes_nothing_and_parks_nothing(self):
+        rig = _merge_rig({1: "merged", 2: "merged", 3: "merged"})
+        rig.github._failing_calls = {"stack_view"}
+
+        rig.uc.execute()
+
+        self.assertNotEqual(rig.store.get_node(rig.item).state, State.DONE)
+        self.assertIsNone(rig.node().park.reason)
+
+    def test_a_refused_teardown_parks_the_step_and_the_item_stays_open(self):
+        rig = _merge_rig({1: "merged", 2: "merged", 3: "merged"})
+        path = "%s/.worktrees/%s" % (_REPO, rig.item)
+        rig.git._registered = {path}
+        rig.git._uncommitted = {path: ["a.py"]}
+
+        rig.uc.execute()
+
+        self.assertNotEqual(rig.store.get_node(rig.item).state, State.DONE)
+        self.assertIn("a.py", rig.node().park.reason)
