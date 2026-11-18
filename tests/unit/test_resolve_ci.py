@@ -1326,13 +1326,63 @@ class TestResolveCiOverAStack(unittest.TestCase):
 
         self.assertNotEqual(rig.node().state, State.DONE)
 
-    def test_a_stack_with_a_closed_layer_has_no_outcome(self):
+    def test_a_stack_with_a_closed_layer_parks_naming_it(self):
         rig = _StackedCiRig(
             state_by_layer={2: "closed"}, checks={n: [_check("build", "failure")] for n in (1, 3)})
 
         rig.uc.execute()
 
-        self.assertNotEqual(rig.node().state, State.DONE)
+        node = rig.node()
+        self.assertEqual(node.state, State.WAITING)
+        self.assertIn("layer 2 of 3", node.park.reason)
+        self.assertIn("https://github.com/acme/widget/pull/2", node.park.reason)
+        self.assertIn("closed without merging", node.park.reason)
+        self.assertIn("gh pr reopen", node.park.needs)
+        self.assertIsNone(node.outcome)
+
+    def test_two_closed_layers_are_each_named(self):
+        rig = _StackedCiRig(state_by_layer={1: "closed", 3: "closed"})
+
+        rig.uc.execute()
+
+        reason = rig.node().park.reason
+        self.assertIn("layer 1 of 3", reason)
+        self.assertIn("layer 3 of 3", reason)
+
+    def test_a_dissolved_stack_parks_poll_ci_naming_it(self):
+        from tests.support.stacked import STACK_URL
+
+        rig = _StackedCiRig()
+        rig.github._stacks.pop(STACK_URL)
+
+        rig.uc.execute()
+
+        node = rig.node()
+        self.assertEqual(node.state, State.WAITING)
+        self.assertIn(STACK_URL, node.park.reason)
+        self.assertIn("dissolved", node.park.reason)
+        self.assertIn("lc attach", node.park.needs)
+        before = node.park
+        rig.uc.execute()
+        self.assertEqual(rig.node().park, before)
+
+    def test_an_empty_stack_is_dissolved_too(self):
+        from tests.support.stacked import STACK_URL
+
+        rig = _StackedCiRig()
+        rig.github.script_stack(STACK_URL, ())
+
+        rig.uc.execute()
+
+        self.assertIn("dissolved", rig.node().park.reason)
+
+    def test_an_unreadable_stack_parks_nothing_where_a_dissolved_one_parks(self):
+        rig = _StackedCiRig()
+        rig.github._failing_calls = {"stack_view"}
+
+        rig.uc.execute()
+
+        self.assertIsNone(rig.node().park.reason)
 
 
 def _wff(name, workflow, workflow_file, conclusion="success"):
@@ -1890,6 +1940,17 @@ class TestResolveCiStackWithNoOpenLayer(unittest.TestCase):
         self.assertIsNone(rig.node().park.reason)
         self.assertEqual([c for c in rig.git.calls if c[0] == "delete_branch"], [])
 
+    def test_every_layer_merged_with_no_merge_stage_parks_naming_the_stage(self):
+        rig = _StackedCiRig(state_by_layer={1: "merged", 2: "merged", 3: "merged"})
+
+        rig.uc.execute()
+
+        node = rig.node()
+        self.assertEqual(node.state, State.WAITING)
+        self.assertIn("declares no merge stage", node.park.reason)
+        self.assertIn("lc close", node.park.needs)
+        self.assertNotEqual(rig.store.get_node(rig.item).state, State.DONE)
+
     def test_a_stack_with_no_open_layer_and_one_closed_parks_naming_the_layer(self):
         rig = _merge_rig({1: "merged", 2: "closed", 3: "merged"})
 
@@ -2108,6 +2169,46 @@ class _GateRig(_StackedCiRig):
 
 
 class TestResolveCiStackGate(unittest.TestCase):
+    def test_a_dissolved_stack_at_the_gate_parks_the_gate(self):
+        from tests.support.stacked import STACK_URL
+
+        rig = _GateRig(count=2)
+        rig.github._stacks.pop(STACK_URL)
+
+        rig.uc.execute()
+
+        node = rig.gate_node()
+        self.assertEqual(node.state, State.WAITING)
+        self.assertIn("dissolved", node.park.reason)
+        self.assertIn(STACK_URL, node.park.reason)
+
+    def test_a_dissolved_stack_on_a_held_gate_records_the_observation_and_parks_nothing(self):
+        from lightcycle.application.work.gate_hold import GateHold
+        from tests.support.stacked import STACK_URL
+
+        rig = _GateRig(count=2)
+        GateHold(rig.store).place(rig.gate, "held")
+        rig.github._stacks.pop(STACK_URL)
+
+        rig.uc.execute()
+
+        node = rig.gate_node()
+        self.assertIsNone(node.park.reason)
+        self.assertIn("stack dissolved (would park)", node.notes)
+
+    def test_a_closed_layer_at_the_gate_parks_the_gate(self):
+        from tests.support.stacked import STACK_URL, with_state
+
+        rig = _GateRig(count=3)
+        rig.github.script_stack(STACK_URL, with_state(rig.layers, 2, "closed"))
+
+        rig.uc.execute()
+
+        node = rig.gate_node()
+        self.assertEqual(node.state, State.WAITING)
+        self.assertIn("layer 2 of 3", node.park.reason)
+        self.assertIn("gh pr reopen", node.park.needs)
+
     def test_a_two_layer_stack_whose_bottom_layer_merges_waits_on_layer_two_and_reopens_when_its_required_checks_pass(self):
         rig = _GateRig(count=2, merged=(1,), checks={2: ()}, required={"build"}, judged=2)
         rig.github._required_by_base["acme/widget@main"] = {"build"}

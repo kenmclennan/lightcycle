@@ -118,3 +118,11 @@ class TestMergeBlocker(unittest.TestCase):
         closed = build_stack(3, states={1: "closed", 2: "closed", 3: "closed"})
         self.assertFalse(stack_shape.abandoned(closed, layer_url(2)))
 
+
+class TestStackShapeHelpers(unittest.TestCase):
+    def test_closed_layer_labels_names_each_closed_layer(self):
+        layers = with_state(with_state(build_stack(3), 1, "closed"), 3, "closed")
+        self.assertEqual(
+            stack_shape.closed_layer_labels(layers),
+            ["layer 1 of 3 (%s)" % layer_url(1), "layer 3 of 3 (%s)" % layer_url(3)])
+        self.assertEqual(stack_shape.closed_layer_labels(build_stack(3)), [])

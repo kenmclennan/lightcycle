@@ -69,6 +69,15 @@ def abandoned(layers, pr) -> bool:
     return layers[-1].state == "closed" and layers[-1].url == pr
 
 
+def closed_layer_labels(layers) -> list:
+    total = len(layers)
+    return [
+        label(position, total, layer.url)
+        for position, layer in enumerate(layers, start=1)
+        if layer.state == "closed"
+    ]
+
+
 def record_of(layers, observed_bases, previous) -> list:
     carried = {e["number"]: e.get("base") for e in (previous or [])}
     record = []

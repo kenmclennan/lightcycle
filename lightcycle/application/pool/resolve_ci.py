@@ -567,11 +567,7 @@ class ResolveCiUseCase:
         return marked
 
     def _settle_without_open_layer(self, step, run, stack):
-        closed = [
-            stack_shape.label(position, len(stack.layers), layer.url)
-            for position, layer in enumerate(stack.layers, start=1)
-            if layer.state == "closed"
-        ]
+        closed = stack_shape.closed_layer_labels(stack.layers)
         if closed:
             ParkStepUseCase(self._store).execute_once(
                 ParkInput(
@@ -588,6 +584,19 @@ class ResolveCiUseCase:
         flow = flow_for(self._flow_service, step)
         outcome = self._merge_outcome(flow, flow.step_def(step.stage).phase)
         if outcome is None:
+            ParkStepUseCase(self._store).execute_once(
+                ParkInput(
+                    step=step.id,
+                    observation=(
+                        "every layer merged, but the workflow declares no merge stage "
+                        "for phase '%s'" % flow.step_def(step.stage).phase
+                    ),
+                    decision=(
+                        "close the item with `lc close %s --outcome merged`, or add a stage "
+                        "with on_pr_merge to the workflow bundle" % step.item
+                    ),
+                )
+            )
             return
         disposition = flow.disposition_for(outcome)
         if disposition is None:
@@ -623,9 +632,38 @@ class ResolveCiUseCase:
                 return sd.pr_merge
         return None
 
+    def _park_unworkable_stack(self, step, run, stack, settles_closed=False):
+        if stack.dissolved:
+            observation = (
+                "the stack %s is dissolved: GitHub no longer reports its layers" % run.stack)
+            decision = (
+                "re-create the stack and attach it with `lc attach %s stack <url>`, or abandon "
+                "the item, or, if every layer merged, close the item with "
+                "`lc close %s --outcome merged`; then unblock this step" % (step.item, step.item))
+            hold_text = "stack dissolved (would park)"
+        else:
+            closed = stack_shape.closed_layer_labels(stack.layers)
+            if not closed:
+                return False
+            if settles_closed and not any(layer.state == "open" for layer in stack.layers):
+                return False
+            observation = "%s closed without merging" % ", ".join(closed)
+            decision = (
+                "reopen each closed layer with `gh pr reopen <url>`, or abandon the item; "
+                "then unblock this step")
+            hold_text = "stack layer closed without merging (would park)"
+        if self._gate_hold.is_held(step.id):
+            self._gate_hold.observe(step, hold_text)
+            return True
+        ParkStepUseCase(self._store).execute_once(
+            ParkInput(step=step.id, observation=observation, decision=decision))
+        return True
+
     def _judge_stack(self, step, sd, run, ctx, ci_resolved):
         stack = read_stack(self._github, run.stack)
         ctx.awaited.add(run.pr)
+        if self._park_unworkable_stack(step, run, stack, settles_closed=True):
+            return
         if not stack.layers:
             return
         total = len(stack.layers)
@@ -635,8 +673,6 @@ class ResolveCiUseCase:
         ]
         if not open_layers:
             self._settle_without_open_layer(step, run, stack)
-            return
-        if any(layer.state == "closed" for layer in stack.layers):
             return
         labelled = []
         for position, layer in open_layers:
@@ -692,7 +728,9 @@ class ResolveCiUseCase:
 
     def _watch_gate(self, step, flow, sd, run, ctx):
         stack = read_stack(self._github, run.stack)
-        if not stack.layers or any(layer.state == "closed" for layer in stack.layers):
+        if self._park_unworkable_stack(step, run, stack):
+            return
+        if not stack.layers:
             return
         held = self._gate_hold.is_held(step.id)
         total = len(stack.layers)
