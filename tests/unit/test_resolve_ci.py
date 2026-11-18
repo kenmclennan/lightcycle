@@ -1294,6 +1294,21 @@ class TestResolveCiOverAStack(unittest.TestCase):
         self.assertTrue(all(not c[1].endswith("/1") for c in judged))
         self.assertEqual(rig.node().outcome, "succeeded")
 
+    def test_a_cleared_stack_takes_the_unstacked_path(self):
+        from lightcycle.application.work.link_artifact import LinkArtifactInput, LinkArtifactUseCase
+
+        rig = _StackedCiRig(checks={
+            1: [_check("build", "failure")], 2: [_check("build", "failure")],
+            3: [_check("build", "success")]})
+        LinkArtifactUseCase(rig.store, rig.github, flow=None).execute(
+            LinkArtifactInput(item=rig.item, atype="stack", value="", clear=True))
+        rig.github.calls.clear()
+
+        rig.uc.execute()
+
+        self.assertEqual(rig.node().outcome, "succeeded")
+        self.assertNotIn("stack_view", [c[0] for c in rig.github.calls])
+
     def test_the_skip_idle_check_does_not_run_for_a_stacked_run(self):
         rig = _StackedCiRig(checks={n: [_check("build", "success")] for n in (1, 2, 3)})
         called = []

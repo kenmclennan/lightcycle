@@ -172,7 +172,7 @@ COMMAND_GROUPS = [
          "update an item or a step; refuses a field the other one owns"),
         ("rm", "<id> [--force]", "delete a node; refuses on a live worker, a dirty worktree or an unmerged branch "
          "- --force overrides the dirty worktree, the unmerged branch and stale claims"),
-        ("attach", "<id> <type> <value> [--label] [--internal] [--kind K]", "attach an artifact"),
+        ("attach", "<id> <type> <value> [--label] [--internal] [--kind K] | <item> stack --clear", "attach an artifact"),
         ("dep", "<id> --needs <id> | --remove <id>", "add or remove a blocker on a node"),
         ("close", "<item> [--outcome \"<text>\"] [--disposition completed|abandoned] "
          "[--note \"<text>\"]",

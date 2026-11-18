@@ -1275,6 +1275,22 @@ class TestFeedbackOverAStack(unittest.TestCase):
         keys = self._artifact(store, spawned.id, "admitted-comments")
         self.assertTrue(lines[0].endswith(keys))
 
+    def test_a_cleared_stack_takes_the_unstacked_path(self):
+        from lightcycle.application.work.link_artifact import LinkArtifactInput, LinkArtifactUseCase
+        from tests.support.stacked import layer_url
+
+        store, item, step, uc, layers = self._rig({layer_url(3): [_inline_on(1500.0, "c3")]})
+        LinkArtifactUseCase(store, uc._github, flow=None).execute(
+            LinkArtifactInput(item=item, atype="stack", value="", clear=True))
+        uc._github.calls.clear()
+
+        result = uc.execute()
+
+        self.assertEqual(result.reworked, [item])
+        (spawned,) = self._feedback_steps(store)
+        self.assertIsNone(self._artifact(store, spawned.id, "feedback-layers"))
+        self.assertNotIn("stack_view", [c[0] for c in uc._github.calls])
+
     def test_comments_on_layers_one_and_three_give_two_lines(self):
         from tests.support.stacked import layer_url
 

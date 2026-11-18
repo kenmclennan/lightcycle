@@ -422,6 +422,29 @@ class TestMixedGates(unittest.TestCase):
         self.assertEqual(h.notes(sc), "")
 
 
+class TestClearedStack(unittest.TestCase):
+    def test_a_cleared_stack_takes_the_unstacked_path(self):
+        from lightcycle.application.work.link_artifact import LinkArtifactInput, LinkArtifactUseCase
+
+        stacked, cleared = _pr(30), _pr(31)
+        github = FakeGitHub(
+            behind_prs={stacked, cleared}, head_shas={stacked: "s1", cleared: "c1"},
+            strict_bases={_BASE},
+        )
+        h = _Harness(github)
+        i_stacked, _ = h.gate(stacked, "stacked")
+        i_cleared, _ = h.gate(cleared, "cleared")
+        for item in (i_stacked, i_cleared):
+            h.store.set_stack(h.store.current_run(item, None).id, "https://github.com/x/y/stack/1")
+        LinkArtifactUseCase(h.store, github, flow=None).execute(
+            LinkArtifactInput(item=i_cleared, atype="stack", value="", clear=True))
+
+        result = h.uc.execute()
+
+        self.assertEqual(result.updated, [i_cleared])
+        self.assertEqual(github.update_calls, [(cleared, "c1")])
+
+
 class TestConflictFallThrough(unittest.TestCase):
     def test_failed_update_then_conflict_routes_through_existing_path(self):
         github, url = _behind(30, head="h1", failing_calls={"update_branch"})
