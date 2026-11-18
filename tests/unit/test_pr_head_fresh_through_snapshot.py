@@ -9,6 +9,7 @@ from lightcycle.application.flow.complete_step import CompleteStepUseCase
 from lightcycle.application.pool.check_content_pin import CheckContentPinUseCase
 from lightcycle.application.pool.pr_snapshot import PrEntry, PrSnapshot
 from lightcycle.application.pool.pr_writes import InlinePrWrites
+from lightcycle.application.work.close_item import CloseItemUseCase
 from lightcycle.application.pool.resolve_ci import ResolveCiUseCase
 from lightcycle.application.pool.skip_idle_ci_watch import SkipIdleCiWatchUseCase
 from lightcycle.application.pool.update_behind_prs import UpdateBehindPrsUseCase
@@ -123,7 +124,7 @@ class TestResolveCiJudgesTheGitHead(unittest.TestCase):
         adapter = ci_helpers._FlowAdapter(flow)
         uc = ResolveCiUseCase(
             store, snapshot, adapter, CompleteStepUseCase(store, adapter, worktrees=NoopWorktrees(), config=None),
-            clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600,
+            close_item=CloseItemUseCase(store, NoopWorktrees()), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600,
             ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60,
             ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0,
             views=AlwaysConfirmed(), trusted_authors=lambda: frozenset())

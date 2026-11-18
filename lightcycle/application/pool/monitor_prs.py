@@ -9,6 +9,7 @@ from lightcycle.application.pool.update_behind_prs import UpdateBehindPrsUseCase
 from lightcycle.application.pool.pr_sync_reads import PrSyncReads
 from lightcycle.application.pool.resolve_ci import CiUnread, ResolveCiUseCase
 from lightcycle.application.pool.resolve_merged_prs import ResolveMergedPrsUseCase
+from lightcycle.application.work.close_item import CloseItemUseCase
 
 
 @dataclass(frozen=True)
@@ -49,7 +50,7 @@ class MonitorPrsUseCase:
         self._detect_stack_shape = DetectStackShapeUseCase(store, github, flow_service, complete)
         self._update_behind = UpdateBehindPrsUseCase(store, github, flow_service, writes)
         self._resolve_ci = ResolveCiUseCase(
-            store, github, flow_service, complete, clock=ci_clock, poll_seconds=ci_poll_seconds,
+            store, github, flow_service, complete, close_item=CloseItemUseCase(store, worktrees), clock=ci_clock, poll_seconds=ci_poll_seconds,
             ci_ceiling_seconds=ci_ceiling_seconds, ci_start_window_seconds=ci_start_window_seconds,
             ci_no_workflows_wait_seconds=ci_no_workflows_wait_seconds, wall_clock=ci_wall_clock,
             ci_unconfirmed_note_polls=ci_unconfirmed_note_polls,
