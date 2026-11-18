@@ -48,6 +48,7 @@ class PrSnapshot(GitHubEventsPort):
         self._stacks = {}
         self._signatures = {}
         self._required = {}
+        self._required_failures = {}
         self._pending = _Pending()
         self._held = frozenset()
         self._epoch = 0
@@ -146,6 +147,11 @@ class PrSnapshot(GitHubEventsPort):
     def publish_required(self, base_key, value):
         with self._lock:
             self._required[base_key] = value
+            self._required_failures.pop(base_key, None)
+
+    def publish_required_failure(self, base_key, failure):
+        with self._lock:
+            self._required_failures[base_key] = failure
 
     def mark_stale(self, pr):
         with self._lock:
@@ -191,6 +197,8 @@ class PrSnapshot(GitHubEventsPort):
         with self._lock:
             if base_key in self._required:
                 return self._required[base_key]
+            if base_key in self._required_failures:
+                return self._required_failures[base_key]
         return NotYetRead()
 
     def update_branch(self, pr, expected_head_sha):

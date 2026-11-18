@@ -26,6 +26,7 @@ class PrPoll:
         self._cutoffs = {}
         self._tips = {}
         self._runs = 0
+        self._rules_logged = {}
 
     def _log_failure(self, read, target, failure):
         detail = failure.stderr.strip().splitlines()[0] if failure.stderr.strip() else ""
@@ -272,7 +273,14 @@ class PrPoll:
                 self._log_failure("pr_view", pr, view)
                 continue
             required = self._writes.required_checks(self._github, view.base_key)
-            if not isinstance(required, ReadFailure):
+            if isinstance(required, ReadFailure):
+                self._snapshot.publish_required_failure(view.base_key, required)
+                seen = (required.returncode, required.stderr)
+                if self._rules_logged.get(view.base_key) != seen:
+                    self._rules_logged[view.base_key] = seen
+                    self._log_failure("required_checks", view.base_key, required)
+            else:
+                self._rules_logged.pop(view.base_key, None)
                 self._snapshot.publish_required(view.base_key, required)
             current = self._snapshot.entry_of(pr) or entry
             self._snapshot.publish(

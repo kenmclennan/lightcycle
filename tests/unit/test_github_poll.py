@@ -57,8 +57,9 @@ class _Pool:
         self.runner = runner or InlineGithubPollRunner()
         self.status = FakeGithubBudgetStatus()
         self.fs = FakeFs()
+        self.writes = PrWrites(time.monotonic)
         self.gate = GithubPollUseCase(
-            self.snapshot, self.github, self.runner, _Config(refresh=refresh), PrWrites(time.monotonic),
+            self.snapshot, self.github, self.runner, _Config(refresh=refresh), self.writes,
             self.status, lambda: 1000.0, self.fs, FakeStore())
 
     def log_lines(self):
@@ -330,15 +331,77 @@ class TestRequiredChecksPublished(unittest.TestCase):
         self.assertEqual(pool.snapshot.required_checks("acme/widget@main"), frozenset({"build"}))
         self.assertEqual(pool.names().count("required_checks"), 1)
 
-    def test_a_failed_read_publishes_nothing_and_is_retried(self):
+    def test_a_failed_read_publishes_the_failure_and_is_retried(self):
         github = _github(check_runs_by_sha=_failing_runs(), failing_calls={"required_checks"})
         pool, pr, sha = self._published(github)
 
         pool.tick(120, checks=[(pr, sha)])
         pool.tick(300, checks=[(pr, sha)])
 
-        self.assertIsInstance(pool.snapshot.required_checks("acme/widget@main"), NotYetRead)
+        failure = pool.snapshot.required_checks("acme/widget@main")
+        self.assertIsInstance(failure, ReadFailure)
+        self.assertNotIsInstance(failure, NotYetRead)
+        self.assertEqual(failure.stderr, "boom")
         self.assertEqual(pool.names().count("required_checks"), 2)
+
+    def test_a_failed_required_read_is_logged_once_per_base_per_distinct_error(self):
+        github = _RulesStderrGitHub(
+            "boom", check_runs_by_sha=_failing_runs(), updated_ats={pr: 100.0 for pr in _ALL},
+            base_keys={pr: "acme/gadget@main" for pr in _B},
+            head_shas={pr: "h-" + pr[-8:] for pr in _ALL})
+        pool, pr, sha = self._published(github)
+        other = _A[1]
+        other_sha = pool.snapshot.head_sha(other)
+        needle = "required_checks acme/widget@main failed (exit 1): "
+
+        def logged(text):
+            return [line for line in pool.log_lines() if needle + text in line]
+
+        pool.tick(120, checks=[(pr, sha), (other, other_sha)])
+        self.assertEqual(len(logged("boom")), 1)
+        pool.tick(300, checks=[(pr, sha)])
+        self.assertEqual(len(logged("boom")), 1)
+
+        github.stderr = "other"
+        pool.tick(480, checks=[(pr, sha)])
+        self.assertEqual(len(logged("other")), 1)
+
+        github.stderr = None
+        pool.tick(660, checks=[(pr, sha)])
+        pool.writes._required.clear()
+        github.stderr = "other"
+        pool.tick(1300, checks=[(pr, sha)])
+        self.assertEqual(len(logged("other")), 2)
+
+    def test_a_failing_base_is_reported_while_a_readable_base_is_published(self):
+        github = _RulesStderrGitHub(
+            "boom", only_base="acme/widget@main", check_runs_by_sha=_failing_runs(),
+            updated_ats={pr: 100.0 for pr in _ALL},
+            base_keys={pr: "acme/gadget@main" for pr in _B},
+            head_shas={pr: "h-" + pr[-8:] for pr in _ALL},
+            required_by_base={"acme/gadget@main": ["build"]})
+        pool, pr, sha = self._published(github)
+        gadget = _B[0]
+
+        pool.tick(120, checks=[(pr, sha), (gadget, pool.snapshot.head_sha(gadget))])
+
+        self.assertEqual(pool.snapshot.required_checks("acme/widget@main").stderr, "boom")
+        self.assertEqual(pool.snapshot.required_checks("acme/gadget@main"), frozenset({"build"}))
+        failed = [line for line in pool.log_lines() if "required_checks" in line and "failed" in line]
+        self.assertEqual(len(failed), 1)
+
+
+class _RulesStderrGitHub(FakeGitHub):
+    def __init__(self, stderr, only_base=None, **kw):
+        super().__init__(**kw)
+        self.stderr = stderr
+        self._only_base = only_base
+
+    def required_checks(self, base_key):
+        if self.stderr is None or (self._only_base and base_key != self._only_base):
+            return super().required_checks(base_key)
+        self._record("required_checks", base_key)
+        return ReadFailure(1, self.stderr)
 
 
 class TestFailures(unittest.TestCase):
