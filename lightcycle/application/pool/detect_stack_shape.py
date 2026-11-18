@@ -59,6 +59,8 @@ class DetectStackShapeUseCase:
             read = read_stack(self._github, run.stack)
             if read.unread:
                 continue
+            if sd.pr_close and stack_shape.abandoned(read.layers, run.pr):
+                continue
             previous = stack_shape.decode(run.stack_seen)
             bases = self._observed_bases(read.layers)
             current = stack_shape.record_of(read.layers, bases, previous)

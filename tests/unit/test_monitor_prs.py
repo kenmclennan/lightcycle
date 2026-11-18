@@ -391,7 +391,7 @@ class TestOutOfOrderStackMerge(unittest.TestCase):
         disposition={"merged": "completed"},
     )
 
-    def _rig(self):
+    def _rig(self, flow=None):
         from lightcycle.domain.pool import stack_shape
         from tests.support.stacked import STACK_URL, base_keys_for, build_stack
 
@@ -405,7 +405,7 @@ class TestOutOfOrderStackMerge(unittest.TestCase):
         step = store.create_step(stage="watch-step", role="agent", item=item)
         gh = FakeGitHub(stacks={STACK_URL: layers}, base_keys=base_keys_for(layers))
         worktrees = FakeWorktrees()
-        flow = _FlowAdapter(self._FLOW)
+        flow = _FlowAdapter(flow or self._FLOW)
         complete = CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None)
         uc = MonitorPrsUseCase(
             store, gh, worktrees, flow, complete,
@@ -447,3 +447,33 @@ class TestOutOfOrderStackMerge(unittest.TestCase):
         uc.execute()
 
         self.assertEqual(order[:2], ["shape", "resolve"])
+
+
+
+    def test_closing_every_layer_between_ticks_abandons_the_item_and_fires_no_shape_route(self):
+        from tests.support.stacked import STACK_URL, build_stack
+
+        abandoning = flow_from_metas(
+            {
+                "watcher": {
+                    "model": "sonnet",
+                    "step": "watch-step",
+                    "routes": {"merged": "done-step", "stack-changed": "review-stack",
+                               "abandoned": "done-step"},
+                    "on_pr_merge": "merged",
+                    "on_pr_close": "abandoned",
+                    "on_pr_stack_shape": "stack-changed",
+                },
+                "review-stack": {"step": "review-stack"},
+            },
+            disposition={"merged": "completed", "abandoned": "abandoned"},
+        )
+        store, item, step, worktrees, uc = self._rig(flow=abandoning)
+        uc._github.script_stack(
+            STACK_URL, build_stack(3, states={1: "closed", 2: "closed", 3: "closed"}))
+
+        result = uc.execute()
+
+        self.assertEqual(result.abandoned, [item])
+        self.assertEqual(result.shape_changed, [])
+        self.assertEqual(store.get_node(item).disposition, "abandoned")

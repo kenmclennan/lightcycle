@@ -27,6 +27,18 @@ _FLOW = flow_from_metas({
     "review-stack": {"step": "review-stack"},
 })
 
+_ABANDON = flow_from_metas({
+    "watcher": {
+        "model": "sonnet",
+        "step": "watch-step",
+        "routes": {"merged": "done-step", "stack-changed": "review-stack"},
+        "on_pr_merge": "merged",
+        "on_pr_close": "abandoned",
+        "on_pr_stack_shape": "stack-changed",
+    },
+    "review-stack": {"step": "review-stack"},
+})
+
 _NO_HOOK = flow_from_metas({
     "watcher": {
         "model": "sonnet", "step": "watch-step",
@@ -96,6 +108,25 @@ class TestDetectStackShape(unittest.TestCase):
         rig.change(with_state(rig.layers, 2, "closed"))
 
         self._fires_once(rig, "layer 2 of 3 (%s) closed without merging" % layer_url(2))
+
+    def test_an_all_closed_stack_at_a_pr_close_gate_does_not_fire_the_shape_route(self):
+        rig = self._baselined(flow=_ABANDON)
+        rig.change(self._closed(rig.layers))
+
+        self.assertEqual(rig.tick().shape_changed, [])
+        self.assertNotEqual(rig.store.get_node(rig.step).state, State.DONE)
+        self.assertEqual({e["state"] for e in rig.record()}, {"open"})
+
+    def test_an_all_closed_stack_at_a_gate_without_pr_close_still_fires(self):
+        rig = self._baselined()
+        rig.change(self._closed(rig.layers))
+
+        self._fires_once(rig, "closed without merging")
+
+    def _closed(self, layers):
+        for n in (1, 2, 3):
+            layers = with_state(layers, n, "closed")
+        return layers
 
     def test_a_layer_retargeted_onto_an_unrelated_base_fires(self):
         rig = self._baselined()
