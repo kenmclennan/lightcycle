@@ -17,3 +17,4 @@ class HumanNodeRow:
     title: Optional[str] = None
     behind: Optional[str] = None
     held: Optional[str] = None
+    merge_next: Optional[str] = None

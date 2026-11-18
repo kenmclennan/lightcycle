@@ -4,9 +4,12 @@ from typing import Any, List, Optional
 
 from lightcycle.application.flow.complete_step import CompleteInput
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
-from lightcycle.application.pool.pr_lookups import flow_for, run_of, skip_unpinned
+from lightcycle.application.pool.pr_lookups import (
+    flow_for, latest_artifact, latest_judged_artifact, run_of, skip_unpinned,
+)
 from lightcycle.application.pool.skip_idle_ci_watch import SkipIdleCiWatchUseCase
 from lightcycle.application.pool.stack_reads import read_stack, record_final_stack
+from lightcycle.application.work.gate_hold import GateHold, route_name
 from lightcycle.application.work.close_item import (
     CloseItemInput, TeardownRefused,
 )
@@ -17,6 +20,9 @@ from lightcycle.domain.pool import (
 )
 from lightcycle.domain.pool.sleep import awake_elapsed
 from lightcycle.domain.work import State
+from lightcycle.domain.work.layer_ci_wait import (
+    LAYER_CI_MERGED, LAYER_CI_MOVED, LAYER_CI_WAIT, MERGE_NEXT,
+)
 from lightcycle.ports.github import NotYetRead, PrSync, ReadFailure
 
 
@@ -102,6 +108,8 @@ class ResolveCiUseCase:
         self._lagging = {}
         self._expected = {}
         self._stack_expected = {}
+        self._retarget_since = {}
+        self._gate_hold = GateHold(store)
         self._mismatch_noted = set()
         ci_ceiling_seconds()
         ci_start_window_seconds()
@@ -606,6 +614,171 @@ class ResolveCiUseCase:
         labelled = self._mark_unrun(step, labelled, ctx)
         self._finish_stacked(step, sd, labelled, ci_resolved)
 
+    def _set_if_changed(self, step, atype, value):
+        if latest_artifact(self._store, step.id, atype) != value:
+            self._store.replace_artifact(step.id, atype, value, internal=True)
+
+    def _clear(self, step, *types):
+        present = {a.type for a in self._store.item_artifacts(step.id)}
+        for atype in types:
+            if atype in present:
+                self._store.remove_artifact(step.id, atype)
+
+    @staticmethod
+    def _decode_map(text):
+        try:
+            value = json.loads(text) if text else None
+        except (TypeError, ValueError):
+            return {}
+        return value if isinstance(value, dict) else {}
+
+    @staticmethod
+    def _decode_count(text):
+        try:
+            return int(text)
+        except (TypeError, ValueError):
+            return None
+
+    def _watch_gate_layers(self, ctx):
+        for step in self._store.all_nodes():
+            if step.type != "step" or step.state != State.WAITING or step.role != "human":
+                continue
+            if step.park.needs or skip_unpinned(self._store, self._flow_service, step):
+                continue
+            flow = flow_for(self._flow_service, step)
+            sd = flow.step_def(step.stage)
+            if sd.pr_merge is None:
+                continue
+            run = run_of(self._store, self._flow_service, step)
+            if run is None or not run.stack:
+                continue
+            self._watch_gate(step, flow, sd, run, ctx)
+
+    def _watch_gate(self, step, flow, sd, run, ctx):
+        stack = read_stack(self._github, run.stack)
+        if not stack.layers or any(layer.state == "closed" for layer in stack.layers):
+            return
+        held = self._gate_hold.is_held(step.id)
+        total = len(stack.layers)
+        open_layers = [
+            (position, layer) for position, layer in enumerate(stack.layers, start=1)
+            if layer.state == "open"
+        ]
+        if not open_layers:
+            if not held:
+                self._clear(step, LAYER_CI_WAIT, LAYER_CI_MOVED)
+            return
+        merged_now = sum(1 for layer in stack.layers if layer.state == "merged")
+        recorded_text = latest_artifact(self._store, step.id, LAYER_CI_MERGED)
+        recorded = self._decode_count(recorded_text)
+        keys_text = latest_judged_artifact(self._store, flow, step, "ci-judged-layers")
+        keys = self._decode_map(keys_text) if keys_text is not None else None
+        merge_trigger = False
+        if recorded is None and keys is None:
+            if merged_now > 0 and not held:
+                self._set_if_changed(step, LAYER_CI_MERGED, str(merged_now))
+        else:
+            derived = total - len(keys) if keys else 0
+            merge_trigger = merged_now > max(recorded or 0, derived)
+        open_urls = {layer.url for _, layer in open_layers}
+        moved = self._decode_map(latest_artifact(self._store, step.id, LAYER_CI_MOVED))
+        live_moved = {url: head for url, head in moved.items() if url in open_urls}
+        if live_moved != moved and not held:
+            if live_moved:
+                self._set_if_changed(
+                    step, LAYER_CI_MOVED, json.dumps(live_moved, sort_keys=True))
+            else:
+                self._clear(step, LAYER_CI_MOVED)
+        target = None
+        if merge_trigger:
+            target = open_layers[0]
+        else:
+            target = next(((p, l) for p, l in open_layers if l.url in live_moved), None)
+        if target is None:
+            if not held:
+                self._clear(step, LAYER_CI_WAIT)
+                self._set_if_changed(
+                    step, MERGE_NEXT, stack_shape.label(open_layers[0][0], total, open_layers[0][1].url))
+            return
+        position, layer = target
+        name = stack_shape.label(position, total, layer.url)
+        if not held:
+            self._set_if_changed(step, LAYER_CI_WAIT, name)
+            self._clear(step, MERGE_NEXT)
+        if merge_trigger and not self._retargeted(step, stack, layer, name, held, ctx):
+            return
+        v = self._judge(step, layer.url, "%s@%s" % (step.id, layer.url), _OWN, ctx)
+        if v is None or v.outcome == "pending":
+            return
+        where = "%s, after %s" % (
+            name, "its retarget" if merge_trigger else "its head moved")
+        if v.outcome in ("failure", "timeout"):
+            if not self._head_still(v):
+                return
+            note = (self._failure_note(v, where) if v.outcome == "failure"
+                    else self._timeout_note(v, where))
+            self._fail_gate(step, flow, sd, name, note, held)
+            return
+        if v.outcome in ("stalled", "cancelled"):
+            if not held:
+                self._park_for(step, v, where)
+            return
+        if v.outcome != "success" or held or not self._head_still(v):
+            return
+        if merge_trigger:
+            self._set_if_changed(step, LAYER_CI_MERGED, str(merged_now))
+        live_moved.pop(layer.url, None)
+        if live_moved:
+            self._set_if_changed(step, LAYER_CI_MOVED, json.dumps(live_moved, sort_keys=True))
+        else:
+            self._clear(step, LAYER_CI_MOVED)
+        self._clear(step, LAYER_CI_WAIT)
+        self._set_if_changed(
+            step, MERGE_NEXT, stack_shape.label(open_layers[0][0], total, open_layers[0][1].url))
+
+    def _retargeted(self, step, stack, layer, name, held, ctx):
+        key = "retarget@%s@%s" % (step.id, layer.url)
+        ctx.seen.add(key)
+        sync = self._github.pr_sync_state(layer.url)
+        if not isinstance(sync, PrSync):
+            return False
+        base = sync.base_key.partition("@")[2]
+        if base not in {l.head_ref for l in stack.layers}:
+            self._retarget_since.pop(key, None)
+            return True
+        now = self._clock()
+        since = self._retarget_since.setdefault(key, now)
+        window = self._ci_start_window_seconds()
+        if held or window is None or now - since <= window:
+            return False
+        ParkStepUseCase(self._store).execute_once(ParkInput(
+            step=step.id,
+            observation=(
+                "%s is still based on %s after the window; GitHub has not retargeted it "
+                "onto the trunk" % (name, base)),
+            decision=(
+                "retarget the layer onto the default branch on GitHub, then unblock this step"),
+        ))
+        return False
+
+    def _fail_gate(self, step, flow, sd, name, note, held):
+        if held:
+            route = route_name(flow, step, sd.pr_head_moved) if sd.pr_head_moved else "a park"
+            self._gate_hold.observe(
+                step, "layer CI failed on %s (would route to %s)" % (name, route))
+            return
+        if self._already_closed(step):
+            return
+        if sd.pr_head_moved:
+            self._clear(step, LAYER_CI_WAIT, LAYER_CI_MOVED)
+            self._complete.execute(CompleteInput(
+                step=step.id, outcome=sd.pr_head_moved, note=note))
+            return
+        ParkStepUseCase(self._store).execute_once(ParkInput(
+            step=step.id, observation=note,
+            decision="fix or re-run the check, then unblock this step",
+        ))
+
     def execute(self, sleeps=()) -> ResolveCiResponse:
         ci_resolved = []
         ctx = _Pass(sleeps=tuple(sleeps))
@@ -628,6 +801,7 @@ class ResolveCiUseCase:
             v = self._judge(step, pr_value, step.id, _OWN, ctx)
             if v is not None:
                 self._finish_unstacked(step, sd, v, ci_resolved)
+        self._watch_gate_layers(ctx)
         for key in [k for k in self._unread if k not in ctx.still_unread]:
             del self._unread[key]
         for key in [k for k in self._noted if k not in ctx.still_unread]:
@@ -647,5 +821,7 @@ class ResolveCiUseCase:
             node = self._store.get_node(key.split("@")[0])
             if node is None or node.state == State.DONE:
                 del self._cancel_parked[key]
+        for key in [k for k in self._retarget_since if k not in ctx.seen]:
+            del self._retarget_since[key]
         self._mismatch_noted &= ctx.seen
         return ResolveCiResponse(ci_resolved=ci_resolved, ci_unread=ctx.ci_unread)

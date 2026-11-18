@@ -367,6 +367,46 @@ class TestInboxBehindMarker(unittest.TestCase):
         self.assertEqual(behind, {marked: "update-branch refused", plain: None})
 
 
+class TestInboxLayerCiWait(unittest.TestCase):
+    def _rows(self, s):
+        return {r.step.id: r for r in InboxUseCase(s, _empty_flow(s)).execute(InboxInput()).rows}
+
+    def test_a_gate_waiting_on_a_layers_ci_leaves_the_inbox_and_returns_when_it_clears(self):
+        s = FakeStore()
+        gate = create_owned_step(s, "gate", stage="gate", role="human")
+        other = create_owned_step(s, "other", stage="gate", role="human")
+        self.assertIn(gate, self._rows(s))
+        s.replace_artifact(gate, "layer-ci-wait", "layer 2 of 2 (u)", internal=True)
+
+        waiting = self._rows(s)
+
+        self.assertIn(other, waiting)
+        self.assertNotIn(gate, waiting)
+        s.remove_artifact(gate, "layer-ci-wait")
+        self.assertIn(gate, self._rows(s))
+
+    def test_a_gate_parked_during_the_wait_stays_in_the_inbox_as_blocked(self):
+        from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
+
+        s = FakeStore()
+        gate = create_owned_step(s, "gate", stage="gate", role="human")
+        s.replace_artifact(gate, "layer-ci-wait", "layer 2 of 2 (u)", internal=True)
+        self.assertNotIn(gate, self._rows(s))
+        ParkStepUseCase(s).execute(ParkInput(step=gate, observation="stuck", decision="fix it"))
+
+        rows = self._rows(s)
+
+        self.assertIn(gate, rows)
+        self.assertEqual(rows[gate].kind, "blocked")
+
+    def test_the_gate_row_carries_the_merge_next_layer(self):
+        s = FakeStore()
+        gate = create_owned_step(s, "gate", stage="gate", role="human")
+        s.replace_artifact(gate, "merge-next", "layer 1 of 2 (u)", internal=True)
+
+        self.assertEqual(self._rows(s)[gate].merge_next, "layer 1 of 2 (u)")
+
+
 class TestInboxGateHold(unittest.TestCase):
     def test_only_the_held_gate_carries_held(self):
         s = FakeStore()

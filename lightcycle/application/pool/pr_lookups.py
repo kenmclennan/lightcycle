@@ -64,3 +64,29 @@ def latest_step(store, item_id):
         key=lambda s: (parse_timestamp(s.created_at) or _MIN_TIMESTAMP, node_id_key(s.id)),
     )
     return steps[-1] if steps else None
+
+
+def latest_artifact(store, step_id, atype):
+    found = None
+    for artifact in store.item_artifacts(step_id):
+        if artifact.type == atype:
+            found = artifact.value
+    return found
+
+
+def latest_judged_artifact(store, flow, step, atype):
+    phase = flow.step_def(step.stage).phase
+    latest = None
+    latest_key = None
+    for child in store.children(step.item):
+        if child.type != "step" or child.state != State.DONE:
+            continue
+        sd = flow.step_def(child.stage)
+        if sd.phase != phase or (sd.ci_success is None and sd.ci_failure is None):
+            continue
+        key = (parse_timestamp(child.created_at) or _MIN_TIMESTAMP, node_id_key(child.id))
+        if latest_key is None or key > latest_key:
+            latest, latest_key = child, key
+    if latest is None:
+        return None
+    return latest_artifact(store, latest.id, atype)

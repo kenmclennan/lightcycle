@@ -123,6 +123,22 @@ class TestRenderBacklog(unittest.TestCase):
         self.assertEqual(
             render_inbox([r], TITLE_CAP), [_inbox("action", "t1", "proj-a", "one", "  held: wait")])
 
+    def test_a_gate_row_with_a_merge_next_layer_names_it(self):
+        layer = "layer 2 of 2 (https://github.com/x/y/pull/2)"
+        r = row(
+            kind="action", project="proj-a", step=tk(id="t1", title="one"), title="one",
+            pr="https://github.com/x/y/pull/1", merge_next=layer,
+        )
+        held = row(
+            kind="action", project="proj-a", step=tk(id="t1", title="one"), title="one",
+            pr="https://github.com/x/y/pull/1", merge_next=layer, held="wait",
+        )
+        self.assertEqual(render_inbox([r], TITLE_CAP), [_inbox(
+            "action", "t1", "proj-a", "one",
+            "  merge next: %s  pr:https://github.com/x/y/pull/1" % layer)])
+        self.assertEqual(render_inbox([held], TITLE_CAP), [_inbox(
+            "action", "t1", "proj-a", "one", "  held: wait  pr:https://github.com/x/y/pull/1")])
+
     def test_missing_project_renders_dash(self):
         lines = render_backlog([row(project=None, step=tk(id="t1", title="one"), title="one")], TITLE_CAP)
         self.assertEqual(lines[0], _flat("t1", "-", "one"))

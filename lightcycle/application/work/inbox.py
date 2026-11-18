@@ -5,6 +5,8 @@ from lightcycle.application.work.behind_reason import behind_reason
 from lightcycle.application.work.callout_hold import callout_hold_step_ids
 from lightcycle.application.work.gate_hold import GateHold
 from lightcycle.application.work.human_node_row import HumanNodeRow
+from lightcycle.application.work.layer_wait import layer_wait_step_ids
+from lightcycle.application.work.merge_next import merge_next_of
 from lightcycle.application.work.watched_steps import watched_step_ids
 from lightcycle.domain.flow import Flow
 from lightcycle.domain.work import NodeQueue, compose_step_title
@@ -30,7 +32,10 @@ class InboxUseCase:
 
     def execute(self, input: InboxInput) -> InboxResponse:
         resolver = self._resolver()
-        hidden = watched_step_ids(self._store) | callout_hold_step_ids(self._store)
+        hidden = (
+            watched_step_ids(self._store) | callout_hold_step_ids(self._store)
+            | layer_wait_step_ids(self._store)
+        )
         steps = [t for t in self._store.all_steps() if t.id not in hidden]
         rows = NodeQueue(steps).for_human(
             resolver, {"action", "blocked"}, input.n)
@@ -55,6 +60,7 @@ class InboxUseCase:
             title=compose_step_title(t.stage, item.title if item else None),
             behind=behind_reason(self._store, t.id),
             held=GateHold(self._store).note_of(t.id),
+            merge_next=merge_next_of(self._store, t.id),
         )
 
     def _pr_for(self, t, resolver):
