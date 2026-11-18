@@ -10,3 +10,7 @@ class FieldRefusalError(UseCaseError):
 
 class RouteUnavailable(UseCaseError):
     pass
+
+
+class UnmergedStackLayer(UseCaseError):
+    pass

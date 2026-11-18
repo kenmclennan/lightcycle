@@ -553,6 +553,8 @@ class ResolveCiUseCase:
                 )
             )
             return
+        if stack_shape.merge_blocker(stack.layers, run.pr) is not None:
+            return
         flow = flow_for(self._flow_service, step)
         outcome = self._merge_outcome(flow, flow.step_def(step.stage).phase)
         if outcome is None:

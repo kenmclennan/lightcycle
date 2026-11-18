@@ -58,8 +58,8 @@ class MonitorPrsUseCase:
         )
 
     def execute(self, sleeps=()) -> MonitorPrsResponse:
-        resolved = self._resolve.execute()
         shaped = self._detect_stack_shape.execute()
+        resolved = self._resolve.execute()
         reads = PrSyncReads(self._github)
         dispatched = self._dispatch.execute(reads)
         moved = self._detect_head_moved.execute(reads)

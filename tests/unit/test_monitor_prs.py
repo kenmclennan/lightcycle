@@ -374,3 +374,76 @@ class TestScriptStageRefusalRunLog(unittest.TestCase):
         self.assertEqual(len(lines), 2)
         self.assertIn("APP-1", lines[0])
         self.assertIn("APP-2", lines[1])
+
+
+class TestOutOfOrderStackMerge(unittest.TestCase):
+    _FLOW = flow_from_metas(
+        {
+            "watcher": {
+                "model": "sonnet",
+                "step": "watch-step",
+                "routes": {"merged": "done-step", "stack-changed": "review-stack"},
+                "on_pr_merge": "merged",
+                "on_pr_stack_shape": "stack-changed",
+            },
+            "review-stack": {"step": "review-stack"},
+        },
+        disposition={"merged": "completed"},
+    )
+
+    def _rig(self):
+        from lightcycle.domain.pool import stack_shape
+        from tests.support.stacked import STACK_URL, base_keys_for, build_stack
+
+        store = FakeStore()
+        item = store.create_item("stacked", "a description")
+        layers = build_stack(3, states={3: "merged"})
+        rid = plant_pr(store, item, layers[-1].url)
+        store.set_stack(rid, STACK_URL)
+        store.set_stack_seen(rid, stack_shape.encode(
+            stack_shape.record_of(build_stack(3), base_keys_for(build_stack(3)), None)))
+        step = store.create_step(stage="watch-step", role="agent", item=item)
+        gh = FakeGitHub(stacks={STACK_URL: layers}, base_keys=base_keys_for(layers))
+        worktrees = FakeWorktrees()
+        flow = _FlowAdapter(self._FLOW)
+        complete = CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None)
+        uc = MonitorPrsUseCase(
+            store, gh, worktrees, flow, complete,
+            trusted_authors=lambda: frozenset(), held_shortcode=lambda: "HLD",
+            writes=InlinePrWrites(gh, time.monotonic), ci_clock=time.monotonic,
+            ci_poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600,
+            ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60,
+            ci_unconfirmed_note_polls=lambda: 3, ci_wall_clock=lambda: 10000.0,
+            ci_views=AlwaysConfirmed(),
+        )
+        return store, item, step, worktrees, uc
+
+    def test_an_out_of_order_stack_merge_fires_the_shape_route_and_closes_nothing(self):
+        store, item, step, worktrees, uc = self._rig()
+
+        result = uc.execute()
+
+        self.assertEqual(result.shape_changed, [item])
+        self.assertEqual(result.merged, [])
+        node = store.get_node(step)
+        self.assertEqual(node.state, "done")
+        self.assertEqual(node.outcome, "stack-changed")
+        self.assertEqual(getattr(worktrees, "released", []), [])
+        parked = [
+            n for n in store.children(item) if n.stage == "review-stack"
+        ]
+        self.assertIn(
+            "merged while a layer below it is still open", parked[0].park.reason)
+
+    def test_the_stack_shape_detector_runs_before_merge_resolution(self):
+        store, item, step, worktrees, uc = self._rig()
+        order = []
+        uc._detect_stack_shape.execute = lambda: (
+            order.append("shape"), type("R", (), {"shape_changed": []})())[1]
+        uc._resolve.execute = lambda: (
+            order.append("resolve"),
+            type("R", (), {"merged": [], "abandoned": [], "refused": []})())[1]
+
+        uc.execute()
+
+        self.assertEqual(order[:2], ["shape", "resolve"])

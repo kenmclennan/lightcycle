@@ -1,8 +1,10 @@
 from dataclasses import dataclass
 from typing import FrozenSet
 
+from lightcycle.application.errors import UnmergedStackLayer
 from lightcycle.application.pool.pr_lookups import false_on_failure
 from lightcycle.application.pool.stack_reads import read_stack
+from lightcycle.domain.pool import stack_shape
 from lightcycle.domain.runs import RunState
 from lightcycle.domain.work.state import State
 
@@ -25,6 +27,18 @@ class RecordMergedGateRunUseCase:
             return False
         self._store.close_run(run.id, RunState.MERGED)
         return True
+
+    def refuse_unmerged_layer(self, input: RecordMergedGateRunInput) -> None:
+        for pass_ending in (False, True):
+            run = self._open_gate_run(input, pass_ending=pass_ending)
+            if run is None or not run.stack:
+                continue
+            layers = read_stack(self._github, run.stack).layers
+            if not layers:
+                continue
+            blocker = stack_shape.merge_blocker(layers, run.pr)
+            if blocker is not None:
+                raise UnmergedStackLayer(blocker)
 
     def merged_prs_at_pass_end(self, input: RecordMergedGateRunInput) -> FrozenSet[str]:
         run = self._open_gate_run(input, pass_ending=True)
@@ -51,5 +65,5 @@ class RecordMergedGateRunUseCase:
     def _pr_merged(self, run):
         if run.stack:
             layers = read_stack(self._github, run.stack).layers
-            return bool(layers) and layers[-1].state == "merged"
+            return bool(layers) and stack_shape.merge_blocker(layers, run.pr) is None
         return bool(false_on_failure(self._github.is_merged(run.pr)))
