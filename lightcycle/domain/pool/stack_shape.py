@@ -61,6 +61,14 @@ def merge_blocker(layers, pr) -> Optional[str]:
     return None
 
 
+def abandoned(layers, pr) -> bool:
+    if not layers:
+        return False
+    if any(layer.state not in ("merged", "closed") for layer in layers):
+        return False
+    return layers[-1].state == "closed" and layers[-1].url == pr
+
+
 def record_of(layers, observed_bases, previous) -> list:
     carried = {e["number"]: e.get("base") for e in (previous or [])}
     record = []

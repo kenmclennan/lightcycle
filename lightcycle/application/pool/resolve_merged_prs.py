@@ -216,7 +216,13 @@ class ResolveMergedPrsUseCase:
                             break
                         resolved = True
                         merged.append(item.id)
-                elif close_outcome and not stacked and false_on_failure(self._github.is_closed_unmerged(pr_value)):
+                elif close_outcome and (
+                        stack_shape.abandoned(stack.layers, pr_value) if stacked
+                        else false_on_failure(self._github.is_closed_unmerged(pr_value))):
+                    if stacked:
+                        gate = active_step_at(self._store, item.id, stage)
+                        if not (gate is not None and self._gate_hold.is_held(gate.id)):
+                            run = record_final_stack(self._store, run, stack)
                     nxt = flow.next(stage, close_outcome)
                     if nxt and nxt.to_stage and not nxt.to_terminal:
                         step = active_step_at(self._store, item.id, stage)

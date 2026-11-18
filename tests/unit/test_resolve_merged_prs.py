@@ -1715,6 +1715,72 @@ class TestResolveMergedPrsOverAStack(unittest.TestCase):
         self.assertEqual(result.merged, [])
         self.assertNotEqual(store.get_node(step).state, State.DONE)
 
+    def test_all_three_layers_closed_unmerged_abandons_the_item(self):
+        store, item, step, github, uc = self._rig(
+            self._all(["closed"] * 3))
+
+        result = uc.execute()
+
+        self.assertEqual(result.abandoned, [item])
+        self.assertEqual(result.merged, [])
+        self.assertEqual(store.get_node(item).state, "done")
+        self.assertEqual(store.get_node(item).disposition, "abandoned")
+
+    def _all(self, states):
+        from tests.support.stacked import build_stack, with_state
+
+        layers = build_stack(3)
+        for n, state in enumerate(states, start=1):
+            layers = with_state(layers, n, state)
+        return layers
+
+    def test_one_layer_closed_and_another_open_does_not_abandon(self):
+        store, item, step, github, uc = self._rig(self._all(["closed", "open", "closed"]))
+
+        result = uc.execute()
+
+        self.assertEqual(result.abandoned, [])
+        self.assertNotEqual(store.get_node(step).state, State.DONE)
+        self.assertNotEqual(store.get_node(item).state, "done")
+
+    def test_merged_lower_layers_with_the_top_closed_abandon_the_item(self):
+        store, item, step, github, uc = self._rig(self._all(["merged", "merged", "closed"]))
+
+        result = uc.execute()
+
+        self.assertEqual(result.abandoned, [item])
+        self.assertEqual(store.get_node(item).disposition, "abandoned")
+
+    def test_a_merged_top_layer_over_a_closed_layer_does_not_abandon(self):
+        store, item, step, github, uc = self._rig(self._all(["closed", "merged", "merged"]))
+
+        result = uc.execute()
+
+        self.assertEqual(result.abandoned, [])
+        self.assertNotEqual(store.get_node(item).state, "done")
+
+    def test_an_all_closed_stack_on_a_held_gate_does_not_abandon(self):
+        from lightcycle.application.work.gate_hold import GateHold
+
+        store, item, step, github, uc = self._rig(self._all(["closed"] * 3))
+        GateHold(store).place(step, "waiting")
+
+        result = uc.execute()
+
+        self.assertEqual(result.abandoned, [])
+        self.assertNotEqual(store.get_node(step).state, State.DONE)
+        self.assertIn("PR closed without merging", store.get_node(step).notes or "")
+
+    def test_an_abandoned_stack_records_the_merged_layers_so_teardown_exempts_them(self):
+        import json
+
+        store, item, step, github, uc = self._rig(self._all(["merged", "closed", "closed"]))
+        uc.execute()
+
+        (run,) = store.runs_of(item)
+        states = [e["state"] for e in json.loads(run.stack_seen)]
+        self.assertEqual(states, ["merged", "closed", "closed"])
+
     def test_an_unread_stack_does_nothing(self):
         from tests.support.stacked import build_stack
 

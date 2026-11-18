@@ -101,3 +101,20 @@ class TestMergeBlocker(unittest.TestCase):
         ]
         for layers, pr, expected in cases:
             self.assertEqual(stack_shape.merge_blocker(layers, pr), expected)
+
+    def test_abandoned_is_true_only_for_merged_or_closed_layers_with_the_run_pr_closed_on_top(self):
+        top = layer_url(3)
+        cases = [
+            (build_stack(3, states={1: "closed", 2: "closed", 3: "closed"}), True),
+            (build_stack(3, states={1: "merged", 2: "closed", 3: "closed"}), True),
+            (build_stack(3, states={1: "closed", 2: "open", 3: "closed"}), False),
+            (build_stack(3, states={1: "closed", 2: "merged", 3: "merged"}), False),
+            (build_stack(3, states={1: "merged", 2: "merged", 3: "closed"}), True),
+            (build_stack(3, states={1: "merged", 2: "merged", 3: "merged"}), False),
+        ]
+        for layers, expected in cases:
+            self.assertEqual(stack_shape.abandoned(layers, top), expected, [l.state for l in layers])
+        self.assertFalse(stack_shape.abandoned((), top))
+        closed = build_stack(3, states={1: "closed", 2: "closed", 3: "closed"})
+        self.assertFalse(stack_shape.abandoned(closed, layer_url(2)))
+
