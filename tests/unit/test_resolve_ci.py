@@ -2250,3 +2250,116 @@ class TestResolveCiStackGate(unittest.TestCase):
         self.assertIsNone(node.park.needs)
         self.assertEqual(rig.gate_values("layer-ci-wait"), [])
         self.assertIn("held: layer CI failed on layer 2 of 2", node.notes)
+
+
+class _AlternatingGitHub(FakeGitHub):
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        self.reason_now = "required_checks"
+
+    def required_checks(self, base_key):
+        if self.reason_now == "required_checks":
+            return ReadFailure(1, "boom")
+        return super().required_checks(base_key)
+
+    def pr_sync_state(self, pr):
+        if self.reason_now == "pr_sync_state":
+            return ReadFailure(1, "denied")
+        return super().pr_sync_state(pr)
+
+
+class TestUnreadPark(unittest.TestCase):
+    def _poll(self, uc, clock, at):
+        clock.now = at
+        uc.execute()
+
+    def _parked(self, store, step):
+        return store.get_node(step).role != "engine"
+
+    def test_a_rules_read_failing_past_the_ceiling_parks_the_step(self):
+        gh = _gh([_ok("build")], required={"build"}, failing={"required_checks"})
+        store, item, step, uc, clock = TestCiUnreadDiagnostics()._setup(gh)
+
+        for at in (0.0, 61.0, 3600.0):
+            self._poll(uc, clock, at)
+            self.assertFalse(self._parked(store, step))
+        self._poll(uc, clock, 3601.0)
+
+        node = store.get_node(step)
+        self.assertEqual(node.role, "human")
+        for text in ("rules-read-failed", _URL, "boom", "3601s"):
+            self.assertIn(text, node.park.reason)
+        self.assertIn("gh auth status", node.park.needs)
+
+    def test_a_read_that_recovers_before_the_ceiling_never_parks(self):
+        gh = _gh([_hung("build", 9990.0)], required={"build"}, failing={"required_checks"})
+        store, item, step, uc, clock = TestCiUnreadDiagnostics()._setup(gh)
+
+        self._poll(uc, clock, 0.0)
+        self._poll(uc, clock, 3000.0)
+        gh._failing_calls = set()
+        self._poll(uc, clock, 3100.0)
+        self.assertEqual(uc._unread_run, {})
+        gh._failing_calls = {"required_checks"}
+        self._poll(uc, clock, 3200.0)
+        self._poll(uc, clock, 6000.0)
+
+        self.assertFalse(self._parked(store, step))
+
+    def test_alternating_reasons_do_not_park(self):
+        gh = _AlternatingGitHub(
+            head_shas={_URL: "sha1"}, check_runs_by_sha={(_URL, "sha1"): (_ok("build"),)},
+            required_by_base={"acme/widget@main": {"build"}})
+        store, item, step, uc, clock = TestCiUnreadDiagnostics()._setup(gh)
+
+        for i, at in enumerate(range(0, 9000, 1000)):
+            gh.reason_now = "required_checks" if i % 2 == 0 else "pr_sync_state"
+            self._poll(uc, clock, float(at))
+            self.assertFalse(self._parked(store, step))
+
+        gh.reason_now = "required_checks"
+        self._poll(uc, clock, 9000.0)
+        self._poll(uc, clock, 11600.0)
+        self.assertFalse(self._parked(store, step))
+        self._poll(uc, clock, 11601.0)
+        self.assertTrue(self._parked(store, step))
+
+    def test_unblocking_restarts_the_unread_count(self):
+        gh = _gh([_ok("build")], required={"build"}, failing={"required_checks"})
+        store, item, step, uc, clock = TestCiUnreadDiagnostics()._setup(gh)
+
+        self._poll(uc, clock, 0.0)
+        self._poll(uc, clock, 3601.0)
+        self.assertTrue(self._parked(store, step))
+        _unblock(store, step)
+        self._poll(uc, clock, 4000.0)
+        self._poll(uc, clock, 7000.0)
+        self.assertFalse(self._parked(store, step))
+        self._poll(uc, clock, 7601.0)
+
+        node = store.get_node(step)
+        self.assertEqual(node.role, "human")
+        self.assertIn("3601s", node.park.reason)
+
+    def test_a_stack_layer_unread_parks_once(self):
+        rig = _StackedCiRig(
+            checks={n: [_wf("build")] for n in (1, 2, 3)}, required={"build"})
+        rig.github.__class__ = _RulesFailingGitHub
+        rig.github.failing_bases = {"acme/widget@%s" % rig.layers[1].base_ref}
+        clock = _Clock()
+        rig.uc._clock = clock
+        rig.uc._wall_clock = lambda: 10000.0
+
+        clock.now = 0.0
+        rig.uc.execute()
+        self.assertEqual(rig.node().role, "engine")
+        rig.github._check_runs_by_sha[(rig.layers[0].url, rig.layers[0].head_sha)] = (
+            _wf("build", conclusion="failure"),)
+        clock.now = 3601.0
+        rig.uc.execute()
+
+        node = rig.node()
+        self.assertEqual(node.role, "human")
+        self.assertIn("https://github.com/acme/widget/pull/2", node.park.reason)
+        self.assertNotEqual(node.outcome, "failed")
+        self.assertNotEqual(node.state, State.DONE)
