@@ -1671,7 +1671,27 @@ class _NotYetRulesGitHub(_ScriptedGitHub):
         return NotYetRead()
 
 
+class _PublishedRulesFailureGitHub(_ScriptedGitHub):
+    def __init__(self, *args, stderr, **kw):
+        super().__init__(*args, **kw)
+        self._snapshot = PrSnapshot(self)
+        self._snapshot.publish_required_failure("acme/widget@main", ReadFailure(1, stderr))
+
+    def required_checks(self, base_key):
+        return self._snapshot.required_checks(base_key)
+
+
 class TestResolveCiRulesRead(unittest.TestCase):
+    def test_a_published_rules_failure_reports_its_stderr(self):
+        stderr = "HTTP 403: Resource not accessible by personal access token"
+        gh = _PublishedRulesFailureGitHub("sha1", _GREEN, stderr=stderr)
+        store, item, step, uc, clock = TestCiUnreadDiagnostics()._setup(gh)
+
+        self.assertEqual(TestCiUnreadDiagnostics._run(None, uc, clock, 0.0), [])
+        self.assertEqual(
+            TestCiUnreadDiagnostics._run(None, uc, clock, 61.0), [(step, "rules-read-failed", stderr)])
+        self.assertNotEqual(store.get_node(step).state, State.DONE)
+
     def test_a_rules_read_that_fails_once_holds_then_judges_against_required(self):
         gh = _gh([_ok("build"), _hung("codacy", 1000.0)], required={"build"}, failing={"required_checks"})
         store, item, step, uc = _ci_setup(gh)

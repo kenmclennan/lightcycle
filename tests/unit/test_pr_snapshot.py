@@ -42,6 +42,28 @@ class TestUnreadPr(unittest.TestCase):
         self.assertIsNone(self.snap.required_checks("acme/widget@main"))
         self.assertEqual(self.github.calls, [])
 
+    def test_a_published_rules_failure_is_returned_until_a_value_replaces_it(self):
+        base = "acme/widget@main"
+        failure = ReadFailure(1, "HTTP 403")
+
+        self.snap.publish_required_failure(base, failure)
+        self.assertIs(self.snap.required_checks(base), failure)
+        self.assertNotIsInstance(self.snap.required_checks(base), NotYetRead)
+
+        self.snap.publish_required(base, frozenset({"build"}))
+        self.assertEqual(self.snap.required_checks(base), frozenset({"build"}))
+
+        self.snap.publish_required_failure(base, failure)
+        self.assertEqual(self.snap.required_checks(base), frozenset({"build"}))
+
+    def test_a_published_none_replaces_a_rules_failure(self):
+        base = "acme/widget@main"
+        self.snap.publish_required_failure(base, ReadFailure(1, "HTTP 403"))
+
+        self.snap.publish_required(base, None)
+
+        self.assertIsNone(self.snap.required_checks(base))
+
     def test_reads_register_the_pr_and_the_wanted_pairs(self):
         self.snap.pr_sync_state(_PR)
         self.snap.changed_files(_PR, "h1")
