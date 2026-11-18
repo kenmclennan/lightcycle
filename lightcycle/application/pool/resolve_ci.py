@@ -460,26 +460,32 @@ class ResolveCiUseCase:
             return labelled
         required = bottom.required
         files_by_label = {}
+        required_labels = set()
         for c in bottom.checks:
-            if required is None or c.name not in required:
-                label = check_label(c)
-                if files_by_label.get(label, "") == "":
-                    files_by_label[label] = c.workflow_file
+            label = check_label(c)
+            if files_by_label.get(label, "") == "":
+                files_by_label[label] = c.workflow_file
+            if required is not None and c.name in required:
+                required_labels.add(label)
         expected = set(files_by_label)
         window = self._ci_start_window_seconds()
         marked = [labelled[0]]
         for name, v in labelled[1:]:
             if v is not None and v.outcome == "success":
                 unrun = unrun_checks(expected, v.checks)
-                if unrun:
+                required_unrun = tuple(label for label in unrun if label in required_labels)
+                other_unrun = tuple(label for label in unrun if label not in required_labels)
+                if other_unrun:
                     expectation = self._stack_expectation(step, v, bottom.pr, ctx)
                     if expectation is None:
                         v = replace(v, outcome="pending")
                         marked.append((name, v))
                         continue
-                    unrun = tuple(
-                        label for label in unrun
+                    other_unrun = tuple(
+                        label for label in other_unrun
                         if not files_by_label[label] or files_by_label[label] in expectation.expected)
+                unrun = other_unrun + tuple(
+                    "%s (required by the base branch)" % label for label in required_unrun)
                 if unrun:
                     if window is not None and awake_elapsed(v.since, v.now, v.sleeps) > window:
                         v = replace(v, unrun=unrun)

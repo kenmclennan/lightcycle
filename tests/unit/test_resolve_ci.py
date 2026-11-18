@@ -1079,16 +1079,45 @@ class TestResolveCiNotRunLayers(unittest.TestCase):
         self.assertEqual(
             rig.artifacts("ci-not-run"), ["layer 3 of 3 https://github.com/acme/widget/pull/3: ci / build"])
 
-    def test_a_layer_whose_own_base_requires_nothing_is_not_held_for_the_bottom_required_check(self):
+    def test_a_layer_lacking_a_bottom_required_check_is_held_then_reported_not_run_as_required(self):
         checks = {1: [_wf("build")], 2: [_wf("lint", "lint")], 3: [_wf("build")]}
         rig = self._rig(checks, required={"build"})
+
+        rig.uc.execute()
+        self.assertNotEqual(rig.node().state, State.DONE)
+        rig.clock[0] += 600
+        rig.uc.execute()
+        self.assertNotEqual(rig.node().state, State.DONE)
+        rig.clock[0] += 1
+        rig.uc.execute()
+
+        self.assertEqual(rig.node().outcome, "succeeded")
+        self.assertEqual(
+            rig.artifacts("ci-not-run"),
+            ["layer 2 of 3 https://github.com/acme/widget/pull/2: ci / build (required by the base branch)"])
+        self.assertIn(
+            "CI not run on layer 2 of 3 (https://github.com/acme/widget/pull/2): "
+            "ci / build (required by the base branch).", rig.node().report)
+
+    def test_a_two_layer_stack_lacking_a_trunk_required_check_lists_layer_two(self):
+        otk = _wf("Build - OTK V2", workflow="")
+        rig = _StackedCiRig(
+            count=2,
+            checks={1: [_wf("build"), _wf("lint", "lint"), otk], 2: [_wf("build"), _wf("lint", "lint")]},
+            required={"build", "Build - OTK V2"})
+        rig.clock = [10000.0]
+        rig.uc._wall_clock = lambda: rig.clock[0]
+        rig.uc._ci_ceiling_seconds = lambda: 10 ** 9
 
         rig.uc.execute()
         rig.clock[0] += 601
         rig.uc.execute()
 
         self.assertEqual(rig.node().outcome, "succeeded")
-        self.assertEqual(rig.artifacts("ci-not-run"), [])
+        self.assertEqual(
+            rig.artifacts("ci-not-run"),
+            ["layer 2 of 2 https://github.com/acme/widget/pull/2: Build - OTK V2 (required by the base branch)"])
+        self.assertIn("CI not run on layer 2 of 2", rig.node().report)
 
     def test_a_failing_layer_routes_failed_with_no_not_run_clause(self):
         checks = {1: [_wf("build"), _wf("lint", "lint")],
@@ -1142,7 +1171,7 @@ class TestResolveCiOverAStack(unittest.TestCase):
         import json
         self.assertEqual(len(json.loads(rig.artifacts("ci-judged-layers")[0])), 3)
 
-    def test_a_trunk_required_check_only_on_layer_one_does_not_hold_the_upper_layers(self):
+    def test_a_trunk_required_check_only_on_layer_one_never_fails_or_times_out_the_upper_layers(self):
         rig = _StackedCiRig(
             checks={
                 1: [_check("build", "success"), _check("codacy", "success")],
@@ -1150,12 +1179,19 @@ class TestResolveCiOverAStack(unittest.TestCase):
                 3: [_check("build", "success")],
             },
             required={"codacy"})
+        rig.clock = [10000.0]
+        rig.uc._wall_clock = lambda: rig.clock[0]
 
+        rig.uc.execute()
+        self.assertNotEqual(rig.node().state, State.DONE)
+        self.assertIsNone(rig.node().outcome)
+        rig.clock[0] += 601
         rig.uc.execute()
 
         node = rig.node()
         self.assertEqual(node.state, State.DONE)
         self.assertEqual(node.outcome, "succeeded")
+        self.assertEqual(len(rig.artifacts("ci-not-run")[0].splitlines()), 2)
 
     def test_an_upper_layer_whose_base_requires_a_check_still_waits_for_it(self):
         rig = _StackedCiRig(checks={n: [_check("build", "success")] for n in (1, 2, 3)})
@@ -1317,10 +1353,10 @@ def _paths_workflow(file, paths=None, ignore=None, branches=None):
 
 
 class TestResolveCiPathFilteredLayers(unittest.TestCase):
-    def _rig(self, workflows, files, bottom=None, layer2=None, layer3=None):
+    def _rig(self, workflows, files, bottom=None, layer2=None, layer3=None, required=None):
         bottom = bottom if bottom is not None else [_wff("build", "app", "app.yml"), _wff("lint", "lint", "lint.yml")]
         layer2 = layer2 if layer2 is not None else [_wff("lint", "lint", "lint.yml")]
-        rig = _StackedCiRig(checks={1: bottom, 2: layer2, 3: layer3 if layer3 is not None else bottom})
+        rig = _StackedCiRig(checks={1: bottom, 2: layer2, 3: layer3 if layer3 is not None else bottom}, required=required)
         rig.clock = [10000.0]
         rig.uc._wall_clock = lambda: rig.clock[0]
         rig.uc._ci_ceiling_seconds = lambda: 10 ** 9
@@ -1393,6 +1429,33 @@ class TestResolveCiPathFilteredLayers(unittest.TestCase):
         self._run(rig)
 
         self.assertEqual(rig.artifacts("ci-not-run"), ["layer 2 of 3 https://github.com/acme/widget/pull/2: svc / test"])
+
+    def test_a_mixed_required_and_path_filtered_layer_lists_only_what_it_owes(self):
+        bottom = [
+            _wff("build", "ci", "ci.yml"), _wff("compile", "app", "app.yml"), _wff("lint", "lint", "lint.yml")]
+        lint = [_wff("lint", "lint", "lint.yml")]
+        rig = self._rig(
+            [_paths_workflow("app.yml", paths=["app/**"]), _paths_workflow("ci.yml")],
+            {2: {"sensors/a"}, 3: {"app/main.rs"}}, bottom=bottom, layer2=lint, layer3=lint,
+            required={"build"})
+
+        self._run(rig)
+
+        self.assertEqual(rig.artifacts("ci-not-run"), [
+            "layer 2 of 3 https://github.com/acme/widget/pull/2: ci / build (required by the base branch)\n"
+            "layer 3 of 3 https://github.com/acme/widget/pull/3: "
+            "app / compile, ci / build (required by the base branch)"])
+
+    def test_a_required_label_bypasses_the_trigger_filter(self):
+        bottom = [_wff("build", "ci", "other.yml"), _wff("lint", "lint", "lint.yml")]
+        rig = self._rig(
+            [_paths_workflow("lint.yml")], {2: {"sensors/a"}}, bottom=bottom,
+            layer2=[_wff("lint", "lint", "lint.yml")], required={"build"})
+        self._run(rig)
+
+        self.assertEqual(rig.artifacts("ci-not-run"), [
+            "layer 2 of 3 https://github.com/acme/widget/pull/2: ci / build (required by the base branch)"])
+        self.assertEqual([c for c in rig.github.calls if c[0] in ("workflow_sources", "changed_files")], [])
 
     def test_a_check_with_no_workflow_file_is_always_expected(self):
         rig = self._rig(
