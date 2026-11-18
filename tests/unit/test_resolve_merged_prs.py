@@ -19,6 +19,7 @@ from lightcycle.application.services.worktree import WorktreeService
 from lightcycle.application.pool.check_content_pin import CheckContentPinUseCase
 from lightcycle.application.pool.pr_lookups import latest_step
 from lightcycle.application.pool.resolve_merged_prs import ResolveMergedPrsUseCase
+from lightcycle.domain.runs import RunState
 from lightcycle.application.services.flow import FlowService
 from lightcycle.domain.work import State
 from lightcycle.application.work.close_item import RELEASE_PENDING_LABEL
@@ -1572,6 +1573,55 @@ class TestResolveMergedPrsOverAStack(unittest.TestCase):
 
         self.assertEqual(result.merged, [item])
         self.assertEqual(store.get_node(item).state, "done")
+
+    def test_all_three_layers_merged_still_closes_as_merged(self):
+        from tests.support.stacked import build_stack
+
+        store, item, step, github, uc = self._rig(
+            build_stack(3, states={1: "merged", 2: "merged", 3: "merged"}))
+
+        result = uc.execute()
+
+        self.assertEqual(result.merged, [item])
+        self.assertEqual(store.get_node(item).state, "done")
+
+    def test_a_merged_top_layer_with_lower_layers_open_does_not_close_the_run(self):
+        from tests.support.stacked import build_stack
+
+        store, item, step, github, uc = self._rig(build_stack(3, states={3: "merged"}))
+        worktrees = FakeWorktrees()
+        uc._worktrees = worktrees
+
+        result = uc.execute()
+
+        self.assertEqual(result.merged, [])
+        self.assertNotEqual(store.get_node(step).state, "done")
+        (run,) = store.runs_of(item)
+        self.assertEqual(run.state, RunState.OPEN)
+        self.assertEqual(getattr(worktrees, "released", []), [])
+
+    def test_a_dropped_layer_followed_by_the_new_top_merging_does_not_close_the_run(self):
+        from tests.support.stacked import STACK_URL, build_stack, layer_url
+
+        store = FakeStore()
+        item = store.create_item("stacked", "a description")
+        rid = plant_pr(store, item, layer_url(3))
+        store.set_stack(rid, STACK_URL)
+        store.create_step(stage="ready-merge", role="human", item=item)
+        github = FakeGitHub(stacks={STACK_URL: build_stack(2, states={1: "merged", 2: "merged"})})
+        flow = _FlowAdapter(_FLOW)
+        worktrees = FakeWorktrees()
+        uc = ResolveMergedPrsUseCase(
+            store, github, worktrees, flow, None,
+            CheckContentPinUseCase(
+                store, github, flow, trusted_authors=lambda: frozenset({"review-code"})),
+        )
+
+        result = uc.execute()
+
+        self.assertEqual(result.merged, [])
+        self.assertNotEqual(store.get_node(item).state, "done")
+        self.assertEqual(getattr(worktrees, "released", []), [])
 
     def test_a_merged_stack_with_a_null_record_gets_the_final_record_before_the_run_closes(self):
         import json

@@ -79,3 +79,25 @@ class TestCompareTrunk(unittest.TestCase):
 
         self.assertEqual(record[0]["number"], 1)
         self.assertEqual(record[0]["base"], TRUNK)
+
+
+class TestMergeBlocker(unittest.TestCase):
+    def test_merge_blocker_names_the_first_unmerged_layer_or_a_foreign_top(self):
+        top = layer_url(3)
+        cases = [
+            (build_stack(3, states={1: "merged", 2: "merged", 3: "merged"}), top, None),
+            (
+                build_stack(3, states={3: "merged"}), top,
+                "layer 1 of 3 (%s) is open" % layer_url(1),
+            ),
+            (
+                build_stack(3, states={1: "merged", 2: "merged", 3: "closed"}), top,
+                "layer 3 of 3 (%s) is closed" % layer_url(3),
+            ),
+            (
+                build_stack(3, states={1: "merged", 2: "merged", 3: "merged"}), layer_url(2),
+                "the stack's top layer is %s, not this run's PR %s" % (top, layer_url(2)),
+            ),
+        ]
+        for layers, pr, expected in cases:
+            self.assertEqual(stack_shape.merge_blocker(layers, pr), expected)

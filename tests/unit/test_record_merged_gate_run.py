@@ -1,6 +1,7 @@
 import unittest
 from tests.support.null_collaborators import NoFlow
 
+from lightcycle.application.errors import UnmergedStackLayer
 from lightcycle.application.flow import CompleteInput, CompleteStepUseCase
 from lightcycle.application.flow.record_merged_gate_run import (
     RecordMergedGateRunInput, RecordMergedGateRunUseCase,
@@ -188,6 +189,50 @@ class TestStackedRun(unittest.TestCase):
 
     def test_not_merged_when_the_last_layer_is_open(self):
         w = self._world("open")
+
+        self.assertFalse(w.record())
+        self.assertEqual(w.states()[w.run], RunState.OPEN)
+
+
+class TestRefuseUnmergedLayer(unittest.TestCase):
+    URL = "https://github.com/x/y/stack/1"
+
+    def _world(self, states, gate="code-gate", failing=None, layers=None):
+        gh = FakeGitHub(failing_calls=failing or set())
+        gh.script_stack(self.URL, layers if layers is not None else [
+            _layer(5, states[0]), _layer(7, states[1])])
+        return _World(gh, stack=self.URL, gate=gate, beyond=False)
+
+    def _refuse(self, w, outcome="merged"):
+        RecordMergedGateRunUseCase(w.store, w.github, w.flow).refuse_unmerged_layer(
+            RecordMergedGateRunInput(step=w.step, outcome=outcome))
+
+    def test_lc_done_merged_with_an_open_lower_layer_is_refused_naming_the_layer(self):
+        for gate in ("code-gate", "pass-gate"):
+            w = self._world(("open", "merged"), gate=gate)
+
+            with self.assertRaises(UnmergedStackLayer) as caught:
+                self._refuse(w)
+
+            self.assertIn("layer 1 of 2", str(caught.exception))
+            self.assertIn("https://github.com/x/y/pull/5", str(caught.exception))
+            self.assertEqual(w.states()[w.run], RunState.OPEN)
+
+    def test_a_fully_merged_stack_is_not_refused(self):
+        for gate in ("code-gate", "pass-gate"):
+            self._refuse(self._world(("merged", "merged"), gate=gate))
+
+    def test_an_unread_or_dissolved_stack_is_not_refused(self):
+        self._refuse(self._world(("open", "merged"), failing={"stack_view"}))
+        self._refuse(self._world(None, layers=[]))
+
+    def test_an_unstacked_run_is_not_refused(self):
+        w = _World(FakeGitHub())
+
+        self._refuse(w)
+
+    def test_a_stacked_run_whose_top_layer_is_merged_but_a_lower_one_is_open_is_not_recorded_merged(self):
+        w = self._world(("open", "merged"))
 
         self.assertFalse(w.record())
         self.assertEqual(w.states()[w.run], RunState.OPEN)

@@ -1864,6 +1864,17 @@ class TestResolveCiStackWithNoOpenLayer(unittest.TestCase):
         self.assertEqual(deleted, sorted([_BRANCH, "layer-1", "layer-2", "layer-3"]))
         self.assertEqual(rig.store.open_runs_of(rig.item), [])
 
+    def test_a_stack_with_no_open_layer_whose_top_is_not_the_run_pr_does_not_close(self):
+        rig = _merge_rig({1: "merged", 2: "merged", 3: "merged"})
+        (run,) = rig.store.runs_of(rig.item)
+        rig.store.set_pr(run.id, "https://github.com/acme/widget/pull/99")
+
+        rig.uc.execute()
+
+        self.assertNotEqual(rig.store.get_node(rig.item).state, State.DONE)
+        self.assertIsNone(rig.node().park.reason)
+        self.assertEqual([c for c in rig.git.calls if c[0] == "delete_branch"], [])
+
     def test_a_stack_with_no_open_layer_and_one_closed_parks_naming_the_layer(self):
         rig = _merge_rig({1: "merged", 2: "closed", 3: "merged"})
 

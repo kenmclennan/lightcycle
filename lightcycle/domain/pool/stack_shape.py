@@ -51,6 +51,16 @@ def label(position, total, url) -> str:
     return "layer %d of %d (%s)" % (position, total, url)
 
 
+def merge_blocker(layers, pr) -> Optional[str]:
+    total = len(layers)
+    for position, layer in enumerate(layers, start=1):
+        if layer.state != "merged":
+            return "%s is %s" % (label(position, total, layer.url), layer.state)
+    if layers[-1].url != pr:
+        return "the stack's top layer is %s, not this run's PR %s" % (layers[-1].url, pr)
+    return None
+
+
 def record_of(layers, observed_bases, previous) -> list:
     carried = {e["number"]: e.get("base") for e in (previous or [])}
     record = []

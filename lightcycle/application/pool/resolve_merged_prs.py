@@ -18,6 +18,7 @@ from lightcycle.application.work.gate_hold import GateHold
 from lightcycle.application.work.close_item import (
     RELEASE_PENDING_LABEL, CloseItemInput, CloseItemUseCase, TeardownRefused,
 )
+from lightcycle.domain.pool import stack_shape
 from lightcycle.domain.runs import RunState
 from lightcycle.ports.git import GitReadError
 
@@ -169,7 +170,7 @@ class ResolveMergedPrsUseCase:
                         if layer.state == "merged":
                             merged_by_pr[layer.url] = True
                     if merge_outcome:
-                        merged_by_pr[pr_value] = stack.layers[-1].state == "merged"
+                        merged_by_pr[pr_value] = stack_shape.merge_blocker(stack.layers, pr_value) is None
                         gate = active_step_at(self._store, item.id, stage)
                         if merged_by_pr[pr_value] and not (
                                 gate is not None and self._gate_hold.is_held(gate.id)):

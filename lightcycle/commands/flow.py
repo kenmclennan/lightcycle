@@ -131,6 +131,7 @@ def cmd_done(argv):
             gate = RecordMergedGateRunUseCase(
                 container().store, container().github, _flow())
             gate_input = RecordMergedGateRunInput(step=a.id, outcome=a.outcome)
+            gate.refuse_unmerged_layer(gate_input)
             gate.execute(gate_input)
             merged_prs = gate.merged_prs_at_pass_end(gate_input)
             resp = CompleteStepUseCase(
