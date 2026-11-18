@@ -43,9 +43,9 @@ def record_of(layers, observed_bases, previous) -> list:
     carried = {e["number"]: e.get("base") for e in (previous or [])}
     record = []
     for layer in layers:
-        base = None
+        base = carried.get(layer.number)
         if layer.state == "open":
-            base = observed_bases.get(layer.url) or carried.get(layer.number)
+            base = observed_bases.get(layer.url) or base
         record.append({
             "number": layer.number, "state": layer.state, "head_ref": layer.head_ref,
             "base": base,
@@ -63,6 +63,10 @@ def _numbers(record):
     return [e["number"] for e in record]
 
 
+def _onto_trunk(trunk, observed, open_below) -> bool:
+    return trunk is not None and observed == trunk and not open_below
+
+
 def compare(previous, layers, current, dissolved) -> ShapeDiff:
     if dissolved:
         if previous:
@@ -70,6 +74,7 @@ def compare(previous, layers, current, dissolved) -> ShapeDiff:
         return ShapeDiff([], [])
     total = len(layers)
     previous = previous or []
+    trunk = previous[0].get("base") if previous else None
     prior = {e["number"]: e for e in previous}
     by_number = {l.number: (i + 1, l) for i, l in enumerate(layers)}
     differences = []
@@ -106,7 +111,8 @@ def compare(previous, layers, current, dissolved) -> ShapeDiff:
         if layer.state == "open" and was is not None:
             observed = current[position - 1].get("base")
             if (observed is not None and observed != layer.base_ref
-                    and observed != was.get("base") and observed not in merged_heads):
+                    and observed != was.get("base") and observed not in merged_heads
+                    and not _onto_trunk(trunk, observed, open_below)):
                 differences.append(
                     "%s was retargeted onto %s, which is neither its lower layer nor the trunk"
                     % (name, observed)
