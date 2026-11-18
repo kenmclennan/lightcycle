@@ -237,3 +237,19 @@ class TestGraphTextFromMetasStepKey(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestStackReviewStages(unittest.TestCase):
+    def test_stack_review_stages_are_the_targets_of_the_shape_outcome(self):
+        flow = mkflow({
+            "watcher": {
+                "step": "poll-ci", "routes": {"stack-shape": "review-stack"},
+                "on_pr_stack_shape": "stack-shape",
+            },
+            "review-stack": {"step": "review-stack"},
+        })
+
+        self.assertEqual(flow.stack_review_stages(), {"review-stack"})
+
+    def test_a_flow_with_no_shape_hook_has_none(self):
+        self.assertEqual(mkflow(METAS).stack_review_stages(), set())

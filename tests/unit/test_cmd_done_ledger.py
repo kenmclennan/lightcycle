@@ -1,3 +1,4 @@
+import json
 import io
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -208,3 +209,32 @@ class TestCmdDoneOnAStackedItem(unittest.TestCase):
         self.assertNotIn("layer-1 ", err)
         self.assertNotIn("branch layer-3", err)
         self.assertNotEqual(store.get_node(item).state, State.DONE)
+
+
+class TestCmdDoneRebaselinesOnReopen(unittest.TestCase):
+    def test_done_on_a_stack_review_step_with_reopen_rebaselines_the_run(self):
+        from tests.support.stacked import build_stack
+        from tests.unit.test_detect_stack_shape import _Rig
+        from tests.unit.test_rebaseline_stack_on_reopen import _FLOW, _review_step, _seen
+
+        rig = _Rig(build_stack(3), flow=_FLOW)
+        container = _ClockedContainer(rig.store)
+        container.github = rig.github
+        cli.set_container(container)
+        self.addCleanup(cli.set_container, None)
+        review = _review_step(rig)
+        self.assertIsNone(_seen(rig))
+
+        with mock.patch.object(flow_cmds, "_flow", return_value=rig.flow), mock.patch.object(
+            flow_cmds, "RecordMergedGateRunUseCase"
+        ), mock.patch.object(
+            flow_cmds, "CompleteStepUseCase"
+        ) as complete, mock.patch.object(
+            flow_cmds, "AdvanceFeedbackLedgerUseCase"
+        ):
+            complete.return_value.execute.return_value = mock.Mock(
+                next_step=None, teardown_refusal=None)
+            rc, out, err = _call(cli.cmd_done, review, "reopen")
+
+        self.assertEqual(rc, 0, err)
+        self.assertEqual([e["number"] for e in json.loads(_seen(rig))], [1, 2, 3])
