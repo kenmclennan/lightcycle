@@ -19,6 +19,7 @@ from lightcycle.adapters.worker_session import (
     SessionError,
     RESULT,
     SESSION_ID,
+    build_command,
     dispatch_event,
     drain,
     has_open_step,
@@ -353,6 +354,16 @@ class TestRun(unittest.TestCase):
         cmd = captured["cmd"]
         self.assertIn("--add-dir", cmd)
         self.assertEqual(cmd[cmd.index("--add-dir") + 1], "/data/root")
+
+    def test_launches_without_mcp_servers_and_slash_commands(self):
+        captured = {}
+        with patch("lightcycle.adapters.worker_session.subprocess.Popen",
+                    self._fake_popen(captured)):
+            run("/d", "/w", "coder", "opus", "sys", 5, open_step=_open)
+        for cmd in (captured["cmd"], build_command("opus", "sys", "/d")):
+            self.assertIn("--strict-mcp-config", cmd)
+            self.assertIn("--disable-slash-commands", cmd)
+            self.assertNotIn("--mcp-config", cmd)
 
     def test_launches_with_fallback_cwd_distinct_from_add_dir(self):
         captured = {}

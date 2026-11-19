@@ -130,7 +130,9 @@ def build_command(model, sysprompt, root):
             "--model", model,
             "--append-system-prompt", sysprompt,
             "--add-dir", root,
-            "--dangerously-skip-permissions"]
+            "--dangerously-skip-permissions",
+            "--strict-mcp-config",
+            "--disable-slash-commands"]
 
 
 def drain(events, policy):
