@@ -262,10 +262,7 @@ class MachineAdapter(MachinePort):
             return None
 
     def gh_tooling(self):
-        return GhTooling(
-            version_text=_run(["gh", "--version"]),
-            extensions_text=_run(["gh", "extension", "list"]),
-        )
+        return GhTooling(version_text=_run(["gh", "--version"]))
 
     def cwd_pids_under(self, root):
         base = os.path.normpath(root)
