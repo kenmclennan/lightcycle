@@ -11,7 +11,6 @@ class FakeMachine(MachinePort):
         self.cwd_calls = []
         self._gh_tooling = gh_tooling if gh_tooling is not None else GhTooling(
             version_text="gh version 2.103.3 (2026-01-01)\n",
-            extensions_text="gh stack\tgithub/gh-stack\tv0.3.0\n",
         )
 
     def headroom(self, workers):

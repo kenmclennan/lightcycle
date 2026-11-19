@@ -14,7 +14,6 @@ from lightcycle.config import Config
 from lightcycle.domain.health.gh_tooling import (
     GhTooling,
     gh_tooling_problems,
-    parse_extensions,
     parse_gh_version,
 )
 from lightcycle.domain.runs import PhaseRun
@@ -182,38 +181,17 @@ class TestGhToolingDomain(unittest.TestCase):
         ):
             self.assertEqual(parse_gh_version(text), expected, text)
 
-    def test_the_version_gate_compares_integers_not_strings(self):
-        ext = "gh stack\tgithub/gh-stack\tv0.3.0\n"
-        for text, healthy in (
-            ("gh version 2.103.3", True), ("gh version 2.89.9", False),
-            ("gh version 2.90.0", True), ("gh version 3.0.0", True),
-        ):
-            problems = gh_tooling_problems(GhTooling(text, ext))
-            self.assertEqual(problems == [], healthy, text)
+    def test_gh_present_with_no_extension_is_healthy(self):
+        self.assertEqual(gh_tooling_problems(GhTooling("gh version 2.103.3")), [])
 
-    def test_old_gh_names_the_version_found(self):
-        problems = gh_tooling_problems(GhTooling("gh version 2.89.9", "x\tgithub/gh-stack\tv1"))
+    def test_an_old_gh_version_is_healthy(self):
+        self.assertEqual(gh_tooling_problems(GhTooling("gh version 2.89.9")), [])
+
+    def test_gh_absent_is_one_problem_without_stack_wording(self):
+        problems = gh_tooling_problems(GhTooling(None))
         self.assertEqual(len(problems), 1)
-        self.assertIn("2.89", problems[0].message)
-
-    def test_extension_parse(self):
-        self.assertEqual(parse_extensions("gh stack\tgithub/gh-stack\tv0.3.0"), ["github/gh-stack"])
-        self.assertEqual(parse_extensions(""), [])
-        self.assertEqual(parse_extensions(None), [])
-
-    def test_missing_extension_names_the_fix(self):
-        problems = gh_tooling_problems(GhTooling("gh version 2.103.3", ""))
-        self.assertEqual(len(problems), 1)
-        self.assertIn("gh extension install github/gh-stack", problems[0].fix)
         self.assertEqual(problems[0].category, "github")
-
-    def test_unreadable_extension_list_is_one_problem(self):
-        problems = gh_tooling_problems(GhTooling("gh version 2.103.3", None))
-        self.assertEqual(len(problems), 1)
-        self.assertIn("could not be read", problems[0].message)
-
-    def test_gh_absent_is_one_problem_not_three(self):
-        self.assertEqual(len(gh_tooling_problems(GhTooling(None, None))), 1)
+        self.assertNotIn("stack", problems[0].message.lower())
 
 
 class TestDoctorReportsGhTooling(unittest.TestCase):
@@ -230,10 +208,13 @@ class TestDoctorReportsGhTooling(unittest.TestCase):
     def test_a_healthy_default_reports_nothing(self):
         self.assertEqual(self._problems(FakeMachine()), [])
 
-    def test_a_missing_gh_stack_is_reported_in_the_github_section(self):
-        problems = self._problems(FakeMachine(gh_tooling=GhTooling("gh version 2.103.3", "")))
+    def test_gh_present_with_no_extension_reports_nothing(self):
+        self.assertEqual(self._problems(FakeMachine(gh_tooling=GhTooling("gh version 2.103.3"))), [])
+
+    def test_a_missing_gh_is_reported_in_the_github_section(self):
+        problems = self._problems(FakeMachine(gh_tooling=GhTooling(None)))
         self.assertEqual(len(problems), 1)
-        self.assertIn("gh extension install github/gh-stack", problems[0].fix)
+        self.assertIn("cli.github.com", problems[0].fix)
 
 
 class TestSpawnerSuppressesTheStackUpdateNotice(unittest.TestCase):
