@@ -102,13 +102,13 @@ Read by `write-code` and `review-code` when they run against this repo.
 - **`tests/run.sh` sizes its own test fan; do not size it by hand.** It reads `LC_MAX_AGENTS` from the environment, which the spawner exports to every worker, and runs `pytest -n <cores / cap>` (floored, minimum 2). Unset, empty, `0` or non-numeric all mean `-n auto`, so a hand run and CI - neither of which exports it - behave exactly as before. Nothing is left for a step prompt or an agent to compute: run the gate through `bash tests/run.sh` and it is already sized to this pool. A trailing `-n <N>` still overrides, since `"$@"` is passed through.
 - **Never use `sed -i` on macOS.** BSD sed reads the next argument as a backup suffix, so in-place edits slip and stray backup files land in the tree. Use `perl -pi -e` or the editor tool instead.
 
-## Preferred skills (invoke before the work)
+## Craft before the work
 
-The craft is carried by skills, not by fattening the step files. Invoke them:
+The craft lives here, not in the step files. Workers launch without skills, so state it directly:
 
-- **Designing a spec**: `brainstorming`, then `writing-plans`. Question the approach and find the minimal solution before committing mechanism. Do NOT add structure (flags, counts, categories, parsers) by analogy to an existing pattern - justify each piece against the actual need, or leave it out. The feedback/data is usually the value; an LLM can read freeform text without codified scaffolding.
-- **Building**: `test-driven-development` - new behaviour ships with a failing test first.
-- **Reviewing**: `requesting-code-review` / `receiving-code-review`, and verify the work meets its spec's acceptance criteria (run it, do not infer).
+- **Designing a spec**: question the approach and find the minimal solution before committing mechanism. Do NOT add structure (flags, counts, categories, parsers) by analogy to an existing pattern - justify each piece against the actual need, or leave it out. The feedback/data is usually the value; an LLM can read freeform text without codified scaffolding.
+- **Building**: new behaviour ships with a failing test first.
+- **Reviewing**: verify the work meets its spec's acceptance criteria by running it, do not infer.
 
 Three craft checks that belong here, not in the step prompts: **no broken windows** (no failing or skipped tests, dead code, or leftover TODOs), **names that age well** (never bake a deprecated concept into a durable identifier), and **absence is not an answer** (below).
 
