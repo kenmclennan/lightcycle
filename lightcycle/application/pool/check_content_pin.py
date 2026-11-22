@@ -11,6 +11,7 @@ from lightcycle.config import ConfigError
 from lightcycle.domain.feedback import LC_MARKER, parse_decision, parse_decision_sha
 from lightcycle.domain.pool import stack_shape
 from lightcycle.domain.work import State
+from lightcycle.domain.work.timestamp import parse_timestamp
 from lightcycle.ports.github import NotYetRead, ReadFailure
 
 
@@ -25,7 +26,32 @@ class CheckContentPinUseCase:
         step = active_step_in_phase(self._store, self._flow_service, item_id, phase)
         return step or active_step_any(self._store, item_id)
 
-    def _unauthorized_drops(self, pr_value, dropped, pin):
+    def _review_rejected(self, item, phase):
+        latest = None
+        for step in self._store.children(item.id):
+            if step.type != "step" or step.state != State.DONE or step.closed_at is None:
+                continue
+            if self._flow_service.phase_for(step) != phase:
+                continue
+            review = self._flow_service.flow_for(step).step_def(step.stage).review
+            if review is None:
+                continue
+            at = parse_timestamp(step.closed_at)
+            if latest is None or at >= latest[0]:
+                latest = (at, step, review)
+        if latest is None:
+            return False
+        outcome = latest[1].outcome
+        return outcome is not None and outcome != latest[2]
+
+    def _keep_paths(self, body):
+        kept = set()
+        for line in body.splitlines():
+            if line.startswith("Keep:"):
+                kept |= {p.strip() for p in line[len("Keep:"):].split(",") if p.strip()}
+        return kept
+
+    def _unauthorized_drops(self, pr_value, dropped, pin, review_rejected=False):
         top_level = self._github.comments_since(pr_value, 0.0)
         inline = self._github.pull_comments(pr_value, 0.0)
         reviews = self._github.reviews(pr_value, 0.0)
@@ -33,16 +59,26 @@ class CheckContentPinUseCase:
             (r for r in (top_level, inline, reviews) if isinstance(r, ReadFailure)), None
         )
         if failure is not None:
-            return dropped, True, False
+            return dropped, True, False, set()
         try:
             trusted = {t.casefold() for t in self._trusted_authors()}
         except ConfigError:
-            return dropped, True, False
+            return dropped, True, False, set()
         authorized = set()
         round_ordered = False
+        verdict_seen = False
+        kept = set()
         for c in list(top_level) + list(inline):
             if c.author.casefold() not in trusted or LC_MARKER not in c.body:
                 continue
+            if (
+                c.is_top_level
+                and not c.path
+                and parse_decision(c.body) is None
+                and parse_decision_sha(c.body) == pin
+            ):
+                verdict_seen = True
+                kept |= self._keep_paths(c.body)
             if parse_decision(c.body) != "rework":
                 continue
             if c.path:
@@ -51,9 +87,13 @@ class CheckContentPinUseCase:
                 round_ordered = True
 
         if round_ordered:
-            return set(), False, True
+            return set(), False, True, set()
+        review_ordered = set()
+        if review_rejected and verdict_seen:
+            review_ordered = {f for f in dropped if f not in kept}
+            authorized |= review_ordered
         unauthorized = {f for f in dropped if f not in authorized}
-        return unauthorized, False, False
+        return unauthorized, False, False, review_ordered
 
     def execute(self, item, pr_value, phase):
         run = self._store.current_run(item.id, phase)
@@ -188,9 +228,21 @@ class CheckContentPinUseCase:
             if dropped and hold is not None and hold(dropped):
                 return False
         if dropped:
-            unauthorized, lookup_failed, round_ordered = self._unauthorized_drops(
-                pr_value, dropped, pin
+            review_rejected = self._review_rejected(item, phase)
+            unauthorized, lookup_failed, round_ordered, review_ordered = self._unauthorized_drops(
+                pr_value, dropped, pin, review_rejected
             )
+            if review_ordered:
+                target = self._step_for_phase(item.id, phase) or latest_step(
+                    self._store, item.id
+                )
+                if target is not None:
+                    self._store.note_condition(
+                        target.id,
+                        "%sPR head moved from %s to %s and dropped: %s - ordered by the rejecting "
+                        "review recorded against %s."
+                        % (prefix, pin, head, ", ".join(sorted(review_ordered)), pin),
+                    )
             if round_ordered:
                 target = self._step_for_phase(item.id, phase) or latest_step(
                     self._store, item.id
