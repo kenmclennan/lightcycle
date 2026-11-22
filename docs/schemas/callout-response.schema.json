@@ -18,6 +18,14 @@
         }
       }
     },
+    "usage": {
+      "type": "object",
+      "required": ["cost_usd"],
+      "properties": {
+        "cost_usd": { "type": "number", "minimum": 0, "maximum": 1000000 },
+        "model": { "type": "string", "minLength": 1, "maxLength": 80 }
+      }
+    },
     "artifacts": {
       "type": "array",
       "maxItems": 20,

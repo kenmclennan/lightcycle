@@ -708,6 +708,13 @@ class FakeStore(StorePort):
         if turn_count or tool_usage:
             self._add_attribution(tid, turn_count, tool_usage)
 
+    def record_step_cost(self, step_id, cost_usd, cost_basis):
+        meta = dict(self._get(step_id).get("metadata") or {})
+        meta["usage_cost_usd"] = (meta.get("usage_cost_usd") or 0.0) + cost_usd
+        if meta.get("usage_cost_basis") is None:
+            meta["usage_cost_basis"] = cost_basis
+        self._get(step_id)["metadata"] = meta
+
     def usage_accrual_state(self, spawnid):
         return self._usage_accrual_state.get(spawnid)
 

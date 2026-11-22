@@ -930,6 +930,27 @@ class StoreContractBase:
             turn_count, tool_usage or {}, rates_used=rates_used,
         )
 
+    def test_record_step_cost_sets_the_basis_when_none_and_accumulates(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+        s.record_step_cost(tid, 0.25, "reported")
+        s.record_step_cost(tid, 0.5, "reported")
+        t = s.get_node(tid)
+        self.assertEqual(t.usage_cost_usd, Cost.from_usd(0.75))
+        self.assertEqual(t.usage_cost_basis, "reported")
+        self.assertEqual(t.usage_input_tokens, 0)
+        self.assertEqual(t.turn_count, 0)
+
+    def test_record_step_cost_keeps_an_existing_basis_and_still_adds(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+        self._live_usage(s, tid, 10, 20, 30, 40, 1.0, "list", None)
+        s.record_step_cost(tid, 0.5, "reported")
+        t = s.get_node(tid)
+        self.assertEqual(t.usage_cost_basis, "list")
+        self.assertEqual(t.usage_cost_usd, Cost.from_usd(1.5))
+        self.assertEqual(t.usage_input_tokens, 10)
+
     def test_record_live_usage_roundtrips_all_seven_fields(self):
         s = self.make_store()
         tid = self._step(s, "t")

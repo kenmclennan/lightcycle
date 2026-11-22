@@ -5,6 +5,7 @@ import unittest
 from lightcycle.domain.work import callout_response as cr
 from lightcycle.domain.work.callout_response import (
     CalloutResponse,
+    CalloutUsage,
     PreflightResponse,
     validate_callout_response,
     validate_preflight_response,
@@ -75,6 +76,11 @@ class TestValidate(unittest.TestCase):
         self.assertEqual(error["properties"]["message"]["maxLength"], cr.MAX_ERROR_CHARS)
         self.assertEqual(error["properties"]["fix"]["maxLength"], cr.MAX_ERROR_CHARS)
         self.assertEqual(sorted(error["required"]), ["fix", "message"])
+        usage = schema["properties"]["usage"]
+        self.assertEqual(usage["required"], ["cost_usd"])
+        self.assertEqual(usage["properties"]["cost_usd"]["minimum"], 0)
+        self.assertEqual(usage["properties"]["cost_usd"]["maximum"], cr.MAX_USAGE_COST_USD)
+        self.assertEqual(usage["properties"]["model"]["maxLength"], cr.MAX_LABEL_CHARS)
         self.assertEqual(cr.PROTOCOL, 2)
         self.assertIn("protocol 2", schema["title"])
 
@@ -88,6 +94,50 @@ class TestValidate(unittest.TestCase):
         self.assertEqual(sorted(error["required"]), ["fix", "message"])
         self.assertEqual(preflight["required"], ["status"])
         self.assertEqual(preflight["then"]["required"], ["errors"])
+
+
+class TestUsage(unittest.TestCase):
+    def test_usage_is_parsed(self):
+        parsed = check(usage={"cost_usd": 0.42, "model": "m"})
+        self.assertEqual(parsed.usage, CalloutUsage(cost_usd=0.42, model="m"))
+
+    def test_usage_absent_is_none(self):
+        self.assertIsNone(check().usage)
+
+    def test_model_is_optional(self):
+        self.assertEqual(check(usage={"cost_usd": 1}).usage, CalloutUsage(cost_usd=1, model=None))
+
+    def test_unknown_usage_keys_are_ignored(self):
+        self.assertIsInstance(check(usage={"cost_usd": 1, "x": 2}), CalloutResponse)
+
+    def test_the_bounds_are_accepted(self):
+        self.assertIsInstance(check(usage={"cost_usd": 0}), CalloutResponse)
+        self.assertIsInstance(check(usage={"cost_usd": 1000000}), CalloutResponse)
+        self.assertIsInstance(check(usage={"cost_usd": 1, "model": "m" * 80}), CalloutResponse)
+
+    def test_each_malformed_usage_is_rejected_naming_usage(self):
+        bad = [
+            {}, {"cost_usd": "1"}, {"cost_usd": True}, {"cost_usd": -1},
+            {"cost_usd": 1000000.01}, {"cost_usd": 1, "model": ""},
+            {"cost_usd": 1, "model": "m" * 81}, {"cost_usd": 1, "model": 3}, [], "x", None,
+        ]
+        for usage in bad:
+            with self.subTest(usage=usage):
+                problem = check(usage=usage)
+                self.assertIsInstance(problem, str)
+                self.assertIn("usage", problem)
+
+    def test_nan_and_infinity_are_rejected(self):
+        for token in ("NaN", "Infinity", "-Infinity"):
+            with self.subTest(token=token):
+                text = '{"status": "ok", "usage": {"cost_usd": %s}}' % token
+                problem = validate_callout_response(text)
+                self.assertIsInstance(problem, str)
+                self.assertIn("usage", problem)
+
+    def test_a_preflight_response_ignores_usage(self):
+        parsed = validate_preflight_response('{"status": "ok", "usage": {"cost_usd": "x"}}')
+        self.assertIsInstance(parsed, PreflightResponse)
 
 
 def err(**kw):
