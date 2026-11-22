@@ -41,6 +41,7 @@ from lightcycle.adapters.guidance_sync_status import GuidanceSyncStatusAdapter
 from lightcycle.adapters.config_reload_status import ConfigReloadStatusAdapter
 from lightcycle.application.pool.reload_config import ReloadConfigUseCase
 from lightcycle.application.setup.config_edit import ConfigEditUseCase
+from lightcycle.application.setup.project_relocate import RelocateProjectUseCase
 from lightcycle.adapters.memory_gate_status import MemoryGateStatusAdapter
 from lightcycle.adapters.scaffold import ScaffoldAdapter
 from lightcycle.adapters.spawner import SpawnerAdapter
@@ -190,6 +191,11 @@ class Container:
 
     def flow_service(self):
         return make_flow_service(self.workflow_bundle, self.store, self.config, self.workflow_source)
+
+    def relocate_project(self):
+        return RelocateProjectUseCase(
+            self.store, self.git, self.fs, self.config, self.config_edit, self.worktrees(),
+        )
 
     def worktrees(self, flow=None):
         return worktrees_for(self, flow=flow)

@@ -49,3 +49,7 @@ class FsPort(ABC):
     @abstractmethod
     def write_text(self, path, text):
         pass
+
+    @abstractmethod
+    def rename_dir(self, old, new):
+        pass

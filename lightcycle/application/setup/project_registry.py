@@ -41,19 +41,33 @@ class AddProjectUseCase:
         if not self._fs.store_ready():
             raise UseCaseError("lightcycle store not initialised - run `lc init` first")
 
+    def _default_shortcode(self, identity):
+        if identity == GUIDANCE_WORKSPACE:
+            try:
+                return self._config.guidance_shortcode()
+            except ConfigError:
+                return None
+        try:
+            return ProjectIdentity.parse(identity).default_shortcode
+        except ValueError as e:
+            try:
+                is_context = identity == self._config.context_artifact_project()
+            except ConfigError:
+                is_context = False
+            if is_context:
+                return None
+            raise UseCaseError(str(e))
+
     def execute(self, input: AddProjectInput) -> AddProjectResponse:
         self._require_global()
-        try:
-            identity = ProjectIdentity.parse(input.identity)
-        except ValueError as e:
-            raise UseCaseError(str(e))
+        default_shortcode = self._default_shortcode(input.identity)
         facets = _parse(input.facets)
         existing = self._store.get_project(input.identity)
         shortcode = (
             input.shortcode or (existing.shortcode if existing else None)
-            or identity.default_shortcode
+            or default_shortcode
         )
-        reason = reserved_shortcode_reason(
+        reason = shortcode and reserved_shortcode_reason(
             shortcode, _guidance_shortcode_for(self._config, input.identity)
         )
         if reason and shortcode != (existing.shortcode if existing else None):
@@ -120,8 +134,8 @@ class SetProjectUseCase:
     def execute(self, identity, facets_text=None, shortcode=None):
         if facets_text is None and shortcode is None:
             raise UseCaseError(
-                'nothing to set - pass --facets a,b,c (or --facets "" to clear them) '
-                "or --shortcode X"
+                'nothing to set - pass --facets a,b,c (or --facets "" to clear them), '
+                "--shortcode X or --path DIR"
             )
         facets = _parse(facets_text) if facets_text is not None else None
         existing = self._store.get_project(identity)

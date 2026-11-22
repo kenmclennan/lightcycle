@@ -1,6 +1,6 @@
 import os
 
-from lightcycle.ports.git import GitOutcome, GitPort, GitReadError
+from lightcycle.ports.git import GitOutcome, GitPort, GitReadError, WorktreeEntry
 from lightcycle.ports.teardown_ledger import TeardownLedgerPort
 
 
@@ -13,7 +13,12 @@ class FakeGit(GitPort, TeardownLedgerPort):
                  missing_identity=(), ref=None, ref_files=None, fetch_ok=True,
                  fetch_detail="boom", added=None, changed=None, ref_shas=None,
                  history=None, approvals=None, uncommitted=None, beyond=None,
-                 remote_delete_fails=False):
+                 remote_delete_fails=False, worktrees=None, repair_fails=None,
+                 prunable_after_repair=()):
+        self._listed_worktrees = {k: list(v) for k, v in (worktrees or {}).items()}
+        self._repair_fails = repair_fails
+        self._prunable_after_repair = set(prunable_after_repair)
+        self._repaired = False
         self._repos = set(repos) if repos is not None else None
         self._is_repo = is_repo
         self._origin = origin
@@ -144,6 +149,23 @@ class FakeGit(GitPort, TeardownLedgerPort):
         self.calls.append(("worktree_registered", root, path))
         self._raise_if("worktree_registered", root)
         return path in self._registered
+
+    def list_worktrees(self, root):
+        self.calls.append(("list_worktrees", root))
+        entries = self._listed_worktrees.get(root, [])
+        return [
+            WorktreeEntry(
+                path=p, prunable=self._repaired and p in self._prunable_after_repair
+            )
+            for p in entries
+        ]
+
+    def repair_worktrees(self, root, paths):
+        self.calls.append(("repair_worktrees", root, tuple(paths)))
+        if self._repair_fails:
+            return GitOutcome(ok=False, detail=self._repair_fails)
+        self._repaired = True
+        return GitOutcome(ok=True)
 
     def has_uncommitted(self, root):
         self._raise_if("has_uncommitted", root)

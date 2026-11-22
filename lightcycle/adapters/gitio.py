@@ -4,7 +4,7 @@ import sys
 import time
 
 from lightcycle.adapters.process_group import run_in_group
-from lightcycle.ports.git import GitOutcome, GitPort, GitReadError
+from lightcycle.ports.git import GitOutcome, GitPort, GitReadError, WorktreeEntry
 
 _GIT_TIMEOUT_SECONDS = 30
 
@@ -162,6 +162,34 @@ def worktree_registered(root, path):
         if line.startswith("worktree ") and os.path.realpath(line[len("worktree ") :]) == want:
             return True
     return False
+
+
+def list_worktrees(root):
+    proc = git(root, "worktree", "list", "--porcelain")
+    if proc.returncode != 0:
+        raise GitReadError("git worktree list failed in %s: %s" % (root, proc.stderr.strip()))
+    blocks = [b for b in proc.stdout.split("\n\n") if b.strip()]
+    entries = []
+    for block in blocks[1:]:
+        lines = block.splitlines()
+        path = next(
+            (l[len("worktree "):] for l in lines if l.startswith("worktree ")), None
+        )
+        if path is None:
+            continue
+        entries.append(
+            WorktreeEntry(path=path, prunable=any(l.startswith("prunable") for l in lines))
+        )
+    return entries
+
+
+def repair_worktrees(root, paths):
+    if paths:
+        proc = git(root, "worktree", "repair", *paths)
+        if proc.returncode != 0:
+            return GitOutcome(ok=False, detail=proc.stderr.strip())
+    proc = git(root, "worktree", "repair")
+    return GitOutcome(ok=proc.returncode == 0, detail=proc.stderr.strip())
 
 
 def has_uncommitted(root):
@@ -433,6 +461,12 @@ class GitAdapter(GitPort):
 
     def worktree_registered(self, root, path):
         return worktree_registered(root, path)
+
+    def list_worktrees(self, root):
+        return list_worktrees(root)
+
+    def repair_worktrees(self, root, paths):
+        return repair_worktrees(root, paths)
 
     def has_uncommitted(self, root):
         return has_uncommitted(root)

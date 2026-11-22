@@ -12,6 +12,12 @@ class GitOutcome:
     detail: str = ""
 
 
+@dataclass(frozen=True)
+class WorktreeEntry:
+    path: str
+    prunable: bool = False
+
+
 class GitPort(ABC):
     @abstractmethod
     def add_worktree(self, root, path, branch, base, retries, backoff):
@@ -75,6 +81,14 @@ class GitPort(ABC):
 
     @abstractmethod
     def worktree_registered(self, root, path):
+        pass
+
+    @abstractmethod
+    def list_worktrees(self, root):
+        pass
+
+    @abstractmethod
+    def repair_worktrees(self, root, paths):
         pass
 
     @abstractmethod

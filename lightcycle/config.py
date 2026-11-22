@@ -389,6 +389,9 @@ class Config:
     def _home(self):
         return os.path.expanduser("~")
 
+    def home_dir(self):
+        return self._home()
+
     def _expand(self, v):
         home = self._home()
         if v == "~":

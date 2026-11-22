@@ -113,6 +113,14 @@ class RecordingGit(GitPort, TeardownLedgerPort):
         self._record("worktree_registered", root, path)
         return (root, path) in self._worktrees
 
+    def list_worktrees(self, root):
+        self._record("list_worktrees", root)
+        return []
+
+    def repair_worktrees(self, root, paths):
+        self._record("repair_worktrees", root, tuple(paths))
+        return GitOutcome(ok=True)
+
     def has_uncommitted(self, root):
         self._record("has_uncommitted", root)
         return False

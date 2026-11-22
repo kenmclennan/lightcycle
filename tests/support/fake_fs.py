@@ -98,6 +98,8 @@ class FakeFs(FsPort, WorkflowBundlePort, WorkerLogPort):
         self._executable = set(executable or ())
         self.workflow_text_calls = []
         self.writes = []
+        self.renames = []
+        self.rename_error = None
 
     def workflow_text(self, name, root=None):
         self.workflow_text_calls.append((name, root))
@@ -205,6 +207,16 @@ class FakeFs(FsPort, WorkflowBundlePort, WorkerLogPort):
     def write_text(self, path, text):
         self.writes.append(path)
         self._files[path] = text.encode("utf-8")
+
+    def rename_dir(self, old, new):
+        if self.rename_error is not None:
+            raise self.rename_error
+        if new in self._dirs or new in self._files:
+            raise FileExistsError(new)
+        self.renames.append((old, new))
+        for table in (self._dirs, self._files):
+            for key in [k for k in table if k == old or k.startswith(old.rstrip("/") + "/")]:
+                table[new + key[len(old):]] = table.pop(key)
 
     def ensure_logs_dir(self):
         return "logs"
