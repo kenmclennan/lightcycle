@@ -19,7 +19,7 @@ ENGINE_STEP_DISPLAY = {
     MATERIAL_AUDIT_STEP: "Auditing guidance and workflows",
     FINDINGS_STEP: "Review the findings",
     DAILY_SUMMARY_STEP: "Writing the daily summary",
-    HELD_COMMENT_STEP: "Decide whether a held comment counts",
+    HELD_COMMENT_STEP: "A reviewer's comment needs you",
     LIFECYCLE_FAILURE_STEP: "Look into a failed maintenance run",
 }
 
@@ -28,7 +28,7 @@ ENGINE_STEP_OUTCOMES = {
     MATERIAL_AUDIT_STEP: ("findings", "clean"),
     FINDINGS_STEP: ("done", "filed", "reviewed"),
     DAILY_SUMMARY_STEP: ("done", "abandoned"),
-    HELD_COMMENT_STEP: ("approve", "reject"),
+    HELD_COMMENT_STEP: ("dealt", "superseded", "withdrawn", "reject"),
     LIFECYCLE_FAILURE_STEP: ("done",),
 }
 

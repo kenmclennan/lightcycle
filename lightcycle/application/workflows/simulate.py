@@ -208,6 +208,7 @@ class WorkflowSimulateUseCase:
         return MonitorPrsUseCase(
             self._store, github, self._worktrees, self._flow, self._complete,
             trusted_authors=lambda: frozenset({"reviewer"}),
+            review_bots=lambda: frozenset(),
             held_shortcode=lambda: "HLD",
             writes=InlinePrWrites(github, time.monotonic),
             ci_clock=time.monotonic, ci_poll_seconds=lambda: 60,
@@ -260,7 +261,7 @@ class WorkflowSimulateUseCase:
         github = self._github_factory()
         github.script_ci_result(pr, (CheckRun(name="sim", status="completed", conclusion="success"),))
         if feedback:
-            github.script_feedback(pr, "please take a look")
+            github.script_feedback(pr, "@lc please take a look")
         try:
             self._monitor(github).execute()
         except UseCaseError as e:

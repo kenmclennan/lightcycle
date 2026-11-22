@@ -4,6 +4,10 @@ from typing import List
 from lightcycle.application.flow.cap_restart import last_gate_firing_key, step_order_key
 from lightcycle.application.flow.complete_step import CompleteInput
 from lightcycle.application.flow.escapes import EscapeRecorder
+from lightcycle.application.pool.feedback_window import (
+    already_admitted_keys,
+    feedback_window_start,
+)
 from lightcycle.application.pool.pr_lookups import (
     false_on_failure,
     flow_for,
@@ -11,19 +15,18 @@ from lightcycle.application.pool.pr_lookups import (
     skip_unpinned,
 )
 from lightcycle.application.pool.pr_sync_reads import PrSyncReads
+from lightcycle.application.pool.review_gates import ReviewGateRefreshUseCase
 from lightcycle.application.pool.stack_conflict import scan_stack
 from lightcycle.application.pool.stack_reads import read_stack
 from lightcycle.application.feedback.hold_comment import HoldCommentUseCase
 from lightcycle.application.work.gate_hold import GateHold, route_name
 from lightcycle.config import ConfigError
 from lightcycle.domain.feedback import (
-    ADMIT,
-    LC_MARKER,
     HeldComment,
+    gated,
     hold_key,
-    outstanding_reviews,
-    outstanding_threads,
-    standing,
+    roles_of,
+    routed,
 )
 from lightcycle.domain.flow import outcome_counts, pr_conflict_failures, total_outcome_count
 from lightcycle.domain.flow.hooks import PR_CONFLICT_CAP
@@ -43,13 +46,6 @@ def _unread_reason(pr, names):
 class DispatchPrFeedbackResponse:
     reworked: List[str] = field(default_factory=list)
     conflicted: List[str] = field(default_factory=list)
-
-
-def _epoch(value):
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return 0.0
 
 
 def _is_conflicted(sync, step):
@@ -82,8 +78,8 @@ def _candidate(run, kind, obj, path=None, line=None):
 
 class DispatchPrFeedbackUseCase:
     def __init__(
-        self, store, github, flow_service, complete, *, trusted_authors, held_shortcode,
-        poll_epoch, unread_note_polls,
+        self, store, github, flow_service, complete, *, trusted_authors, review_bots,
+        held_shortcode, poll_epoch, unread_note_polls,
     ):
         self._poll_epoch = poll_epoch
         self._unread_note_polls = unread_note_polls
@@ -94,7 +90,11 @@ class DispatchPrFeedbackUseCase:
         self._flow_service = flow_service
         self._complete = complete
         self._trusted_authors = trusted_authors
+        self._review_bots = review_bots
         self._hold = HoldCommentUseCase(store, held_shortcode)
+        self._gates = ReviewGateRefreshUseCase(
+            store, github, complete, trusted_authors=trusted_authors, review_bots=review_bots)
+        self._refreshed = set()
         self._escapes = EscapeRecorder(store)
         self._gate_hold = GateHold(store)
 
@@ -122,11 +122,13 @@ class DispatchPrFeedbackUseCase:
         return keyed
 
     def _outstanding_feedback(self, step, pr, flow, run):
-        since = self._github.last_push_time(pr)
-        if isinstance(since, ReadFailure):
-            self._note_gh_read_failure(step.id, since)
-            reason = _unread_reason(pr, ["last_push_time"]) if isinstance(since, NotYetRead) else None
+        last_push = self._github.last_push_time(pr)
+        if isinstance(last_push, ReadFailure):
+            self._note_gh_read_failure(step.id, last_push)
+            reason = (
+                _unread_reason(pr, ["last_push_time"]) if isinstance(last_push, NotYetRead) else None)
             return _Feedback(failed=True), reason
+        since = feedback_window_start(run, last_push)
         top_level = self._github.comments_since(pr, since)
         inline = self._github.pull_comments(pr, since)
         reviews = self._github.reviews(pr, since)
@@ -144,34 +146,24 @@ class DispatchPrFeedbackUseCase:
                 step.id, "feedback not read: config key trusted-authors is unset (%s)" % e)
             return _Feedback(failed=True), None
 
-        step_def = flow.step_def(step.stage)
-        mention_token = step_def.mention_token
+        roles = roles_of(trusted, self._review_bots())
+        mention_token = flow.step_def(step.stage).mention_token
+        feedback_step = flow.step_def(step.stage).pr_feedback
+        already = already_admitted_keys(self._store, feedback_step, step.item)
 
-        def admits(item):
-            return standing(item.author, trusted) == ADMIT
-
-        unmarked = [c for c in inline if LC_MARKER not in c.body]
-        mentions = [
-            c for c in top_level
-            if mention_token and LC_MARKER not in c.body and mention_token in c.body
-        ]
-        signalled = outstanding_reviews(reviews, inline, mention_token)
-
-        dispatched_through = _epoch(run.comments_dispatched_through)
+        routes = routed(top_level, inline, reviews, roles, mention_token)
         admitted = []
         for kind, items in (
-            ("inline", outstanding_threads([c for c in inline if admits(c)])),
-            ("review", [r for r in signalled if admits(r)]),
-            ("mention", [c for c in mentions if admits(c)]),
+            ("inline", routes.inline), ("review", routes.review), ("mention", routes.mention),
         ):
             admitted += self._keyed(
-                step, run, kind, [i for i in items if i.created_at > dispatched_through])
+                step, run, kind,
+                [i for i in items if hold_key(kind, i.id) not in already])
 
         origin = self._store.get_item(step.item)
+        gates = gated(top_level, inline, reviews, roles)
         for kind, items in (
-            ("inline", [c for c in unmarked if not admits(c)]),
-            ("review", [r for r in signalled if not admits(r)]),
-            ("mention", [c for c in mentions if not admits(c)]),
+            ("inline", gates.inline), ("review", gates.review), ("mention", gates.mention),
         ):
             for held in self._keyed(step, run, kind, items):
                 self._hold.execute(run, origin, pr, held)
@@ -302,6 +294,7 @@ class DispatchPrFeedbackUseCase:
     def execute(self, reads=None) -> DispatchPrFeedbackResponse:
         reads = reads or PrSyncReads(self._github)
         reworked, conflicted = [], []
+        self._refreshed = set()
         seen = set()
         scanned = set()
         for step in self._store.all_nodes():
@@ -350,6 +343,9 @@ class DispatchPrFeedbackUseCase:
                         reason = (
                             "%s feedback is waiting on %s - %s %s is still open for this item"
                             % (PR_FEEDBACK_PREFIX, pr_value, feedback_step, open_step.id))
+                if run.id not in self._refreshed:
+                    self._refreshed.add(run.id)
+                    self._gates.execute(step, pr_value, run)
                 if not held:
                     self._settle(step, reason)
                 seen.add(step.id)

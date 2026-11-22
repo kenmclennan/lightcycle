@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 
 from lightcycle.domain.feedback import HeldComment
 from lightcycle.domain.money import Cost
@@ -68,6 +69,16 @@ def held_comment(store, run_id, key):
         (run_id, key),
     ).fetchone()
     return HeldComment(*row) if row else None
+
+
+def seed_hold_state(store, step_id, state):
+    if not _is_sqlite(store):
+        hold = next(h for h in store._holds.values() if h.step_id == step_id)
+        store._holds[(hold.run_id, hold.key)] = replace(hold, state=state)
+        return
+    store._conn.execute(
+        "UPDATE held_comments SET state = ? WHERE step_id = ?", (state, step_id))
+    store._conn.commit()
 
 
 def held_comment_for_step(store, step_id):

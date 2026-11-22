@@ -41,17 +41,20 @@ class ConfigEditCase(unittest.TestCase):
         return self.uc.get(key).lines
 
 
+BLANK_LIST_SEEDS = ("review-bots",)
+
+
 class TestKindTable(unittest.TestCase):
     def test_kinds_and_seed_keys_name_the_same_keys(self):
         self.assertEqual(set(KEY_KINDS), {k for k, _ in _SEED_KEYS})
-        self.assertEqual(len(KEY_KINDS), 78)
+        self.assertEqual(len(KEY_KINDS), 79)
 
     def test_kind_sizes(self):
         sizes = {}
         for kind in KEY_KINDS.values():
             sizes[kind] = sizes.get(kind, 0) + 1
         self.assertEqual(sizes, {
-            "bool": 5, "int": 37, "float": 14, "path": 4, "relative-path": 7, "list": 2,
+            "bool": 5, "int": 37, "float": 14, "path": 4, "relative-path": 7, "list": 3,
             "str": 9})
 
 
@@ -59,7 +62,7 @@ class TestSeededKeys(ConfigEditCase):
     def test_every_seeded_key_round_trips(self):
         passed = 0
         for key, seed in _SEED_KEYS:
-            if key in NO_USABLE_DEFAULT:
+            if key in NO_USABLE_DEFAULT or key in BLANK_LIST_SEEDS:
                 continue
             values = seed.split() if KEY_KINDS[key] == "list" else [seed]
             result = self.uc.set(key, values)
@@ -153,6 +156,14 @@ class TestLists(ConfigEditCase):
         self.assertEqual(self.get("trusted-authors"), ("bob", "ken"))
         self.uc.remove("trusted-authors", "bob")
         self.assertEqual(self.get("trusted-authors"), ("ken",))
+
+    def test_review_bots_add_and_unset(self):
+        self.uc.add("review-bots", "Copilot")
+        self.assertEqual(self.get("review-bots"), ("copilot",))
+        self.uc.add("review-bots", "other[bot]")
+        self.assertEqual(self.get("review-bots"), ("copilot", "other[bot]"))
+        self.uc.unset("review-bots")
+        self.assertEqual(self.get("review-bots"), ())
 
     def test_add_on_a_non_list_refuses(self):
         for verb in (self.uc.add, self.uc.remove):

@@ -551,6 +551,15 @@ class TestRenamedShortcodeKey(unittest.TestCase):
         self.assertNotIn("summary-shortcode", seeds)
 
 
+class TestReviewBots(unittest.TestCase):
+    def test_review_bots_key_reads_empty_when_unset_and_casefolds(self):
+        self.assertEqual(_cfg().review_bots(), frozenset())
+        self.assertEqual(_cfg(review_bots="").review_bots(), frozenset())
+        self.assertEqual(
+            _cfg(review_bots="Copilot  Other[bot]").review_bots(),
+            frozenset({"copilot", "other[bot]"}))
+
+
 class TestTrustedAuthors(unittest.TestCase):
     def test_the_value_is_split_on_whitespace_and_casefolded(self):
         c = _cfg(trusted_authors="Alice  bob\tCarol")

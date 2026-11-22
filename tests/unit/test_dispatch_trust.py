@@ -1,4 +1,4 @@
-from tests.support.store_seed import held_comment, held_comment_for_step
+from tests.support.store_seed import held_comment, held_comment_for_step, seed_hold_state
 import unittest
 from tests.support.null_collaborators import NoopWorktrees
 
@@ -41,7 +41,7 @@ def _review(ts, author, rid, body="@lc needs work"):
 
 
 class _Base(unittest.TestCase):
-    def _build(self, github, trusted=lambda: _TRUSTED, flow=None):
+    def _build(self, github, trusted=lambda: _TRUSTED, flow=None, review_bots=None):
         self.flow = flow or _FEEDBACK_FLOW
         self.store = FakeStore()
         self.item = self.store.create_item("in-review feature", "a description")
@@ -50,7 +50,7 @@ class _Base(unittest.TestCase):
         self.adapter = _FlowAdapter(self.flow)
         self.uc = DispatchPrFeedbackUseCase(
             self.store, github, self.adapter, None,
-            trusted_authors=trusted, held_shortcode=lambda: "HLD",
+            trusted_authors=trusted, review_bots=review_bots or trusted, held_shortcode=lambda: "HLD",
             poll_epoch=lambda: 0, unread_note_polls=lambda: 3,
         )
         return self.uc
@@ -72,6 +72,9 @@ class _Base(unittest.TestCase):
         return found[0].value.split("\n") if found else None
 
     def _decide(self, hold_step, outcome):
+        if outcome == "approve":
+            seed_hold_state(self.store, hold_step, "approved")
+            return
         CompleteStepUseCase(self.store, self.adapter, worktrees=NoopWorktrees(), config=None).execute(
             _complete_input(hold_step, outcome))
 
@@ -129,12 +132,13 @@ class TestEachRouteAppliesTheSameRule(_Base):
                 self.assertEqual(self.uc.execute().reworked, [])
                 self.assertEqual(len(self._hold_steps()), 1)
 
-    def test_a_top_level_comment_without_the_mention_token_is_never_held(self):
+    def test_a_non_trusted_top_level_comment_without_the_mention_token_is_gated(self):
         gh = FakeGitHub(push_time=1000.0, timed_comments=[
             _mention(1500.0, "mallory", "c1", body="thanks, looks good")])
         self._build(gh)
         self.uc.execute()
-        self.assertEqual(self._hold_steps(), [])
+        self.assertEqual(len(self._hold_steps()), 1)
+        self.assertEqual(self._feedback_steps(), [])
 
 
 class TestMixedFeedback(_Base):
@@ -221,7 +225,9 @@ class TestWatermark(_Base):
     def test_a_trusted_comment_at_exactly_the_watermark_is_not_readmitted(self):
         gh = FakeGitHub(push_time=1000.0, timed_comments=[_mention(1500.0, "ken", "m1")])
         self._build(gh)
-        self.store.set_comments_dispatched_through(self.rid, str(1500.0))
+        self.assertEqual(self.uc.execute().reworked, [self.item])
+        for s in self._feedback_steps():
+            self.store.complete_node(s.id, "done")
         self.assertEqual(self.uc.execute().reworked, [])
 
     def test_an_approved_hold_at_exactly_the_watermark_still_dispatches(self):
@@ -283,8 +289,8 @@ class TestDecidingAHold(_Base):
         self.uc.execute()
         return self._hold_steps()[0]
 
-    def test_approve_and_reject_update_the_ledger_and_close_the_hold_item(self):
-        for outcome, state in (("approve", "approved"), ("reject", "rejected")):
+    def test_dealt_and_reject_update_the_ledger_and_close_the_hold_item(self):
+        for outcome, state in (("dealt", "dealt"), ("reject", "rejected")):
             with self.subTest(outcome=outcome):
                 hold = self._held()
                 self._decide(hold.id, outcome)
@@ -296,7 +302,7 @@ class TestDecidingAHold(_Base):
         hold = self._held()
         with self.assertRaises(UseCaseError) as caught:
             self._decide(hold.id, "done")
-        self.assertIn("approve, reject", str(caught.exception))
+        self.assertIn("dealt, superseded, withdrawn, reject", str(caught.exception))
         self.assertEqual(held_comment(self.store, self.rid, "mention:m1").state, "held")
 
     def test_the_hold_item_describes_the_comment_as_untrusted_text(self):

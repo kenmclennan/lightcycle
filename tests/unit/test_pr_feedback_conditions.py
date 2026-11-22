@@ -47,7 +47,7 @@ class _Rig:
         self.now = 0.0
         self.dispatch = DispatchPrFeedbackUseCase(
             self.store, self.snapshot, _FlowAdapter(_FEEDBACK_FLOW), None,
-            trusted_authors=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
+            trusted_authors=lambda: frozenset({"reviewer"}), review_bots=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
             poll_epoch=self.epoch, unread_note_polls=lambda: 3)
 
     def gate(self, pr, plant=True):
@@ -221,7 +221,9 @@ class TestSilentSkipsRecordACondition(unittest.TestCase):
         rig.dispatch.execute()
         opened = rig.feedback_steps(item)
         self.assertEqual(len(opened), 1)
-        rig.store.set_comments_dispatched_through(rig.store.runs_of(item)[0].id, "0")
+        rig.github._timed_comments.append(_mention(1600.0))
+        rig.github._updated_ats[_FIRST] = 2.0
+        rig.poll_once(_FIRST)
 
         self._run_epochs(rig, [5, 7])
         self.assertEqual(rig.conditions(step), [])

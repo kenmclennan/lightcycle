@@ -56,6 +56,15 @@ class FeedbackAggregate:
     def decide_hold(self, step_id, state):
         self._transition_hold("step_id = ?", (step_id,), state)
 
+    def update_hold_body(self, run_id, key, body):
+        cur = self._conn.execute(
+            "UPDATE held_comments SET body = ? WHERE run_id = ? AND key = ? AND state = ?",
+            (body, run_id, key, HELD),
+        )
+        self._commit()
+        if cur.rowcount != 1:
+            raise StoreError("no open held comment for %s" % ((run_id, key),))
+
     def mark_hold_dispatched(self, run_id, key):
         self._transition_hold("run_id = ? AND key = ?", (run_id, key), DISPATCHED)
 

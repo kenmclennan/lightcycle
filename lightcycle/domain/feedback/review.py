@@ -1,6 +1,7 @@
 import re
 
 LC_MARKER = "<!-- lc -->"
+AUTOMATED_PREFIX = "AUTOMATED:"
 
 _DECISION_RE = re.compile(r"<!-- lc:decision=(\w+) -->")
 _SHA_RE = re.compile(r"<!-- lc:sha=(\w+) -->")
@@ -20,6 +21,14 @@ def outstanding_threads(comments):
             continue
         latest[key] = c
     return list(latest.values())
+
+
+def is_engine_marked(comment):
+    return LC_MARKER in comment.body
+
+
+def review_gate_wanted(review):
+    return review.state == "CHANGES_REQUESTED" or bool(review.body.strip())
 
 
 def review_has_signal(review):

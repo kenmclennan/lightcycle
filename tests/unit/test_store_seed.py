@@ -10,6 +10,7 @@ from tests.support.store_seed import (
     held_comment_for_step,
     seed_attribution,
     seed_day_summary_claim,
+    seed_hold_state,
     seed_usage,
 )
 
@@ -111,7 +112,7 @@ class StoreSeedBase:
         approved = self._hold(s, "mention:1", 1.0)
         self._hold(s, "mention:2", 2.0)
         rejected = self._hold(s, "mention:3", 3.0)
-        s.decide_hold(approved, "approved")
+        seed_hold_state(s, approved, "approved")
         s.mark_hold_dispatched("R-1", "mention:1")
         s.decide_hold(rejected, "rejected")
         self.assertEqual(held_comment(s, "R-1", "mention:1").state, "dispatched")

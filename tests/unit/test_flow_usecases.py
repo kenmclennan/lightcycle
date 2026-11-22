@@ -540,7 +540,7 @@ class TestEngineStepOutcomes(unittest.TestCase):
                 MATERIAL_AUDIT_STEP: ("findings", "clean"),
                 FINDINGS_STEP: ("done", "filed", "reviewed"),
                 DAILY_SUMMARY_STEP: ("done", "abandoned"),
-                HELD_COMMENT_STEP: ("approve", "reject"),
+                HELD_COMMENT_STEP: ("dealt", "superseded", "withdrawn", "reject"),
                 LIFECYCLE_FAILURE_STEP: ("done",),
             },
         )

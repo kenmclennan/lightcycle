@@ -77,12 +77,14 @@ Lanes run over **steps only** - items never appear in a lane (they live in `lc b
 
 ## A held comment's own lifecycle
 
-A held comment (the `held_comments` row, see the ontology) has a four-state machine of its own, separate from the node `state`: `held` goes to `approved` or `rejected` when a human completes the hold step (`lc done <step> approve|reject`), and `approved` goes to `dispatched` when the pool opens a `handle-feedback` step carrying it. Any other transition is refused by the store. `rejected` and `dispatched` are terminal. `comments_dispatched_through` advances only past trusted-admitted comments; the ledger, not that watermark, governs a held comment, so an approved comment older than the watermark or the last push still dispatches.
+A held comment (the `held_comments` row, see the ontology) has a state machine of its own, separate from the node `state`: `held` goes to `dealt` or `rejected` when a human completes the review gate (`lc done <step> dealt|reject`), and to `superseded` or `withdrawn` only when the engine closes the gate, because an operator answered in the thread or the reviewer deleted the comment. Approving a comment is retired and refused. A row already `approved` before the retirement still goes to `dispatched` when the pool opens a `handle-feedback` step carrying it. Any other transition is refused by the store; every state but `held` and `approved` is terminal. Comments an operator or review bot routes by `@lc` (or by being a bot) are admitted by the pool and never enter the ledger.
 
 ```mermaid
 graph LR
-  held -->|approve| approved
+  held -->|dealt| dealt
   held -->|reject| rejected
+  held -->|operator replies in thread| superseded
+  held -->|comment deleted| withdrawn
   approved -->|dispatch| dispatched
 ```
 

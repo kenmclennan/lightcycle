@@ -758,6 +758,10 @@ class Config:
     def trusted_authors(self):
         return frozenset(a.casefold() for a in self._required_str("trusted-authors").split())
 
+    def review_bots(self):
+        raw = self.load_config().get("review-bots") or ""
+        return frozenset(a.casefold() for a in raw.split())
+
     def seed_trusted_authors(self, login):
         if self.load_config().get("trusted-authors"):
             return False

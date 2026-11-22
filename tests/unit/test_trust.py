@@ -32,10 +32,11 @@ class TestStanding(unittest.TestCase):
 
 class TestTransitions(unittest.TestCase):
     def test_only_the_documented_transitions_are_legal(self):
-        self.assertTrue(can_transition("held", "approved"))
-        self.assertTrue(can_transition("held", "rejected"))
+        for target in ("dealt", "superseded", "withdrawn", "rejected"):
+            self.assertTrue(can_transition("held", target), target)
+        self.assertFalse(can_transition("held", "approved"))
         self.assertTrue(can_transition("approved", "dispatched"))
         self.assertFalse(can_transition("held", "dispatched"))
-        self.assertFalse(can_transition("rejected", "approved"))
+        self.assertFalse(can_transition("rejected", "dealt"))
         self.assertFalse(can_transition("dispatched", "held"))
         self.assertFalse(can_transition("approved", "rejected"))

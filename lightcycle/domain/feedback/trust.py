@@ -9,10 +9,13 @@ HELD_COMMENT_ORIGIN_LABEL = "held-comment-origin"
 HELD = "held"
 APPROVED = "approved"
 REJECTED = "rejected"
+DEALT = "dealt"
+SUPERSEDED = "superseded"
+WITHDRAWN = "withdrawn"
 DISPATCHED = "dispatched"
 
 _TRANSITIONS = {
-    HELD: (APPROVED, REJECTED),
+    HELD: (DEALT, SUPERSEDED, WITHDRAWN, REJECTED),
     APPROVED: (DISPATCHED,),
 }
 

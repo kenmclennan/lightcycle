@@ -242,6 +242,7 @@ class Container:
             monitor=MonitorPrsUseCase(
                 self.store, snapshot, worktrees, flow, complete,
                 trusted_authors=self.config.trusted_authors,
+                review_bots=self.config.review_bots,
                 held_shortcode=self.config.held_comment_shortcode, writes=writes,
                 ci_clock=self.monotonic, ci_poll_seconds=self.config.github_poll_seconds,
                 ci_ceiling_seconds=self.config.ci_check_ceiling_seconds,

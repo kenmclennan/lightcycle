@@ -83,7 +83,7 @@ class ResolveCiUseCase:
     def __init__(
         self, store, github, flow_service, complete, *, close_item, clock, poll_seconds, ci_ceiling_seconds,
         ci_start_window_seconds, ci_no_workflows_wait_seconds, wall_clock, views, trusted_authors,
-        ci_unconfirmed_note_polls,
+        review_bots, ci_unconfirmed_note_polls,
     ):
         self._store = store
         self._github = github
@@ -99,7 +99,8 @@ class ResolveCiUseCase:
         self._wall_clock = wall_clock
         self._views = views
         self._skip_idle = SkipIdleCiWatchUseCase(
-            store, github, flow_service, complete, trusted_authors=trusted_authors)
+            store, github, flow_service, complete, trusted_authors=trusted_authors,
+            review_bots=review_bots)
         self._unread = {}
         self._unread_run = {}
         self._noted = {}

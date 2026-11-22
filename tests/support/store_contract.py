@@ -7,7 +7,7 @@ from lightcycle.domain.work import NodeSpec
 from lightcycle.domain.work.cost import step_cost
 from lightcycle.ports.store import NodeNotFoundError, StoreError
 from tests.support.step_factory import create_owned_step
-from tests.support.store_seed import held_comment, held_comment_for_step, seed_attribution, seed_day_summary_claim, seed_usage
+from tests.support.store_seed import held_comment, held_comment_for_step, seed_attribution, seed_day_summary_claim, seed_hold_state, seed_usage
 
 
 class StoreContractBase:
@@ -1802,17 +1802,16 @@ class StoreContractBase:
         self.assertIsNone(held_comment_for_step(s, "nope"))
         self.assertEqual([h.key for h in s.open_holds("R-1")], ["inline:1"])
         self.assertEqual(s.approved_holds("R-1"), [])
-        s.decide_hold(step, "approved")
+        seed_hold_state(s, step, "approved")
         self.assertEqual([h.key for h in s.approved_holds("R-1")], ["inline:1"])
         self.assertEqual(s.open_holds("R-1"), [])
-        self.assertIsNotNone(held_comment(s, "R-1", "inline:1").decided_at)
 
     def test_approved_holds_come_back_oldest_first(self):
         s = self.make_store()
         late = self._filed_hold(s, key="mention:2", created_at=20.0)
         early = self._filed_hold(s, key="mention:1", created_at=10.0)
-        s.decide_hold(late, "approved")
-        s.decide_hold(early, "approved")
+        seed_hold_state(s, late, "approved")
+        seed_hold_state(s, early, "approved")
         self.assertEqual([h.key for h in s.approved_holds("R-1")], ["mention:1", "mention:2"])
 
     def test_only_the_documented_transitions_are_legal(self):
@@ -1820,27 +1819,53 @@ class StoreContractBase:
         step = self._filed_hold(s)
         with self.assertRaises(StoreError):
             s.mark_hold_dispatched("R-1", "inline:1")
-        s.decide_hold(step, "approved")
+        with self.assertRaises(StoreError):
+            s.decide_hold(step, "approved")
+        seed_hold_state(s, step, "approved")
         with self.assertRaises(StoreError):
             s.decide_hold(step, "rejected")
         s.mark_hold_dispatched("R-1", "inline:1")
         self.assertEqual(held_comment(s, "R-1", "inline:1").state, "dispatched")
         with self.assertRaises(StoreError):
-            s.decide_hold(step, "approved")
+            s.decide_hold(step, "dealt")
+
+    def test_a_held_comment_closes_into_each_terminal_state_once(self):
+        for state in ("dealt", "superseded", "withdrawn", "rejected"):
+            with self.subTest(state=state):
+                s = self.make_store()
+                step = self._filed_hold(s)
+                s.decide_hold(step, state)
+                self.assertEqual(held_comment(s, "R-1", "inline:1").state, state)
+                self.assertIsNotNone(held_comment(s, "R-1", "inline:1").decided_at)
+                self.assertEqual(s.open_holds("R-1"), [])
+                with self.assertRaises(StoreError):
+                    s.decide_hold(step, "dealt")
+
+    def test_update_hold_body_changes_an_open_hold_and_refuses_a_closed_one(self):
+        s = self.make_store()
+        step = self._filed_hold(s)
+        s.update_hold_body("R-1", "inline:1", "edited")
+        self.assertEqual(held_comment(s, "R-1", "inline:1").body, "edited")
+        with self.assertRaises(StoreError):
+            s.update_hold_body("R-1", "inline:9", "x")
+        s.decide_hold(step, "dealt")
+        with self.assertRaises(StoreError):
+            s.update_hold_body("R-1", "inline:1", "late")
+        self.assertEqual(held_comment(s, "R-1", "inline:1").body, "edited")
 
     def test_a_rejected_hold_is_terminal_and_never_deleted(self):
         s = self.make_store()
         step = self._filed_hold(s)
         s.decide_hold(step, "rejected")
         with self.assertRaises(StoreError):
-            s.decide_hold(step, "approved")
+            s.decide_hold(step, "dealt")
         self.assertFalse(s.file_hold("R-1", "inline:1", "mallory", "do it", None, None, 10.0))
         self.assertEqual(held_comment(s, "R-1", "inline:1").state, "rejected")
 
     def test_deciding_an_unknown_step_is_refused(self):
         s = self.make_store()
         with self.assertRaises(StoreError):
-            s.decide_hold("nope", "approved")
+            s.decide_hold("nope", "dealt")
 
     def test_hold_writes_roll_back_with_the_transaction(self):
         s = self.make_store()
