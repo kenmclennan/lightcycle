@@ -45,7 +45,7 @@ Workflows are not shadowed or resolved through a chain: each item pins one sha-p
 
 ### Changing one key
 
-`lc config get <key>` prints the resolved value (a list key prints one entry per line; an environment override is noted on stderr). `lc config set <key> <value>` validates the value against the key's type and range before writing, and refuses an unknown key or a bad value without touching the file. `lc config unset <key>` writes the key's seed value back and prints it; `trusted-authors` and `workflows-remote` have no usable seed, so `unset` refuses on them. `lc config add <list-key> <value>` and `lc config remove <list-key> <value>` change `trusted-authors` and `context-artifact-types`; removing the last entry refuses.
+`lc config get <key>` prints the resolved value (a list key prints one entry per line; an environment override is noted on stderr). `lc config set <key> <value>` validates the value against the key's type and range before writing, and refuses an unknown key or a bad value without touching the file. `lc config unset <key>` writes the key's seed value back and prints it; `trusted-authors` and `workflows-remote` have no usable seed, so `unset` refuses on them. `lc config add <list-key> <value>` and `lc config remove <list-key> <value>` change `trusted-authors`, `review-bots` and `context-artifact-types`; removing the last entry refuses.
 
 `add`, `remove` and `unset` with nothing to do (the value already present, already absent, or the key already at its seed) leave the file byte-identical, print one line saying nothing changed and exit 0, so a script that runs them twice does not fail the second time. Refusals stay for real errors: an unknown key, a wrong type, and the cases above.
 
