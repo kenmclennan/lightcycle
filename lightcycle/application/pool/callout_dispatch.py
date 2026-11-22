@@ -19,8 +19,10 @@ from lightcycle.domain.work.callout_response import (
     CalloutResponse,
     validate_callout_response,
 )
+from lightcycle.domain.money import Cost
 from lightcycle.domain.work.callout_runs import (
     CALLOUT_RUNS,
+    COST_BASIS_REPORTED,
     INTERRUPTED_MESSAGE,
     PHASE_PREFLIGHT,
     PHASE_RUN,
@@ -131,6 +133,7 @@ class CalloutDispatchUseCase:
         if not isinstance(parsed, CalloutResponse):
             return self._record_failure(
                 step.id, callout_id, record, "invalid response: %s" % parsed, now)
+        record = self._record_usage(step.id, record, parsed.usage)
         if parsed.status == STATUS_FAILED:
             return self._record_failure(
                 step.id, callout_id, record, parsed.message, now, parsed.errors)
@@ -139,6 +142,17 @@ class CalloutDispatchUseCase:
             status=STATUS_OK, message=parsed.message or None, finished=now,
             artifacts=[
                 {"label": a.label, "kind": a.kind, "value": a.value} for a in parsed.artifacts])
+        return record
+
+    def _record_usage(self, step_id, record, usage):
+        if usage is None:
+            return record
+        if Cost.from_usd(usage.cost_usd):
+            self._store.record_step_cost(step_id, usage.cost_usd, COST_BASIS_REPORTED)
+        record = dict(record)
+        record["cost_usd"] = usage.cost_usd
+        if usage.model is not None:
+            record["model"] = usage.model
         return record
 
     def _abandon_if_overdue(self, step, callout_id, record, key, now, sleeps):

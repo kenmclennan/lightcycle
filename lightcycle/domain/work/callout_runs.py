@@ -6,6 +6,7 @@ STATUS_OK = "ok"
 STATUS_FAILED = "failed"
 PHASE_PREFLIGHT = "preflight"
 PHASE_RUN = "run"
+COST_BASIS_REPORTED = "reported"
 INTERRUPTED_MESSAGE = "interrupted by a pool restart"
 
 

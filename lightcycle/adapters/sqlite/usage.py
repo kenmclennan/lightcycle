@@ -147,6 +147,14 @@ class UsageAggregate:
             self._conn.rollback()
             raise
 
+    def record_step_cost(self, step_id, cost_usd, cost_basis):
+        self._conn.execute(
+            "UPDATE steps SET usage_cost_usd = usage_cost_usd + ?, "
+            "usage_cost_basis = COALESCE(usage_cost_basis, ?) WHERE id = ?",
+            (cost_usd, cost_basis, step_id),
+        )
+        self._commit()
+
     def usage_accrual_state(self, spawnid):
         row = self._conn.execute(
             "SELECT log_file, offset, message_ids, pending_tool_use, posted_turn_count, "

@@ -6,7 +6,14 @@ from lightcycle.domain.flow.step_def import StepDef
 from lightcycle.domain.work import State
 from lightcycle.ports.github import StackLayer
 from lightcycle.ports.script_runner import ScriptResult
-from tests.support.callout_rig import CalloutRig, callout, ok, preflight_failed, preflight_ok
+from tests.support.callout_rig import (
+    CalloutRig,
+    callout,
+    ok,
+    preflight_failed,
+    preflight_ok,
+    with_usage,
+)
 from tests.support.fake_script_runner import FakeScriptRunner
 
 
@@ -317,6 +324,115 @@ class TestFailures(unittest.TestCase):
         self.assertEqual(rows, [
             ("callout:a:1", "myapp://1"), ("callout:a:2", "t"),
             ("callout:b", "failed: exited with code 2")])
+
+
+class TestUsageCost(unittest.TestCase):
+    def _run(self, *callout_ids):
+        rig = CalloutRig([callout(c, "pr") for c in callout_ids or ("a",)])
+        step = rig.gate()
+        rig.use_case.execute(100)
+        rig.pass_preflight(step, 101, *callout_ids)
+        return rig, step
+
+    def _cost(self, rig, step):
+        return rig.store.get_step(step).usage_cost_usd.to_usd()
+
+    def test_an_ok_response_with_usage_adds_cost_with_reported_basis_and_changes_nothing_else(self):
+        rig, step = self._run()
+        before = rig.store.get_step(step)
+        self.assertEqual(before.state, State.WAITING)
+        rig.runner.finish(rig.key(step), with_usage(ok(), cost_usd=0.42, model="m"))
+
+        rig.use_case.execute(102)
+
+        after = rig.store.get_step(step)
+        self.assertEqual(after.usage_cost_usd.to_usd(), 0.42)
+        self.assertEqual(after.usage_cost_basis, "reported")
+        self.assertEqual(after.state, State.WAITING)
+        self.assertEqual(after.outcome, before.outcome)
+        self.assertEqual(after.turn_count, 0)
+        self.assertEqual(after.usage_input_tokens, 0)
+        self.assertEqual(rig.records(step)["a"]["cost_usd"], 0.42)
+        self.assertEqual(rig.records(step)["a"]["model"], "m")
+
+    def test_a_failed_response_with_usage_also_records_it(self):
+        rig, step = self._run()
+        rig.runner.finish(rig.key(step), with_usage(ok(), status="failed", cost_usd=0.1))
+
+        rig.use_case.execute(102)
+
+        self.assertEqual(rig.records(step)["a"]["status"], "failed")
+        self.assertEqual(self._cost(rig, step), 0.1)
+        self.assertEqual(rig.records(step)["a"]["cost_usd"], 0.1)
+
+    def test_exit_timeout_and_invalid_output_record_nothing(self):
+        results = [
+            ScriptResult(exit_code=2),
+            ScriptResult(exit_code=None, timed_out=True),
+            ScriptResult(exit_code=0, stdout='{"status": "ok", "usage": {"cost_usd": -1}}'),
+        ]
+        for result in results:
+            with self.subTest(result=result):
+                rig, step = self._run()
+                rig.runner.finish(rig.key(step), result)
+
+                rig.use_case.execute(102)
+
+                self.assertEqual(self._cost(rig, step), 0)
+                self.assertIsNone(rig.store.get_step(step).usage_cost_basis)
+                self.assertNotIn("cost_usd", rig.records(step)["a"])
+
+    def test_an_ok_response_without_usage_records_nothing(self):
+        rig, step = self._run()
+        rig.runner.finish(rig.key(step), ok())
+
+        rig.use_case.execute(102)
+
+        self.assertEqual(self._cost(rig, step), 0)
+        self.assertNotIn("cost_usd", rig.records(step)["a"])
+
+    def test_several_callouts_on_one_gate_sum_and_keep_their_own_figures(self):
+        rig, step = self._run("a", "b", "c")
+        rig.runner.finish(rig.key(step, "a"), with_usage(ok(), cost_usd=0.4))
+        rig.runner.finish(rig.key(step, "b"), with_usage(ok(), status="failed", cost_usd=0.1))
+        rig.runner.finish(rig.key(step, "c"), ScriptResult(exit_code=0, stdout=json.dumps(
+            {"status": "failed", "message": "no"})))
+
+        rig.use_case.execute(102)
+
+        records = rig.records(step)
+        self.assertAlmostEqual(self._cost(rig, step), 0.5)
+        self.assertEqual(records["a"]["cost_usd"], 0.4)
+        self.assertEqual(records["b"]["cost_usd"], 0.1)
+        self.assertNotIn("cost_usd", records["c"])
+
+    def test_a_cost_that_rounds_to_zero_is_not_written_but_stays_on_the_record(self):
+        rig, step = self._run()
+        rig.runner.finish(rig.key(step), with_usage(ok(), cost_usd=0.0000001))
+
+        rig.use_case.execute(102)
+
+        self.assertEqual(self._cost(rig, step), 0)
+        self.assertIsNone(rig.store.get_step(step).usage_cost_basis)
+        self.assertEqual(rig.records(step)["a"]["cost_usd"], 0.0000001)
+
+    def test_a_second_tick_does_not_add_the_cost_again(self):
+        rig, step = self._run()
+        rig.runner.finish(rig.key(step), with_usage(ok(), cost_usd=0.42))
+
+        rig.use_case.execute(102)
+        rig.use_case.execute(103)
+
+        self.assertEqual(self._cost(rig, step), 0.42)
+
+    def test_a_run_interrupted_by_a_restart_records_no_cost(self):
+        rig, step = self._run()
+        rig.runner.orphan_running()
+
+        rig.use_case.execute(102)
+
+        self.assertEqual(self._cost(rig, step), 0)
+        self.assertNotIn("cost_usd", rig.records(step)["a"])
 
 
 class TestPreflight(unittest.TestCase):

@@ -42,3 +42,33 @@ class TestCalloutThroughTheRealRunner(unittest.TestCase):
         record = rig.records(step)["a"]
         self.assertEqual(record["status"], "ok", record)
         self.assertEqual(record["artifacts"][0]["value"], "myapp://open?x=1")
+
+    def test_a_real_script_usage_lands_on_the_gate_step(self):
+        directory = tempfile.mkdtemp()
+        home = tempfile.mkdtemp()
+        script = os.path.join(directory, "callout.sh")
+        with open(script, "w") as f:
+            f.write(
+                "#!/bin/sh\ncat >/dev/null\n"
+                'echo \'{"status":"ok","usage":{"cost_usd":0.42,"model":"m"}}\'\n')
+        os.chmod(script, os.stat(script).st_mode | stat.S_IXUSR)
+        runner = ScriptRunnerAdapter(
+            Config(environ={"LC_HOME": home, "LC_WORKER_HISTORY": "20"}), RunGroupsAdapter())
+        real = callout("a", "pr")
+        real = type(real)(
+            id="a", command=script, subject="pr", principal_outputs=("code",), wait=False,
+            timeout=30)
+        rig = CalloutRig([real], runner=runner)
+        step = rig.gate()
+
+        rig.use_case.execute(100)
+        for tick in range(300):
+            rig.use_case.execute(101 + tick)
+            if rig.records(step)["a"]["status"] != "running":
+                break
+            time.sleep(0.02)
+
+        stored = rig.store.get_step(step)
+        self.assertEqual(rig.records(step)["a"]["status"], "ok")
+        self.assertEqual(stored.usage_cost_usd.to_usd(), 0.42)
+        self.assertEqual(stored.usage_cost_basis, "reported")

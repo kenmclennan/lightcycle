@@ -254,6 +254,10 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def record_step_cost(self, step_id, cost_usd, cost_basis):
+        pass
+
+    @abstractmethod
     def usage_accrual_state(self, spawnid):
         pass
 

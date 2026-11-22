@@ -1,7 +1,8 @@
 import json
+import math
 import re
 from dataclasses import dataclass
-from typing import Tuple
+from typing import Optional, Tuple
 
 PROTOCOL = 2
 STATUSES = ("ok", "failed")
@@ -10,6 +11,7 @@ MAX_ARTIFACTS = 20
 MAX_VALUE_CHARS = 65536
 MAX_LABEL_CHARS = 80
 MAX_ERRORS = 20
+MAX_USAGE_COST_USD = 1000000
 MAX_ERROR_CHARS = 500
 _LINK = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://\S+$")
 
@@ -28,11 +30,18 @@ class CalloutError:
 
 
 @dataclass(frozen=True)
+class CalloutUsage:
+    cost_usd: float
+    model: Optional[str] = None
+
+
+@dataclass(frozen=True)
 class CalloutResponse:
     status: str
     message: str
     artifacts: Tuple[CalloutArtifact, ...] = ()
     errors: Tuple[CalloutError, ...] = ()
+    usage: Optional[CalloutUsage] = None
 
 
 @dataclass(frozen=True)
@@ -102,6 +111,24 @@ def _artifact_problem(index, raw):
     return None
 
 
+def _usage_of(raw):
+    if not isinstance(raw, dict):
+        return "usage must be an object"
+    cost = raw.get("cost_usd")
+    if (
+        isinstance(cost, bool) or not isinstance(cost, (int, float))
+        or not math.isfinite(cost) or cost < 0 or cost > MAX_USAGE_COST_USD
+    ):
+        return "usage cost_usd must be a number between 0 and %d" % MAX_USAGE_COST_USD
+    model = raw.get("model")
+    if model is not None:
+        if not isinstance(model, str) or not model:
+            return "usage model must be a non-empty string"
+        if len(model) > MAX_LABEL_CHARS:
+            return "usage model is longer than %d characters" % MAX_LABEL_CHARS
+    return CalloutUsage(cost_usd=cost, model=model)
+
+
 def validate_callout_response(text):
     try:
         raw = json.loads(text)
@@ -132,7 +159,12 @@ def validate_callout_response(text):
         problem = _artifact_problem(index, artifact)
         if problem:
             return problem
+    usage = None
+    if "usage" in raw:
+        usage = _usage_of(raw["usage"])
+        if isinstance(usage, str):
+            return usage
     return CalloutResponse(
         status=status, message=message,
         artifacts=tuple(CalloutArtifact(a["label"], a["kind"], a["value"]) for a in artifacts),
-        errors=_errors_of(errors))
+        errors=_errors_of(errors), usage=usage)

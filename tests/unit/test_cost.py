@@ -141,10 +141,34 @@ class TestStepCost(unittest.TestCase):
 
 
 class TestItemCost(unittest.TestCase):
-    def test_human_step_contributes_nothing(self):
+    def test_human_step_that_ran_as_an_agent_contributes_to_the_item_total(self):
         steps = [_FakeStep(role="human", turn_count=1, usage_cost_usd=Cost.from_usd(5.0), usage_cost_basis="list")]
         result = item_cost(steps)
+        self.assertEqual(result.turn_count, 1)
+        self.assertEqual(result.cost_usd, Cost.from_usd(5.0))
+        self.assertEqual(len(result.stages), 1)
+
+    def test_human_gate_that_never_ran_contributes_nothing(self):
+        steps = [_FakeStep(role="human", turn_count=0, usage_cost_usd=Cost.from_usd(0.0), usage_cost_basis=None)]
+        result = item_cost(steps)
         self.assertEqual(result.turn_count, 0)
+        self.assertEqual(result.stages, ())
+
+    def test_human_gate_with_a_reported_cost_is_summed_with_agent_steps(self):
+        steps = [
+            _FakeStep(role="agent", turn_count=1, usage_cost_usd=Cost.from_usd(1.0), usage_cost_basis="list"),
+            _FakeStep(stage="gate", role="human", usage_cost_usd=Cost.from_usd(0.5), usage_cost_basis="reported"),
+        ]
+        result = item_cost(steps)
+        self.assertEqual(result.cost_usd, Cost.from_usd(1.5))
+        self.assertIn("gate", [row.stage for row in result.stages])
+        self.assertEqual(result.not_recorded_count, 0)
+        self.assertEqual(result.list_count, 1)
+
+    def test_engine_step_with_a_reported_cost_still_contributes_nothing(self):
+        steps = [_FakeStep(role="engine", usage_cost_usd=Cost.from_usd(0.5), usage_cost_basis="reported")]
+        result = item_cost(steps)
+        self.assertEqual(result.cost_usd, Cost())
         self.assertEqual(result.stages, ())
 
     def test_engine_step_contributes_nothing(self):

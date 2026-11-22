@@ -61,6 +61,15 @@ def ok(*artifacts):
         "artifacts": [{"label": l, "kind": k, "value": v} for l, k, v in artifacts]}))
 
 
+def with_usage(result, status=None, **usage):
+    body = json.loads(result.stdout)
+    body["usage"] = usage
+    if status:
+        body["status"] = status
+        body["message"] = "boom"
+    return ScriptResult(exit_code=0, stdout=json.dumps(body))
+
+
 def preflight_ok():
     return ScriptResult(exit_code=0, stdout=json.dumps({"status": "ok"}))
 
