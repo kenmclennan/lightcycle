@@ -216,6 +216,9 @@ class PrSnapshot(GitHubEventsPort):
     def pr_files(self, pr):
         return self._github.pr_files(pr)
 
+    def own_files(self, pr, sha):
+        return self._github.own_files(pr, sha)
+
     def pr_view(self, pr):
         return self._github.pr_view(pr)
 

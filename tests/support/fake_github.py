@@ -4,7 +4,7 @@ from lightcycle.ports.github import GitHubEventsPort, ListedPr, PrSync, PrView, 
 
 class FakeGitHub(GitHubEventsPort):
     def __init__(self, merged_prs=(), closed_prs=(), conflicted_prs=(), push_time=0.0,
-                 timed_comments=None, timed_reviews=None, head_shas=None, files_by_sha=None,
+                 timed_comments=None, timed_reviews=None, head_shas=None, files_by_sha=None, own_files_by_sha=None,
                  check_runs_by_sha=None, failing_calls=(), issue_states=None,
                  behind_prs=(), strict_bases=(), base_keys=None, login="operator",
                  updated_ats=None, failing_prs=(), required_by_base=None,
@@ -26,6 +26,7 @@ class FakeGitHub(GitHubEventsPort):
         self._lagging = set(lagging_prs)
         self._branch_shas = branch_shas if branch_shas is not None else {}
         self._files_by_sha = files_by_sha or {}
+        self._own_files_by_sha = own_files_by_sha or {}
         self._check_runs_by_sha = check_runs_by_sha or {}
         self._workflows_by_sha = workflows_by_sha or {}
         self._runs_by_sha = runs_by_sha or {}
@@ -207,6 +208,14 @@ class FakeGitHub(GitHubEventsPort):
         self._record("changed_files", pr, sha)
         if "changed_files" in self._failing_calls:
             return ReadFailure(1, "boom")
+        return self._files_by_sha.get((pr, sha), frozenset())
+
+    def own_files(self, pr, sha):
+        self._record("own_files", pr, sha)
+        if "own_files" in self._failing_calls:
+            return ReadFailure(1, "boom")
+        if (pr, sha) in self._own_files_by_sha:
+            return frozenset(self._own_files_by_sha[(pr, sha)])
         return self._files_by_sha.get((pr, sha), frozenset())
 
     def pr_files(self, pr):

@@ -282,6 +282,15 @@ class TestPrFilesPassThrough(unittest.TestCase):
         self.assertEqual(snap.take_wanted().files, frozenset())
 
 
+def test_own_files_passes_through_to_the_port():
+    github = FakeGitHub(own_files_by_sha={(_PR, "h1"): frozenset({"a.py"})})
+    snap = PrSnapshot(github)
+
+    assert snap.own_files(_PR, "h1") == frozenset({"a.py"})
+
+    assert github.calls == [("own_files", _PR, "h1")]
+
+
 class TestDiffSignatureRead(unittest.TestCase):
     def setUp(self):
         self.github = FakeGitHub()

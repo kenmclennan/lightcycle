@@ -175,6 +175,11 @@ class CheckContentPinUseCase:
         if isinstance(old_files, ReadFailure) or isinstance(new_files, ReadFailure):
             return False
         dropped = old_files - new_files
+        if dropped:
+            own = self._github.own_files(pr_value, pin)
+            if isinstance(own, ReadFailure):
+                return False
+            dropped = dropped & own
         if dropped and retained is not None:
             carried = retained(dropped)
             if carried is None:
