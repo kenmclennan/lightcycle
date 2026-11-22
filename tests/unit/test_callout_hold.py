@@ -66,3 +66,22 @@ class TestCalloutHold(unittest.TestCase):
         self.assertEqual(rig.store.get_node(step).state, State.WAITING)
 
         self.assertIn(step, self._rows(rig))
+
+
+class TestCleanupNeverHolds(unittest.TestCase):
+    def test_a_running_cleanup_of_a_waiting_callout_is_not_a_hold(self):
+        import time
+        from lightcycle.application.work.callout_hold import callout_hold_step_ids
+
+        rig = CalloutRig([callout("a", "pr", wait=True)])
+        step = rig.gate()
+        rig.use_case.execute(100)
+        rig.pass_preflight(step, 101)
+        rig.runner.finish(rig.key(step), ok())
+        rig.use_case.execute(102)
+        rig.store.complete_node(step, "approved")
+
+        rig.use_case.execute(time.time())
+
+        self.assertEqual(rig.records(step)["a"]["cleanup"]["status"], "running")
+        self.assertNotIn(step, callout_hold_step_ids(rig.store))

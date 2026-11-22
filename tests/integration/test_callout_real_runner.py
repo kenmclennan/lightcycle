@@ -72,3 +72,39 @@ class TestCalloutThroughTheRealRunner(unittest.TestCase):
         self.assertEqual(rig.records(step)["a"]["status"], "ok")
         self.assertEqual(stored.usage_cost_usd.to_usd(), 0.42)
         self.assertEqual(stored.usage_cost_basis, "reported")
+
+
+class TestCleanupThroughTheRealRunner(unittest.TestCase):
+    def test_a_real_script_answers_cleanup_by_writing_a_marker(self):
+        directory = tempfile.mkdtemp()
+        home = tempfile.mkdtemp()
+        marker = os.path.join(directory, "marker")
+        script = os.path.join(directory, "callout.sh")
+        with open(script, "w") as f:
+            f.write(
+                "#!/bin/sh\ninput=$(cat)\ncase \"$input\" in *cleanup*) : > %s;; esac\n"
+                'echo \'{"status":"ok"}\'\n' % marker)
+        os.chmod(script, os.stat(script).st_mode | stat.S_IXUSR)
+        runner = ScriptRunnerAdapter(
+            Config(environ={"LC_HOME": home, "LC_WORKER_HISTORY": "20"}), RunGroupsAdapter())
+        real = type(callout("a", "pr"))(
+            id="a", command=script, subject="pr", principal_outputs=("code",), wait=False,
+            timeout=30)
+        rig = CalloutRig([real], runner=runner)
+        step = rig.gate()
+        rig.use_case.execute(100)
+        for tick in range(300):
+            rig.use_case.execute(101 + tick)
+            if rig.records(step)["a"]["status"] not in ("running",) and not rig.runner.running():
+                break
+            time.sleep(0.02)
+        self.assertEqual(rig.records(step)["a"]["status"], "ok")
+        rig.store.complete_node(step, "approved")
+
+        for _ in range(300):
+            rig.use_case.execute(time.time())
+            if os.path.exists(marker):
+                break
+            time.sleep(0.02)
+
+        self.assertTrue(os.path.exists(marker), rig.records(step))
