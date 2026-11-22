@@ -132,7 +132,7 @@ COMMAND_GROUPS = [
         ("project", "<add|list|rm|scan> ...", "manage the project registry: add <owner/name> "
          "[--shortcode X] [--path P], list, rm <owner/name>, scan [dir] [--json] lists git repos "
          "under dir (default cwd) as registration candidates - read-only, registers nothing"),
-        ("config", "[--edit]", "show every resolved config setting, or edit the config file"),
+        ("config", "[--edit | get|set|unset|add|remove <key> ...]", "show every resolved config setting, edit the config file, or change one key: get <key>, set <key> <value>, unset <key> (reset to its seed), add|remove <list-key> <value>; blocks use dotted keys such as callout-x.command"),
         ("version", "", "print the lightcycle version"),
         ("upgrade", "[--check]", "upgrade lc in place from main if it's ahead; --check only reports"),
         ("workflow", "<add|upgrade|set|list|rm|check|describe|simulate> ...", "manage workflow sources and "

@@ -284,7 +284,13 @@ COMMANDS = {
     }),
     "config": CommandSpec(prog="lc config", args=(
         Arg("--edit", action="store_true"),
-    )),
+    ), subparsers={
+        "get": CommandSpec(prog="lc config get", args=(Arg("key"),)),
+        "set": CommandSpec(prog="lc config set", args=(Arg("key"), Arg("value", nargs="+"))),
+        "unset": CommandSpec(prog="lc config unset", args=(Arg("key"),)),
+        "add": CommandSpec(prog="lc config add", args=(Arg("key"), Arg("value"))),
+        "remove": CommandSpec(prog="lc config remove", args=(Arg("key"), Arg("value"))),
+    }),
     "status": CommandSpec(prog="lc status", args=(
         Arg("--json", action="store_true"),
     )),

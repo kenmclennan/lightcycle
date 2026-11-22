@@ -233,8 +233,47 @@ def _preflight_changed_callouts(before):
             print("  fix: %s" % error.fix)
 
 
+def _config_subcommand(a):
+    use_case = container().config_edit
+    try:
+        if a.sub == "get":
+            result = use_case.get(a.key)
+            for line in result.lines:
+                print(line)
+            if result.note:
+                sys.stderr.write("note: %s\n" % result.note)
+            return 0
+        callouts_before = _callouts_by_id()
+        if a.sub == "set":
+            result = use_case.set(a.key, a.value)
+        elif a.sub == "unset":
+            result = use_case.unset(a.key)
+        elif a.sub == "add":
+            result = use_case.add(a.key, a.value)
+        else:
+            result = use_case.remove(a.key, a.value)
+    except UseCaseError as e:
+        sys.stderr.write("%s\n" % e)
+        return 1
+    print(result.message)
+    if not result.changed:
+        return 0
+    for warning in result.warnings:
+        print("warning: %s" % warning)
+    print(CONFIG_EDIT_RESTART_NOTICE)
+    if result.callout_changed:
+        _preflight_changed_callouts(callouts_before)
+    return 0
+
+
 def cmd_config(argv):
-    a = build_parser(COMMANDS["config"]).parse_args(argv)
+    parser = build_parser(COMMANDS["config"])
+    a = parser.parse_args(argv)
+    if a.sub is not None and a.edit:
+        sys.stderr.write("--edit cannot be combined with a subcommand\n")
+        return 2
+    if a.sub is not None:
+        return _config_subcommand(a)
     if a.edit:
         container().config.ensure_config()
         editor = container().config.editor()

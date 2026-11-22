@@ -40,6 +40,7 @@ from lightcycle.adapters.machine import MachineAdapter
 from lightcycle.adapters.guidance_sync_status import GuidanceSyncStatusAdapter
 from lightcycle.adapters.config_reload_status import ConfigReloadStatusAdapter
 from lightcycle.application.pool.reload_config import ReloadConfigUseCase
+from lightcycle.application.setup.config_edit import ConfigEditUseCase
 from lightcycle.adapters.memory_gate_status import MemoryGateStatusAdapter
 from lightcycle.adapters.scaffold import ScaffoldAdapter
 from lightcycle.adapters.spawner import SpawnerAdapter
@@ -129,6 +130,7 @@ class Container:
             else ScriptRunnerAdapter(self.config, self.run_groups)
         )
         self.callout_preflight = CalloutPreflightUseCase(self.config, self.script_runner)
+        self.config_edit = ConfigEditUseCase(self.config)
         self.github_poll_runner = (
             github_poll_runner if github_poll_runner is not None
             else GithubPollRunnerAdapter(self.worker_log)

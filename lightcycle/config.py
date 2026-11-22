@@ -1,4 +1,5 @@
 import os
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -274,6 +275,43 @@ class Config:
     def _restart_required(self, candidate, start_values):
         return restart_required(
             candidate, start_values, lambda k: self._env(_ENV_OVERRIDE_VARS[k]) is not None)
+
+    def read_config_text(self):
+        with open(self.config_path()) as f:
+            return f.read()
+
+    def write_config_text(self, text):
+        p = self.config_path()
+        directory = os.path.dirname(p) or "."
+        fd, tmp = tempfile.mkstemp(dir=directory, prefix=".config-")
+        try:
+            with os.fdopen(fd, "w") as f:
+                f.write(text)
+            if os.path.exists(p):
+                os.chmod(tmp, os.stat(p).st_mode & 0o7777)
+            os.replace(tmp, p)
+        except BaseException:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
+            raise
+        self.reload()
+
+    def seed_value(self, key):
+        overrides = self._seed_overrides()
+        for k, v in _SEED_KEYS:
+            if k == key:
+                return overrides.get(k, v)
+        raise KeyError(key)
+
+    def candidate_problem(self, text, key):
+        probe = Config(environ={"LC_CONFIG": self.config_path()})
+        probe._cached = frontmatter.parse_frontmatter(text)
+        probe._cached_path = probe.config_path()
+        probe._loaded_mtime = None
+        for s in probe.resolved_settings():
+            if s.key == key and s.state in ("invalid", "unset"):
+                return s.error
+        return None
 
     def _seed_overrides(self, registered=None):
         overrides = {}

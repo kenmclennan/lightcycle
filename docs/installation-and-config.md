@@ -41,7 +41,15 @@ Workflows are not shadowed or resolved through a chain: each item pins one sha-p
 
 ## Config
 
-`~/.lightcycle/config` is the single boundary to the environment. Values are required and seeded visibly (no hidden defaults). Show or edit with `lc config [--edit]`.
+`~/.lightcycle/config` is the single boundary to the environment. Values are required and seeded visibly (no hidden defaults). Show it with `lc config`, edit the whole file with `lc config --edit`, or change one key with a subcommand.
+
+### Changing one key
+
+`lc config get <key>` prints the resolved value (a list key prints one entry per line; an environment override is noted on stderr). `lc config set <key> <value>` validates the value against the key's type and range before writing, and refuses an unknown key or a bad value without touching the file. `lc config unset <key>` writes the key's seed value back and prints it; `trusted-authors` and `workflows-remote` have no usable seed, so `unset` refuses on them. `lc config add <list-key> <value>` and `lc config remove <list-key> <value>` change `trusted-authors` and `context-artifact-types`; removing the last entry refuses.
+
+`add`, `remove` and `unset` with nothing to do (the value already present, already absent, or the key already at its seed) leave the file byte-identical, print one line saying nothing changed and exit 0, so a script that runs them twice does not fail the second time. Refusals stay for real errors: an unknown key, a wrong type, and the cases above.
+
+A key inside a `callout-<id>`, `schedule-<id>` or `workflow-<origin>-<name>` block is addressed with a dotted key, split on the last dot, for example `lc config set callout-x.command /path/to/script`. `unset callout-x.command` removes that line (and the block header when it was the last key), and `unset callout-x` removes the whole block. Edits keep every other line, comment and blank line as it was, and the file is replaced atomically so a running pool never reads a half-written file. A worker in the live home may run `lc config` and `lc config get` only. Two commands run at the same instant can lose an update; no lock is taken.
 
 A running pool (`lc start`) checks the file's modification time at the start of every tick. When it has moved, the pool re-reads the file, replaces its config and prints `config reloaded`, so `schedule-<id>` blocks, `schedules-paused`, `max-agents` and every other key apply within one tick. A reload only takes effect if the new file is valid: when it is missing, unreadable, or a required key is unset, blank or rejected by its getter, the pool keeps the last good config, writes one `warning: config reload rejected` line to stderr per distinct edit, and `lc doctor` reports it in the `config` category until the file changes again. Short-lived commands (`lc show`, `lc done`) read the file on each invocation.
 
