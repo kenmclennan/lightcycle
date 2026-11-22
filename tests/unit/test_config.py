@@ -397,6 +397,27 @@ class TestReconcileConfig(unittest.TestCase):
         self.assertIn("max-agents: 5", text)
         self.assertIn("max-title-length: 72", text)
 
+    def test_appends_on_its_own_line_when_file_lacks_trailing_newline(self):
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "config")
+        Path(p).write_text("projects: /p\nspecs: /s")
+        c = Config(environ={"LC_CONFIG": p})
+        c.reconcile_config()
+        lines = Path(p).read_text().splitlines()
+        self.assertIn("specs: /s", lines)
+        self.assertIn("max-agents: 5", lines)
+        self.assertEqual(c.load_config()["specs"], "/s")
+
+    def test_adds_no_blank_line_when_file_ends_in_newline(self):
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "config")
+        Path(p).write_text("projects: /p\nspecs: /s\n")
+        c = Config(environ={"LC_CONFIG": p})
+        c.reconcile_config()
+        text = Path(p).read_text()
+        self.assertTrue(text.startswith("projects: /p\nspecs: /s\n"))
+        self.assertNotIn("\n\n", text)
+
     def test_seeds_missing_path_keys_from_registered_projects(self):
         d = tempfile.mkdtemp()
         p = os.path.join(d, "config")
