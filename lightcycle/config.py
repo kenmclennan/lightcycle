@@ -335,7 +335,11 @@ class Config:
         missing = self._missing_seed_keys(self.load_config(), registered)
         if not missing:
             return ()
+        with open(p, "rb") as f:
+            existing_bytes = f.read()
         with open(p, "a") as f:
+            if existing_bytes and not existing_bytes.endswith(b"\n"):
+                f.write("\n")
             for k, v in missing:
                 f.write("%s: %s\n" % (k, v))
         self.reload()
