@@ -3,9 +3,10 @@ import os
 import tempfile
 import unittest
 from contextlib import redirect_stderr
+from unittest import mock
 
 from lightcycle.adapters.workers import (
-    mark_checked, prune_pool_gh_call_logs, prune_workers, register_worker, set_pid_started, set_step,
+    group_alive, mark_checked, prune_pool_gh_call_logs, prune_workers, register_worker, set_pid_started, set_step,
     workers_path, workers_state,
 )
 from lightcycle.ports.workers import RegistryUnreadable
@@ -125,3 +126,13 @@ class TestGhCallLogPruning(unittest.TestCase):
             ["gh-calls-abc.log", "gh-calls-pool-20260102.log", "gh-calls-pool-20260103.log"],
         )
         self.assertTrue(os.path.exists(other))
+
+
+class TestGroupAlive(unittest.TestCase):
+    def test_group_alive_reads_permission_error_as_empty(self):
+        with mock.patch("os.killpg", side_effect=PermissionError):
+            self.assertFalse(group_alive(1))
+        with mock.patch("os.killpg", side_effect=ProcessLookupError):
+            self.assertFalse(group_alive(1))
+        with mock.patch("os.killpg", return_value=None):
+            self.assertTrue(group_alive(1))

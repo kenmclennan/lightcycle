@@ -1,4 +1,5 @@
 import os
+import signal
 import subprocess
 import tempfile
 import time
@@ -6,6 +7,12 @@ import unittest
 
 from lightcycle.adapters import workers as wk
 
+IGNORER = (
+    "import signal,subprocess,sys,time;"
+    "subprocess.Popen([sys.executable,'-c',"
+    "'import signal,time;signal.signal(signal.SIGTERM,signal.SIG_IGN);time.sleep(300)']);"
+    "time.sleep(0.5)"
+)
 LEADER = "import subprocess,time;subprocess.Popen(['sleep','300']);time.sleep(0.2)"
 
 
@@ -61,9 +68,9 @@ def _assert_group_reaped(test, pgid, message, timeout=REAP_DEADLINE):
     )
 
 
-def _spawn_leader_with_child():
-    leader = subprocess.Popen(["python3", "-c", LEADER], start_new_session=True)
-    time.sleep(0.6)
+def _spawn_leader_with_child(code=LEADER):
+    leader = subprocess.Popen(["python3", "-c", code], start_new_session=True)
+    time.sleep(1.0 if code is not LEADER else 0.6)
     leader.wait()
     return leader.pid
 
@@ -155,3 +162,66 @@ class TestWorkerGroupReap(unittest.TestCase):
         )
         self.assertRegex(text, r"stat=\S+")
         self.assertNotIn("pid=%d " % exited.pid, text)
+
+    def _spawn_ignorer(self):
+        pid = _spawn_leader_with_child(IGNORER)
+        self.strays.append(pid)
+        self.assertTrue(_in_group(pid), "fixture left no child in the group")
+        return pid
+
+    def _entry(self, pid):
+        return [w for w in wk.workers_state(self.root) if w["pid"] == pid]
+
+    def test_prune_sigkills_a_term_ignoring_child_after_the_grace(self):
+        pid = self._spawn_ignorer()
+        self._register(pid)
+
+        wk.prune_workers(self.root, keep_dead=5, grace_seconds=60, now=lambda: 1000.0)
+
+        time.sleep(0.5)
+        self.assertTrue(_in_group(pid))
+        self.assertEqual(self._entry(pid)[0]["reap_term_at"], 1000.0)
+
+        wk.prune_workers(self.root, keep_dead=5, grace_seconds=60, now=lambda: 1061.0)
+
+        _assert_group_reaped(self, pid, "TERM-ignoring child survived the grace")
+
+    def test_prune_does_not_sigkill_inside_the_grace(self):
+        pid = self._spawn_ignorer()
+        self._register(pid)
+
+        wk.prune_workers(self.root, keep_dead=5, grace_seconds=60, now=lambda: 1000.0)
+        wk.prune_workers(self.root, keep_dead=5, grace_seconds=60, now=lambda: 1001.0)
+
+        time.sleep(0.5)
+        self.assertTrue(_in_group(pid), "child was killed inside the grace")
+
+    def test_a_dead_workers_entry_is_kept_while_its_group_is_live(self):
+        live = self._spawn_ignorer()
+        empty = subprocess.Popen(["true"], start_new_session=True)
+        empty.wait()
+        self._register(live)
+        self._register(empty.pid)
+
+        dropped = wk.prune_workers(self.root, keep_dead=0, grace_seconds=60, now=lambda: 1000.0)
+
+        self.assertEqual(dropped, 1)
+        self.assertEqual(len(self._entry(live)), 1)
+        self.assertEqual(self._entry(empty.pid), [])
+
+        wk.prune_workers(self.root, keep_dead=0, grace_seconds=60, now=lambda: 1100.0)
+        _assert_group_reaped(self, live, "TERM-ignoring child survived the grace")
+        wk.prune_workers(self.root, keep_dead=0, grace_seconds=60, now=lambda: 1101.0)
+
+        self.assertEqual(self._entry(live), [])
+
+    def test_a_stopped_child_is_ended(self):
+        pid = self._spawn_ignorer()
+        for row in _live_group_rows(_ps_snapshot()[0], pid):
+            os.kill(int(row["pid"]), signal.SIGSTOP)
+        self._register(pid)
+
+        wk.prune_workers(self.root, keep_dead=5, grace_seconds=0, now=lambda: 1000.0)
+        wk.prune_workers(self.root, keep_dead=5, grace_seconds=0, now=lambda: 1001.0)
+
+        _assert_group_reaped(self, pid, "stopped child survived")

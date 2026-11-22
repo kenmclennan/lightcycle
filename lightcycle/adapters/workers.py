@@ -4,6 +4,7 @@ import os
 import signal
 import subprocess
 import sys
+import time
 from contextlib import contextmanager
 
 from lightcycle.adapters.process_group import run_in_group
@@ -147,7 +148,44 @@ def reap_worker_group(pid):
     return True
 
 
-def prune_workers(root, keep_dead):
+def group_alive(pgid):
+    try:
+        os.killpg(int(pgid), 0)
+    except (OSError, ValueError, TypeError):
+        return False
+    return True
+
+
+def kill_worker_group(pid):
+    try:
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return False
+    if pid <= 0 or pid_alive(pid):
+        return False
+    for sig in (signal.SIGCONT, signal.SIGKILL):
+        try:
+            os.killpg(pid, sig)
+        except (OSError, ValueError):
+            return False
+    return True
+
+
+def _end_group(entry, grace_seconds, now):
+    pid = entry.get("pid", -1)
+    if not group_alive(pid):
+        return False, False
+    term_at = entry.get("reap_term_at")
+    if term_at is None:
+        reap_worker_group(pid)
+        entry["reap_term_at"] = now
+        return True, True
+    if now - term_at >= grace_seconds:
+        kill_worker_group(pid)
+    return True, False
+
+
+def prune_workers(root, keep_dead, grace_seconds=0, now=time.time):
     with registry_lock(root):
         workers = workers_state(root)
         dead_idx = [
@@ -155,16 +193,24 @@ def prune_workers(root, keep_dead):
             for i, w in enumerate(workers)
             if not worker_alive(w.get("pid", -1), w.get("pid_started"))
         ]
+        stamp = now()
+        live_groups = set()
+        changed = False
         for i in dead_idx:
-            reap_worker_group(workers[i].get("pid", -1))
+            live, touched = _end_group(workers[i], grace_seconds, stamp)
+            if live:
+                live_groups.add(i)
+            changed = changed or touched
         n_drop = max(0, len(dead_idx) - keep_dead)
-        if not n_drop:
+        drop = set([i for i in dead_idx if i not in live_groups][:n_drop])
+        if not drop:
+            if changed:
+                write_workers(root, workers)
             return 0
-        drop = set(dead_idx[:n_drop])
         write_workers(root, [w for i, w in enumerate(workers) if i not in drop])
         for i in drop:
             _remove_quietly(os.path.join(root, "logs", gh_calls_filename(workers[i].get("spawnid"))))
-        return n_drop
+        return len(drop)
 
 
 def _remove_quietly(path):
@@ -247,7 +293,9 @@ class WorkersAdapter(WorkersPort):
 
     def prune_workers(self, keep_dead=None):
         kd = self._config.worker_history() if keep_dead is None else keep_dead
-        dropped = prune_workers(self._config.data_root(), kd)
+        dropped = prune_workers(
+            self._config.data_root(), kd, grace_seconds=self._config.shutdown_grace_seconds()
+        )
         prune_pool_gh_call_logs(self._config.data_root(), kd)
         return dropped
 
