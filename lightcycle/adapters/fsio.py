@@ -56,6 +56,10 @@ def write_text(path, text):
         f.write(text)
 
 
+def rename_dir(old, new):
+    os.rename(old, new)
+
+
 def ensure_logs_dir(root):
     d = os.path.join(root, "logs")
     os.makedirs(d, exist_ok=True)
@@ -112,6 +116,9 @@ class FsAdapter(FsPort):
 
     def write_text(self, path, text):
         return write_text(path, text)
+
+    def rename_dir(self, old, new):
+        return rename_dir(old, new)
 
     def ensure_logs_dir(self):
         return ensure_logs_dir(self._config.data_root())

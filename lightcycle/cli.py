@@ -129,8 +129,8 @@ def require_store():
 COMMAND_GROUPS = [
     ("Setup", [
         ("init", "", "create the lightcycle store + seed the HOME config (run once)."),
-        ("project", "<add|list|rm|scan> ...", "manage the project registry: add <owner/name> "
-         "[--shortcode X] [--path P], list, rm <owner/name>, scan [dir] [--json] lists git repos "
+        ("project", "<add|set|mv|list|rm|scan> ...", "manage the project registry: add <owner/name> "
+         "[--shortcode X] [--path P], set <identity> --path DIR, mv <identity> <new-dir> or mv --prefix <old-dir> <new-dir> (moves the folder, repairs worktrees, rewrites paths), list, rm <owner/name>, scan [dir] [--json] lists git repos "
          "under dir (default cwd) as registration candidates - read-only, registers nothing"),
         ("config", "[--edit | get|set|unset|add|remove <key> ...]", "show every resolved config setting, edit the config file, or change one key: get <key>, set <key> <value>, unset <key> (reset to its seed), add|remove <list-key> <value>; blocks use dotted keys such as callout-x.command"),
         ("version", "", "print the lightcycle version"),

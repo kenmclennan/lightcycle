@@ -121,6 +121,28 @@ def _init_pull_default_origin():
             % (e, url, origin))
 
 
+def _print_relocation(result):
+    for line in result.lines:
+        print(line)
+    if result.config_rewritten:
+        print(CONFIG_EDIT_RESTART_NOTICE)
+
+
+def _project_mv(a, c):
+    if a.prefix is not None:
+        if a.identity is None or a.new_dir is not None:
+            sys.stderr.write("usage: lc project mv --prefix <old-dir> <new-dir>\n")
+            return 2
+        result = c.relocate_project().move_prefix(a.prefix, a.identity)
+    else:
+        if a.identity is None or a.new_dir is None:
+            sys.stderr.write("usage: lc project mv <identity> <new-dir>\n")
+            return 2
+        result = c.relocate_project().move(a.identity, a.new_dir)
+    _print_relocation(result)
+    return 0
+
+
 def cmd_project(argv):
     parser = build_parser(COMMANDS["project"])
     a = parser.parse_args(argv)
@@ -144,7 +166,13 @@ def cmd_project(argv):
             else:
                 print("%s already registered (shortcode %s)" % (r.identity, r.shortcode))
             return 0
+        if a.sub == "mv":
+            return _project_mv(a, c)
         if a.sub == "set":
+            if a.path is not None:
+                _print_relocation(c.relocate_project().set_path(a.identity, a.path))
+                if a.facets is None and a.shortcode is None:
+                    return 0
             r = SetProjectUseCase(c.store, c.config).execute(
                 a.identity, a.facets, a.shortcode
             )

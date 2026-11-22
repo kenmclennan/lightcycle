@@ -137,8 +137,10 @@ class InitGridUseCase:
             if requested and wanted != registered.local_path:
                 raise UseCaseError(
                     "guidance repo is already registered at %s, not %s - run "
-                    "`lc project rm %s` first to move it"
-                    % (registered.local_path, wanted, GUIDANCE_WORKSPACE)
+                    "`lc project mv %s %s` (or `lc project set %s --path %s` if you "
+                    "moved it by hand)"
+                    % (registered.local_path, wanted, GUIDANCE_WORKSPACE, wanted,
+                       GUIDANCE_WORKSPACE, wanted)
                 )
             return "unchanged", registered.local_path
         shortcode = self._guidance_shortcode_checked()
