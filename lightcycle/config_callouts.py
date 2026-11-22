@@ -49,6 +49,25 @@ def parse_principal_outputs(raw):
     return names
 
 
+def callout_key_problem(key, value):
+    if key not in CALLOUT_KEYS:
+        return "unknown key %r" % key
+    if key == "subject" and parse_presents(value) is None:
+        return "key 'subject' must be pr, description or artifact:<name> (got %r)" % value
+    if key == "principal-outputs" and parse_principal_outputs(value) is None:
+        return (
+            "key 'principal-outputs' must be comma-separated names matching [a-z0-9-]+ (got %r)"
+            % value)
+    if key == "wait":
+        try:
+            parse_bool("wait", value)
+        except ValueError:
+            return "key 'wait' must be true or false (got %r)" % value
+    if key == "timeout":
+        return _timeout_problem(value)
+    return None
+
+
 def callout_problems(block, callout_id):
     problems = []
     if not _ID.match(callout_id or ""):
@@ -59,26 +78,12 @@ def callout_problems(block, callout_id):
     for key in CALLOUT_KEYS:
         if _blank(block.get(key)):
             problems.append("key %r is missing or blank" % key)
-    subject = block.get("subject")
-    if not _blank(subject) and parse_presents(subject) is None:
-        problems.append(
-            "key 'subject' must be pr, description or artifact:<name> (got %r)" % subject)
-    principal_outputs = block.get("principal-outputs")
-    if not _blank(principal_outputs) and parse_principal_outputs(principal_outputs) is None:
-        problems.append(
-            "key 'principal-outputs' must be comma-separated names matching [a-z0-9-]+ (got %r)"
-            % principal_outputs)
-    wait = block.get("wait")
-    if not _blank(wait):
-        try:
-            parse_bool("wait", wait)
-        except ValueError:
-            problems.append("key 'wait' must be true or false (got %r)" % wait)
-    timeout = block.get("timeout")
-    if not _blank(timeout):
-        problem = _timeout_problem(timeout)
-        if problem:
-            problems.append(problem)
+    for key in CALLOUT_KEYS:
+        value = block.get(key)
+        if not _blank(value):
+            problem = callout_key_problem(key, value)
+            if problem:
+                problems.append(problem)
     return problems
 
 

@@ -52,6 +52,19 @@ class TestWorkerPermitted(unittest.TestCase):
     def test_config_with_unparsed_flags_is_refused_for_a_worker(self):
         self.assertFalse(worker_permitted("config", {}))
 
+    def test_config_write_subcommands_are_refused_for_a_worker(self):
+        for sub in ("set", "unset", "add", "remove"):
+            self.assertFalse(worker_permitted("config", {"edit": False, "sub": sub}), sub)
+        self.assertTrue(worker_permitted("config", {"edit": False, "sub": "get"}))
+        self.assertTrue(worker_permitted("config", {"edit": False, "sub": None}))
+
+    def test_config_set_parsed_from_real_argv_is_refused_for_a_worker(self):
+        from lightcycle import cli
+        flags = cli._config_flags(["set", "max-agents", "3"])
+        self.assertFalse(worker_permitted("config", flags))
+        self.assertTrue(worker_permitted("config", cli._config_flags(["get", "max-agents"])))
+        self.assertTrue(worker_permitted("config", cli._config_flags([])))
+
     def test_a_verb_outside_worker_verbs_and_not_set_never_permitted(self):
         self.assertFalse(worker_permitted("rm", {"state": "waiting"}))
         self.assertFalse(worker_permitted("halt", {"note": ["x"]}))

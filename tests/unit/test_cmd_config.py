@@ -7,6 +7,7 @@ from pathlib import Path
 
 from lightcycle import cli
 from lightcycle.adapters.fsio import FsAdapter
+from lightcycle.application.setup.config_edit import ConfigEditUseCase
 from lightcycle.domain.work.callout_response import CalloutError
 from tests.support.fake_callout_preflight import FakeCalloutPreflight
 from lightcycle.config import _SEED_KEYS, RESTART_REQUIRED_KEYS, Config
@@ -28,6 +29,7 @@ class FakeContainer:
         self.launcher = launcher
         self.callout_preflight = callout_preflight
         self.fs = FsAdapter(config)
+        self.config_edit = ConfigEditUseCase(config)
 
 
 class FakeLauncher:
@@ -235,3 +237,19 @@ class TestCmdConfigCalloutRegistration(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestConfigSubcommandParsing(unittest.TestCase):
+    def setUp(self):
+        self._orig = cli.container()
+        self.addCleanup(lambda: cli.set_container(self._orig))
+
+    def test_edit_with_a_subcommand_is_refused(self):
+        c = _cfg()
+        c.ensure_config()
+        cli.set_container(FakeContainer(c))
+        before = Path(c.config_path()).read_bytes()
+        rc, out, err = call(cli.cmd_config, "--edit", "get", "max-agents")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("--edit", err)
+        self.assertEqual(Path(c.config_path()).read_bytes(), before)

@@ -147,7 +147,7 @@ The mutating CLI is a small set of generic primitives over nodes; the read views
 | --- | --- |
 | `lc init` | create `~/.lightcycle` (store + config) and the guidance repo; run once |
 | `lc project <add\|set\|list\|rm\|scan>` | manage the project registry: `add <owner/name> [--shortcode X] [--path P] [--facets a,b,c]`, `set <identity> --facets a,b,c`, `list`, `rm <owner/name>`, `scan [dir] [--json]` discovers git repos under `dir` (default cwd) as registration candidates, with suggested facets from the guidance repo's `detected-by` lists - read-only, sets nothing |
-| `lc config [--edit]` | show (or `--edit`) the lightcycle config: projects + specs roots |
+| `lc config [--edit \| get\|set\|unset\|add\|remove <key> ...]` | show the lightcycle config, `--edit` it in your editor, or change one key: `get <key>`, `set <key> <value>`, `unset <key>`, `add\|remove <list-key> <value>`; block keys are dotted, e.g. `callout-x.command` |
 | `lc start [--once] [--detach]` | the agent pool: sweep, then fill up to `LC_MAX_AGENTS` workers from the ready queue; `--detach` runs it in the background |
 | `lc stop [--drain]` | stop a detached pool; `--drain` lets running workers finish first |
 | `lc halt <item\|step> --note "<reason>"` | stop one running step's worker now and park the step, keeping its worktree and branch; resume with `lc set <step> --state ready` |

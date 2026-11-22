@@ -24,6 +24,8 @@ def worker_permitted(verb, parsed_flags):
             return True
         return parsed_flags.get("sub") == "check" and bool(parsed_flags.get("dir"))
     if verb == "config":
-        return "edit" in parsed_flags and not parsed_flags["edit"]
+        return (
+            "edit" in parsed_flags and not parsed_flags["edit"]
+            and parsed_flags.get("sub") in (None, "get"))
     return False
 

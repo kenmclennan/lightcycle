@@ -1,3 +1,4 @@
+from lightcycle.application.setup.config_edit import ConfigEditError, ConfigEditResult, ConfigEditUseCase
 from lightcycle.application.setup.export_snapshot import ExportSnapshotUseCase
 from lightcycle.application.setup.init_grid import InitGridUseCase
 from lightcycle.application.setup.project_registry import (
@@ -22,7 +23,7 @@ from lightcycle.ports.upgrade import ProcessListUnreadableError, RemoteVersionUn
 from lightcycle.application.setup.upgrade_notice import UpgradeNoticeResponse, UpgradeNoticeUseCase
 
 __all__ = [
-    "ExportSnapshotUseCase", "InitGridUseCase", "AddProjectInput", "AddProjectUseCase", "SetProjectUseCase",
+    "ConfigEditError", "ConfigEditResult", "ConfigEditUseCase", "ExportSnapshotUseCase", "InitGridUseCase", "AddProjectInput", "AddProjectUseCase", "SetProjectUseCase",
     "ListProjectsUseCase", "ProjectRegistry", "RemoveProjectUseCase", "ScanCandidate",
     "ScanProjectsUseCase", "ScanResult",
     "RestoreInput", "RestoreStoreUseCase",
