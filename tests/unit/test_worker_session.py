@@ -20,6 +20,7 @@ from lightcycle.adapters.worker_session import (
     RESULT,
     SESSION_ID,
     build_command,
+    descendant_pids,
     dispatch_event,
     drain,
     has_open_step,
@@ -383,6 +384,7 @@ class TestRun(unittest.TestCase):
     class _NeverExitsProc:
         def __init__(self):
             self.stdout = _FakeStdout("")
+            self.pid = 10
             self.stdin = MagicMock()
             self.terminate_calls = 0
             self.kill_calls = 0
@@ -415,7 +417,9 @@ class TestRun(unittest.TestCase):
 
         clock = self._CountingClock()
         with patch("lightcycle.adapters.worker_session.subprocess.Popen", popen), \
-                patch("lightcycle.adapters.worker_session.time.sleep"):
+                patch("lightcycle.adapters.worker_session.time.sleep"), \
+                patch("lightcycle.adapters.worker_session.descendant_pids", return_value=[]), \
+                patch("lightcycle.adapters.worker_session.os.kill"):
             run("/data/root", "/work/item-1", "coder", "opus", "sys", 0, clock=clock, open_step=_open)
         self.assertEqual(proc.terminate_calls, 2)
         self.assertEqual(proc.kill_calls, 1)
@@ -431,7 +435,9 @@ class TestRun(unittest.TestCase):
             return proc
 
         with patch("lightcycle.adapters.worker_session.subprocess.Popen", popen), \
-                patch("lightcycle.adapters.worker_session.time.sleep"):
+                patch("lightcycle.adapters.worker_session.time.sleep"), \
+                patch("lightcycle.adapters.worker_session.descendant_pids", return_value=[]), \
+                patch("lightcycle.adapters.worker_session.os.kill"):
             rc = run("/data/root", "/work/item-1", "coder", "opus", "sys", 0,
                      clock=self._CountingClock(), open_step=_open)
         self.assertEqual(rc, -signal.SIGKILL)
@@ -445,9 +451,82 @@ class TestRun(unittest.TestCase):
 
         clock = self._CountingClock()
         with patch("lightcycle.adapters.worker_session.subprocess.Popen", popen), \
-                patch("lightcycle.adapters.worker_session.time.sleep"):
+                patch("lightcycle.adapters.worker_session.time.sleep"), \
+                patch("lightcycle.adapters.worker_session.descendant_pids", return_value=[]), \
+                patch("lightcycle.adapters.worker_session.os.kill"):
             run("/data/root", "/work/item-1", "coder", "opus", "sys", 0, clock=clock, open_step=_open)
         self.assertGreaterEqual(clock.calls, EXIT_GRACE_SECONDS)
+
+    def test_sigkill_fallback_kills_snapshot_descendants_after_claude(self):
+        order = []
+        proc = self._NeverExitsProc()
+        proc.pid = 10
+        real_kill = proc.kill
+
+        def kill():
+            order.append("claude")
+            real_kill()
+
+        proc.kill = kill
+
+        def snapshot(pid):
+            order.append("snapshot")
+            return [11, 12]
+
+        def popen(cmd, cwd, **kwargs):
+            return proc
+
+        with patch("lightcycle.adapters.worker_session.subprocess.Popen", popen), \
+                patch("lightcycle.adapters.worker_session.time.sleep"), \
+                patch("lightcycle.adapters.worker_session.descendant_pids", snapshot), \
+                patch("lightcycle.adapters.worker_session.os.kill",
+                      lambda pid, sig: order.append((pid, sig))):
+            run("/d", "/w", "coder", "opus", "sys", 0, clock=self._CountingClock(), open_step=_open)
+        self.assertEqual(proc.kill_calls, 1)
+        self.assertEqual(order, ["snapshot", "claude", (11, signal.SIGKILL), (12, signal.SIGKILL)])
+
+    class _ExitsAfterTerminateProc(_NeverExitsProc):
+        def __init__(self):
+            super().__init__()
+            self.pid = 10
+
+        def poll(self):
+            return -15 if self.terminate_calls else None
+
+    def test_first_sigterm_path_signals_no_descendants(self):
+        proc = self._ExitsAfterTerminateProc()
+
+        def popen(cmd, cwd, **kwargs):
+            return proc
+
+        with patch("lightcycle.adapters.worker_session.subprocess.Popen", popen), \
+                patch("lightcycle.adapters.worker_session.time.sleep"), \
+                patch("lightcycle.adapters.worker_session.descendant_pids") as walk, \
+                patch("lightcycle.adapters.worker_session.os.kill") as kill:
+            run("/d", "/w", "coder", "opus", "sys", 0, clock=self._CountingClock(), open_step=_open)
+        self.assertEqual(proc.kill_calls, 0)
+        walk.assert_not_called()
+        kill.assert_not_called()
+
+    def test_a_vanished_descendant_does_not_abort_the_rest(self):
+        proc = self._NeverExitsProc()
+        proc.pid = 10
+        sent = []
+
+        def fake_kill(pid, sig):
+            if pid == 11:
+                raise ProcessLookupError()
+            sent.append(pid)
+
+        def popen(cmd, cwd, **kwargs):
+            return proc
+
+        with patch("lightcycle.adapters.worker_session.subprocess.Popen", popen), \
+                patch("lightcycle.adapters.worker_session.time.sleep"), \
+                patch("lightcycle.adapters.worker_session.descendant_pids", return_value=[11, 12]), \
+                patch("lightcycle.adapters.worker_session.os.kill", fake_kill):
+            run("/d", "/w", "coder", "opus", "sys", 0, clock=self._CountingClock(), open_step=_open)
+        self.assertEqual(sent, [12])
 
     def test_time_time_is_never_called(self):
         captured = {}
@@ -595,3 +674,24 @@ class TestSessionPolicyHasOneWriter(unittest.TestCase):
                     callers.add(node.name)
         self.assertEqual(callers, {"drain"})
         self.assertEqual(callers.intersection(self.READER_THREAD_FUNCTIONS), set())
+
+
+class TestDescendantPids(unittest.TestCase):
+    def _ps(self, stdout, returncode=0):
+        return patch("lightcycle.adapters.worker_session.subprocess.run",
+                     return_value=subprocess.CompletedProcess([], returncode, stdout, ""))
+
+    def test_descendant_pids_returns_transitive_children_only(self):
+        table = "  1 0\n 10 1\n 11 10\n 12 11\n 20 1\n 21 20\n"
+        with self._ps(table):
+            self.assertEqual(sorted(descendant_pids(10)), [11, 12])
+            self.assertEqual(descendant_pids(12), [])
+
+    def test_descendant_pids_is_empty_when_ps_fails(self):
+        for effect in (FileNotFoundError(), subprocess.TimeoutExpired("ps", 5)):
+            with patch("lightcycle.adapters.worker_session.subprocess.run", side_effect=effect):
+                self.assertEqual(descendant_pids(10), [])
+        with self._ps("10 1\ngarbage line\n"):
+            self.assertEqual(descendant_pids(10), [])
+        with self._ps("10 1\n11 10\n", returncode=1):
+            self.assertEqual(descendant_pids(10), [])

@@ -1,5 +1,6 @@
 import contextlib
 import json
+import os
 import queue
 import signal
 import sqlite3
@@ -93,6 +94,45 @@ NUDGE_TEXT = ("Your previous turn ended but your step is not resolved yet. Conti
               "reach your terminal lc outcome, then exit.")
 EXIT_GRACE_SECONDS = 20
 KILL_WAIT_SECONDS = 10
+PS_TIMEOUT_SECONDS = 5
+
+
+def descendant_pids(root_pid):
+    try:
+        out = subprocess.run(["ps", "-A", "-o", "pid=,ppid="], capture_output=True, text=True,
+                             timeout=PS_TIMEOUT_SECONDS)
+        if out.returncode != 0:
+            return []
+        children = {}
+        for line in out.stdout.splitlines():
+            fields = line.split()
+            if not fields:
+                continue
+            pid, ppid = int(fields[0]), int(fields[1])
+            children.setdefault(ppid, []).append(pid)
+    except (OSError, ValueError, IndexError, subprocess.SubprocessError):
+        return []
+    found = []
+    seen = {root_pid}
+    frontier = [root_pid]
+    while frontier:
+        nxt = []
+        for parent in frontier:
+            for child in children.get(parent, []):
+                if child not in seen:
+                    seen.add(child)
+                    found.append(child)
+                    nxt.append(child)
+        frontier = nxt
+    return found
+
+
+def kill_descendants(pids):
+    for pid in pids:
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
 
 
 def user_message(text):
@@ -218,7 +258,9 @@ def run(add_dir, cwd, stage, model, sysprompt, max_session_seconds, *, open_step
         proc.terminate()
         time.sleep(2)
         if proc.poll() is None:
+            snapshot = descendant_pids(proc.pid)
             proc.kill()
+            kill_descendants(snapshot)
     try:
         rc = proc.wait(timeout=KILL_WAIT_SECONDS)
     except subprocess.TimeoutExpired:
