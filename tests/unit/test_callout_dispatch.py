@@ -1,4 +1,6 @@
+import datetime
 import json
+import time
 import unittest
 
 from lightcycle.application.work.step_detail import StepDetail
@@ -703,3 +705,318 @@ class TestSuspendRetry(unittest.TestCase):
 
         self.assertEqual(rig.records(step)["a"]["status"], "failed")
 
+
+
+def closed_gate(rig):
+    step = rig.gate()
+    rig.use_case.execute(100)
+    rig.pass_preflight(step, 101)
+    return step
+
+
+def finish_run(rig, step, callout_id="a", result=None):
+    rig.runner.finish(rig.key(step, callout_id), result or ok())
+    rig.use_case.execute(102)
+
+
+def close(rig, step, outcome="approved"):
+    rig.store.complete_node(step, outcome)
+
+
+def cleanup_key(step, callout_id="a"):
+    return "callout:%s:%s:cleanup" % (step, callout_id)
+
+
+def cleanup_stdins(rig):
+    return [
+        json.loads(c["stdin"]) for c in rig.runner.started if c["key"].endswith(":cleanup")]
+
+
+def set_closed_at(rig, step, seconds_ago):
+    when = datetime.datetime.fromtimestamp(time.time() - seconds_ago, datetime.timezone.utc)
+    rig.store._get(step)["closed_at"] = when.isoformat()
+
+
+class TestCleanupRequest(unittest.TestCase):
+    def test_a_closed_gate_gets_one_cleanup_with_the_stored_subject_and_outcome(self):
+        rig = CalloutRig([callout("a", "pr")])
+        step = rig.gate()
+        item = rig.store.get_node(step).item
+        rid = rig.store.open_run(item, rig.store.open_pass(item), "code")
+        rig.store.set_pr(rid, "https://github.com/o/r/pull/7")
+        rig.use_case.execute(100)
+        rig.pass_preflight(step, 101)
+        run_request = rig.stdin(1)
+        finish_run(rig, step)
+        rig.store.close_run(rid)
+        close(rig, step, "approved")
+
+        response = rig.use_case.execute(time.time())
+
+        self.assertEqual(response.cleanups, [cleanup_key(step)])
+        request = cleanup_stdins(rig)[0]
+        self.assertEqual(request["verb"], "cleanup")
+        self.assertEqual(request["outcome"], "approved")
+        self.assertEqual(request["subject"]["url"], "https://github.com/o/r/pull/7")
+        self.assertEqual(request["subject"], run_request["subject"])
+        self.assertEqual(request["item"], run_request["item"])
+        self.assertEqual(request["step"], run_request["step"])
+        self.assertNotIn("context", request)
+        self.assertIsNone(request["repos"]["workspace"])
+        self.assertEqual(len(rig.runner.started), 3)
+
+    def test_the_record_carries_the_run_subject_and_a_running_cleanup(self):
+        rig = CalloutRig([callout("a", "pr")])
+        step = closed_gate(rig)
+        self.assertEqual(rig.records(step)["a"]["subject"], rig.stdin(1)["subject"])
+        finish_run(rig, step)
+        close(rig, step, "approved")
+
+        rig.use_case.execute(time.time())
+
+        cleanup = rig.records(step)["a"]["cleanup"]
+        self.assertEqual(cleanup["status"], "running")
+        self.assertEqual(cleanup["outcome"], "approved")
+
+
+class TestCleanupEligibility(unittest.TestCase):
+    def _ready(self, result=None):
+        rig = CalloutRig([callout("a", "pr")])
+        step = closed_gate(rig)
+        finish_run(rig, step, result=result)
+        return rig, step
+
+    def test_an_open_gate_gets_none(self):
+        rig, step = self._ready()
+
+        rig.use_case.execute(time.time())
+
+        self.assertEqual(cleanup_stdins(rig), [])
+
+    def test_a_failed_run_record_gets_one(self):
+        rig, step = self._ready(ScriptResult(exit_code=1))
+        close(rig, step)
+
+        rig.use_case.execute(time.time())
+
+        self.assertEqual(len(cleanup_stdins(rig)), 1)
+
+    def test_a_failed_preflight_record_gets_none(self):
+        rig = CalloutRig([callout("a", "pr")])
+        step = rig.gate()
+        rig.use_case.execute(100)
+        rig.runner.finish(rig.preflight_key(step), ScriptResult(exit_code=1))
+        rig.use_case.execute(101)
+        close(rig, step)
+
+        rig.use_case.execute(time.time())
+
+        self.assertEqual(cleanup_stdins(rig), [])
+
+    def test_a_record_with_no_subject_gets_none(self):
+        rig, step = self._ready()
+        records = rig.records(step)
+        del records["a"]["subject"]
+        rig.store.replace_artifact(step, "callout-runs", json.dumps(records), internal=True)
+        close(rig, step)
+
+        rig.use_case.execute(time.time())
+
+        self.assertEqual(cleanup_stdins(rig), [])
+
+    def test_a_running_record_waits_then_gets_one(self):
+        rig = CalloutRig([callout("a", "pr")])
+        step = closed_gate(rig)
+        records = rig.records(step)
+        records["a"]["deadline"] = time.time() + 1000
+        rig.store.replace_artifact(step, "callout-runs", json.dumps(records), internal=True)
+        close(rig, step)
+
+        rig.use_case.execute(time.time())
+        self.assertEqual(cleanup_stdins(rig), [])
+
+        rig.runner.finish(rig.key(step), ok())
+        rig.use_case.execute(time.time())
+        self.assertEqual(len(cleanup_stdins(rig)), 1)
+
+    def test_a_gate_closed_eight_days_ago_gets_none_and_six_days_23_hours_gets_one(self):
+        for ago, expected in ((8 * 86400, 0), (6 * 86400 + 23 * 3600, 1)):
+            rig, step = self._ready()
+            close(rig, step)
+            set_closed_at(rig, step, ago)
+
+            rig.use_case.execute(time.time())
+
+            self.assertEqual(len(cleanup_stdins(rig)), expected, ago)
+
+    def test_a_second_tick_does_not_start_it_again(self):
+        rig, step = self._ready()
+        close(rig, step)
+
+        rig.use_case.execute(time.time())
+        rig.use_case.execute(time.time())
+
+        self.assertEqual(len(cleanup_stdins(rig)), 1)
+
+    def test_a_cleaned_record_is_not_cleaned_again_after_it_finishes(self):
+        rig, step = self._ready()
+        close(rig, step)
+        rig.use_case.execute(time.time())
+        rig.runner.finish(cleanup_key(step), ok())
+        rig.use_case.execute(time.time())
+
+        rig.use_case.execute(time.time())
+
+        self.assertEqual(len(cleanup_stdins(rig)), 1)
+
+    def test_an_agent_step_gets_none(self):
+        rig = CalloutRig([callout("a", "pr")])
+        step = rig.gate(role="agent")
+        record = {"a": {"status": "ok", "phase": "run", "subject": {"kind": "pr"}}}
+        rig.store.replace_artifact(step, "callout-runs", json.dumps(record), internal=True)
+        close(rig, step)
+
+        rig.use_case.execute(time.time())
+
+        self.assertEqual(cleanup_stdins(rig), [])
+
+
+class TestCleanupMixed(unittest.TestCase):
+    def test_an_unconfigured_callout_is_recorded_failed_and_the_others_start(self):
+        rig = CalloutRig([callout("a", "pr"), callout("b", "pr"), callout("c", "pr")])
+        step = rig.gate()
+        rig.use_case.execute(100)
+        rig.pass_preflight(step, 101, "a", "b", "c")
+        for cid in ("a", "b", "c"):
+            rig.runner.finish(rig.key(step, cid), ok())
+        rig.use_case.execute(102)
+        close(rig, step)
+        rig.config._callouts = [c for c in rig.config._callouts if c.id != "c"]
+
+        rig.use_case.execute(time.time())
+
+        self.assertEqual(
+            sorted(c["callout"] for c in cleanup_stdins(rig)), ["a", "b"])
+        records = rig.records(step)
+        self.assertEqual(records["c"]["cleanup"]["status"], "failed")
+        self.assertEqual(records["c"]["cleanup"]["message"], "callout is no longer configured")
+        notes = rig.store.get_node(step).notes or ""
+        self.assertEqual(notes.count("cleanup failed"), 1)
+        self.assertIn("callout:c: cleanup failed", notes)
+
+
+class TestCleanupReaping(unittest.TestCase):
+    def _started(self, **kwargs):
+        rig = CalloutRig([callout("a", "pr", **kwargs)])
+        step = closed_gate(rig)
+        finish_run(rig, step)
+        close(rig, step, "approved")
+        rig.use_case.execute(time.time())
+        return rig, step
+
+    def _assert_untouched(self, rig, step):
+        node = rig.store.get_node(step)
+        self.assertEqual(node.state, State.DONE)
+        self.assertEqual(node.outcome, "approved")
+        self.assertFalse(node.park.reason or node.park.needs)
+        self.assertEqual(rig.records(step)["a"]["status"], "ok")
+
+    def _fails(self, program, message, now=None):
+        rig, step = self._started()
+        program(rig, step)
+
+        rig.use_case.execute(now or time.time())
+
+        cleanup = rig.records(step)["a"]["cleanup"]
+        self.assertEqual(cleanup["status"], "failed")
+        self.assertIn(message, cleanup["message"])
+        self.assertIn("finished", cleanup)
+        notes = rig.store.get_node(step).notes or ""
+        self.assertIn("callout:a: cleanup failed - ", notes)
+        self.assertEqual(notes.count("cleanup failed"), 1)
+        self._assert_untouched(rig, step)
+        return rig, step
+
+    def test_ok_marks_the_cleanup_ok(self):
+        rig, step = self._started()
+        rig.runner.finish(cleanup_key(step), ok(("x", "link", "http://x")))
+
+        rig.use_case.execute(time.time())
+
+        cleanup = rig.records(step)["a"]["cleanup"]
+        self.assertEqual(cleanup["status"], "ok")
+        self.assertIn("finished", cleanup)
+        self.assertEqual(rig.records(step)["a"]["artifacts"], [])
+        self._assert_untouched(rig, step)
+
+    def test_a_failed_response(self):
+        self._fails(
+            lambda rig, step: rig.runner.finish(
+                cleanup_key(step), with_usage(ok(), status="failed", cost_usd=0)), "boom")
+
+    def test_a_non_zero_exit(self):
+        self._fails(
+            lambda rig, step: rig.runner.finish(cleanup_key(step), ScriptResult(exit_code=3)),
+            "code 3")
+
+    def test_a_timeout(self):
+        self._fails(
+            lambda rig, step: rig.runner.finish(
+                cleanup_key(step), ScriptResult(exit_code=None, timed_out=True)),
+            "timed out")
+
+    def test_invalid_stdout(self):
+        self._fails(
+            lambda rig, step: rig.runner.finish(
+                cleanup_key(step), ScriptResult(exit_code=0, stdout="nope")),
+            "invalid response")
+
+    def test_an_orphaned_process(self):
+        self._fails(lambda rig, step: rig.runner.orphan_running(), "interrupted")
+
+    def test_an_unreturned_process_past_the_grace(self):
+        rig, step = self._started()
+        deadline = rig.records(step)["a"]["cleanup"]["deadline"]
+        rig.use_case.execute(deadline + 60)
+        self.assertEqual(rig.records(step)["a"]["cleanup"]["status"], "running")
+
+        rig.use_case.execute(deadline + 61)
+
+        cleanup = rig.records(step)["a"]["cleanup"]
+        self.assertEqual(cleanup["status"], "failed")
+        self.assertIn("still running 60s past its deadline", cleanup["message"])
+        self._assert_untouched(rig, step)
+
+    def test_a_failed_cleanup_is_never_retried(self):
+        rig, step = self._started()
+        rig.runner.finish(cleanup_key(step), ScriptResult(exit_code=1))
+        rig.use_case.execute(time.time())
+
+        rig.use_case.execute(time.time())
+
+        self.assertEqual(len(cleanup_stdins(rig)), 1)
+
+    def test_usage_on_an_ok_cleanup_is_added_to_the_step(self):
+        rig, step = self._started()
+        rig.runner.finish(cleanup_key(step), with_usage(ok(), cost_usd=0.25, model="m"))
+
+        rig.use_case.execute(time.time())
+
+        stored = rig.store.get_step(step)
+        self.assertEqual(stored.usage_cost_usd.to_usd(), 0.25)
+        self.assertEqual(stored.usage_cost_basis, "reported")
+        self.assertEqual(rig.records(step)["a"]["cleanup"]["status"], "ok")
+
+
+class TestSubjectSnapshot(unittest.TestCase):
+    def test_the_subject_is_stored_after_a_suspend_restart(self):
+        rig = CalloutRig([callout("a", "pr")])
+        step = closed_gate(rig)
+        rig.runner.finish(
+            rig.key(step), ScriptResult(exit_code=None, timed_out=True, started_at=0, finished_at=10))
+
+        rig.use_case.execute(102, sleeps=[(2, 8)])
+
+        record = rig.records(step)["a"]
+        self.assertTrue(record["suspend_retried"])
+        self.assertEqual(record["subject"], json.loads(rig.runner.started[-1]["stdin"])["subject"])

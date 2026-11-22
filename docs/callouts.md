@@ -29,7 +29,7 @@ A callout starts at a waiting human gate only when both hold: its `subject` equa
 
 ## Request (protocol 2)
 
-The engine writes one JSON object to the callout's stdin, then closes it. `verb` is `run` here and `preflight` in a [preflight](#preflight). The environment is the engine's own base environment; the working directory is `repos.repo_path`.
+The engine writes one JSON object to the callout's stdin, then closes it. `verb` is `run` here, `preflight` in a [preflight](#preflight) and `cleanup` in a [cleanup](#cleanup). A callout must switch on `verb`: one that treats every unknown verb as `run` would rebuild its output when the gate closes. The environment is the engine's own base environment; the working directory is `repos.repo_path`.
 
 ```json
 {
@@ -94,6 +94,34 @@ The response is `{"status": "ok"}` or `{"status": "failed", "errors": [{"message
 
 The engine runs preflight in three places: `lc doctor` (each problem is a `config` finding of kind `callout-preflight` with its fix), after `lc config --edit` saves a new callout or one whose `command` changed (a `warning:` line and an indented `fix:` line per error, never changing the exit status), and before each gate run. A gate whose preflight fails skips the run, is never retried, and shows the problem and its fix in the Detail tab.
 
+## Cleanup
+
+A callout answers a third verb, `cleanup`, by removing only what it built at the gate (a view, a ref). It is the same configured `command` with this request on stdin, and there is no new declaration:
+
+```json
+{
+  "protocol": 2,
+  "verb": "cleanup",
+  "callout": "<id>",
+  "item": { "id": "...", "title": "...", "repo": "...", "project": "..." },
+  "step": {
+    "id": "...",
+    "stage": "...",
+    "workflow": "<origin>/<name>@<sha>",
+    "principal_output": "spec"
+  },
+  "subject": { "kind": "pr", "url": "...", "base": "...", "stack_layers": [] },
+  "outcome": "<the gate step's outcome, or null>",
+  "repos": { "repo_path": "...", "workspace": null }
+}
+```
+
+`subject` is the subject the gate's run was sent, stored when the run request was built. `outcome` is the closed gate step's outcome as the store holds it. `repos.workspace` is normally `null` because a gate that closed by merge has no open phase run, so a callout must not assume the path exists. There is no `context` key and no preflight first.
+
+The response is the run response. `artifacts` are accepted and discarded; `usage` is recorded as for a run. A callout must be idempotent on `cleanup`: it may run for a gate whose run failed partway, for a run that built nothing, and again after an engine upgrade. Removing something already absent is success.
+
+The pool sends it once for each (step, callout) whose gate step is `done`, human, closed within the last 7 days, and whose record is `ok` or `failed` with a run `phase`, a stored `subject` and no `cleanup` yet. A record still `running`, a preflight-only record and a record written before `subject` was stored get none. A callout no longer configured is not run and is recorded as a failed cleanup. A cleanup never holds the gate, never changes the step's state, outcome or routing, and is never retried; a timeout, a failure, bad output or a pool restart mid-cleanup is a condition note `callout:<id>: cleanup failed - <message>` on the step and nothing else.
+
 ## Where it shows
 
-One run is recorded per (step, callout) in the `callout-runs` step artifact and is never retried. A record gains `finished` (epoch seconds) whenever it leaves `running`; a record written before that field existed has none. The Detail tab appends, after the workflow's own rows, a `callout:<id>` row (`running` or `failed: <message>`), followed on a failure by one `callout:<id>:error:<n>` row per error showing `<message> - fix: <fix>`, or one `callout:<id>:<n>` row per artifact. A gate surfaces after at most one pool tick of delay when a waiting callout matches it. The Workflow tab shows one `callout · <id>` row per record under its gate, with the status and duration; a record that reported `usage` also carries `cost_usd` and `model`, and the cost counts in the step's Cost tab and the item total; selecting it opens the gate on the Detail tab.
+One run is recorded per (step, callout) in the `callout-runs` step artifact and is never retried. A record gains `finished` (epoch seconds) whenever it leaves `running`; a record written before that field existed has none. The Detail tab appends, after the workflow's own rows, a `callout:<id>` row (`running` or `failed: <message>`), followed on a failure by one `callout:<id>:error:<n>` row per error showing `<message> - fix: <fix>`, or one `callout:<id>:<n>` row per artifact. A gate surfaces after at most one pool tick of delay when a waiting callout matches it. The Workflow tab shows one `callout · <id>` row per record under its gate, with the status and duration; a record that reported `usage` also carries `cost_usd` and `model`, and the cost counts in the step's Cost tab and the item total; selecting it opens the gate on the Detail tab. A failed cleanup shows only as a `callout:<id>: cleanup failed` condition note on the step.

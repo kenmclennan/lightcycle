@@ -24,12 +24,15 @@ from lightcycle.domain.work.callout_runs import (
     CALLOUT_RUNS,
     COST_BASIS_REPORTED,
     INTERRUPTED_MESSAGE,
+    PHASE_CLEANUP,
     PHASE_PREFLIGHT,
     PHASE_RUN,
     STATUS_FAILED,
     STATUS_OK,
     STATUS_RUNNING,
+    cleanup_due,
     dump_runs,
+    in_cleanup_window,
 )
 from lightcycle.domain.work.step_focus import FOCUS_ARTIFACT, parse_presents
 from lightcycle.ports.github import PrView
@@ -48,11 +51,14 @@ _CALLOUT_ERRORS = (
 class CalloutDispatchResponse:
     started: List[str] = field(default_factory=list)
     reaped: List[str] = field(default_factory=list)
+    cleanups: List[str] = field(default_factory=list)
 
 
 def callout_key(step_id, callout_id, phase=PHASE_RUN):
     key = "%s%s:%s" % (CALLOUT_KEY_PREFIX, step_id, callout_id)
-    return key + ":preflight" if phase == PHASE_PREFLIGHT else key
+    if phase == PHASE_PREFLIGHT:
+        return key + ":preflight"
+    return key + ":cleanup" if phase == PHASE_CLEANUP else key
 
 
 class CalloutDispatchUseCase:
@@ -68,7 +74,8 @@ class CalloutDispatchUseCase:
     def execute(self, now: float, sleeps=()) -> CalloutDispatchResponse:
         reaped = self._reap(now, sleeps)
         started = self._start(now)
-        return CalloutDispatchResponse(started=started, reaped=reaped)
+        cleanups = self._cleanup(now, sleeps)
+        return CalloutDispatchResponse(started=started, reaped=reaped, cleanups=cleanups)
 
     def _write(self, step_id, runs):
         self._store.replace_artifact(step_id, CALLOUT_RUNS, dump_runs(runs), internal=True)
@@ -85,7 +92,7 @@ class CalloutDispatchUseCase:
     def _reap(self, now, sleeps=()):
         reaped = []
         running = set(self._runner.running())
-        for step in self._store.all_steps():
+        for step in self._reapable_steps(now):
             runs = callout_runs_of(self._store, step.id)
             changed = False
             for callout_id, record in list(runs.items()):
@@ -105,6 +112,12 @@ class CalloutDispatchUseCase:
             if changed:
                 self._write(step.id, runs)
         return reaped
+
+    def _reapable_steps(self, now):
+        return [
+            s for s in self._store.all_steps_including_done()
+            if s.state != State.DONE
+            or (s.role == "human" and in_cleanup_window(s.closed_at, now))]
 
     def _reap_one(self, step, callout_id, record, key, is_running, now, sleeps=()):
         if not is_running:
@@ -179,11 +192,13 @@ class CalloutDispatchUseCase:
         verb = "preflight" if preflight else "run"
         limit = record.get("preflight_timeout") if preflight else callout.timeout
         key = callout_key(step.id, callout_id, PHASE_PREFLIGHT if preflight else PHASE_RUN)
+        request = self._request(step, callout, presents, verb)
         self._runner.start(
             key, callout.command, self._cwd(step), self._config.base_env(),
-            json.dumps(self._request(step, callout, presents, verb)), limit,
-            callout_log_label(step.id, callout_id))
+            json.dumps(request), limit, callout_log_label(step.id, callout_id))
         record = dict(record)
+        if "subject" in request:
+            record["subject"] = request["subject"]
         record.update(suspend_retried=True, deadline=now + limit)
         self._store.note_condition(
             step.id, "callout:%s: timed out across a suspend; restarted once" % callout_id)
@@ -200,10 +215,11 @@ class CalloutDispatchUseCase:
         presents = self._presents(step)
         record = dict(record)
         record.pop("suspend_retried", None)
-        record.update(phase=PHASE_RUN, deadline=now + callout.timeout)
+        request = self._request(step, callout, presents, "run")
+        record.update(phase=PHASE_RUN, deadline=now + callout.timeout, subject=request["subject"])
         self._runner.start(
             callout_key(step.id, callout_id), callout.command, self._cwd(step),
-            self._config.base_env(), json.dumps(self._request(step, callout, presents, "run")),
+            self._config.base_env(), json.dumps(request),
             callout.timeout, callout_log_label(step.id, callout_id))
         return record
 
@@ -253,6 +269,117 @@ class CalloutDispatchUseCase:
                     self._write(step.id, runs)
         return started
 
+    def _cleanup(self, now, sleeps=()):
+        started = []
+        for step in self._store.all_steps_including_done():
+            if step.state != State.DONE or step.role != "human":
+                continue
+            if not in_cleanup_window(step.closed_at, now):
+                continue
+            runs = callout_runs_of(self._store, step.id)
+            if not runs:
+                continue
+            changed = self._reap_cleanups(step, runs, now, sleeps)
+            changed = self._start_cleanups(step, runs, now, started) or changed
+            if changed:
+                self._write(step.id, runs)
+        return started
+
+    def _cleanup_failure(self, step_id, callout_id, cleanup, message, now, errors=()):
+        message = failure_message(message, errors)
+        self._store.note_condition(
+            step_id, "callout:%s: cleanup failed - %s" % (callout_id, message))
+        failed = {k: v for k, v in cleanup.items() if k in ("started", "deadline", "outcome", "cost_usd", "model")}
+        failed.update(status=STATUS_FAILED, message=message, finished=now)
+        return failed
+
+    def _reap_cleanups(self, step, runs, now, sleeps):
+        changed = False
+        running = None
+        for callout_id, record in list(runs.items()):
+            cleanup = record.get("cleanup") if isinstance(record, dict) else None
+            if not isinstance(cleanup, dict) or cleanup.get("status") != STATUS_RUNNING:
+                continue
+            if running is None:
+                running = set(self._runner.running())
+            key = callout_key(step.id, callout_id, PHASE_CLEANUP)
+            try:
+                updated = self._reap_cleanup_one(
+                    step, callout_id, cleanup, key, key in running, now, sleeps)
+            except _CALLOUT_ERRORS as e:
+                updated = self._cleanup_failure(step.id, callout_id, cleanup, str(e), now)
+            if updated is None:
+                continue
+            record = dict(record)
+            record["cleanup"] = updated
+            runs[callout_id] = record
+            changed = True
+        return changed
+
+    def _reap_cleanup_one(self, step, callout_id, cleanup, key, is_running, now, sleeps):
+        if not is_running:
+            return self._cleanup_failure(
+                step.id, callout_id, cleanup, INTERRUPTED_MESSAGE, now)
+        result = self._runner.poll(key)
+        if result is None:
+            deadline = cleanup.get("deadline")
+            if deadline is None or awake_elapsed(deadline, now, sleeps) <= _DEADLINE_GRACE_SECONDS:
+                return None
+            self._runner.abandon(key)
+            return self._cleanup_failure(step.id, callout_id, cleanup, _UNRETURNED_MESSAGE, now)
+        if result.timed_out:
+            return self._cleanup_failure(
+                step.id, callout_id, cleanup, "timed out after the configured limit", now)
+        if result.exit_code is None:
+            return self._cleanup_failure(
+                step.id, callout_id, cleanup,
+                "could not run the command: %s" % (result.stderr_tail or "no exit status"), now)
+        if result.exit_code != 0:
+            return self._cleanup_failure(
+                step.id, callout_id, cleanup, "exited with code %s" % result.exit_code, now)
+        parsed = validate_callout_response(result.stdout)
+        if not isinstance(parsed, CalloutResponse):
+            return self._cleanup_failure(
+                step.id, callout_id, cleanup, "invalid response: %s" % parsed, now)
+        cleanup = self._record_usage(step.id, cleanup, parsed.usage)
+        if parsed.status == STATUS_FAILED:
+            return self._cleanup_failure(
+                step.id, callout_id, cleanup, parsed.message, now, parsed.errors)
+        cleanup = dict(cleanup)
+        cleanup.update(status=STATUS_OK, finished=now)
+        return cleanup
+
+    def _start_cleanups(self, step, runs, now, started):
+        changed = False
+        for callout_id, record in list(runs.items()):
+            if not cleanup_due(step.closed_at, record, now):
+                continue
+            callout = self._callout(callout_id)
+            record = dict(record)
+            changed = True
+            if callout is None:
+                record["cleanup"] = self._cleanup_failure(
+                    step.id, callout_id, {}, "callout is no longer configured", now)
+                runs[callout_id] = record
+                continue
+            record["cleanup"] = {
+                "status": STATUS_RUNNING, "started": now, "deadline": now + callout.timeout,
+                "outcome": step.outcome}
+            runs[callout_id] = record
+            self._write(step.id, runs)
+            key = callout_key(step.id, callout_id, PHASE_CLEANUP)
+            try:
+                stdin = json.dumps(self._request(
+                    step, callout, None, "cleanup", record["subject"], step.outcome))
+                self._runner.start(
+                    key, callout.command, self._cwd(step), self._config.base_env(), stdin,
+                    callout.timeout, callout_log_label(step.id, callout_id))
+                started.append(key)
+            except _CALLOUT_ERRORS as e:
+                record["cleanup"] = self._cleanup_failure(
+                    step.id, callout_id, record["cleanup"], str(e), now)
+        return changed
+
     def _presents(self, step):
         try:
             if skip_unpinned(self._store, self._flow_service, step):
@@ -287,7 +414,7 @@ class CalloutDispatchUseCase:
             return None
         return self._worktrees.worktree_path(step)
 
-    def _request(self, step, callout, presents, verb):
+    def _request(self, step, callout, presents, verb, subject=None, outcome=None):
         item = self._store.get_item(step.item)
         request = {
             "protocol": PROTOCOL,
@@ -304,6 +431,9 @@ class CalloutDispatchUseCase:
             "principal_output": self._principal_output(step)}
         if verb == "run":
             request["subject"] = self._subject(step, item, presents)
+        if verb == "cleanup":
+            request["subject"] = subject
+            request["outcome"] = outcome
         request["repos"] = {
             "repo_path": self._repo_path(step), "workspace": self._workspace(step)}
         return request
