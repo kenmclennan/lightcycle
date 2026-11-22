@@ -1,10 +1,15 @@
 import unittest
 
 from lightcycle.domain.feedback import (
+    AUTOMATED_PREFIX,
     LC_MARKER,
     outstanding_reviews,
     outstanding_threads,
+    parse_decision,
+    parse_decision_sha,
     review_has_signal,
+    roles_of,
+    thread_answered_by_operator,
     thread_key,
 )
 from lightcycle.ports.github import Comment, Review
@@ -133,3 +138,40 @@ class TestOutstandingReviews(unittest.TestCase):
         result = outstanding_reviews([linked, tokened], [_linked("r1")], None)
 
         self.assertEqual(result, [linked])
+
+
+class TestAutomatedPrefix(unittest.TestCase):
+    def test_a_first_line_carrying_the_prefix_does_not_disturb_marker_parsing(self):
+        body = "%s pushed the fix\n%s\n<!-- lc:sha=abc123 -->\n<!-- lc:decision=rework -->" % (
+            AUTOMATED_PREFIX, LC_MARKER)
+
+        self.assertEqual(parse_decision(body), "rework")
+        self.assertEqual(parse_decision_sha(body), "abc123")
+
+
+class TestRoles(unittest.TestCase):
+    def test_a_review_bot_is_a_trusted_author_listed_as_one(self):
+        roles = roles_of({"Ken", "Copilot"}, {"copilot", "ghost"})
+
+        self.assertTrue(roles.is_bot("COPILOT"))
+        self.assertFalse(roles.is_bot("ghost"))
+        self.assertFalse(roles.is_trusted("ghost"))
+        self.assertTrue(roles.is_trusted("ken"))
+        self.assertFalse(roles.is_bot("ken"))
+
+    def test_only_an_unmarked_later_operator_comment_answers_a_thread(self):
+        roles = roles_of({"ken"}, set())
+        root = Comment(author="m", body="x", is_top_level=False, id="c1", created_at=1.0)
+        reply = Comment(
+            author="ken", body="ok", is_top_level=False, id="c2", in_reply_to_id="c1",
+            created_at=2.0)
+        marked = Comment(
+            author="ken", body=LC_MARKER, is_top_level=False, id="c3", in_reply_to_id="c1",
+            created_at=3.0)
+        earlier = Comment(
+            author="ken", body="ok", is_top_level=False, id="c0", in_reply_to_id="c1",
+            created_at=0.5)
+
+        self.assertTrue(thread_answered_by_operator(root, [root, reply], roles))
+        self.assertFalse(thread_answered_by_operator(root, [root, marked], roles))
+        self.assertFalse(thread_answered_by_operator(root, [root, earlier], roles))

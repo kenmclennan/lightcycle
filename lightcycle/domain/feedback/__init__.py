@@ -3,17 +3,29 @@ from lightcycle.domain.feedback.period import Period
 from lightcycle.domain.feedback.reflection import Reflection, parse_reflections, reflections_of
 from lightcycle.domain.feedback.retro import RETRO_ORIGIN_LABEL, RETROED_LABEL, Retro
 from lightcycle.domain.feedback.review import (
+    AUTOMATED_PREFIX,
     LC_MARKER,
+    is_engine_marked,
     outstanding_reviews,
     outstanding_threads,
     parse_decision,
     parse_decision_sha,
+    review_gate_wanted,
     review_has_signal,
     thread_key,
+)
+from lightcycle.domain.feedback.routing import (
+    Roles,
+    Sorted,
+    gated,
+    roles_of,
+    routed,
+    thread_answered_by_operator,
 )
 from lightcycle.domain.feedback.trust import (
     ADMIT,
     APPROVED,
+    DEALT,
     DISPATCHED,
     HELD,
     HELD_COMMENT_ORIGIN_LABEL,
@@ -22,6 +34,8 @@ from lightcycle.domain.feedback.trust import (
     KIND_MENTION,
     KIND_REVIEW,
     REJECTED,
+    SUPERSEDED,
+    WITHDRAWN,
     HeldComment,
     can_transition,
     hold_key,
@@ -32,7 +46,7 @@ from lightcycle.domain.feedback.signal import UNLABELED_MODEL, SignalSpec, Signa
 from lightcycle.domain.feedback.worklog import Worklog, WorklogEntry
 
 __all__ = [
-    "ReviewEscape", "ADMIT", "APPROVED", "DISPATCHED", "HELD", "HELD_COMMENT_ORIGIN_LABEL", "HOLD", "HeldComment",
+    "ReviewEscape", "ADMIT", "APPROVED", "AUTOMATED_PREFIX", "DEALT", "Roles", "SUPERSEDED", "Sorted", "WITHDRAWN", "gated", "is_engine_marked", "review_gate_wanted", "roles_of", "routed", "thread_answered_by_operator", "DISPATCHED", "HELD", "HELD_COMMENT_ORIGIN_LABEL", "HOLD", "HeldComment",
     "KIND_INLINE", "KIND_MENTION", "KIND_REVIEW", "REJECTED", "can_transition", "hold_key",
     "standing",
     "Duration", "LC_MARKER", "Period", "RETRO_ORIGIN_LABEL", "RETROED_LABEL", "Reflection", "Retro", "SignalSpec", "Signals",

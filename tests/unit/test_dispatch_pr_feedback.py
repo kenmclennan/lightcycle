@@ -17,7 +17,8 @@ from tests.support.fake_github import FakeGitHub
 from tests.support.fake_store import FakeStore
 
 _BOT_LOGIN = "copilot-pull-request-reviewer[bot]"
-_TRUST = dict(trusted_authors=lambda: frozenset({"reviewer", _BOT_LOGIN}), held_shortcode=lambda: "HLD",
+_TRUST = dict(trusted_authors=lambda: frozenset({"reviewer", _BOT_LOGIN}),
+              review_bots=lambda: frozenset({"reviewer", _BOT_LOGIN}), held_shortcode=lambda: "HLD",
               poll_epoch=lambda: 0, unread_note_polls=lambda: 3)
 
 
@@ -461,7 +462,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
         self.assertEqual(result.reworked, [item])
         self.assertEqual(len(self._spawned_feedback_steps(store, step)), 1)
 
-    def test_untrusted_summary_only_review_is_not_held(self):
+    def test_untrusted_summary_only_review_is_gated(self):
         url = "https://github.com/x/y/pull/37-untrusted-summary"
         gh = FakeGitHub(
             push_time=1000.0,
@@ -476,7 +477,7 @@ class TestMonitorPrsFeedback(unittest.TestCase):
         self.assertEqual(result.reworked, [])
         held = [n for n in store.all_nodes()
                 if n.type == "step" and n.stage == "review-held-comment"]
-        self.assertEqual(held, [])
+        self.assertEqual(len(held), 1)
 
     def test_commented_review_with_body_triggers(self):
         url = "https://github.com/x/y/pull/37-commented-with-body"

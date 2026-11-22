@@ -11,6 +11,7 @@ from lightcycle.domain.work import State
 from lightcycle.ports.github import CheckRun, Comment, NotYetRead, Review
 from tests.support.fake_fs import flow_from_metas
 from tests.support.fake_github import FakeGitHub
+from tests.support.store_seed import seed_hold_state
 from tests.support.fake_store import FakeStore
 from tests.support.fake_view_freshness import AlwaysConfirmed, NeverConfirmed
 from tests.unit.test_resolve_ci import _BRANCH, _URL, _FlowAdapter, plant_pr
@@ -32,7 +33,11 @@ def _flow(always_run=False):
             "on_ci_success": "succeeded", "on_ci_failure": "failed",
         },
         "watcher": watcher,
-        "reviewer": {"model": "sonnet", "step": "review"},
+        "reviewer": {
+            "model": "sonnet", "step": "review",
+            "on_pr_feedback": "handle-feedback", "on_mention_token": "@lc",
+        },
+        "handler": {"model": "sonnet", "step": "handle-feedback"},
     })
 
 
@@ -63,7 +68,7 @@ class _Rig:
         self.uc = ResolveCiUseCase(
             self.store, github, adapter, complete, close_item=CloseItemUseCase(self.store, NoopWorktrees()), clock=time.monotonic, poll_seconds=lambda: 60,
             ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0,
-            views=views or AlwaysConfirmed(), trusted_authors=trusted)
+            views=views or AlwaysConfirmed(), trusted_authors=trusted, review_bots=trusted)
 
     def step(self, stage):
         found = [c for c in self.store.children(self.item) if c.stage == stage]
@@ -94,16 +99,16 @@ class TestFeedbackKeepsTheAgent(unittest.TestCase):
         self.assertIsNone(rig.step("review"))
 
     def test_trusted_top_level_comment(self):
-        self._kept(_gh(comments=[(_PUSH + 1, _comment())]))
+        self._kept(_gh(comments=[(_PUSH + 1, _comment(body="@lc please fix"))]))
 
     def test_trusted_inline_comment(self):
         self._kept(_gh(comments=[(_PUSH + 1, _comment(top_level=False, path="a.py", line=1))]))
 
     def test_trusted_review_requesting_changes(self):
-        self._kept(_gh(reviews=[(_PUSH + 1, Review(author="alice", body="", state="CHANGES_REQUESTED", id="r1"))]))
+        self._kept(_gh(reviews=[(_PUSH + 1, Review(author="alice", body="@lc", state="CHANGES_REQUESTED", id="r1"))]))
 
     def test_trusted_commented_review_with_a_body(self):
-        self._kept(_gh(reviews=[(_PUSH + 1, Review(author="alice", body="hm", state="COMMENTED", id="r1"))]))
+        self._kept(_gh(reviews=[(_PUSH + 1, Review(author="alice", body="@lc hm", state="COMMENTED", id="r1"))]))
 
 
 class TestFeedbackThatDoesNotBlock(unittest.TestCase):
@@ -116,7 +121,7 @@ class TestFeedbackThatDoesNotBlock(unittest.TestCase):
         self._skipped(_gh(comments=[(_PUSH, _comment())]))
 
     def test_comment_a_fraction_above_the_cutoff_blocks(self):
-        rig = _Rig(_gh(comments=[(_PUSH + 0.001, _comment())]))
+        rig = _Rig(_gh(comments=[(_PUSH + 0.001, _comment(body="@lc fix"))]))
         rig.uc.execute()
         self.assertEqual(rig.step("watch-ci").state, State.QUEUED)
 
@@ -132,7 +137,7 @@ class TestFeedbackThatDoesNotBlock(unittest.TestCase):
         rig.store.file_hold(run.id, "k1", "mallory", "body", None, None, 1.0)
         hold_step = rig.store.create_step(stage="held-comment", role="human", item=rig.item)
         rig.store.attach_hold(run.id, "k1", rig.item, hold_step)
-        rig.store.decide_hold(hold_step, "approved")
+        seed_hold_state(rig.store, hold_step, "approved")
         rig.uc.execute()
         self.assertEqual(rig.step("watch-ci").state, State.QUEUED)
 
@@ -186,7 +191,7 @@ class TestMixedPrs(unittest.TestCase):
 
         class _PerPr(FakeGitHub):
             def comments_since(self, pr, since):
-                return [_comment()] if pr == other else []
+                return [_comment(body="@lc fix")] if pr == other else []
 
         gh = _PerPr(
             head_shas={_URL: "sha1", other: "sha1"},

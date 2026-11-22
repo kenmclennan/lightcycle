@@ -1,4 +1,4 @@
-from tests.support.store_seed import held_comment
+from tests.support.store_seed import held_comment, seed_hold_state
 import dataclasses
 import json
 import unittest
@@ -42,7 +42,7 @@ _METAS = {
                         "routes": {"done": "await-merge"}, "phase": "code"},
 }
 _FLOW = flow_from_metas(_METAS)
-_TRUST = dict(trusted_authors=lambda: frozenset({"ken"}), held_shortcode=lambda: "HLD",
+_TRUST = dict(trusted_authors=lambda: frozenset({"ken"}), review_bots=lambda: frozenset({"ken"}), held_shortcode=lambda: "HLD",
               poll_epoch=lambda: 0, unread_note_polls=lambda: 3)
 
 
@@ -309,7 +309,7 @@ class TestPrCommentEscapes(unittest.TestCase):
         uc.execute()
         self.assertEqual(rig.store.escapes_since(""), [])
         held = held_comment(rig.store, rig.rid, "mention:1500.0")
-        rig.store.decide_hold(held.step_id, "approved")
+        seed_hold_state(rig.store, held.step_id, "approved")
         uc.execute()
         (row,) = rig.store.escapes_since("")
         self.assertEqual((row.via, row.source, row.authors), ("pr-comment", "other", "mallory"))

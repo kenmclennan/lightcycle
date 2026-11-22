@@ -409,6 +409,10 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def update_hold_body(self, run_id, key, body):
+        pass
+
+    @abstractmethod
     def mark_hold_dispatched(self, run_id, key):
         pass
 

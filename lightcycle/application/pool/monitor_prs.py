@@ -31,7 +31,7 @@ class MonitorPrsResponse:
 class MonitorPrsUseCase:
     def __init__(
         self, store, github, worktrees, flow_service, complete, *,
-        trusted_authors, held_shortcode, writes, ci_clock, ci_poll_seconds,
+        trusted_authors, review_bots, held_shortcode, writes, ci_clock, ci_poll_seconds,
         ci_ceiling_seconds, ci_start_window_seconds, ci_no_workflows_wait_seconds, ci_wall_clock,
         ci_views, ci_unconfirmed_note_polls,
     ):
@@ -44,7 +44,8 @@ class MonitorPrsUseCase:
         self._github = github
         self._dispatch = DispatchPrFeedbackUseCase(
             store, github, flow_service, complete,
-            trusted_authors=trusted_authors, held_shortcode=held_shortcode,
+            trusted_authors=trusted_authors, review_bots=review_bots,
+            held_shortcode=held_shortcode,
             poll_epoch=ci_views.poll_epoch, unread_note_polls=ci_unconfirmed_note_polls,
         )
         self._note_drafts = NoteDraftPrsUseCase(store, github, flow_service)
@@ -56,7 +57,7 @@ class MonitorPrsUseCase:
             ci_ceiling_seconds=ci_ceiling_seconds, ci_start_window_seconds=ci_start_window_seconds,
             ci_no_workflows_wait_seconds=ci_no_workflows_wait_seconds, wall_clock=ci_wall_clock,
             ci_unconfirmed_note_polls=ci_unconfirmed_note_polls,
-            views=ci_views, trusted_authors=trusted_authors,
+            views=ci_views, trusted_authors=trusted_authors, review_bots=review_bots,
         )
 
     def execute(self, sleeps=()) -> MonitorPrsResponse:

@@ -8,6 +8,7 @@ from lightcycle.application.flow.engine_steps import (
     LIFECYCLE_FAILURE_STEP, LIFECYCLE_ORIGIN_LABEL, MATERIAL_AUDIT_STEP, RETRO_ORIGIN_LABEL,
     SUMMARY_ORIGIN_LABEL, engine_outcomes_for_node,
 )
+from lightcycle.domain.feedback import DEALT, REJECTED, SUPERSEDED, WITHDRAWN
 from lightcycle.domain.feedback import RETROED_LABEL
 from lightcycle.domain.flow.hooks import CI_FAILED_CAP
 from lightcycle.application.flow.next_step import NextStepResolver
@@ -28,6 +29,11 @@ from lightcycle.domain.contracts import StepContract
 from lightcycle.domain.work import NodeSpec
 from lightcycle.domain.work.state import State
 
+HOLD_OUTCOME_STATES = {
+    "dealt": DEALT, "superseded": SUPERSEDED, "withdrawn": WITHDRAWN, "reject": REJECTED,
+}
+ENGINE_ONLY_HOLD_OUTCOMES = ("superseded", "withdrawn")
+
 _AUTO_CLOSE_REASON = "auto-closed: all children done"
 
 
@@ -46,6 +52,7 @@ class CompleteInput:
     outcome: str
     note: Optional[str] = None
     merged_prs: FrozenSet[str] = frozenset()
+    by_engine: bool = False
 
 
 @dataclass(frozen=True)
@@ -84,6 +91,7 @@ class CompleteStepUseCase:
             return CompleteResponse(next_step=None)
         if not repair:
             self._refuse_other_than_refused_route(t, input)
+        self._refuse_retired_approve(t, input)
         valid = engine_outcomes_for_node(self._store, t)
         if valid is not None and input.outcome not in valid:
             raise UseCaseError(
@@ -131,8 +139,24 @@ class CompleteStepUseCase:
     def _is_summary_origin(self, t):
         return SUMMARY_ORIGIN_LABEL in self._store.labels_of(t.item)
 
+    def _refuse_retired_approve(self, t, input: CompleteInput):
+        if (
+            input.outcome == "approve" and t.stage == HELD_COMMENT_STEP
+            and self._is_held_comment_origin(t)
+        ):
+            raise UseCaseError(
+                "approve is retired: a reviewer's comment never drives the pipeline by approval. "
+                "To act on it, post an @lc comment on the PR after agreeing what it should say; "
+                "close this gate with lc done %s dealt, or reject to drop it." % t.id
+            )
+
     def _complete_held_comment(self, t, input: CompleteInput, repair) -> CompleteResponse:
-        decided = "approved" if input.outcome == "approve" else "rejected"
+        if input.outcome in ENGINE_ONLY_HOLD_OUTCOMES and not input.by_engine:
+            raise UseCaseError(
+                "%s is closed by the engine only, when the thread is answered or the comment "
+                "is deleted; close this gate with dealt or reject." % input.outcome
+            )
+        decided = HOLD_OUTCOME_STATES[input.outcome]
 
         def writes(_new):
             if not repair:

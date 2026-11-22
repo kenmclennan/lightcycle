@@ -29,7 +29,7 @@ _RELATIVE_PATH_KEYS = (
     "tui-health-icon-dir", "tui-health-icon-0", "tui-health-icon-1", "tui-health-icon-2",
     "tui-health-icon-3", "tui-health-icon-4", "tui-health-icon-busy",
 )
-_LIST_KEYS = ("trusted-authors", "context-artifact-types")
+_LIST_KEYS = ("trusted-authors", "review-bots", "context-artifact-types")
 _STR_KEYS = (
     "branch-prefix", "default-origin", "workflows-remote", "editor", "personal-origin",
     "audit-shortcode", "held-comment-shortcode", "guidance-shortcode",
@@ -59,7 +59,7 @@ for _kind, _keys in (
 
 BLANK_ALLOWED = ("personal-origin",)
 NO_USABLE_DEFAULT = ("trusted-authors", "workflows-remote")
-CASEFOLDED_LISTS = ("trusted-authors",)
+CASEFOLDED_LISTS = ("trusted-authors", "review-bots")
 
 SEED = "seed"
 BLOCK = "block"

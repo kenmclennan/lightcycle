@@ -1019,6 +1019,12 @@ class FakeStore(StorePort):
     def decide_hold(self, step_id, state):
         self._transition_hold(self._hold_for_step(step_id), state)
 
+    def update_hold_body(self, run_id, key, body):
+        hold = self._holds.get((run_id, key))
+        if hold is None or hold.state != HELD:
+            raise StoreError("no open held comment for %s" % ((run_id, key),))
+        self._holds[(run_id, key)] = replace(hold, body=body)
+
     def mark_hold_dispatched(self, run_id, key):
         self._transition_hold(self._holds.get((run_id, key)), DISPATCHED)
 

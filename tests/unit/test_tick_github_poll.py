@@ -106,7 +106,7 @@ class TestCiStageIssuesNoGitCall(unittest.TestCase):
         plant_pr(store, item, _PR, branch="feat/thing")
         step = store.create_step(stage="poll-ci", role="engine", item=item)
         flow = _FlowAdapter(_FLOW)
-        monitor = _CiMonitor(ResolveCiUseCase(store, snapshot, flow, CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None), close_item=CloseItemUseCase(store, NoopWorktrees()), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=snapshot, trusted_authors=lambda: frozenset()))
+        monitor = _CiMonitor(ResolveCiUseCase(store, snapshot, flow, CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None), close_item=CloseItemUseCase(store, NoopWorktrees()), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=snapshot, trusted_authors=lambda: frozenset(), review_bots=lambda: frozenset()))
         git = FakeGit()
         tick = make_tick(
             store, FakeWorkers(), FakeSpawner(), _Config(), monitor=monitor,
@@ -130,7 +130,7 @@ def _ci_pool(hold_view):
     item = store.create_item("building a thing", "a description")
     plant_pr(store, item, _PR, branch="feat/thing")
     flow = _FlowAdapter(_FLOW)
-    monitor = _CiMonitor(ResolveCiUseCase(store, snapshot, flow, CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None), close_item=CloseItemUseCase(store, NoopWorktrees()), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=snapshot, trusted_authors=lambda: frozenset()))
+    monitor = _CiMonitor(ResolveCiUseCase(store, snapshot, flow, CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None), close_item=CloseItemUseCase(store, NoopWorktrees()), clock=time.monotonic, poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=snapshot, trusted_authors=lambda: frozenset(), review_bots=lambda: frozenset()))
     tick = make_tick(
         store, FakeWorkers(), FakeSpawner(), _Config(), monitor=monitor,
         github_poll_gate=_gate(snapshot, github, InlineGithubPollRunner()),
@@ -209,7 +209,7 @@ def _head_change_pool(before_move, settle=True):
     monitor = _CiMonitor(ResolveCiUseCase(
         store, snapshot, flow, CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None),
         close_item=CloseItemUseCase(store, NoopWorktrees()), clock=time.monotonic, poll_seconds=lambda: _POLL,
-        ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=snapshot, trusted_authors=lambda: frozenset()))
+        ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, wall_clock=lambda: 10000.0, views=snapshot, trusted_authors=lambda: frozenset(), review_bots=lambda: frozenset()))
     tick = make_tick(
         store, FakeWorkers(), FakeSpawner(), _Config(), monitor=monitor,
         github_poll_gate=_gate(snapshot, github, InlineGithubPollRunner()),
@@ -503,7 +503,7 @@ class _Rig:
         flow = _FlowAdapter(_BEHIND_FLOW)
         self.monitor = MonitorPrsUseCase(
             self.store, self.snapshot, FakeWorktrees(), flow, CompleteStepUseCase(self.store, flow, worktrees=NoopWorktrees(), config=None),
-            trusted_authors=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
+            trusted_authors=lambda: frozenset({"reviewer"}), review_bots=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
             writes=self.writes, ci_clock=time.monotonic, ci_poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, ci_wall_clock=lambda: 10000.0, ci_views=self.snapshot)
         self.poll = GithubPollUseCase(self.snapshot, self.github, runner, _Config(), self.writes, FakeGithubBudgetStatus(), time.time, FakeFs(), FakeStore())
 
