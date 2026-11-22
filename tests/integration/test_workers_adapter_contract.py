@@ -37,7 +37,7 @@ class TestWorkersAdapterContract(WorkersContractBase, unittest.TestCase):
             pass
 
     def make_workers(self):
-        config = Config(environ={"LC_HOME": self._root})
+        config = Config(environ={"LC_HOME": self._root, "LC_SHUTDOWN_GRACE_SECONDS": "5"})
         w = WorkersAdapter(config)
         self._seed(w, [
             {"spawnid": "_alive_seed", "pid": self._alive_proc.pid, "step": None},
