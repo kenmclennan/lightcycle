@@ -77,6 +77,39 @@ _FLOW = flow_from_metas(
 )
 
 
+_REVIEW_FLOW = flow_from_metas(
+    {
+        "reviewer": {
+            "step": "ready-merge",
+            "routes": {"merged": "cleanup", "changes": "build"},
+            "on_pr_merge": "merged",
+            "on_pr_close": "abandoned",
+        },
+        "review-code": {
+            "step": "review-code",
+            "review": "done",
+            "routes": {"done": "ready-merge", "rejected": "build"},
+        },
+    },
+    disposition={"merged": "completed", "abandoned": "abandoned"},
+)
+
+
+def close_review(store, item, outcome):
+    review = store.create_step(stage="review-code", role="agent", item=item)
+    store.complete_node(review, outcome)
+    return review
+
+
+def verdict(sha, body="", author="review-code"):
+    return Comment(
+        author=author,
+        body=LC_MARKER + "<!-- lc:sha=%s -->" % sha + body,
+        is_top_level=True,
+        created_at=100.0,
+    )
+
+
 class _ContentPinRunner:
     def __init__(self, store, cc, item_id, phase):
         self._store = store
@@ -819,6 +852,85 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         self.assertIn("b.py", node.notes)
 
 
+    def _review_move(self, comment, outcomes=("rejected",), before=("a.py", "b.py"),
+                     after=("a.py",), comments_failing=False):
+        gh = FakeGitHub(
+            head_shas={self._URL: "sha1"},
+            files_by_sha={
+                (self._URL, "sha1"): frozenset(before),
+                (self._URL, "sha2"): frozenset(after),
+            },
+            timed_comments=[(100.0, comment)] if comment is not None else [],
+        )
+        store, item, step, uc = self._setup(gh, flow=_REVIEW_FLOW)
+        uc.execute()
+        for outcome in outcomes:
+            close_review(store, item, outcome)
+        gh._head_shas[self._URL] = "sha2"
+        if comments_failing:
+            gh._failing_calls = {"comments_since"}
+        uc.execute()
+        return store, item, step
+
+    def test_rejecting_review_orders_back_a_file_without_naming_it(self):
+        store, item, step = self._review_move(verdict("sha1", " the helper in b was wrong"))
+
+        node = store.get_node(step)
+        self.assertEqual(node.role, "agent")
+        self.assertIn("ordered by the rejecting review", node.notes)
+        self.assertIn("b.py", node.notes)
+        self.assertEqual(self._pin(store, item), "sha2")
+
+    def test_drop_without_a_rejection_still_parks(self):
+        store, item, step = self._review_move(None, outcomes=())
+
+        node = store.get_node(step)
+        self.assertEqual(node.role, "human")
+        self.assertIn("b.py", node.notes)
+
+    def test_review_ordered_needs_a_current_trusted_rejection(self):
+        cases = {
+            "passed review": (verdict("sha1"), ("done",)),
+            "superseded rejection": (verdict("sha1"), ("rejected", "done")),
+            "stale verdict": (verdict("sha0"), ("rejected",)),
+            "untrusted author": (verdict("sha1", author="colleague"), ("rejected",)),
+        }
+        for name, (comment, outcomes) in cases.items():
+            with self.subTest(name):
+                store, item, step = self._review_move(comment, outcomes=outcomes)
+
+                node = store.get_node(step)
+                self.assertEqual(node.role, "human")
+                self.assertIn("b.py", node.notes)
+
+    def test_keep_line_file_still_parks_in_a_mixed_move(self):
+        store, item, step = self._review_move(
+            verdict("sha1", "\nKeep: c.py"),
+            before=("a.py", "b.py", "c.py"),
+        )
+
+        node = store.get_node(step)
+        self.assertEqual(node.role, "human")
+        self.assertIn("did not find one accounting for c.py", node.park.reason)
+        self.assertNotIn("accounting for b.py", node.park.reason)
+        self.assertNotIn("b.py,", node.park.reason)
+
+    def test_keep_line_alone_parks_naming_the_kept_file(self):
+        store, item, step = self._review_move(verdict("sha1", "\nKeep: b.py"))
+
+        node = store.get_node(step)
+        self.assertEqual(node.role, "human")
+        self.assertIn("b.py", node.notes)
+
+    def test_review_ordered_fails_closed_when_the_thread_cannot_be_read(self):
+        store, item, step = self._review_move(verdict("sha1"), comments_failing=True)
+
+        node = store.get_node(step)
+        self.assertEqual(node.role, "human")
+        self.assertIn("Could not read", node.park.reason)
+        self.assertIn("b.py", node.park.reason)
+
+
 class TestContentPinOverAStack(unittest.TestCase):
     def _setup(self, signatures=None, files=None):
         import json
@@ -1161,6 +1273,29 @@ class TestContentPinOverAStack(unittest.TestCase):
         self.assertIn("ordered by the rework", node.notes)
         self.assertIn("gone.py", node.notes)
         self.assertNotIn("moved.py", node.notes)
+        self.assertEqual(self._pins()[two], "sha-2b")
+
+    def test_layer_review_ordered_drop_parks_nothing(self):
+        two = _layer_url(2)
+        self._setup(files={
+            (two, "pin2"): frozenset({"a.py", "gone.py"}),
+            (two, "sha-2b"): frozenset({"a.py"})})
+        self.uc = CheckContentPinUseCase(
+            self.store, self.github, _FlowAdapter(_REVIEW_FLOW),
+            trusted_authors=lambda: frozenset({"review-code"}))
+        self.github._head_shas[two] = "pin2"
+        self._run()
+        close_review(self.store, self.item, "rejected")
+        self.github._head_shas[two] = "sha-2b"
+        self.github._timed_comments.append((100.0, verdict("pin2")))
+
+        self._run()
+        self._run()
+
+        node = self.store.get_node(self.step)
+        self.assertNotEqual(node.state, State.WAITING)
+        self.assertIn("ordered by the rejecting review", node.notes)
+        self.assertIn("gone.py", node.notes)
         self.assertEqual(self._pins()[two], "sha-2b")
 
     def test_a_cleared_stack_takes_the_unstacked_path(self):
