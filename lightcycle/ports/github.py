@@ -152,6 +152,10 @@ class GitHubEventsPort(ABC):
         pass
 
     @abstractmethod
+    def own_files(self, pr: str, sha: str) -> Union[frozenset, ReadFailure]:
+        pass
+
+    @abstractmethod
     def diff_signature(
         self, pr: str, sha: str, base: Optional[str] = None
     ) -> Union[str, ReadFailure]:

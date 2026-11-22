@@ -251,6 +251,9 @@ class ScriptedGitHub(GitHubEventsPort):
     def pr_files(self, pr):
         return frozenset()
 
+    def own_files(self, pr, sha):
+        return frozenset()
+
     def diff_signature(self, pr, sha, base=None):
         return ReadFailure(-1, "diff signatures are not simulated")
 

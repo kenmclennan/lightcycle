@@ -41,6 +41,7 @@ def _captured_argvs():
         adapter.changed_files(_PR, "deadbeef", "main")
         adapter.diff_signature(_PR, "deadbeef")
         adapter.pr_files(_PR)
+        adapter.own_files(_PR, "deadbeef")
 
     return [c for c in calls if c and c[0] == "gh"]
 

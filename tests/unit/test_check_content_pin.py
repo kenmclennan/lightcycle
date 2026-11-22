@@ -372,6 +372,91 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         self.assertIn("dropped.py", node.notes)
         self.assertNotIn("new.py", node.notes)
 
+    def test_head_rebuilt_on_another_base_and_back_does_not_park(self):
+        url = self._URL
+        gh = FakeGitHub(
+            head_shas={url: "A"},
+            files_by_sha={
+                (url, "A"): frozenset({"own.py"}),
+                (url, "B"): frozenset({"own.py", "m1.py", "m2.py"}),
+                (url, "C"): frozenset({"own.py"}),
+            },
+            own_files_by_sha={(url, "B"): frozenset({"own.py"})},
+        )
+        store, item, step, uc = self._setup(gh)
+        uc.execute()
+
+        gh._head_shas[url] = "B"
+        uc.execute()
+        gh._head_shas[url] = "C"
+        uc.execute()
+
+        self.assertEqual(self._pin(store, item), "C")
+        self.assertIsNone(store.get_node(step).notes)
+        self.assertEqual(store.get_node(step).role, "agent")
+
+    def test_a_genuine_drop_still_parks_naming_the_file(self):
+        url = self._URL
+        gh = FakeGitHub(
+            head_shas={url: "P1"},
+            files_by_sha={(url, "P1"): frozenset({"a.py", "b.py"}), (url, "P2"): frozenset({"a.py"})},
+            own_files_by_sha={(url, "P1"): frozenset({"a.py", "b.py"})},
+        )
+        store, item, step, uc = self._setup(gh)
+        uc.execute()
+
+        gh._head_shas[url] = "P2"
+        uc.execute()
+
+        node = store.get_node(step)
+        self.assertEqual(node.role, "human")
+        self.assertIn("b.py", node.notes)
+        self.assertNotIn("a.py", node.notes)
+
+    def test_a_mixed_rebuild_names_only_the_items_own_file(self):
+        url = self._URL
+        gh = FakeGitHub(
+            head_shas={url: "P1"},
+            files_by_sha={
+                (url, "P1"): frozenset({"own1.py", "own2.py", "base.py"}),
+                (url, "P2"): frozenset({"own1.py"}),
+            },
+            own_files_by_sha={(url, "P1"): frozenset({"own1.py", "own2.py"})},
+        )
+        store, item, step, uc = self._setup(gh)
+        uc.execute()
+
+        gh._head_shas[url] = "P2"
+        uc.execute()
+
+        node = store.get_node(step)
+        self.assertEqual(node.role, "human")
+        self.assertIn("own2.py", node.notes)
+        self.assertNotIn("base.py", node.notes)
+
+    def test_an_own_files_read_failure_defers_without_advancing_the_pin(self):
+        url = self._URL
+        gh = FakeGitHub(
+            head_shas={url: "P1"},
+            files_by_sha={(url, "P1"): frozenset({"a.py", "b.py"}), (url, "P2"): frozenset({"a.py"})},
+        )
+        store, item, step, uc = self._setup(gh)
+        uc.execute()
+        gh._head_shas[url] = "P2"
+        self.assertTrue(gh._files_by_sha[(url, "P1")] - gh._files_by_sha[(url, "P2")])
+        gh._failing_calls = {"own_files"}
+
+        uc.execute()
+
+        self.assertEqual(self._pin(store, item), "P1")
+        self.assertIsNone(store.get_node(step).notes)
+        self.assertEqual(store.get_node(step).role, "agent")
+
+        gh._failing_calls = set()
+        uc.execute()
+
+        self.assertIn("b.py", store.get_node(step).notes)
+
     def test_in_progress_step_is_not_reassigned_but_is_noted(self):
         gh = FakeGitHub(
             head_shas={self._URL: "sha1"},
@@ -780,6 +865,20 @@ class TestContentPinOverAStack(unittest.TestCase):
         node = self.store.get_node(self.step)
         self.assertEqual(node.state, State.WAITING)
         self.assertIn("layer 2 of 3 (%s)" % two, node.park.reason)
+        self.assertEqual(self._pins()[two], "sha-2b")
+
+    def test_a_layer_rebuilt_on_another_base_parks_nothing(self):
+        two = _layer_url(2)
+        self._setup(files={(two, "sha-2"): frozenset({"a.py", "base.py"}),
+                           (two, "sha-2b"): frozenset({"a.py"})})
+        self.github._own_files_by_sha[(two, "sha-2")] = frozenset({"a.py"})
+        self._run()
+        self.github._head_shas[two] = "sha-2b"
+
+        self._run()
+
+        self.assertIsNone(self.store.get_node(self.step).notes)
+        self.assertNotEqual(self.store.get_node(self.step).state, State.WAITING)
         self.assertEqual(self._pins()[two], "sha-2b")
 
     def test_a_cascaded_head_advances_the_pin_silently(self):

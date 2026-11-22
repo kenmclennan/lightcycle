@@ -335,6 +335,40 @@ class GitHubEventsAdapter(GitHubEventsPort):
             return ReadFailure(-1, "could not parse gh api compare JSON for changed filenames")
         return frozenset(f for f in filenames if f)
 
+    def own_files(self, pr: str, sha: str) -> Union[frozenset, ReadFailure]:
+        parts = _repo_parts(pr)
+        if not parts:
+            return ReadFailure(-1, "pr is not a parseable GitHub PR URL: %r" % pr)
+        owner, repo, number = parts
+        try:
+            d = run_in_group(
+                ["gh", "api", "/repos/%s/%s" % (owner, repo), "--jq", ".default_branch"],
+                capture_output=True, text=True,
+                timeout=_GH_TIMEOUT_SECONDS,
+            )
+            if d.returncode != 0:
+                return ReadFailure(d.returncode, d.stderr)
+            default = d.stdout.strip()
+            if not default:
+                return ReadFailure(-1, "gh api returned an empty default_branch for %r" % pr)
+            r = run_in_group(
+                [
+                    "gh", "api", "/repos/%s/%s/compare/%s...%s" % (owner, repo, default, sha),
+                    "--jq", "[.files[]?.filename]",
+                ],
+                capture_output=True, text=True,
+                timeout=_GH_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired:
+            return _timeout_read_failure()
+        if r.returncode != 0:
+            return ReadFailure(r.returncode, r.stderr)
+        try:
+            filenames = json.loads(r.stdout)
+        except (json.JSONDecodeError, ValueError):
+            return ReadFailure(-1, "could not parse gh api compare JSON for own filenames")
+        return frozenset(f for f in filenames if f)
+
     def pr_files(self, pr: str) -> Union[frozenset, ReadFailure]:
         parts = _repo_parts(pr)
         if not parts:
