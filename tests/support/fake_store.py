@@ -86,6 +86,7 @@ def record_to_step(record, blocked_by=None):
         ),
         claimed_by=record.get("assignee"),
         model=meta.get("model"),
+        effort=meta.get("effort"),
         outcome=record.get("outcome"),
         notes=record.get("notes"),
         watched_step=meta.get("watched_step"),
@@ -531,6 +532,12 @@ class FakeStore(StorePort):
         b = self._get(tid)
         meta = dict(b.get("metadata") or {})
         meta["model"] = model
+        b["metadata"] = meta
+
+    def set_effort(self, tid, effort):
+        b = self._get(tid)
+        meta = dict(b.get("metadata") or {})
+        meta["effort"] = effort
         b["metadata"] = meta
 
     def label_add(self, tid, label):

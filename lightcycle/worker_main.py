@@ -50,6 +50,7 @@ def main():
             config.max_session_seconds(),
             open_step=lambda: has_open_step(container.store, spawnid),
             env=config.agent_env(),
+            effort=plan.effort,
             record_session_id=lambda sid: container.store.replace_artifact(
                 plan.step_id, "session-id", sid, internal=True
             ),

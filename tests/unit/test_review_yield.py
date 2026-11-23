@@ -407,7 +407,15 @@ class TestReviewYield(unittest.TestCase):
         self.assertEqual(stage["cost_usd"], sum(r["cost_usd"] for r in stage["verdict_rows"]))
         self.assertEqual(
             {k for k in stage["verdict_rows"][0]},
-            {"step", "item", "pass", "phase", "outcome", "closed_at", "cost_usd", "findings", "layers"})
+            {"step", "item", "pass", "phase", "outcome", "closed_at", "cost_usd", "findings", "layers", "effort"})
+
+    def test_verdict_rows_carry_effort(self):
+        rig, rejected, passed = self._setup()
+        rig.store.set_effort(rejected, "low")
+        (stage,) = self._report(rig)["stages"]
+        efforts = {r["step"]: r["effort"] for r in stage["verdict_rows"]}
+        self.assertEqual(efforts, {rejected: "low", passed: None})
+        self.assertEqual((stage["verdicts"], stage["passes"], stage["rejections"]), (2, 1, 1))
 
     def test_cost_is_summed_across_verdict_rows(self):
         rig, rejected, passed = self._setup()

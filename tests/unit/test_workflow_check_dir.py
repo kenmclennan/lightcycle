@@ -421,6 +421,46 @@ class TestAlwaysRunKeyChecks(unittest.TestCase):
         self.assertIn("declares always-run: but source.toml has no requires-engine", err)
 
 
+class TestEffortKeyChecks(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        cli.set_container(_Container())
+
+    def _build(self, value, requires=True, model=True):
+        root = _bundle(self.tmp)
+        step = os.path.join(root, "steps", "write-code.md")
+        with open(step) as f:
+            text = f.read()
+        if not model:
+            text = text.replace("model: sonnet\n", "")
+        with open(step, "w") as f:
+            f.write(text.replace("---\n", "---\neffort: %s\n" % value, 1))
+        if requires:
+            with open(os.path.join(root, "source.toml"), "a") as f:
+                f.write('requires-engine = ">=0.6.0"\n')
+        return root
+
+    def test_a_valid_level_reports_nothing(self):
+        rc, _out, err = run_check("--dir", self._build("low"), "spec-driven")
+        self.assertEqual(rc, 0, err)
+
+    def test_an_invalid_level_is_reported(self):
+        rc, _out, err = run_check("--dir", self._build("extreme"), "spec-driven")
+        self.assertEqual(rc, 1)
+        self.assertIn("declares effort: 'extreme'", err)
+
+    def test_a_step_without_model_is_reported(self):
+        rc, _out, err = run_check("--dir", self._build("low", model=False), "spec-driven")
+        self.assertEqual(rc, 1)
+        self.assertIn("declares effort: but has no model:", err)
+
+    def test_the_key_without_requires_engine_is_reported(self):
+        rc, _out, err = run_check("--dir", self._build("low", requires=False), "spec-driven")
+        self.assertEqual(rc, 1)
+        self.assertIn("declares effort: but source.toml has no requires-engine", err)
+
+
 class TestPrincipalOutputKeyChecks(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()

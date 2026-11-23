@@ -146,6 +146,7 @@ class ReviewYieldUseCase:
             "phase": definition.phase, "outcome": step.outcome, "closed_at": step.closed_at,
             "cost_usd": step.usage_cost_usd.to_usd(), "findings": findings,
             "layers": layers.verdict_layers(findings),
+            "effort": step.effort,
         })
         if step.item not in group.items:
             group.items.add(step.item)

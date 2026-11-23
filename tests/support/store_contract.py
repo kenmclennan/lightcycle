@@ -853,6 +853,21 @@ class StoreContractBase:
         s.set_model(tid, "sonnet")
         self.assertEqual(s.get_node(tid).model, "sonnet")
 
+    def test_set_effort_roundtrip(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+        self.assertIsNone(s.get_node(tid).effort)
+        s.set_effort(tid, "low")
+        self.assertEqual(s.get_node(tid).effort, "low")
+
+    def test_set_effort_preserves_model(self):
+        s = self.make_store()
+        tid = self._step(s, "t")
+        s.set_model(tid, "sonnet")
+        s.set_effort(tid, "high")
+        t = s.get_node(tid)
+        self.assertEqual((t.model, t.effort), ("sonnet", "high"))
+
     def test_set_model_preserves_other_metadata(self):
         s = self.make_store()
         tid = self._step(s, "t")

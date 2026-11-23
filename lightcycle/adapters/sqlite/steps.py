@@ -151,6 +151,10 @@ class StepsAggregate:
         self._conn.execute("UPDATE steps SET model = ? WHERE id = ?", (model, tid))
         self._commit()
 
+    def set_effort(self, tid, effort):
+        self._conn.execute("UPDATE steps SET effort = ? WHERE id = ?", (effort, tid))
+        self._commit()
+
     def label_add(self, tid, label):
         if not self._apply_label(tid, label, True):
             exists = self._conn.execute(

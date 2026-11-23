@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from typing import List
 
 from lightcycle.frontmatter import split_frontmatter
+from lightcycle.domain.work.effort import effort_problem
 from lightcycle.application.workflows.bundle_check import (
     check_bundle_references,
     check_prompts,
@@ -173,6 +174,17 @@ class CheckWorkflowDirUseCase:
                 if manifest.requires_engine is None:
                     problems.append(
                         "step %s declares always-run: but source.toml has no requires-engine; "
+                        "older engines would ignore it" % role)
+            if "effort" in step_meta:
+                found_effort = effort_problem(step_meta["effort"])
+                if found_effort is not None:
+                    problems.append("step %s declares effort: %r; %s" % (role, step_meta["effort"], found_effort))
+                if "model" not in step_meta:
+                    problems.append(
+                        "step %s declares effort: but has no model: (only an agent step runs claude)" % role)
+                if manifest.requires_engine is None:
+                    problems.append(
+                        "step %s declares effort: but source.toml has no requires-engine; "
                         "older engines would ignore it" % role)
             if "principal-output" in step_meta and manifest.requires_engine is None:
                 problems.append(
