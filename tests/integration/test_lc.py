@@ -3572,6 +3572,16 @@ class TestNodeDTOReadSurface(unittest.TestCase):
         rc, out, err = call(_cli_mod.cmd_show, tid)
         self.assertEqual(json.loads(out)["usage_api_calls"], 3)
 
+    def test_show_surfaces_the_steps_effort(self):
+        tid = self._make_task()
+        rc, out, err = call(_cli_mod.cmd_show, tid)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("effort", json.loads(out))
+        self.assertIsNone(json.loads(out)["effort"])
+        self.store.set_effort(tid, "low")
+        rc, out, err = call(_cli_mod.cmd_show, tid)
+        self.assertEqual(json.loads(out)["effort"], "low")
+
     STEP_MODEL_FIELDS = (
         "inputs", "outputs", "records", "detail", "detail_presents", "report",
         "previous_step", "log",

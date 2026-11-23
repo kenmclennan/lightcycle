@@ -16,7 +16,7 @@ _ITEM_COLUMNS = (
 )
 
 _STEP_COLUMNS = (
-    "id", "item", "stage", "pass_id", "role", "state", "assignee", "model",
+    "id", "item", "stage", "pass_id", "role", "state", "assignee", "model", "effort",
     "outcome", "notes", "watched_step",
     "park_reason", "park_needs", "park_tried",
     "created_at", "fired_at", "closed_at", "active_seconds",

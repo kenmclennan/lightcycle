@@ -25,7 +25,7 @@ class ClaimInput:
     stage: Optional[str] = None
 
 
-_STRUCTURAL_META_KEYS = ("model", "accepts", "produces", "presents", "detail", "github", "always-run",
+_STRUCTURAL_META_KEYS = ("model", "effort", "accepts", "produces", "presents", "detail", "github", "always-run",
                          "review", "sends-back", "config", "principal-output")
 
 
@@ -147,6 +147,9 @@ class ClaimStepUseCase:
         model = meta.get("model")
         if model:
             self._store.set_model(t.id, model)
+        effort = meta.get("effort")
+        if effort:
+            self._store.set_effort(t.id, str(effort))
         try:
             if spawnid:
                 self._workers.set_step(spawnid, t.id)

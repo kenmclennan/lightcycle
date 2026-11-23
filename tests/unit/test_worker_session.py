@@ -91,6 +91,29 @@ class TestPlanSession(unittest.TestCase):
                 reclaimed.append, "agent")
         self.assertEqual(reclaimed, ["s-9"])
 
+    def test_plan_session_carries_a_declared_effort(self):
+        plan = plan_session(
+            lambda role: self._resp("p"),
+            lambda f, pin: StepPrompt(meta={"model": "sonnet", "effort": "low"}, body="x"),
+            self._never_reclaim, "agent")
+        self.assertEqual(plan.effort, "low")
+
+    def test_plan_session_without_effort_plans_none(self):
+        plan = plan_session(
+            lambda role: self._resp("p"),
+            lambda f, pin: StepPrompt(meta={"model": "sonnet"}, body="x"),
+            self._never_reclaim, "agent")
+        self.assertIsNone(plan.effort)
+
+    def test_plan_session_refuses_an_invalid_effort(self):
+        reclaimed = []
+        with self.assertRaises(SessionError):
+            plan_session(
+                lambda role: self._resp("p", "s-9"),
+                lambda f, pin: StepPrompt(meta={"model": "sonnet", "effort": "extreme"}, body="x"),
+                reclaimed.append, "agent")
+        self.assertEqual(reclaimed, ["s-9"])
+
     def test_agent_without_model_reclaims_the_pre_claim_and_raises(self):
         reclaimed = []
         with self.assertRaises(SessionError):
@@ -355,6 +378,26 @@ class TestRun(unittest.TestCase):
         cmd = captured["cmd"]
         self.assertIn("--add-dir", cmd)
         self.assertEqual(cmd[cmd.index("--add-dir") + 1], "/data/root")
+
+    def test_build_command_passes_effort_after_model(self):
+        cmd = build_command("opus", "sys", "/d", effort="low")
+        i = cmd.index("--model")
+        self.assertEqual(cmd[i:i + 4], ["--model", "opus", "--effort", "low"])
+
+    def test_build_command_without_effort_is_unchanged(self):
+        cmd = build_command("opus", "sys", "/d")
+        self.assertIn("--model", cmd)
+        self.assertNotIn("--effort", cmd)
+        self.assertEqual(cmd[cmd.index("--model") + 1:cmd.index("--model") + 3],
+                         ["opus", "--append-system-prompt"])
+
+    def test_run_passes_effort_to_the_command(self):
+        captured = {}
+        with patch("lightcycle.adapters.worker_session.subprocess.Popen",
+                    self._fake_popen(captured)):
+            run("/d", "/w", "coder", "opus", "sys", 5, open_step=_open, effort="high")
+        cmd = captured["cmd"]
+        self.assertEqual(cmd[cmd.index("--effort") + 1], "high")
 
     def test_launches_without_mcp_servers_and_slash_commands(self):
         captured = {}

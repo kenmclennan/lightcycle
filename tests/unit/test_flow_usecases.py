@@ -1764,6 +1764,27 @@ class TestClaimConfigOmitsPrincipalOutput(unittest.TestCase):
         self.assertEqual(resp.config["ci-wait"], "1m")
 
 
+class TestClaimRecordsEffort(unittest.TestCase):
+    def _claim(self, meta):
+        s = FakeStore()
+        item = s.create_item("st", "a description", workflow="spec-driven", shortcode="GRID")
+        step = s.create_step(stage="build", role="agent", item=item)
+        metas = {"coder": {"model": "sonnet", "step": "build", "ci-wait": "1m", **meta}}
+        resp = ClaimStepUseCase(
+            s, flow_for(metas, s), FakeWorktrees(), FakeWorkers(), FakeConfig(),
+            FakeGithubBudget(), StackLayers(FakeGitHub())).execute(ClaimInput(role="agent"))
+        return s.get_node(step), resp
+
+    def test_claim_records_the_declared_effort(self):
+        step, resp = self._claim({"effort": "low"})
+        self.assertEqual(step.effort, "low")
+        self.assertNotIn("effort", resp.config)
+
+    def test_claim_without_effort_records_none(self):
+        step, _resp = self._claim({})
+        self.assertIsNone(step.effort)
+
+
 class TestBlockTask(unittest.TestCase):
     def test_routes_to_human_with_resume(self):
         s = FakeStore()

@@ -185,6 +185,10 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def set_effort(self, tid, effort):
+        pass
+
+    @abstractmethod
     def label_add(self, tid, label):
         pass
 

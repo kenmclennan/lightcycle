@@ -16,6 +16,7 @@ class Step:
     state: State = State.QUEUED
     claimed_by: Optional[str] = None
     model: Optional[str] = None
+    effort: Optional[str] = None
     outcome: Optional[str] = None
     notes: Optional[str] = None
     watched_step: Optional[str] = None
@@ -66,6 +67,7 @@ class Step:
             "state": self.state,
             "claimed_by": self.claimed_by,
             "model": self.model,
+            "effort": self.effort,
             "outcome": self.outcome,
             "notes": self.notes,
             "watched_step": self.watched_step,

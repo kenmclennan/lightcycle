@@ -1385,6 +1385,14 @@ class TestSqliteStoreUsageColumnsMigration(unittest.TestCase):
         ).fetchone()
         self.assertIsNotNone(table)
 
+    def test_existing_store_gains_the_effort_column(self):
+        root = tempfile.mkdtemp()
+        self._seed_pre_usage_store(root)
+        store = SqliteStore(self._config(root))
+        cols = {r[1] for r in store._conn.execute("PRAGMA table_info(steps)").fetchall()}
+        self.assertIn("effort", cols)
+        self.assertIsNone(store.get_step("s-1").effort)
+
     def test_existing_store_gains_step_tool_usage_and_backfill_log_tables(self):
         root = tempfile.mkdtemp()
         self._seed_pre_usage_store(root)

@@ -14,6 +14,7 @@ from typing import Optional
 
 from lightcycle.adapters.claude_stream import parse_rate_limit_event
 from lightcycle.domain.guidance.guidance import GuidanceSelection
+from lightcycle.domain.work.effort import effort_problem
 from lightcycle.domain.pool.worker_session import CLOSE, NUDGE, SessionPolicy
 
 
@@ -32,6 +33,7 @@ class SessionPlan:
     guidance_skipped: tuple = ()
     guidance_notes: tuple = ()
     guidance_recorded: bool = False
+    effort: Optional[str] = None
 
 
 def _no_guidance(resp):
@@ -51,6 +53,11 @@ def plan_session(claim, resolve, reclaim, role, guidance=_no_guidance):
     if not model:
         reclaim(resp.view.step.id)
         raise SessionError("step %r has no 'model' in frontmatter" % step_file)
+    effort = agent.meta.get("effort") or None
+    if effort is not None and effort_problem(effort) is not None:
+        reclaim(resp.view.step.id)
+        raise SessionError(
+            "step %r has an invalid 'effort' in frontmatter: %s" % (step_file, effort_problem(effort)))
     recorded = True
     try:
         selection = guidance(resp)
@@ -65,6 +72,7 @@ def plan_session(claim, resolve, reclaim, role, guidance=_no_guidance):
         step_id=resp.view.step.id, guidance_delivered=selection.delivered,
         guidance_skipped=selection.skipped, guidance_notes=selection.notes,
         guidance_recorded=recorded,
+        effort=effort,
     )
 
 
@@ -162,12 +170,14 @@ def has_open_step(store, spawnid):
         return True
 
 
-def build_command(model, sysprompt, root):
+def build_command(model, sysprompt, root, effort=None):
+    effort_args = ["--effort", effort] if effort is not None else []
     return ["claude", "-p",
             "--input-format", "stream-json",
             "--output-format", "stream-json",
             "--verbose",
             "--model", model,
+            *effort_args,
             "--append-system-prompt", sysprompt,
             "--add-dir", root,
             "--dangerously-skip-permissions",
@@ -197,8 +207,9 @@ def poll_decision(open_step, policy, events):
 
 
 def run(add_dir, cwd, stage, model, sysprompt, max_session_seconds, *, open_step,
-        clock=time.monotonic, record_session_id=lambda session_id: None, env=None):
-    proc = subprocess.Popen(build_command(model, sysprompt, add_dir), cwd=cwd,
+        clock=time.monotonic, record_session_id=lambda session_id: None, env=None,
+        effort=None):
+    proc = subprocess.Popen(build_command(model, sysprompt, add_dir, effort=effort), cwd=cwd,
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             text=True, bufsize=1, env=env)
     policy = SessionPolicy()
