@@ -11,6 +11,7 @@ SCHEDULE_ORIGIN_LABEL = "schedule-origin"
 SCHEDULE_GUARD_LABEL_PREFIX = "schedule-guard:"
 DAILY_SUMMARY_STEP = "daily-summary"
 HELD_COMMENT_STEP = "review-held-comment"
+TRIAGE_HELD_COMMENT_STEP = "triage-held-comment"
 LIFECYCLE_ORIGIN_LABEL = "lifecycle-origin"
 LIFECYCLE_FAILURE_STEP = "review-lifecycle-failure"
 
@@ -20,6 +21,7 @@ ENGINE_STEP_DISPLAY = {
     FINDINGS_STEP: "Review the findings",
     DAILY_SUMMARY_STEP: "Writing the daily summary",
     HELD_COMMENT_STEP: "A reviewer's comment needs you",
+    TRIAGE_HELD_COMMENT_STEP: "Judging a reviewer's comment",
     LIFECYCLE_FAILURE_STEP: "Look into a failed maintenance run",
 }
 
@@ -29,6 +31,7 @@ ENGINE_STEP_OUTCOMES = {
     FINDINGS_STEP: ("done", "filed", "reviewed"),
     DAILY_SUMMARY_STEP: ("done", "abandoned"),
     HELD_COMMENT_STEP: ("dealt", "superseded", "withdrawn", "reject"),
+    TRIAGE_HELD_COMMENT_STEP: ("asks", "quiet", "superseded", "withdrawn", "reject"),
     LIFECYCLE_FAILURE_STEP: ("done",),
 }
 
@@ -47,7 +50,7 @@ def engine_outcomes_for_node(store, node):
         return engine_outcomes_of(node.stage)
     if node.stage == DAILY_SUMMARY_STEP and SUMMARY_ORIGIN_LABEL in labels:
         return engine_outcomes_of(node.stage)
-    if node.stage == HELD_COMMENT_STEP and HELD_COMMENT_ORIGIN_LABEL in labels:
+    if node.stage in (HELD_COMMENT_STEP, TRIAGE_HELD_COMMENT_STEP) and HELD_COMMENT_ORIGIN_LABEL in labels:
         return engine_outcomes_of(node.stage)
     if node.stage == LIFECYCLE_FAILURE_STEP and LIFECYCLE_ORIGIN_LABEL in labels:
         return engine_outcomes_of(node.stage)

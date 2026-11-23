@@ -50,7 +50,7 @@ class _Base(unittest.TestCase):
         self.adapter = _FlowAdapter(self.flow)
         self.uc = DispatchPrFeedbackUseCase(
             self.store, github, self.adapter, None,
-            trusted_authors=trusted, review_bots=review_bots or trusted, held_shortcode=lambda: "HLD",
+            trusted_authors=trusted, review_bots=review_bots or trusted, held_shortcode=lambda: "HLD", held_triage_timeout=lambda: 0, wall_clock=lambda: 0.0,
             poll_epoch=lambda: 0, unread_note_polls=lambda: 3,
         )
         return self.uc

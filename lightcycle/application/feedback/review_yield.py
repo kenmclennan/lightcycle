@@ -7,6 +7,7 @@ from lightcycle.application.flow.engine_steps import (
     HELD_COMMENT_STEP,
     LIFECYCLE_FAILURE_STEP,
     MATERIAL_AUDIT_STEP,
+    TRIAGE_HELD_COMMENT_STEP,
 )
 from lightcycle.domain.feedback import layers
 from lightcycle.domain.feedback.review_yield import (
@@ -22,7 +23,7 @@ from lightcycle.ports.store import NodeNotFoundError
 
 _ENGINE_STAGES = frozenset({
     AUDIT_STEP, MATERIAL_AUDIT_STEP, FINDINGS_STEP, DAILY_SUMMARY_STEP, HELD_COMMENT_STEP,
-    LIFECYCLE_FAILURE_STEP,
+    TRIAGE_HELD_COMMENT_STEP, LIFECYCLE_FAILURE_STEP,
 })
 
 POST_MERGE = "post-merge"

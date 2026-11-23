@@ -167,7 +167,7 @@ class TestTickWithMonitor(unittest.TestCase):
         worktrees = FakeWorktrees()
         monitor = MonitorPrsUseCase(
             store, FakeGitHub(merged_prs={url}), worktrees, _FlowAdapter(_FLOW),
-            trusted_authors=lambda: frozenset({"reviewer"}), review_bots=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
+            trusted_authors=lambda: frozenset({"reviewer"}), review_bots=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD", held_triage_timeout=lambda: 0,
             writes=InlinePrWrites(FakeGitHub(), time.monotonic), ci_clock=time.monotonic, ci_poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, ci_wall_clock=lambda: 10000.0, ci_views=AlwaysConfirmed(), complete=None,
         )
 
@@ -188,7 +188,7 @@ class TestTickWithMonitor(unittest.TestCase):
         worktrees = FakeWorktrees()
         monitor = MonitorPrsUseCase(
             store, FakeGitHub(closed_prs={url}), worktrees, _FlowAdapter(_FLOW),
-            trusted_authors=lambda: frozenset({"reviewer"}), review_bots=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
+            trusted_authors=lambda: frozenset({"reviewer"}), review_bots=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD", held_triage_timeout=lambda: 0,
             writes=InlinePrWrites(FakeGitHub(), time.monotonic), ci_clock=time.monotonic, ci_poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, ci_wall_clock=lambda: 10000.0, ci_views=AlwaysConfirmed(), complete=None,
         )
 
@@ -282,7 +282,7 @@ class TestMonitorPrsUseCaseComposesAllThreeJobs(unittest.TestCase):
 
         uc = MonitorPrsUseCase(
             store, gh, worktrees, _FlowAdapter(flow), complete,
-            trusted_authors=lambda: frozenset({"reviewer"}), review_bots=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
+            trusted_authors=lambda: frozenset({"reviewer"}), review_bots=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD", held_triage_timeout=lambda: 0,
             writes=InlinePrWrites(gh, time.monotonic), ci_clock=time.monotonic, ci_poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3, ci_wall_clock=lambda: 10000.0, ci_views=AlwaysConfirmed(),
         )
 
@@ -315,7 +315,7 @@ class TestTeardownRefusalRunLog(unittest.TestCase):
         github = FakeGitHub(merged_prs={self.URL})
         monitor = MonitorPrsUseCase(
             store, github, worktrees, _FlowAdapter(_FLOW),
-            trusted_authors=lambda: frozenset({"reviewer"}), review_bots=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
+            trusted_authors=lambda: frozenset({"reviewer"}), review_bots=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD", held_triage_timeout=lambda: 0,
             writes=InlinePrWrites(github, time.monotonic), ci_clock=time.monotonic,
             ci_poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600, ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60, ci_unconfirmed_note_polls=lambda: 3,
             ci_wall_clock=lambda: 10000.0, ci_views=AlwaysConfirmed(), complete=None,
@@ -409,7 +409,7 @@ class TestOutOfOrderStackMerge(unittest.TestCase):
         complete = CompleteStepUseCase(store, flow, worktrees=NoopWorktrees(), config=None)
         uc = MonitorPrsUseCase(
             store, gh, worktrees, flow, complete,
-            trusted_authors=lambda: frozenset(), review_bots=lambda: frozenset(), held_shortcode=lambda: "HLD",
+            trusted_authors=lambda: frozenset(), review_bots=lambda: frozenset(), held_shortcode=lambda: "HLD", held_triage_timeout=lambda: 0,
             writes=InlinePrWrites(gh, time.monotonic), ci_clock=time.monotonic,
             ci_poll_seconds=lambda: 60, ci_ceiling_seconds=lambda: 3600,
             ci_start_window_seconds=lambda: 600, ci_no_workflows_wait_seconds=lambda: 60,

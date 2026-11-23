@@ -33,6 +33,7 @@ from lightcycle.domain.feedback.trust import (
     KIND_INLINE,
     KIND_MENTION,
     KIND_REVIEW,
+    NOTED,
     REJECTED,
     SUPERSEDED,
     WITHDRAWN,
@@ -47,7 +48,7 @@ from lightcycle.domain.feedback.worklog import Worklog, WorklogEntry
 
 __all__ = [
     "ReviewEscape", "ADMIT", "APPROVED", "AUTOMATED_PREFIX", "DEALT", "Roles", "SUPERSEDED", "Sorted", "WITHDRAWN", "gated", "is_engine_marked", "review_gate_wanted", "roles_of", "routed", "thread_answered_by_operator", "DISPATCHED", "HELD", "HELD_COMMENT_ORIGIN_LABEL", "HOLD", "HeldComment",
-    "KIND_INLINE", "KIND_MENTION", "KIND_REVIEW", "REJECTED", "can_transition", "hold_key",
+    "KIND_INLINE", "KIND_MENTION", "KIND_REVIEW", "NOTED", "REJECTED", "can_transition", "hold_key",
     "standing",
     "Duration", "LC_MARKER", "Period", "RETRO_ORIGIN_LABEL", "RETROED_LABEL", "Reflection", "Retro", "SignalSpec", "Signals",
     "UNLABELED_MODEL", "Worklog", "WorklogEntry", "outstanding_reviews",

@@ -1829,6 +1829,12 @@ class StoreContractBase:
         seed_hold_state(s, early, "approved")
         self.assertEqual([h.key for h in s.approved_holds("R-1")], ["mention:1", "mention:2"])
 
+    def test_hold_of_step_finds_the_hold_or_nothing(self):
+        s = self.make_store()
+        step = self._filed_hold(s)
+        self.assertEqual(s.hold_of_step(step).key, "inline:1")
+        self.assertIsNone(s.hold_of_step("nope"))
+
     def test_only_the_documented_transitions_are_legal(self):
         s = self.make_store()
         step = self._filed_hold(s)
@@ -1845,7 +1851,7 @@ class StoreContractBase:
             s.decide_hold(step, "dealt")
 
     def test_a_held_comment_closes_into_each_terminal_state_once(self):
-        for state in ("dealt", "superseded", "withdrawn", "rejected"):
+        for state in ("dealt", "superseded", "withdrawn", "rejected", "noted"):
             with self.subTest(state=state):
                 s = self.make_store()
                 step = self._filed_hold(s)

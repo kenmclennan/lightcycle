@@ -47,14 +47,14 @@ BLANK_LIST_SEEDS = ("review-bots",)
 class TestKindTable(unittest.TestCase):
     def test_kinds_and_seed_keys_name_the_same_keys(self):
         self.assertEqual(set(KEY_KINDS), {k for k, _ in _SEED_KEYS})
-        self.assertEqual(len(KEY_KINDS), 79)
+        self.assertEqual(len(KEY_KINDS), 80)
 
     def test_kind_sizes(self):
         sizes = {}
         for kind in KEY_KINDS.values():
             sizes[kind] = sizes.get(kind, 0) + 1
         self.assertEqual(sizes, {
-            "bool": 5, "int": 37, "float": 14, "path": 4, "relative-path": 7, "list": 3,
+            "bool": 5, "int": 38, "float": 14, "path": 4, "relative-path": 7, "list": 3,
             "str": 9})
 
 
@@ -70,7 +70,7 @@ class TestSeededKeys(ConfigEditCase):
             setting = next(s for s in self.config.resolved_settings() if s.key == key)
             self.assertEqual(setting.state, "set", key)
             passed += 1
-        self.assertEqual(passed, 76)
+        self.assertEqual(passed, 77)
 
     def test_blank_seeded_required_keys_refuse(self):
         for key in NO_USABLE_DEFAULT:

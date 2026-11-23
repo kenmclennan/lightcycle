@@ -53,6 +53,12 @@ class FeedbackAggregate:
         )
         self._commit()
 
+    def hold_of_step(self, step_id):
+        row = self._conn.execute(
+            "SELECT %s FROM held_comments WHERE step_id = ?" % self._HOLD_COLUMNS, (step_id,)
+        ).fetchone()
+        return HeldComment(*row) if row else None
+
     def decide_hold(self, step_id, state):
         self._transition_hold("step_id = ?", (step_id,), state)
 

@@ -79,7 +79,7 @@ def _candidate(run, kind, obj, path=None, line=None):
 class DispatchPrFeedbackUseCase:
     def __init__(
         self, store, github, flow_service, complete, *, trusted_authors, review_bots,
-        held_shortcode, poll_epoch, unread_note_polls,
+        held_shortcode, held_triage_timeout, wall_clock, poll_epoch, unread_note_polls,
     ):
         self._poll_epoch = poll_epoch
         self._unread_note_polls = unread_note_polls
@@ -91,9 +91,10 @@ class DispatchPrFeedbackUseCase:
         self._complete = complete
         self._trusted_authors = trusted_authors
         self._review_bots = review_bots
-        self._hold = HoldCommentUseCase(store, held_shortcode)
+        self._hold = HoldCommentUseCase(store, held_shortcode, held_triage_timeout)
         self._gates = ReviewGateRefreshUseCase(
-            store, github, complete, trusted_authors=trusted_authors, review_bots=review_bots)
+            store, github, complete, trusted_authors=trusted_authors, review_bots=review_bots,
+            triage_timeout=held_triage_timeout, wall_clock=wall_clock)
         self._refreshed = set()
         self._escapes = EscapeRecorder(store)
         self._gate_hold = GateHold(store)

@@ -1,10 +1,13 @@
-from lightcycle.application.flow.engine_steps import HELD_COMMENT_ORIGIN_LABEL, HELD_COMMENT_STEP
+from lightcycle.application.flow.engine_steps import (
+    HELD_COMMENT_ORIGIN_LABEL, HELD_COMMENT_STEP, TRIAGE_HELD_COMMENT_STEP,
+)
 from lightcycle.application.work.project_of import project_of
+from lightcycle.config import ConfigError
 
 _BODY_LIMIT = 2000
 
 
-def _pr_label(pr):
+def pr_label(pr):
     parts = pr.rstrip("/").split("/")
     if len(parts) >= 5 and parts[-2] == "pull":
         return "%s/%s#%s" % (parts[-4], parts[-3], parts[-1])
@@ -36,9 +39,21 @@ def describe_gate(origin, pr, held, edited=False):
 
 
 class HoldCommentUseCase:
-    def __init__(self, store, shortcode):
+    def __init__(self, store, shortcode, triage_timeout):
         self._store = store
         self._shortcode = shortcode
+        self._triage_timeout = triage_timeout
+
+    def _first_step(self, held):
+        if held.path:
+            return HELD_COMMENT_STEP, "human"
+        try:
+            triage = self._triage_timeout() > 0
+        except ConfigError:
+            triage = False
+        if triage:
+            return TRIAGE_HELD_COMMENT_STEP, "agent"
+        return HELD_COMMENT_STEP, "human"
 
     def execute(self, run, origin, pr, held):
         with self._store.transaction():
@@ -47,12 +62,13 @@ class HoldCommentUseCase:
             ):
                 return None
             item_id = self._store.create_item(
-                "Held comment from %s on %s" % (held.author, _pr_label(pr)),
+                "Held comment from %s on %s" % (held.author, pr_label(pr)),
                 describe_gate(origin, pr, held),
                 project=project_of(self._store, origin),
                 shortcode=self._shortcode(),
             )
             self._store.label_add(item_id, HELD_COMMENT_ORIGIN_LABEL)
-            step_id = self._store.create_step(stage=HELD_COMMENT_STEP, role="human", item=item_id)
+            stage, role = self._first_step(held)
+            step_id = self._store.create_step(stage=stage, role=role, item=item_id)
             self._store.attach_hold(run.id, held.key, item_id, step_id)
         return step_id

@@ -26,6 +26,7 @@ from lightcycle.application.flow import (
 )
 from lightcycle.application.flow.engine_steps import (
     AUDIT_STEP, DAILY_SUMMARY_STEP, ENGINE_STEP_OUTCOMES, FINDINGS_STEP, HELD_COMMENT_STEP, LIFECYCLE_FAILURE_STEP,
+    TRIAGE_HELD_COMMENT_STEP,
     MATERIAL_AUDIT_STEP,
 )
 from lightcycle.application.flow.next_step import NextStepResolver
@@ -541,6 +542,7 @@ class TestEngineStepOutcomes(unittest.TestCase):
                 FINDINGS_STEP: ("done", "filed", "reviewed"),
                 DAILY_SUMMARY_STEP: ("done", "abandoned"),
                 HELD_COMMENT_STEP: ("dealt", "superseded", "withdrawn", "reject"),
+                TRIAGE_HELD_COMMENT_STEP: ("asks", "quiet", "superseded", "withdrawn", "reject"),
                 LIFECYCLE_FAILURE_STEP: ("done",),
             },
         )
@@ -551,6 +553,7 @@ class TestEngineStepOutcomes(unittest.TestCase):
             (MATERIAL_AUDIT_STEP, "retro-origin"),
             (FINDINGS_STEP, "retro-origin"),
             (DAILY_SUMMARY_STEP, "summary-origin"),
+            (TRIAGE_HELD_COMMENT_STEP, "held-comment-origin"),
         ):
             s = FakeStore()
             item, sid = self._step(s, stage, label)

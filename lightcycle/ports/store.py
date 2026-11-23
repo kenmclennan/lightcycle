@@ -409,6 +409,10 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def hold_of_step(self, step_id):
+        pass
+
+    @abstractmethod
     def decide_hold(self, step_id, state):
         pass
 

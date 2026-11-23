@@ -47,7 +47,7 @@ class _Rig:
         self.now = 0.0
         self.dispatch = DispatchPrFeedbackUseCase(
             self.store, self.snapshot, _FlowAdapter(_FEEDBACK_FLOW), None,
-            trusted_authors=lambda: frozenset({"reviewer"}), review_bots=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD",
+            trusted_authors=lambda: frozenset({"reviewer"}), review_bots=lambda: frozenset({"reviewer"}), held_shortcode=lambda: "HLD", held_triage_timeout=lambda: 0, wall_clock=lambda: 0.0,
             poll_epoch=self.epoch, unread_note_polls=lambda: 3)
 
     def gate(self, pr, plant=True):

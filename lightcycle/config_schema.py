@@ -46,7 +46,7 @@ _INT_KEYS = (
     "tui-doctor-check-seconds", "pool-upgrade-check-seconds", "shutdown-grace-seconds",
     "tick-failure-cap", "review-rounds-cap", "guidance-budget-bytes",
     "guidance-unused-after-deliveries", "guidance-dormant-days", "lifecycle-timeout-seconds",
-    "script-timeout-seconds", "script-max-running",
+    "script-timeout-seconds", "script-max-running", "held-comment-triage-timeout",
 )
 
 KEY_KINDS = {}

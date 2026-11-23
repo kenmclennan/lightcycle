@@ -1294,6 +1294,34 @@ class TestGithubReserveCalls(unittest.TestCase):
         self.assertIn("github-reserve-calls", [k for k, _v in _SEED_KEYS])
 
 
+class TestHeldCommentTriageTimeout(unittest.TestCase):
+    def test_seeded_at_nine_hundred(self):
+        self.assertEqual(dict(_SEED_KEYS)["held-comment-triage-timeout"], "900")
+
+    def test_the_file_value_is_read(self):
+        self.assertEqual(
+            _cfg(held_comment_triage_timeout="120").held_comment_triage_timeout(), 120)
+
+    def test_zero_is_accepted_and_turns_triage_off(self):
+        self.assertEqual(_cfg(held_comment_triage_timeout="0").held_comment_triage_timeout(), 0)
+
+    def test_negative_and_non_integer_are_refused_naming_the_key(self):
+        for value in ("-1", "soon"):
+            with self.subTest(value=value):
+                with self.assertRaises(ConfigError) as ctx:
+                    _cfg(held_comment_triage_timeout=value).held_comment_triage_timeout()
+                self.assertIn("held-comment-triage-timeout", str(ctx.exception))
+
+    def test_missing_fails_rather_than_returning_a_value(self):
+        with self.assertRaises(ConfigError) as ctx:
+            _cfg(spin_cap="3").held_comment_triage_timeout()
+        self.assertIn("held-comment-triage-timeout", str(ctx.exception))
+
+    def test_an_absent_key_is_reported_by_missing_config_keys(self):
+        c = _cfg(spin_cap="3")
+        self.assertIn("held-comment-triage-timeout", c.missing_config_keys())
+
+
 class TestPrependPath(unittest.TestCase):
     def test_the_directory_ends_up_first(self):
         env = {"PATH": "/usr/bin:/bin"}
