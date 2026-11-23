@@ -652,6 +652,10 @@ class Config:
         return self._check_range(
             "script-timeout-seconds", self._required_int("script-timeout-seconds"))
 
+    def held_comment_triage_timeout(self):
+        return self._check_range(
+            "held-comment-triage-timeout", self._required_int("held-comment-triage-timeout"))
+
     def script_max_running(self):
         return self._check_range("script-max-running", self._required_int("script-max-running"))
 

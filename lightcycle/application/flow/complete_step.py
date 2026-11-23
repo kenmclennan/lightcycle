@@ -6,9 +6,10 @@ from lightcycle.application.flow.escapes import EscapeRecorder
 from lightcycle.application.flow.engine_steps import (
     AUDIT_STEP, DAILY_SUMMARY_STEP, FINDINGS_STEP, HELD_COMMENT_ORIGIN_LABEL, HELD_COMMENT_STEP,
     LIFECYCLE_FAILURE_STEP, LIFECYCLE_ORIGIN_LABEL, MATERIAL_AUDIT_STEP, RETRO_ORIGIN_LABEL,
-    SUMMARY_ORIGIN_LABEL, engine_outcomes_for_node,
+    SUMMARY_ORIGIN_LABEL, TRIAGE_HELD_COMMENT_STEP, engine_outcomes_for_node,
 )
-from lightcycle.domain.feedback import DEALT, REJECTED, SUPERSEDED, WITHDRAWN
+from lightcycle.application.feedback.hold_comment import pr_label
+from lightcycle.domain.feedback import DEALT, NOTED, REJECTED, SUPERSEDED, WITHDRAWN
 from lightcycle.domain.feedback import RETROED_LABEL
 from lightcycle.domain.flow.hooks import CI_FAILED_CAP
 from lightcycle.application.flow.next_step import NextStepResolver
@@ -109,6 +110,8 @@ class CompleteStepUseCase:
             return self._complete(t, input, repair=repair)
         if self._is_held_comment_origin(t) and t.stage == HELD_COMMENT_STEP:
             return self._complete_held_comment(t, input, repair)
+        if self._is_held_comment_origin(t) and t.stage == TRIAGE_HELD_COMMENT_STEP:
+            return self._complete_triage(t, input, repair)
         if self._is_lifecycle_origin(t) and t.stage == LIFECYCLE_FAILURE_STEP:
             return self._complete(t, input, repair=repair)
         return self._complete_workflow(t, input, repair)
@@ -161,6 +164,41 @@ class CompleteStepUseCase:
         def writes(_new):
             if not repair:
                 self._store.decide_hold(t.id, decided)
+
+        return self._complete(t, input, writes=writes, repair=repair)
+
+    def _complete_triage(self, t, input: CompleteInput, repair) -> CompleteResponse:
+        if input.outcome in HOLD_OUTCOME_STATES:
+            return self._complete_held_comment(t, input, repair)
+        if input.outcome == "asks":
+            return self._complete_triage_asks(t, input, repair)
+        return self._complete_triage_quiet(t, input, repair)
+
+    def _complete_triage_asks(self, t, input: CompleteInput, repair) -> CompleteResponse:
+        spec = None
+        if not repair:
+            spec = NodeSpec(stage=HELD_COMMENT_STEP, role="human", item=t.item, previous=t.id)
+
+        def writes(gate):
+            if gate is None:
+                return
+            hold = self._store.hold_of_step(t.id)
+            self._store.attach_hold(hold.run_id, hold.key, t.item, gate)
+
+        resp = self._complete(t, input, spec=spec, writes=writes, repair=repair)
+        return CompleteResponse(next_step=None, teardown_refusal=resp.teardown_refusal)
+
+    def _complete_triage_quiet(self, t, input: CompleteInput, repair) -> CompleteResponse:
+        def writes(_new):
+            if repair:
+                return
+            hold = self._store.hold_of_step(t.id)
+            self._store.decide_hold(t.id, NOTED)
+            run = self._store.get_run(hold.run_id)
+            self._store.add_artifact(
+                run.item, "quiet-comment",
+                "%s %s on %s: %s" % (hold.author, hold.key, pr_label(run.pr), input.note or ""),
+            )
 
         return self._complete(t, input, writes=writes, repair=repair)
 

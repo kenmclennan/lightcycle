@@ -210,6 +210,7 @@ class WorkflowSimulateUseCase:
             trusted_authors=lambda: frozenset({"reviewer"}),
             review_bots=lambda: frozenset(),
             held_shortcode=lambda: "HLD",
+            held_triage_timeout=self._config.held_comment_triage_timeout,
             writes=InlinePrWrites(github, time.monotonic),
             ci_clock=time.monotonic, ci_poll_seconds=lambda: 60,
             ci_ceiling_seconds=self._config.ci_check_ceiling_seconds,

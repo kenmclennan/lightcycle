@@ -1023,6 +1023,9 @@ class FakeStore(StorePort):
         self._holds[(hold.run_id, hold.key)] = replace(
             hold, state=target, decided_at=self._now())
 
+    def hold_of_step(self, step_id):
+        return self._hold_for_step(step_id)
+
     def decide_hold(self, step_id, state):
         self._transition_hold(self._hold_for_step(step_id), state)
 

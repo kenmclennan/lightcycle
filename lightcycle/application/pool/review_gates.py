@@ -1,4 +1,7 @@
+import datetime
+
 from lightcycle.application.feedback.hold_comment import describe_gate
+from lightcycle.application.flow.engine_steps import TRIAGE_HELD_COMMENT_STEP
 from lightcycle.application.flow.complete_step import CompleteInput
 from lightcycle.application.pool.stack_reads import read_stack
 from lightcycle.config import ConfigError
@@ -8,6 +11,7 @@ from lightcycle.domain.feedback import (
     roles_of,
     thread_answered_by_operator,
 )
+from lightcycle.domain.work.state import State
 from lightcycle.ports.github import NotYetRead, ReadFailure
 
 GATE_NOTE_PREFIX = "review-gates:"
@@ -18,7 +22,11 @@ def _kind_of(key):
 
 
 class ReviewGateRefreshUseCase:
-    def __init__(self, store, github, complete, *, trusted_authors, review_bots):
+    def __init__(
+        self, store, github, complete, *, trusted_authors, review_bots, triage_timeout, wall_clock,
+    ):
+        self._triage_timeout = triage_timeout
+        self._wall_clock = wall_clock
         self._store = store
         self._github = github
         self._complete = complete
@@ -87,6 +95,21 @@ class ReviewGateRefreshUseCase:
         self._complete.execute(
             CompleteInput(step=held.step_id, outcome=outcome, note=note, by_engine=True))
 
+    def _triage_overdue(self, held):
+        if held.step_id is None:
+            return False
+        node = self._store.get_node(held.step_id)
+        if node.stage != TRIAGE_HELD_COMMENT_STEP or node.state == State.DONE:
+            return False
+        if node.state == State.WAITING and node.park:
+            return True
+        try:
+            timeout = self._triage_timeout()
+        except ConfigError:
+            return True
+        filed = datetime.datetime.fromisoformat(node.created_at).timestamp()
+        return self._wall_clock() - filed >= timeout
+
     def _refresh_one(self, step, pr, origin, held, live, inline, roles):
         obj = live.get(held.key)
         if obj is None:
@@ -94,6 +117,9 @@ class ReviewGateRefreshUseCase:
             return
         if _kind_of(held.key) == KIND_INLINE and thread_answered_by_operator(obj, inline, roles):
             self._close(held, "superseded", "an operator answered in the thread")
+            return
+        if self._triage_overdue(held):
+            self._close(held, "asks", "triage did not finish")
             return
         if obj.body != held.body:
             self._store.update_hold_body(held.run_id, held.key, obj.body)

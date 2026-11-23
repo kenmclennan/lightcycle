@@ -42,7 +42,7 @@ _METAS = {
                         "routes": {"done": "await-merge"}, "phase": "code"},
 }
 _FLOW = flow_from_metas(_METAS)
-_TRUST = dict(trusted_authors=lambda: frozenset({"ken"}), review_bots=lambda: frozenset({"ken"}), held_shortcode=lambda: "HLD",
+_TRUST = dict(trusted_authors=lambda: frozenset({"ken"}), review_bots=lambda: frozenset({"ken"}), held_shortcode=lambda: "HLD", held_triage_timeout=lambda: 0, wall_clock=lambda: 0.0,
               poll_epoch=lambda: 0, unread_note_polls=lambda: 3)
 
 

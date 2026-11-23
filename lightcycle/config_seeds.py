@@ -78,6 +78,7 @@ _SEED_KEYS = [
     ("lifecycle-timeout-seconds", "300"),
     ("script-timeout-seconds", "300"),
     ("script-max-running", "4"),
+    ("held-comment-triage-timeout", "900"),
 ]
 
 _SEED_SCHEDULES = """\

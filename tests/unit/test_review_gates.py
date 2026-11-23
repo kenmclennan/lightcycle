@@ -48,7 +48,7 @@ class _Rig(unittest.TestCase):
             self.store, github, adapter, self.complete,
             trusted_authors=lambda: frozenset(trusted),
             review_bots=lambda: frozenset(review_bots),
-            held_shortcode=lambda: "HLD", poll_epoch=lambda: 0, unread_note_polls=lambda: 3,
+            held_shortcode=lambda: "HLD", held_triage_timeout=lambda: 0, wall_clock=lambda: 0.0, poll_epoch=lambda: 0, unread_note_polls=lambda: 3,
         )
         return self.uc
 

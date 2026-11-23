@@ -16,6 +16,7 @@ _NUMERIC_RANGES = {
     "lifecycle-timeout-seconds": (1, None),
     "script-timeout-seconds": (1, None),
     "script-max-running": (1, None),
+    "held-comment-triage-timeout": (0, None),
     "workflow-retention": (1, None),
     "max-boot-seconds": (0, None),
     "max-session-seconds": (0, None),

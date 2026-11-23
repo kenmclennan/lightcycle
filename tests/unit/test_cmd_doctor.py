@@ -338,6 +338,16 @@ class TestCmdDoctor(unittest.TestCase):
         self.assertNotIn("kind", finding)
         self.assertNotIn("fix", finding)
 
+    def test_json_reports_an_absent_held_comment_triage_timeout(self):
+        class MissingTriageConfig(FakeConfig):
+            def missing_config_keys(self):
+                return ("held-comment-triage-timeout",)
+
+        cli.set_container(FakeContainer(FakeStore(), config=MissingTriageConfig()))
+        rc, out, err = call(cli.cmd_doctor, "--json")
+        (finding,) = json.loads(out)["config"]
+        self.assertIn("held-comment-triage-timeout", finding["message"])
+
     def test_text_blank_key_prints_the_fix_beneath_the_message(self):
         cli.set_container(self._blank_container())
         rc, out, err = call(cli.cmd_doctor)
