@@ -17,6 +17,12 @@ class FakeWorkers(WorkersPort):
     def seed(self, workers):
         self._workers = list(workers)
 
+    def begin_tick(self):
+        return None
+
+    def end_tick(self):
+        return None
+
     def pid_alive(self, pid, started=None):
         return pid in self._alive
 

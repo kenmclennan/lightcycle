@@ -7,6 +7,14 @@ class RegistryUnreadable(Exception):
 
 class WorkersPort(ABC):
     @abstractmethod
+    def begin_tick(self):
+        pass
+
+    @abstractmethod
+    def end_tick(self):
+        pass
+
+    @abstractmethod
     def workers_state(self):
         pass
 
