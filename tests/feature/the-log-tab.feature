@@ -183,3 +183,42 @@ Feature: The Log tab
     And I press t
     Then the session separator is still shown
 
+
+  Scenario: A log several times the budget can be scrolled to its first line
+    Given a done step whose log is several times the page size
+    When I open its Log tab
+    Then the first line is not shown
+    When I scroll to the top repeatedly
+    Then the first line is shown
+    And no single read exceeded the page size plus one line
+    And the whole file was never read at once
+
+  Scenario: Paging up keeps the live tail running
+    Given a running step whose log is several times the page size
+    When I open its Log tab
+    And I scroll to the top repeatedly
+    And the worker writes a new line to the log
+    Then the first line is shown
+    And the new line is in the log
+
+  Scenario: Earlier sessions arrive by paging when the newest fills the budget
+    Given a resumed step whose newest session fills the open budget
+    When I open its Log tab
+    Then no earlier session is shown
+    When I scroll to the top repeatedly
+    Then the session separator is shown before the newest session's first line
+    And the previous session's last line is shown
+
+  Scenario: The not-loaded marker is shown until the first line is reached
+    Given a done step whose log is several times the page size
+    When I open its Log tab
+    Then the not-loaded marker is the first row
+    When I scroll to the top repeatedly
+    Then the not-loaded marker is gone
+
+  Scenario: Hiding thinking keeps the not-loaded marker
+    Given a done step whose log is several times the page size
+    When I open its Log tab
+    And I press t
+    Then the not-loaded marker is the first row
+    And the marker is not one of the retained lines

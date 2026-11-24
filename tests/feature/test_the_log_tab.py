@@ -786,3 +786,216 @@ def _then_missing_named(ctx):
 def _then_separator_still_shown(ctx):
     assert "--- session 2 of 2" in _collapsed(_buffered_text(ctx))
 
+
+
+PAGING_FIRST = "paging-first-line"
+PAGING_LAST = "paging-last-line"
+
+
+def _paging_fixture(pages=5):
+    from lightcycle.adapters.tui.hub import LOG_PAGE_BYTES
+
+    parts = [_assistant_text_event(PAGING_FIRST)]
+    size = len(parts[0])
+    index = 0
+    filler = "f" * 200
+    while size < pages * LOG_PAGE_BYTES:
+        line = _assistant_text_event("filler %06d %s" % (index, filler))
+        parts.append(line)
+        size += len(line)
+        index += 1
+    parts.append(_assistant_text_event(PAGING_LAST))
+    return b"".join(parts)
+
+
+class _RecordingFs(FakeFs):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.reads = []
+
+    def read_before(self, path, end, max_bytes):
+        result = super().read_before(path, end, max_bytes)
+        self.reads.append(("before", len(result[0])))
+        return result
+
+    def read_tail(self, path, max_bytes):
+        result = super().read_tail(path, max_bytes)
+        self.reads.append(("tail", len(result[0])))
+        return result
+
+    def read_from(self, path, offset):
+        result = super().read_from(path, offset)
+        self.reads.append(("from", len(result[0])))
+        return result
+
+    def read_from_bounded(self, path, offset, max_bytes):
+        result = super().read_from_bounded(path, offset, max_bytes)
+        self.reads.append(("bounded", len(result[0])))
+        return result
+
+
+def _with_recording_fs(builder, lines):
+    store, item, step, fs, workers = builder(lines)
+    recording = _RecordingFs(files=dict(fs._files))
+    return store, item, step, recording, workers
+
+
+def _scroll_to_top(ctx, bound=15):
+    session = ctx["session"]
+    pane = _log_pane(ctx)
+    screen = ctx["hub_screen"]
+    for _ in range(bound):
+        session.run(lambda: pane.scroll_home(animate=False))
+        session.run(pane.action_scroll_home)
+        session.pause()
+        if screen._log_at_start() and pane.scroll_y == 0:
+            return
+    assert screen._log_at_start()
+
+
+@given("a done step whose log is several times the page size")
+def _given_done_paging(ctx):
+    _prepare(ctx, *_with_recording_fs(_done_step, _paging_fixture()))
+
+
+@given("a running step whose log is several times the page size")
+def _given_running_paging(ctx):
+    _prepare(ctx, *_with_recording_fs(_running_step, _paging_fixture()))
+
+
+@then("the first line is not shown")
+def _then_first_not_shown(ctx):
+    assert _nonblank_rows(_painted_segments(ctx))
+    assert PAGING_FIRST not in _buffered_text(ctx)
+
+
+@when("I scroll to the top repeatedly")
+def _when_scroll_to_top(ctx):
+    _scroll_to_top(ctx)
+
+
+@then("the first line is shown")
+def _then_first_shown(ctx):
+    assert PAGING_FIRST in _log_text(ctx)
+
+
+@then("no single read exceeded the page size plus one line")
+def _then_reads_bounded(ctx):
+    from lightcycle.adapters.tui.hub import LOG_PAGE_BYTES
+
+    longest = max(len(line) for line in _paging_fixture().splitlines(keepends=True))
+    assert max(size for _kind, size in ctx["fs"].reads) <= LOG_PAGE_BYTES + longest
+
+
+@then("the whole file was never read at once")
+def _then_never_slurped(ctx):
+    total = len(ctx["fs"]._files[LOG_PATH])
+    assert all(size < total for _kind, size in ctx["fs"].reads)
+    before = sum(size for kind, size in ctx["fs"].reads if kind == "before")
+    opened = sum(size for kind, size in ctx["fs"].reads if kind == "tail")
+    assert before + opened == total
+
+
+@then("the new line is in the log")
+def _then_new_line_in_log(ctx):
+    assert "a new line" in _buffered_text(ctx)
+
+
+SESSION_ONE_LOG = "/fake/logs/worker-session-one.log"
+
+
+@given("a resumed step whose newest session fills the open budget")
+def _given_newest_fills_budget(ctx):
+    from lightcycle.adapters.tui.hub import LOG_INITIAL_TAIL_BYTES
+
+    filler = b""
+    index = 0
+    while len(filler) < LOG_INITIAL_TAIL_BYTES + 4096:
+        filler += _assistant_text_event("newest %06d %s" % (index, "n" * 200))
+        index += 1
+    newest = _assistant_text_event("newest-first-line") + filler
+    store, item, step, fs, workers = _resumed_step(
+        earlier=[SESSION_ONE_LOG], reasons=["stalled"],
+        extra_files={SESSION_ONE_LOG: _assistant_text_event("older-last-line")})
+    fs._files[LOG_PATH] = newest
+    _prepare(ctx, store, item, step, fs, workers)
+
+
+@then("no earlier session is shown")
+def _then_no_earlier_session(ctx):
+    assert _nonblank_rows(_painted_segments(ctx))
+    assert "older-last-line" not in _buffered_text(ctx)
+    assert "--- session" not in _collapsed(_buffered_text(ctx))
+
+
+@then("the session separator is shown before the newest session's first line")
+def _then_separator_before_newest(ctx):
+    text = _collapsed(_buffered_text(ctx))
+    assert text.index("--- session 2 of 2") < text.index("newest-first-line")
+
+
+@then("the previous session's last line is shown")
+def _then_previous_last_shown(ctx):
+    text = _collapsed(_buffered_text(ctx))
+    assert text.index("older-last-line") < text.index("--- session 2 of 2")
+
+
+def _first_row(ctx):
+    return _buffered_text(ctx).split("\n")[0]
+
+
+@then("the not-loaded marker is the first row")
+def _then_marker_first(ctx):
+    from lightcycle.adapters.tui.hub import LOG_PAGE_BYTES  # noqa: F401
+    from lightcycle.adapters.tui.hub_render import LOG_EARLIER_NOT_LOADED_MESSAGE
+
+    assert _nonblank_rows(_painted_segments(ctx))
+    assert _first_row(ctx).strip() == LOG_EARLIER_NOT_LOADED_MESSAGE
+
+
+@then("the not-loaded marker is gone")
+def _then_marker_gone(ctx):
+    from lightcycle.adapters.tui.hub_render import LOG_EARLIER_NOT_LOADED_MESSAGE
+
+    assert _nonblank_rows(_painted_segments(ctx))
+    assert LOG_EARLIER_NOT_LOADED_MESSAGE not in _buffered_text(ctx)
+
+
+@then("the marker is not one of the retained lines")
+def _then_marker_not_retained(ctx):
+    from lightcycle.adapters.tui.hub_render import LOG_EARLIER_NOT_LOADED_MESSAGE
+
+    assert all(line.text != LOG_EARLIER_NOT_LOADED_MESSAGE for line in ctx["hub_screen"]._log_lines)
+
+
+def test_paging_up_recovers_lines_the_retained_cap_dropped(ctx):
+    _prepare(ctx, *_running_step(lines=SEEDED_LINES))
+    _open(ctx)
+    overflow_count = LOG_LINES_MAX_RETAINED + 50
+    bulk = b"".join(_assistant_text_event("bulk line %05d" % i) for i in range(overflow_count))
+    _write_raw(ctx, bulk)
+    _tick(ctx)
+    assert "bulk line %05d" % 0 not in _buffered_text(ctx)
+
+    _scroll_to_top(ctx, bound=40)
+
+    assert "bulk line %05d" % 0 in _buffered_text(ctx)
+
+
+def test_paging_up_keeps_the_topmost_line_in_place(ctx):
+    _prepare(ctx, *_with_recording_fs(_done_step, _paging_fixture(pages=2)))
+    _open(ctx)
+    session = ctx["session"]
+    pane = _log_pane(ctx)
+    session.run(lambda: pane.scroll_home(animate=False))
+    session.pause()
+
+    rows = _painted_lines(session, pane)
+    topmost = next(row.strip() for row in rows[1:] if row.strip())
+    assert topmost
+    session.run(lambda: pane.scroll_home(animate=False))
+    session.pause()
+    session.run(lambda: pane.scroll_home(animate=False))
+    session.pause()
+
+    assert topmost in _log_text(ctx)

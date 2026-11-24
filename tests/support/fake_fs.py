@@ -189,6 +189,23 @@ class FakeFs(FsPort, WorkflowBundlePort, WorkerLogPort):
             rest = rest[newline + 1:] if newline != -1 else b""
         return rest, offset
 
+    def read_before(self, path, end, max_bytes):
+        content = self._files.get(path)
+        if content is None:
+            return b"", end
+        end = min(end, len(content))
+        if end <= 0:
+            return b"", 0
+        lo = max(0, end - max_bytes)
+        if lo == 0:
+            return content[:end], 0
+        newline = content.find(b"\n", lo - 1, end - 1)
+        if newline != -1:
+            start = newline + 1
+        else:
+            start = content.rfind(b"\n", 0, lo - 1) + 1
+        return content[start:end], start
+
     def list_dir(self, path):
         return sorted(self._dirs.get(path, []))
 

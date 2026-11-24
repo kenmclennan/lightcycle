@@ -74,6 +74,12 @@ LOG_TAIL_INTERVAL_SECONDS = 1
 LOG_INITIAL_TAIL_BYTES = 256 * 1024
 
 
+LOG_PAGE_BYTES = 256 * 1024
+
+
+LOG_EARLIER_NOT_LOADED_MESSAGE = "(earlier output not loaded - scroll up to load more)"
+
+
 LOG_LINES_MAX_RETAINED = 4000
 
 

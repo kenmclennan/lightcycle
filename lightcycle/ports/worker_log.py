@@ -15,6 +15,10 @@ class WorkerLogPort(ABC):
         pass
 
     @abstractmethod
+    def read_before(self, path, end, max_bytes):
+        pass
+
+    @abstractmethod
     def iter_lines(self, path):
         pass
 

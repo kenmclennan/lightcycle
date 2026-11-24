@@ -35,6 +35,42 @@ def read_tail(path, max_bytes):
     return rest, offset
 
 
+_BEFORE_SCAN_CHUNK = 8192
+
+
+def read_before(path, end, max_bytes):
+    if not path or not os.path.exists(path):
+        return b"", end
+    size = os.path.getsize(path)
+    end = min(end, size)
+    if end <= 0:
+        return b"", 0
+    lo = max(0, end - max_bytes)
+    with open(path, "rb") as f:
+        if lo == 0:
+            f.seek(0)
+            return f.read(end), 0
+        f.seek(lo - 1)
+        window = f.read(end - lo + 1)
+        newline = window.find(b"\n", 0, len(window) - 1)
+        if newline != -1:
+            start = lo - 1 + newline + 1
+        else:
+            start = 0
+            position = lo - 1
+            while position > 0:
+                chunk_start = max(0, position - _BEFORE_SCAN_CHUNK)
+                f.seek(chunk_start)
+                chunk = f.read(position - chunk_start)
+                found = chunk.rfind(b"\n")
+                if found != -1:
+                    start = chunk_start + found + 1
+                    break
+                position = chunk_start
+        f.seek(start)
+        return f.read(end - start), start
+
+
 def log_mtime(path):
     if not path:
         return None
@@ -85,6 +121,9 @@ class WorkerLogAdapter(WorkerLogPort):
 
     def read_tail(self, path, max_bytes):
         return read_tail(path, max_bytes)
+
+    def read_before(self, path, end, max_bytes):
+        return read_before(path, end, max_bytes)
 
     def iter_lines(self, path):
         return iter_lines(path)

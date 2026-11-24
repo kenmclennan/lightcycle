@@ -109,13 +109,37 @@ class WorkflowBundleContractBase:
         self.assertEqual(fs.workflow_names(self.root()), ["a", "b"])
 
 
-class WorkerLogContractBase:
+class ReadBeforeContractBase:
     def make_fs(self, files=None, dirs=None, metas=None, bodies=None, workflows=None):
         raise NotImplementedError
 
     def path(self, relpath):
         raise NotImplementedError
 
+    def test_read_before_returns_whole_lines_ending_at_end(self):
+        fs = self.make_fs(files={"a.txt": _TAIL_CONTENT})
+        self.assertEqual(fs.read_before(self.path("a.txt"), 10, 5), (b"bbbb\n", 5))
+        self.assertEqual(fs.read_before(self.path("a.txt"), 15, 10), (b"bbbb\ncccc\n", 5))
+
+    def test_read_before_on_the_budget_lands_exactly_on_the_file_start(self):
+        fs = self.make_fs(files={"a.txt": _TAIL_CONTENT})
+        self.assertEqual(fs.read_before(self.path("a.txt"), 10, 10), (b"aaaa\nbbbb\n", 0))
+
+    def test_read_before_returns_a_line_longer_than_the_budget_whole(self):
+        fs = self.make_fs(files={"a.txt": _TAIL_CONTENT})
+        self.assertEqual(fs.read_before(self.path("a.txt"), 10, 4), (b"bbbb\n", 5))
+
+    def test_read_before_clips_end_to_the_file_size(self):
+        fs = self.make_fs(files={"a.txt": _TAIL_CONTENT})
+        self.assertEqual(fs.read_before(self.path("a.txt"), 999, 10), (b"bbbb\ncccc\n", 5))
+        self.assertEqual(fs.read_before(self.path("a.txt"), 0, 10), (b"", 0))
+
+    def test_read_before_of_a_missing_file_returns_nothing(self):
+        fs = self.make_fs()
+        self.assertEqual(fs.read_before(self.path("gone.txt"), 7, 10), (b"", 7))
+
+
+class WorkerLogContractBase(ReadBeforeContractBase):
     def root(self):
         raise NotImplementedError
 

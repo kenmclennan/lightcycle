@@ -252,6 +252,14 @@ def test_the_log_excerpt_fixture_is_real_captured_stream_json_past_the_bound():
     assert any(len(entry.text) > MAX_LOG_LINE_CHARS for entry in parsed)
 
 
+def test_the_not_loaded_state_shows_the_marker():
+    from lightcycle.adapters.tui.hub_render import LOG_EARLIER_NOT_LOADED_MESSAGE
+
+    frame = render("hub#log-earlier-not-loaded", size=(120, 30))
+
+    assert LOG_EARLIER_NOT_LOADED_MESSAGE in frame
+
+
 def test_the_log_pane_wraps_a_long_entry_instead_of_clipping_it():
     frame = render("hub#active-log")
     assert "resumes 14:32:00" in frame
