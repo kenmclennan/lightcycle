@@ -13,6 +13,7 @@ from lightcycle.application.pool.lifecycle_cadence import LifecycleCadenceRespon
 from lightcycle.application.pool.memory_gate import MemoryGateResponse
 from lightcycle.application.pool.monitor_prs import MonitorPrsResponse
 from lightcycle.application.pool.release_interrupted_runs import ReleaseInterruptedRunsResponse
+from lightcycle.application.work.gate_hold import GateHold
 from lightcycle.application.work.release_holds import ReleaseHolds
 from lightcycle.application.pool.reload_config import ReloadConfigResponse
 from lightcycle.application.pool.schedule_cadence import ScheduleCadenceResponse
@@ -205,6 +206,7 @@ class TickUseCase:
             closed=self._budget_low and not reading.low)
         self._budget_low = reading.low
         held = set(held) | ReleaseHolds(self._store, self._flow_service).held_ids(ready_steps)
+        held |= GateHold(self._store).held_ids(ready_steps)
         ready_roles = ReadyQueue([s for s in ready_steps if s.id not in held]).roles()
         ready_count = len(ready_roles)
         spawned = []

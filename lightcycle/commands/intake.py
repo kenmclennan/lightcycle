@@ -241,7 +241,9 @@ def cmd_set(argv):
         return 2
     try:
         if a.state is not None and node_type == "step":
-            RefuseGateHoldUseCase(container().store).execute(a.id)
+            RefuseGateHoldUseCase(container().store).execute(
+                a.id, parking=a.state == State.WAITING.value
+            )
         if a.state == "active":
             depends_ids = a.depends or []
             for node_id in depends_ids:

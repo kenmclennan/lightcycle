@@ -55,3 +55,36 @@ class TestHeldStepRefusesTheHumanRoutes(unittest.TestCase):
         rc, out, err = call(cli.cmd_set, self.gate, "--notes", "x")
 
         self.assertEqual(rc, 0, err)
+
+
+class TestHeldAgentStepParking(unittest.TestCase):
+    def setUp(self):
+        self.store = FakeStore()
+        cli.set_container(_Container(self.store))
+        self.item = self.store.create_item("an item", "a description")
+        self.step = self.store.create_step(stage="build", role="agent", item=self.item)
+        self.store.claim_ready("agent", "w1")
+        GateHold(self.store).place(self.step, "by hand")
+
+    def test_set_state_waiting_parks_a_held_running_step(self):
+        rc, out, err = call(
+            cli.cmd_set, self.step, "--state", "waiting", "--needs", "x", "--reason", "y")
+
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(self.store.get_node(self.step).state, "waiting")
+
+    def test_done_still_refuses_a_held_running_step(self):
+        rc, out, err = call(cli.cmd_done, self.step, "done")
+
+        self.assertEqual(rc, 1)
+        self.assertEqual(self.store.get_node(self.step).state, "running")
+
+    def test_set_state_waiting_on_a_held_waiting_gate_still_refuses(self):
+        gate = self.store.create_step(stage="gate", role="human", item=self.item)
+        GateHold(self.store).place(gate, "wait")
+
+        rc, out, err = call(
+            cli.cmd_set, gate, "--state", "waiting", "--needs", "x", "--reason", "y")
+
+        self.assertEqual(rc, 1)
+        self.assertIn("lc release %s" % gate, err)

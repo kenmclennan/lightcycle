@@ -7,6 +7,7 @@ from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.application.flow.rebase_retries import earlier_rebase_retries
 from lightcycle.application.setup.project_registry import ProjectRegistry
 from lightcycle.application.work.item_outputs import ItemOutputs
+from lightcycle.application.work.gate_hold import GateHold
 from lightcycle.application.work.release_holds import ReleaseHolds
 from lightcycle.application.work.node_read_surface import node_read_surface
 from lightcycle.application.work.step_inputs import StepInputs
@@ -108,6 +109,7 @@ class ClaimStepUseCase:
             held |= holds.held_ids(self._store.ready_steps())
         if self._github_budget.reading().low:
             held |= set(self._github_budget.held(self._store.ready_steps()))
+        held |= GateHold(self._store).held_ids(self._store.ready_steps())
         exclude = tuple(sorted(held))
         t = self._store.claim_ready(
             role, spawnid or role, item=item, stage=stage, exclude=exclude)
