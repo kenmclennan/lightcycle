@@ -77,7 +77,7 @@ Lanes run over **steps only** - items never appear in a lane (they live in `lc b
 
 ## A held comment's own lifecycle
 
-A held comment (the `held_comments` row, see the ontology) has a state machine of its own, separate from the node `state`: `held` goes to `dealt` or `rejected` when a human completes the review gate (`lc done <step> dealt|reject`), and to `superseded` or `withdrawn` only when the engine closes the gate, because an operator answered in the thread or the reviewer deleted the comment. Approving a comment is retired and refused. A row already `approved` before the retirement still goes to `dispatched` when the pool opens a `handle-feedback` step carrying it. Any other transition is refused by the store; every state but `held` and `approved` is terminal. Comments an operator or review bot routes by `@lc` (or by being a bot) are admitted by the pool and never enter the ledger.
+A held comment (the `held_comments` row, see the ontology) has a state machine of its own, separate from the node `state`: `held` goes to `dealt` or `rejected` when a human completes the review gate (`lc done <step> dealt|reject`), and to `superseded` or `withdrawn` only when the engine closes the gate, because an operator answered in the thread or the reviewer deleted the comment. A top-level comment or review first goes to the triage step (`triage-held-comment`): `held` goes to `noted` when triage closes `quiet` (the comment asks the operator nothing, so no gate opens), and stays `held` when triage closes `asks`, at which point the engine files the review gate. Approving a comment is retired and refused. A row already `approved` before the retirement still goes to `dispatched` when the pool opens a `handle-feedback` step carrying it. Any other transition is refused by the store; every state but `held` and `approved` is terminal. Comments an operator or review bot routes by `@lc` (or by being a bot) are admitted by the pool and never enter the ledger.
 
 ```mermaid
 graph LR
@@ -85,6 +85,7 @@ graph LR
   held -->|reject| rejected
   held -->|operator replies in thread| superseded
   held -->|comment deleted| withdrawn
+  held -->|triage closes quiet| noted
   approved -->|dispatch| dispatched
 ```
 
