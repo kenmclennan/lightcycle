@@ -311,6 +311,12 @@ class NullWorkers(WorkersPort):
     def workers_state(self):
         self._refuse("workers_state")
 
+    def begin_tick(self):
+        return None
+
+    def end_tick(self):
+        return None
+
     def pid_alive(self, pid, started=None):
         self._refuse("pid_alive")
 

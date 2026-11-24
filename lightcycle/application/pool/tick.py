@@ -147,6 +147,13 @@ class TickUseCase:
             self._github_poll_gate.settle()
 
     def execute(self, input: TickInput) -> TickResponse:
+        self._workers.begin_tick()
+        try:
+            return self._run_tick(input)
+        finally:
+            self._workers.end_tick()
+
+    def _run_tick(self, input: TickInput) -> TickResponse:
         sleeps = self._sleeps()
         config_result = self._reload_config()
         self._flow_service.clear_cache()

@@ -92,7 +92,9 @@ def decide_alive(pid_exists, recorded_start, live_start):
 
 
 def worker_alive(pid, recorded_start):
-    return decide_alive(pid_alive(pid), recorded_start, process_start_time(pid))
+    if not pid_alive(pid):
+        return False
+    return decide_alive(True, recorded_start, process_start_time(pid))
 
 
 _TRACKED_CHILDREN = {}
@@ -187,13 +189,13 @@ def _end_group(entry, grace_seconds, now):
     return True, False
 
 
-def prune_workers(root, keep_dead, grace_seconds=0, now=time.time):
+def prune_workers(root, keep_dead, grace_seconds=0, now=time.time, alive=worker_alive):
     with registry_lock(root):
         workers = workers_state(root)
         dead_idx = [
             i
             for i, w in enumerate(workers)
-            if not worker_alive(w.get("pid", -1), w.get("pid_started"))
+            if not alive(w.get("pid", -1), w.get("pid_started"))
         ]
         stamp = now()
         live_groups = set()
@@ -280,23 +282,40 @@ def set_pid_started(root, spawnid, pid_started):
 class WorkersAdapter(WorkersPort):
     def __init__(self, config):
         self._config = config
+        self._tick_memo = None
+
+    def begin_tick(self):
+        self._tick_memo = {}
+
+    def end_tick(self):
+        self._tick_memo = None
 
     def workers_state(self):
         return [Worker.from_state(d) for d in workers_state(self._config.data_root())]
 
     def pid_alive(self, pid, started=None):
-        return worker_alive(pid, started)
+        memo = self._tick_memo
+        if memo is None:
+            return worker_alive(pid, started)
+        key = (pid, started)
+        if key not in memo:
+            memo[key] = worker_alive(pid, started)
+        return memo[key]
 
     def reap(self):
         return reap_children()
 
     def kill(self, pid):
+        if self._tick_memo is not None:
+            for key in [k for k in self._tick_memo if k[0] == pid]:
+                del self._tick_memo[key]
         return kill(pid)
 
     def prune_workers(self, keep_dead=None):
         kd = self._config.worker_history() if keep_dead is None else keep_dead
         dropped = prune_workers(
-            self._config.data_root(), kd, grace_seconds=self._config.shutdown_grace_seconds()
+            self._config.data_root(), kd, grace_seconds=self._config.shutdown_grace_seconds(),
+            alive=self.pid_alive,
         )
         prune_pool_gh_call_logs(self._config.data_root(), kd)
         return dropped

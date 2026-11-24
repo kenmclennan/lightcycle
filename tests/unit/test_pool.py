@@ -72,6 +72,12 @@ class FakeWorkers:
             raise RegistryUnreadable("boom")
         return [Worker.from_state(d) for d in self._workers]
 
+    def begin_tick(self):
+        return None
+
+    def end_tick(self):
+        return None
+
     def pid_alive(self, pid, started=None):
         self.calls.append("probe")
         return pid in self._alive
