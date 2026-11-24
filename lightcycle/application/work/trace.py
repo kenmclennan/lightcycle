@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from lightcycle.application.errors import UseCaseError
 from lightcycle.domain.feedback import layers
-from lightcycle.domain.work import Artifact, Item, worker_log_filename
+from lightcycle.domain.work import Artifact, Item, session_dicts, worker_log_filename
 
 
 @dataclass(frozen=True)
@@ -21,12 +21,13 @@ class TraceNode:
     role: Optional[str]
     artifacts: List[Artifact] = field(default_factory=list)
     api_calls: Optional[int] = None
+    logs: List[dict] = field(default_factory=list)
 
     def as_dict(self):
         return {
             "id": self.id, "step": self.step, "state": self.state, "log": self.log,
             "role": self.role, "artifacts": [a.as_dict() for a in self.artifacts],
-            "api_calls": self.api_calls,
+            "api_calls": self.api_calls, "logs": self.logs,
         }
 
 
@@ -80,6 +81,7 @@ class TraceUseCase:
                 id=kt.id, step=kt.stage, state=kt.state, log=self._log_for_step(kt),
                 role=kt.role, artifacts=self._store.item_artifacts(kt.id),
                 api_calls=kt.usage_api_calls,
+                logs=session_dicts(self._store.step_sessions(kt.id)),
             )
             for kt in self._store.children(input.item)
         ]

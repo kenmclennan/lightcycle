@@ -12,6 +12,7 @@ class LogKind(StrEnum):
     RETRY = "retry"
     PROGRESS = "progress"
     UNPARSED = "unparsed"
+    SESSION = "session"
 
 
 @dataclass(frozen=True)

@@ -108,6 +108,15 @@ CREATE TABLE IF NOT EXISTS step_inputs (
     body TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS step_sessions (
+    step         TEXT NOT NULL,
+    n            INTEGER NOT NULL,
+    log_path     TEXT NOT NULL,
+    started_at   TEXT NOT NULL,
+    ended_reason TEXT,
+    PRIMARY KEY (step, n)
+);
+
 CREATE INDEX IF NOT EXISTS idx_steps_item ON steps(item);
 CREATE INDEX IF NOT EXISTS idx_steps_state ON steps(state);
 CREATE INDEX IF NOT EXISTS idx_steps_stage ON steps(stage);

@@ -163,3 +163,23 @@ Feature: The Log tab
     Given the live log is open and following the tail
     When a thinking-token-only event arrives
     Then the cursor still marks the previous last visible line
+
+  Scenario: A resumed step shows both sessions with one separator
+    Given a step that was resumed once, both of its logs present
+    When I open its Log tab
+    Then both sessions' lines are shown, oldest first, with one separator between them
+    And the separator names session 2 of 2, its start time and why the first session ended
+    And the newest session still tails live
+
+  Scenario: A missing earlier log is named, not dropped
+    Given a step resumed twice whose oldest log file is missing
+    When I open its Log tab
+    Then the present earlier log's lines are shown
+    And the missing log is named in the tab without an error
+
+  Scenario: Hiding thinking keeps the session separators
+    Given a step that was resumed once, both of its logs present
+    When I open its Log tab
+    And I press t
+    Then the session separator is still shown
+

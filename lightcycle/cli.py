@@ -15,6 +15,7 @@ from lightcycle.adapters.log_parser import LogLineParser
 from lightcycle.domain.work import worker_permitted
 from lightcycle.render import worker_refusal_message
 from lightcycle.application.pool import (
+    sweep_end_suffix,
     AcquireRunLockUseCase,
     ClearDrainUseCase,
     DrainPoolUseCase,
@@ -452,7 +453,7 @@ def _tick_event_lines(result, ts):
         detail = ": %s" % unread.detail if unread.detail else ""
         lines.append("%s  %-7s  %s" % (ts, "ci-unread", "%s %s%s" % (unread.step, unread.reason, detail)))
     for bid in result.sweep.swept:
-        lines.append("%s  %-7s  %s" % (ts, "sweep", bid))
+        lines.append("%s  %-7s  %s%s" % (ts, "sweep", bid, sweep_end_suffix(result.sweep, bid)))
     for bid in result.sweep.preserved:
         lines.append("%s  %-7s  %s" % (ts, "preserve", bid))
     for bid in result.sweep.capture_failed:

@@ -7,6 +7,7 @@ from lightcycle.application.pool.breaker_status import (
 )
 from lightcycle.application.pool.github_budget import GithubBudgetUseCase
 from lightcycle.application.pool.health_icon import HealthIconUseCase
+from lightcycle.application.pool.tail_sessions import SessionTail, TailSessionsInput, TailSessionsUseCase
 from lightcycle.application.pool.tick_timing import RecordTickTimingUseCase, TickHealthUseCase
 from lightcycle.application.pool.hook_completions import (
     HookCompletionsResponse,
@@ -38,7 +39,7 @@ from lightcycle.application.pool.run_lock import (
     ReleaseRunLockUseCase,
 )
 from lightcycle.application.pool.stop_pool import StopPoolResponse, StopPoolUseCase
-from lightcycle.application.pool.sweep import SweepUseCase
+from lightcycle.application.pool.sweep import SweepUseCase, sweep_end_suffix
 from lightcycle.application.pool.tail_log import TailLogInput, TailLogResult, TailLogUseCase
 from lightcycle.application.pool.tick import TickInput, TickUseCase
 from lightcycle.application.pool.upgrade_cadence import UpgradeCadenceUseCase
@@ -85,9 +86,13 @@ __all__ = [
     "StopPoolSignalUseCase",
     "StopPoolUseCase",
     "SweepUseCase",
+    "sweep_end_suffix",
     "TailLogInput",
     "TailLogResult",
     "TailLogUseCase",
+    "SessionTail",
+    "TailSessionsInput",
+    "TailSessionsUseCase",
     "TickInput",
     "TickUseCase",
     "UpgradeCadenceUseCase",
