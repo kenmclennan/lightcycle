@@ -1006,6 +1006,27 @@ def _hub_active_log(size):
     return _open_hub(_launch(store, size=size, fs=fs, workers=workers), coding, tab="log")
 
 
+def _hub_log_earlier_not_loaded(size):
+    from lightcycle.adapters.tui.hub import LogPane
+    from lightcycle.adapters.tui.hub_render import LOG_INITIAL_TAIL_BYTES
+
+    store, _scan, coding = _populated_store()
+    repeats = 3 * LOG_INITIAL_TAIL_BYTES // len(_LOG_EXCERPT) + 1
+    fs = FakeFs(files={_LOG_PATH: _LOG_EXCERPT * repeats})
+    workers = FakeWorkers(
+        workers=[{"step": coding, "role": "write-code", "pid": 4242, "pid_started": None,
+                  "log": _LOG_PATH}],
+        alive_pids=set(),
+    )
+    session = _open_hub(_launch(store, size=size, fs=fs, workers=workers), coding, tab="log")
+    pane = session.app.screen.query_one(LogPane)
+    pane.quiet_top = True
+    session.run(lambda: pane.scroll_home(animate=False))
+    session.pause()
+    pane.quiet_top = False
+    return session
+
+
 def _hub_log_finished(size):
     store, _scan, coding = _populated_store()
     fs = FakeFs(files={_LOG_PATH: _LOG_EXCERPT})
@@ -1746,6 +1767,7 @@ SCREENS = {
     "hub#workflow-stacked-time": _hub_hierarchy_stacked_time,
     "hub#active-log": _hub_active_log,
     "hub#log-finished": _hub_log_finished,
+    "hub#log-earlier-not-loaded": _hub_log_earlier_not_loaded,
     "hub#outputs": _hub_outputs,
     "hub#outputs-stacked": _hub_outputs_stacked,
     "hub#outputs-history": _hub_outputs_history,

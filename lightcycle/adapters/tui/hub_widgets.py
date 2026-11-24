@@ -13,6 +13,7 @@ from rich.text import Text
 from textual import events
 from textual.app import ComposeResult
 from textual.binding import Binding
+from textual.message import Message
 from textual.containers import (
     Horizontal,
     Vertical,
@@ -93,6 +94,9 @@ class HubTabStrip(Horizontal):
 
 
 class LogPane(RichLog):
+    class TopReached(Message):
+        pass
+
     BINDINGS = [
         Binding("up", "scroll_up", "Scroll up", show=False),
         Binding("down", "scroll_down", "Scroll down", show=False),
@@ -106,10 +110,36 @@ class LogPane(RichLog):
         kwargs.setdefault("max_lines", LOG_PANE_MAX_LINES)
         super().__init__(*args, **kwargs)
         self.live = False
+        self.quiet_top = False
+
+    def _post_top_reached(self) -> None:
+        if not self.quiet_top:
+            self.post_message(self.TopReached())
 
     def watch_scroll_y(self, old, new) -> None:
         super().watch_scroll_y(old, new)
         self.auto_scroll = self.is_vertical_scroll_end
+        if new == 0 and old > 0:
+            self._post_top_reached()
+
+    def action_scroll_up(self) -> None:
+        if self.scroll_y == 0:
+            self._post_top_reached()
+        super().action_scroll_up()
+
+    def action_page_up(self) -> None:
+        if self.scroll_y == 0:
+            self._post_top_reached()
+        super().action_page_up()
+
+    def action_scroll_home(self) -> None:
+        if self.scroll_y == 0:
+            self._post_top_reached()
+        super().action_scroll_home()
+
+    def on_mouse_scroll_up(self, event) -> None:
+        if self.scroll_y == 0:
+            self._post_top_reached()
 
     def write_entry(self, content) -> int:
         before_deferred = len(self._deferred_renders)

@@ -4,6 +4,7 @@ import unittest
 
 from lightcycle.adapters.worker_log import WorkerLogAdapter, iter_lines
 from tests.support.fake_fs import FakeFs
+from tests.support.fs_contract import ReadBeforeContractBase
 
 
 class TestReadFrom(unittest.TestCase):
@@ -197,6 +198,62 @@ class TestIterLines(unittest.TestCase):
     def test_fake_fs_unknown_path_yields_nothing(self):
         fs = FakeFs()
         self.assertEqual(list(fs.iter_lines("/l/missing.log")), [])
+
+
+class TestRealReadBefore(ReadBeforeContractBase, unittest.TestCase):
+    def setUp(self):
+        self._root = tempfile.mkdtemp()
+
+    def path(self, relpath):
+        return os.path.join(self._root, relpath)
+
+    def make_fs(self, files=None, dirs=None, metas=None, bodies=None, workflows=None):
+        for name, content in (files or {}).items():
+            with open(self.path(name), "wb") as f:
+                f.write(content)
+        return WorkerLogAdapter(None)
+
+
+class TestPaging(unittest.TestCase):
+    def _page_back(self, adapter, path, page):
+        end = os.path.getsize(path)
+        pages = []
+        while end > 0:
+            data, start = adapter.read_before(path, end, page)
+            self.assertTrue(data)
+            self.assertTrue(start == 0 or open(path, "rb").read()[start - 1:start] == b"\n")
+            self.assertEqual(len(data), end - start)
+            pages.append(data)
+            end = start
+        return pages
+
+    def test_paging_back_from_the_end_reproduces_the_file(self):
+        root = tempfile.mkdtemp()
+        path = os.path.join(root, "worker.log")
+        page = 4096
+        lines = [(b"x" * (1 + (i * 37) % 300)) + b"\n" for i in range(400)]
+        lines.insert(200, b"L" * (page * 3) + b"\n")
+        lines += [b"tail one\n", b"tail two\n"]
+        content = b"".join(lines)
+        self.assertGreater(len(content), 3 * page)
+        with open(path, "wb") as f:
+            f.write(content)
+
+        pages = self._page_back(WorkerLogAdapter(None), path, page)
+
+        self.assertGreater(len(pages), 3)
+        longest = max(len(line) for line in lines)
+        self.assertTrue(all(len(p) <= page + longest for p in pages))
+        self.assertEqual(b"".join(reversed(pages)), content)
+
+    def test_fake_fs_pages_back_to_the_file_start_too(self):
+        content = b"".join(b"line %03d\n" % i for i in range(50))
+        fs = FakeFs(files={"/l/w.log": content})
+        end, pieces = len(content), []
+        while end > 0:
+            data, end = fs.read_before("/l/w.log", end, 37)
+            pieces.append(data)
+        self.assertEqual(b"".join(reversed(pieces)), content)
 
 
 if __name__ == "__main__":

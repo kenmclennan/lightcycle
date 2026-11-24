@@ -7,7 +7,12 @@ from lightcycle.application.pool.breaker_status import (
 )
 from lightcycle.application.pool.github_budget import GithubBudgetUseCase
 from lightcycle.application.pool.health_icon import HealthIconUseCase
-from lightcycle.application.pool.tail_sessions import SessionTail, TailSessionsInput, TailSessionsUseCase
+from lightcycle.application.pool.read_earlier_log import (
+    EarlierChunk,
+    EarlierLog,
+    EarlierLogInput,
+    ReadEarlierLogUseCase,
+)
 from lightcycle.application.pool.tick_timing import RecordTickTimingUseCase, TickHealthUseCase
 from lightcycle.application.pool.hook_completions import (
     HookCompletionsResponse,
@@ -90,9 +95,10 @@ __all__ = [
     "TailLogInput",
     "TailLogResult",
     "TailLogUseCase",
-    "SessionTail",
-    "TailSessionsInput",
-    "TailSessionsUseCase",
+    "EarlierChunk",
+    "EarlierLog",
+    "EarlierLogInput",
+    "ReadEarlierLogUseCase",
     "TickInput",
     "TickUseCase",
     "UpgradeCadenceUseCase",

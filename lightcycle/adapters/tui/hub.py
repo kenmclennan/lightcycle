@@ -71,6 +71,7 @@ from lightcycle.adapters.tui.hub_render import (
     LOG_INITIAL_TAIL_BYTES,
     LOG_LINES_MAX_RETAINED,
     LOG_NO_STREAM_MESSAGE,
+    LOG_PAGE_BYTES,
     LOG_PANE_MAX_LINES,
     LOG_TAIL_INTERVAL_SECONDS,
     OUTPUTS_CONTINUATION_INDENT,
@@ -231,6 +232,7 @@ __all__ = [
     "LOG_INITIAL_TAIL_BYTES",
     "LOG_LINES_MAX_RETAINED",
     "LOG_NO_STREAM_MESSAGE",
+    "LOG_PAGE_BYTES",
     "LOG_PANE_MAX_LINES",
     "LOG_TAIL_INTERVAL_SECONDS",
     "ListArtifactViewerScreen",
@@ -481,6 +483,12 @@ class NodeHubScreen(HubScreenMarker, LogTabMixin, HierarchyTabMixin, OutputsTabM
         self._log_timer = None
         self._log_parser = LogLineParser()
         self._log_lines = []
+        self._log_cursor = (1, 0)
+        self._log_first_session = 1
+        self._log_spans = []
+        self._log_trimmed = False
+        self._log_paged = False
+        self._log_path = None
         self._show_thinking = True
         self._log_cursor_active = False
         self._log_cursor_text = None
