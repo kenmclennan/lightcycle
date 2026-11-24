@@ -299,6 +299,14 @@ class StorePort(ABC):
         pass
 
     @abstractmethod
+    def step_sessions(self, step):
+        pass
+
+    @abstractmethod
+    def end_session(self, step, reason):
+        pass
+
+    @abstractmethod
     def save_step_inputs(self, step, frozen_at, body):
         pass
 

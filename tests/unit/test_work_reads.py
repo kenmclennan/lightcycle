@@ -232,6 +232,78 @@ class TestTrace(unittest.TestCase):
         self.assertIsNone(resp.steps[0].log)
 
 
+class TestSessionLogs(unittest.TestCase):
+    def _resumed(self):
+        s = FakeStore()
+        sid = s.create_item("st", "d")
+        k = s.create_step(stage="build", role="agent", item=sid)
+        s.set_log(k, "/l/a.log")
+        s.end_session(k, "stalled")
+        s.set_log(k, "/l/b.log")
+        return s, sid, k
+
+    def test_show_lists_every_session_log(self):
+        s, _sid, k = self._resumed()
+
+        out = ShowNodeUseCase(s, _empty_flow(s), StackLayers(FakeGitHub())).execute(ShowNodeInput(step=k)).as_dict()
+
+        self.assertEqual([e["log"] for e in out["logs"]], ["/l/a.log", "/l/b.log"])
+        self.assertEqual([e["ended"] for e in out["logs"]], ["stalled", None])
+        self.assertEqual([e["n"] for e in out["logs"]], [1, 2])
+
+    def test_a_step_with_no_log_shows_an_empty_logs_list(self):
+        s = FakeStore()
+        sid = s.create_item("st", "d")
+        k = s.create_step(stage="build", role="agent", item=sid)
+
+        out = ShowNodeUseCase(s, _empty_flow(s), StackLayers(FakeGitHub())).execute(ShowNodeInput(step=k)).as_dict()
+
+        self.assertEqual(out["logs"], [])
+
+    def test_trace_json_lists_every_session_log(self):
+        s, sid, _k = self._resumed()
+
+        resp = TraceUseCase(s, _Workers([]), FakeFs(), _Config()).execute(TraceInput(item=sid))
+
+        logs = resp.as_dict()["steps"][0]["logs"]
+        self.assertEqual([e["log"] for e in logs], ["/l/a.log", "/l/b.log"])
+
+    def _trace_text(self, s, sid):
+        import contextlib
+        import io
+        from types import SimpleNamespace
+        from unittest import mock
+
+        from lightcycle.commands import inspect as inspect_commands
+
+        fake = SimpleNamespace(store=s, workers=_Workers([]), fs=FakeFs(), config=_Config())
+        out = io.StringIO()
+        with mock.patch.object(inspect_commands, "container", lambda: fake), contextlib.redirect_stdout(out):
+            inspect_commands.cmd_trace([sid])
+        return out.getvalue()
+
+    def test_trace_text_prints_one_line_per_session_beyond_the_first(self):
+        s, sid, _k = self._resumed()
+
+        text = self._trace_text(s, sid)
+
+        session_lines = [l for l in text.splitlines() if l.strip().startswith("session ")]
+        self.assertEqual(len(session_lines), 2)
+        self.assertIn("/l/a.log", session_lines[0])
+        self.assertIn("ended: stalled", session_lines[0])
+        self.assertIn("ended: unknown", session_lines[1])
+
+    def test_trace_text_prints_no_session_line_for_a_single_session(self):
+        s = FakeStore()
+        sid = s.create_item("st", "d")
+        k = s.create_step(stage="build", role="agent", item=sid)
+        s.set_log(k, "/l/a.log")
+
+        text = self._trace_text(s, sid)
+
+        self.assertNotIn("session ", text)
+
+
 def _seed_mixed_store():
     s = FakeStore()
     todo_item = s.create_item("todo item", "a description")

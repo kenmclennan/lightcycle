@@ -9,6 +9,7 @@ from lightcycle.adapters.tui.design_system import COLOURS
 from lightcycle.adapters.tui.hub import (
     LOG_CURSOR_GLYPH, LOG_FINISHED_MESSAGE, LOG_LINES_MAX_RETAINED, LogPane, NodeHubScreen,
 )
+from lightcycle.domain.work import session_separator
 from lightcycle.domain.work.log_line import LogKind
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
@@ -703,3 +704,85 @@ def test_first_mount_on_a_still_in_progress_step_whose_worker_already_died(ctx):
     assert len(finished_rows) == 1
     assert len(last_line_rows) == 1
     assert LOG_CURSOR_GLYPH not in _log_text(ctx)
+
+
+FIRST_LOG = "/fake/logs/worker-first.log"
+OLDEST_LOG = "/fake/logs/worker-oldest.log"
+
+
+def _resumed_step(*, earlier, reasons, extra_files=None):
+    store = FakeStore()
+    item = store.create_item("Item", "a description")
+    step = store.create_step(stage="coder", role="agent", item=item)
+    store.claim_ready("agent")
+    for path, reason in zip(earlier, reasons):
+        store.set_log(step, path)
+        store.end_session(step, reason)
+    store.set_log(step, LOG_PATH)
+    workers = FakeWorkers(
+        workers=[{"step": step, "role": "coder", "pid": WORKER_PID, "pid_started": None, "log": LOG_PATH}],
+        alive_pids={WORKER_PID},
+    )
+    files = {LOG_PATH: _assistant_text_event("second session work", "2026-08-19T14:10:00.000Z")}
+    files.update(extra_files or {})
+    return store, item, step, FakeFs(files=files), workers
+
+
+def _collapsed(text):
+    return " ".join(text.split())
+
+
+@given("a step that was resumed once, both of its logs present")
+def _given_resumed_once(ctx):
+    _prepare(ctx, *_resumed_step(
+        earlier=[FIRST_LOG], reasons=["stalled"],
+        extra_files={FIRST_LOG: _assistant_text_event("first session work", "2026-08-19T14:00:00.000Z")}))
+
+
+@given("a step resumed twice whose oldest log file is missing")
+def _given_resumed_twice_oldest_missing(ctx):
+    _prepare(ctx, *_resumed_step(
+        earlier=[OLDEST_LOG, FIRST_LOG], reasons=["died", "reclaimed"],
+        extra_files={FIRST_LOG: _assistant_text_event("first session work", "2026-08-19T14:00:00.000Z")}))
+
+
+@then("both sessions' lines are shown, oldest first, with one separator between them")
+def _then_both_sessions_shown(ctx):
+    text = _collapsed(_buffered_text(ctx))
+    assert text.count("--- session") == 1
+    assert text.index("first session work") < text.index("--- session") < text.index("second session work")
+
+
+@then("the separator names session 2 of 2, its start time and why the first session ended")
+def _then_separator_names_session(ctx):
+    sessions = ctx["store"].step_sessions(ctx["step_id"])
+    expected = _collapsed(session_separator(sessions[1], 2, "stalled"))
+    assert expected in _collapsed(_buffered_text(ctx))
+    assert "stalled, killed by the pool" in expected
+
+
+@then("the newest session still tails live")
+def _then_newest_tails_live(ctx):
+    _write_line(ctx, "a later line")
+    _tick(ctx)
+    text = _collapsed(_buffered_text(ctx))
+    assert "a later line" in text
+    assert text.count("--- session") == 1
+
+
+@then("the present earlier log's lines are shown")
+def _then_present_earlier_shown(ctx):
+    assert "first session work" in _collapsed(_buffered_text(ctx))
+
+
+@then("the missing log is named in the tab without an error")
+def _then_missing_named(ctx):
+    text = _collapsed(_buffered_text(ctx))
+    assert "(log file not found: %s)" % OLDEST_LOG in text
+    assert text.count("--- session") == 2
+
+
+@then("the session separator is still shown")
+def _then_separator_still_shown(ctx):
+    assert "--- session 2 of 2" in _collapsed(_buffered_text(ctx))
+

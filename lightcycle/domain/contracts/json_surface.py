@@ -7,7 +7,7 @@ from lightcycle.domain.work.step import Step
 
 READ_SURFACE_EXTRA_KEYS = frozenset({
     "artifacts", "branch", "config", "description", "detail", "detail_presents",
-    "guidance_delivered", "guidance_skipped", "inputs", "item_artifacts", "notes", "outputs",
+    "guidance_delivered", "guidance_skipped", "inputs", "item_artifacts", "logs", "notes", "outputs",
     "passes", "phase", "pr", "records", "repo_path", "routes", "runs", "session_id", "skill",
     "spec_path", "stack_error", "stack_layers", "valid_outcomes", "workflow", "workflow_config", "workflow_error", "workflow_resolved",
     "workflow_source", "workspace",

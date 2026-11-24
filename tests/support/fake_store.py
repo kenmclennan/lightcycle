@@ -27,7 +27,7 @@ from lightcycle.domain.work.open_successors import open_successors
 from lightcycle.domain.work.item import ItemFields
 from lightcycle.domain.work.outputs import ArtifactRecord, StepStamp
 from lightcycle.domain.work import (
-    Artifact, DailySummary, Item, NodeView, Park, State, Step, default_kind_for, derive_state,
+    Artifact, DailySummary, Item, NodeView, Park, State, Step, StepSession, default_kind_for, derive_state,
     item_blocked_by, roll_up,
     drop_condition_lines,
     merge_condition_note,
@@ -148,7 +148,7 @@ _TX_ATTRS = (
     "_records", "_labels", "_passes", "_runs", "_deps",
     "_history", "_projects", "_tool_usage", "_backfill_log", "_usage_accrual_state",
     "_counters", "_daily_summaries", "_holds",
-    "_schedule_run_requests", "_step_inputs", "_artifact_seq", "_feedback_cutoffs",
+    "_schedule_run_requests", "_step_inputs", "_sessions", "_artifact_seq", "_feedback_cutoffs",
     "_pool_updates", "_escapes",
 )
 
@@ -174,6 +174,7 @@ class FakeStore(StorePort):
         self._feedback_cutoffs = {}
         self._pool_updates = {}
         self._step_inputs = {}
+        self._sessions = {}
         self._artifact_seq = 0
         self._now = now or (lambda: datetime.datetime.now().astimezone().isoformat())
         self._config = config
@@ -840,7 +841,34 @@ class FakeStore(StorePort):
         self._get(step)["report"] = text or None
 
     def set_log(self, step, path):
-        self._get(step)["log_path"] = path or None
+        record = self._get(step)
+        if path:
+            self._open_session(step, record.get("log_path"), path)
+        record["log_path"] = path or None
+
+    def _open_session(self, step, previous_path, path):
+        sessions = self._sessions.setdefault(step, [])
+        now = self._now()
+        if not sessions:
+            if previous_path and previous_path != path:
+                sessions.append(StepSession(1, previous_path, now, None))
+        elif sessions[-1].log_path == path:
+            return
+        sessions.append(StepSession(len(sessions) + 1, path, now, None))
+
+    def step_sessions(self, step):
+        sessions = self._sessions.get(step)
+        if sessions:
+            return list(sessions)
+        path = self._get(step).get("log_path")
+        return [StepSession(1, path, None, None)] if path else []
+
+    def end_session(self, step, reason):
+        sessions = self._sessions.get(step)
+        if not sessions or sessions[-1].ended_reason is not None:
+            return None
+        sessions[-1] = replace(sessions[-1], ended_reason=reason)
+        return sessions[-1].n
 
     def save_step_inputs(self, step, frozen_at, body):
         self._get(step)
@@ -1142,6 +1170,7 @@ class FakeStore(StorePort):
                 if other and other.get("state") != "done":
                     other["dep_count"] = max(0, (other.get("dep_count") or 0) - 1)
         self._records.pop(tid, None)
+        self._sessions.pop(tid, None)
         self._escapes = {k: e for k, e in self._escapes.items() if e.item != tid}
         self._deps.pop(tid, None)
         self._history.pop(tid, None)

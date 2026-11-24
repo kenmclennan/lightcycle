@@ -27,6 +27,7 @@ from lightcycle.domain.work.park import Park
 from lightcycle.domain.work.slow_step import SlowKind, SlowStep, StageBaseline, slow_steps
 from lightcycle.domain.work.step import Step
 from lightcycle.domain.work.step_title import compose_step_title
+from lightcycle.domain.work.step_session import StepSession, reason_text, session_dicts, session_separator
 from lightcycle.domain.work.log_line import LogKind, LogLine
 from lightcycle.domain.work.node_id import format_step_id, node_id_key
 from lightcycle.domain.work.node_queue import NodeQueue
@@ -67,7 +68,7 @@ __all__ = [
     "all_states", "missing_for_state", "refuse_fields", "refuse_state",
     "Item", "LogKind", "LogLine", "NodeQueue", "NodeSpec", "NodeView", "Park",
     "SlowKind", "SlowStep", "StageBaseline", "slow_steps",
-    "Step", "compose_step_title", "format_step_id", "node_id_key",
+    "Step", "StepSession", "reason_text", "session_dicts", "session_separator", "compose_step_title", "format_step_id", "node_id_key",
     "MAX_PARAGRAPHS", "MAX_SENTENCES_PER_PARAGRAPH", "MAX_SENTENCE_WORDS", "MAX_WORDS",
     "CapBreach", "cap_breaches", "cap_rules_help", "render_cap_refusal",
     "merge_condition_note", "drop_condition_lines", "ProjectIdentity", "ProjectedStep",

@@ -5,7 +5,7 @@ from lightcycle.application.pool.backup import BackupResponse
 from lightcycle.application.pool.hook_completions import HookCompletionsResponse
 from lightcycle.application.pool.monitor_prs import MonitorPrsResponse
 from lightcycle.application.pool.reload_config import ReloadConfigResponse
-from lightcycle.application.pool.sweep import SweepResponse
+from lightcycle.application.pool.sweep import SweepEnd, SweepResponse
 from lightcycle.application.pool.tick import BreakerState, PoolState, TickResponse
 from lightcycle.cli import _format_tick, _idle_reason, _run_log_lines
 
@@ -24,6 +24,7 @@ def _result(**kw):
     return TickResponse(
         sweep=SweepResponse(
             swept=defaults["swept"], killed=defaults["killed"], pruned=defaults["pruned"],
+            ended=defaults.get("ended", {}),
         ),
         spawned=defaults["spawned"],
         monitor=MonitorPrsResponse(
@@ -250,3 +251,26 @@ class TestRunLogLines(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSweepLineReason(unittest.TestCase):
+    def _sweep_lines(self, **kw):
+        lines, _ = _format_tick(_result(**kw), (0, 4, 0, 0), _NOW)
+        return [l for l in lines if "sweep" in l]
+
+    def test_sweep_line_names_the_session_and_reason(self):
+        lines = self._sweep_lines(swept=["xyz.2"], ended={"xyz.2": SweepEnd("stalled", 1)})
+
+        self.assertEqual(len(lines), 1)
+        self.assertTrue(lines[0].endswith("  sweep    xyz.2  (session 1 ended: stalled)"))
+
+    def test_sweep_line_without_a_recorded_reason_is_unchanged(self):
+        lines = self._sweep_lines(swept=["xyz.2"])
+
+        self.assertTrue(lines[0].endswith("  sweep    xyz.2"))
+
+    def test_sweep_line_without_a_session_number_names_only_the_reason(self):
+        lines = self._sweep_lines(swept=["xyz.2"], ended={"xyz.2": SweepEnd("died", None)})
+
+        self.assertTrue(lines[0].endswith("  sweep    xyz.2  (ended: died)"))
+

@@ -65,4 +65,4 @@ class TestDeclaredSurfaceCoversWhatTheEngineEmits(unittest.TestCase):
         self.assertLessEqual({"guidance_delivered", "guidance_skipped"}, json_surface())
 
     def test_the_declared_extra_keys_are_the_scraped_twenty_seven_and_the_guidance_pair(self):
-        self.assertEqual(len(READ_SURFACE_EXTRA_KEYS), 31)
+        self.assertEqual(len(READ_SURFACE_EXTRA_KEYS), 32)

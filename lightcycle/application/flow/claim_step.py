@@ -159,6 +159,7 @@ class ClaimStepUseCase:
             StepInputs(self._store, self._flow, outputs).freeze(t)
             return self._context(t, outputs, pin, meta)
         except Exception:
+            self._store.end_session(t.id, "claim-failed")
             self._store.reclaim(t.id)
             raise
 

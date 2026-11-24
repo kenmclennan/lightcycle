@@ -257,6 +257,7 @@ class ItemsAggregate:
         self._conn.execute("DELETE FROM steps WHERE id = ?", (tid,))
         self._conn.execute("DELETE FROM step_gh_calls WHERE step = ?", (tid,))
         self._conn.execute("DELETE FROM step_tool_usage WHERE step = ?", (tid,))
+        self._conn.execute("DELETE FROM step_sessions WHERE step = ?", (tid,))
         self._conn.execute("DELETE FROM items WHERE id = ?", (tid,))
         self._conn.execute("DELETE FROM deps WHERE node_id = ? OR blocked_by = ?", (tid, tid))
         self._conn.execute("DELETE FROM artifacts WHERE item_id = ?", (tid,))

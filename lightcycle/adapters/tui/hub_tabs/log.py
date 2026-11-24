@@ -3,8 +3,10 @@ from lightcycle.adapters.tui.design_system import COLOURS
 from lightcycle.application.pool import (
     TailLogInput,
     TailLogUseCase,
+    TailSessionsInput,
+    TailSessionsUseCase,
 )
-from lightcycle.domain.work import LogKind
+from lightcycle.domain.work import LogKind, LogLine, session_separator
 from rich.text import Text
 from textual.widgets import Static
 from lightcycle.adapters.tui.hub_render import (
@@ -42,9 +44,39 @@ class LogTabMixin:
             self._log_mode = "no-log"
             empty.update(LOG_NO_STREAM_MESSAGE)
             return
+        self._seed_session_lines(result)
         self._apply_tail_result(result)
         if self._log_mode == "live" and not self._log_finished:
             self._log_timer = self.set_interval(LOG_TAIL_INTERVAL_SECONDS, self._tail_tick)
+
+    def _seed_session_lines(self, result) -> None:
+        earlier = TailSessionsUseCase(
+            self._container.store, self._container.worker_log, self._container.fs
+        ).execute(TailSessionsInput(target=self._log_target, max_bytes=LOG_INITIAL_TAIL_BYTES))
+        if not earlier:
+            return
+        sessions = self._container.store.step_sessions(self._log_target)
+        total = len(sessions)
+        lines = []
+        previous_reason = None
+        for index, tail in enumerate(earlier):
+            if index > 0:
+                lines.append(self._separator_line(tail.session, total, previous_reason))
+            if tail.exists:
+                lines.extend(LogLineParser().feed(tail.data) if tail.data else [])
+            else:
+                lines.append(LogLine(
+                    timestamp=None, kind=LogKind.SESSION,
+                    text="(log file not found: %s)" % tail.session.log_path))
+            previous_reason = tail.session.ended_reason
+        lines.append(self._separator_line(sessions[-1], total, previous_reason))
+        self._log_lines = lines[-LOG_LINES_MAX_RETAINED:]
+        self._write_tail_data(self.query_one(LogPane), self._log_lines)
+
+    def _separator_line(self, session, total, previous_reason):
+        return LogLine(
+            timestamp=None, kind=LogKind.SESSION,
+            text=session_separator(session, total, previous_reason))
 
     def _run_initial_tail(self):
         use_case = TailLogUseCase(

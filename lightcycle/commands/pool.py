@@ -14,6 +14,7 @@ from lightcycle.application.pool import (
     BackfillUsageUseCase,
     ListWorkersUseCase,
 )
+from lightcycle.application.pool.sweep import sweep_end_suffix
 from lightcycle.ports.workers import RegistryUnreadable
 
 
@@ -50,7 +51,7 @@ def cmd_sweep(argv):
         now, container().config.max_boot_seconds(), container().config.stall_seconds(), sleeps
     )
     for bid in result.swept:
-        print("swept %s" % bid)
+        print("swept %s%s" % (bid, sweep_end_suffix(result, bid)))
     for bid in result.preserved:
         print("preserved %s" % bid)
     for bid in result.capture_failed:

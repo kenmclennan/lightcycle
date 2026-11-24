@@ -1975,3 +1975,51 @@ class StoreContractBase:
         self.assertEqual(list(s.pool_updated_heads("old")), [])
         self.assertEqual(s.feedback_cutoff("young"), (2.0, "h1"))
         self.assertEqual(list(s.pool_updated_heads("young")), ["h1"])
+
+    def test_set_log_records_one_session_per_distinct_path_in_order(self):
+        s = self.make_store()
+        step = self._step(s, role="agent")
+
+        s.set_log(step, "/l/a.log")
+        s.set_log(step, "/l/b.log")
+
+        self.assertEqual([(x.n, x.log_path) for x in s.step_sessions(step)], [(1, "/l/a.log"), (2, "/l/b.log")])
+        self.assertEqual(s.get_node(step).log_path, "/l/b.log")
+
+    def test_set_log_with_the_newest_path_again_adds_no_session(self):
+        s = self.make_store()
+        step = self._step(s, role="agent")
+
+        s.set_log(step, "/l/a.log")
+        s.set_log(step, "/l/a.log")
+
+        self.assertEqual([x.n for x in s.step_sessions(step)], [1])
+
+    def test_set_log_with_an_empty_path_clears_the_log_and_adds_no_session(self):
+        s = self.make_store()
+        step = self._step(s, role="agent")
+        s.set_log(step, "/l/a.log")
+
+        s.set_log(step, "")
+
+        self.assertIsNone(s.get_node(step).log_path)
+        self.assertEqual([x.n for x in s.step_sessions(step)], [1])
+
+    def test_end_session_marks_the_newest_open_session_once(self):
+        s = self.make_store()
+        step = self._step(s, role="agent")
+        self.assertIsNone(s.end_session(step, "died"))
+        s.set_log(step, "/l/a.log")
+        s.set_log(step, "/l/b.log")
+
+        self.assertEqual(s.end_session(step, "stalled"), 2)
+        self.assertIsNone(s.end_session(step, "died"))
+
+        self.assertEqual([x.ended_reason for x in s.step_sessions(step)], [None, "stalled"])
+
+    def test_a_step_with_no_log_has_no_sessions(self):
+        s = self.make_store()
+        step = self._step(s, role="agent")
+
+        self.assertEqual(s.step_sessions(step), [])
+

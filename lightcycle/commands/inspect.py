@@ -183,6 +183,11 @@ def cmd_trace(argv):
             log = "  log:" + t.log if t.log else ""
             calls = "-" if t.api_calls is None else str(t.api_calls)
             print("  step %s  %s  [%s]  calls:%s%s" % (t.id, t.step or "-", t.state, calls, log))
+            if len(t.logs) > 1:
+                for entry in t.logs:
+                    print("    session %d  %s  started %s  ended: %s" % (
+                        entry["n"], entry["log"], entry["started_at"] or "unknown",
+                        entry["ended"] or "unknown"))
             for art in t.artifacts:
                 if art.type == "findings":
                     print("    artifact findings: see lc show %s" % t.id)

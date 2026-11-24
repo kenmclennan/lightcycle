@@ -1,5 +1,5 @@
 from lightcycle.domain.work.outputs import ArtifactRecord
-from lightcycle.domain.work import Artifact, State, drop_condition_lines, merge_condition_note
+from lightcycle.domain.work import Artifact, State, StepSession, drop_condition_lines, merge_condition_note
 from lightcycle.ports.store import NodeNotFoundError
 from lightcycle.adapters.sqlite.shared import _PARK_COLUMNS, _RAW_STORAGE_STATE
 
@@ -291,11 +291,69 @@ class StepsAggregate:
         self._commit()
 
     def set_log(self, step, path):
-        if self._conn.execute(
-            "UPDATE steps SET log_path = ? WHERE id = ?", (path or None, step)
-        ).rowcount == 0:
+        row = self._conn.execute(
+            "SELECT log_path FROM steps WHERE id = ?", (step,)
+        ).fetchone()
+        if row is None:
             raise NodeNotFoundError("unknown step '%s'" % step)
+        if path:
+            self._open_session(step, row[0], path)
+        self._conn.execute(
+            "UPDATE steps SET log_path = ? WHERE id = ?", (path or None, step)
+        )
         self._commit()
+
+    def _open_session(self, step, previous_path, path):
+        newest = self._conn.execute(
+            "SELECT n, log_path FROM step_sessions WHERE step = ? ORDER BY n DESC LIMIT 1",
+            (step,),
+        ).fetchone()
+        now = self._now()
+        if newest is None:
+            n = 0
+            if previous_path and previous_path != path:
+                n = 1
+                self._conn.execute(
+                    "INSERT INTO step_sessions (step, n, log_path, started_at) VALUES (?, 1, ?, ?)",
+                    (step, previous_path, now),
+                )
+        elif newest[1] == path:
+            return
+        else:
+            n = newest[0]
+        self._conn.execute(
+            "INSERT INTO step_sessions (step, n, log_path, started_at) VALUES (?, ?, ?, ?)",
+            (step, n + 1, path, now),
+        )
+
+    def step_sessions(self, step):
+        rows = self._conn.execute(
+            "SELECT n, log_path, started_at, ended_reason FROM step_sessions "
+            "WHERE step = ? ORDER BY n",
+            (step,),
+        ).fetchall()
+        if rows:
+            return [StepSession(*r) for r in rows]
+        row = self._conn.execute(
+            "SELECT log_path FROM steps WHERE id = ?", (step,)
+        ).fetchone()
+        if row is None or not row[0]:
+            return []
+        return [StepSession(1, row[0], None, None)]
+
+    def end_session(self, step, reason):
+        row = self._conn.execute(
+            "SELECT n, ended_reason FROM step_sessions WHERE step = ? ORDER BY n DESC LIMIT 1",
+            (step,),
+        ).fetchone()
+        if row is None or row[1] is not None:
+            return None
+        self._conn.execute(
+            "UPDATE step_sessions SET ended_reason = ? WHERE step = ? AND n = ?",
+            (reason, step, row[0]),
+        )
+        self._commit()
+        return row[0]
 
     def save_step_inputs(self, step, frozen_at, body):
         self._conn.execute(

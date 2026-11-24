@@ -1,11 +1,17 @@
 import sys
 from dataclasses import dataclass, field
-from typing import List
+from typing import Dict, List, Optional
 
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.domain.pool import WorkerPool
 from lightcycle.ports.git import GitReadError
 from lightcycle.ports.workers import RegistryUnreadable
+
+
+@dataclass(frozen=True)
+class SweepEnd:
+    reason: str
+    session: Optional[int]
 
 
 @dataclass(frozen=True)
@@ -17,6 +23,15 @@ class SweepResponse:
     capture_failed: List[str] = field(default_factory=list)
     parked: List[str] = field(default_factory=list)
     not_checked: List[str] = field(default_factory=list)
+    ended: Dict[str, SweepEnd] = field(default_factory=dict)
+
+
+def sweep_end_suffix(response, step_id):
+    end = response.ended.get(step_id)
+    if end is None:
+        return ""
+    prefix = "session %d " % end.session if end.session is not None else ""
+    return "  (%sended: %s)" % (prefix, end.reason)
 
 
 class SweepUseCase:
@@ -169,6 +184,7 @@ class SweepUseCase:
         capture_failed = []
         not_checked = []
         parked = []
+        ended = {}
         for t in claimed:
             if t.id not in stalled_ids and (
                 t.id in covered or t.claimed_by in live_spawnids or booting
@@ -185,8 +201,15 @@ class SweepUseCase:
                 )
             elif captured == "not_checked":
                 not_checked.append(t.id)
+            dead = None if t.id in stalled_ids else pool.dead_for_step(probe, t.id)
+            if t.id in stalled_ids:
+                reason = "stalled"
+            elif dead is None:
+                reason = "reclaimed"
+            else:
+                reason = "pool-stopped" if dead.halted else "died"
+            ended[t.id] = SweepEnd(reason, self._store.end_session(t.id, reason))
             if t.id not in stalled_ids:
-                dead = pool.dead_for_step(probe, t.id)
                 if dead is not None:
                     lines = list(self._worker_log.iter_lines(dead.log))
                     no_work = not self._stream.saw_session_activity(lines)
@@ -221,4 +244,5 @@ class SweepUseCase:
             capture_failed=capture_failed,
             parked=parked,
             not_checked=not_checked,
+            ended=ended,
         )

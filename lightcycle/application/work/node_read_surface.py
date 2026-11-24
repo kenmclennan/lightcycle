@@ -2,6 +2,7 @@ from lightcycle.application.flow.engine_steps import engine_outcomes_for_node
 from lightcycle.application.work.step_detail import StepDetail
 from lightcycle.application.work.step_inputs import StepInputs
 from lightcycle.domain.work.forwarded_note import shim_notes
+from lightcycle.domain.work.step_session import session_dicts
 
 
 def node_read_surface(store, flow, view, outputs, stack_layers):
@@ -21,6 +22,7 @@ def node_read_surface(store, flow, view, outputs, stack_layers):
         output_entries = step_inputs.entry_dicts_for_step(step)
         _produced, records = item_outputs.step_rows(step)
         out["inputs"] = inputs
+        out["logs"] = session_dicts(store.step_sessions(step.id))
         out["outputs"] = {"report": step.report, "artifacts": output_entries}
         out["records"] = [
             {"type": r.type, "label": r.label, "value": r.value} for r in records

@@ -40,6 +40,52 @@ class TestSqliteStoreContract(StoreContractBase, unittest.TestCase):
         return make_sqlite_store(extra_config={"context-artifact-types": " ".join(types)})
 
 
+class TestSqliteStepSessions(unittest.TestCase):
+    def _legacy_step(self, path):
+        s = make_sqlite_store()
+        step = create_owned_step(s, "x", role="agent")
+        s._conn.execute("UPDATE steps SET log_path = ? WHERE id = ?", (path, step))
+        s._conn.commit()
+        return s, step
+
+    def test_a_step_with_only_a_log_path_reads_as_one_session(self):
+        s, step = self._legacy_step("/l/old.log")
+
+        sessions = s.step_sessions(step)
+
+        self.assertEqual(s._conn.execute("SELECT COUNT(*) FROM step_sessions").fetchone()[0], 0)
+        self.assertEqual([(x.n, x.log_path, x.started_at, x.ended_reason) for x in sessions],
+                         [(1, "/l/old.log", None, None)])
+
+    def test_set_log_on_a_legacy_step_keeps_the_old_path_as_session_one(self):
+        s, step = self._legacy_step("/l/old.log")
+
+        s.set_log(step, "/l/new.log")
+
+        self.assertEqual([(x.n, x.log_path) for x in s.step_sessions(step)],
+                         [(1, "/l/old.log"), (2, "/l/new.log")])
+
+    def test_removing_a_step_removes_its_sessions(self):
+        s = make_sqlite_store()
+        step = create_owned_step(s, "x", role="agent")
+        s.set_log(step, "/l/a.log")
+        s.set_log(step, "/l/b.log")
+        count = "SELECT COUNT(*) FROM step_sessions WHERE step = ?"
+        self.assertEqual(s._conn.execute(count, (step,)).fetchone()[0], 2)
+
+        s.delete(step)
+
+        self.assertEqual(s._conn.execute(count, (step,)).fetchone()[0], 0)
+
+    def test_step_sessions_table_has_only_its_primary_key_index(self):
+        s = make_sqlite_store()
+
+        indexes = [r[1] for r in s._conn.execute("PRAGMA index_list(step_sessions)").fetchall()]
+
+        self.assertEqual(indexes, ["sqlite_autoindex_step_sessions_1"])
+        self.assertEqual(s._conn.execute("PRAGMA foreign_key_list(step_sessions)").fetchall(), [])
+
+
 class TestBusyTimeout(unittest.TestCase):
     def test_the_connection_waits_for_a_lock_for_the_shared_busy_timeout(self):
         s = make_sqlite_store()
