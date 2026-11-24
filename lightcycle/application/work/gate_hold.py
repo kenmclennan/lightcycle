@@ -19,6 +19,9 @@ class GateHold:
     def is_held(self, step_id):
         return any(a.type == GATE_HOLD for a in self._store.item_artifacts(step_id))
 
+    def held_ids(self, steps):
+        return {s.id for s in steps if self.is_held(s.id)}
+
     def place(self, step_id, note):
         self._store.replace_artifact(step_id, GATE_HOLD, note, internal=True)
 

@@ -1,5 +1,6 @@
 from lightcycle.application.flow.engine_steps import engine_display_of
 from lightcycle.application.services.engine_fragments import with_engine_fragments
+from lightcycle.application.work.gate_hold import GateHold
 from lightcycle.application.work.release_holds import ReleaseHolds
 from lightcycle.domain.flow import Flow
 from lightcycle.domain.flow.graph import parse_graph
@@ -266,5 +267,5 @@ class FlowService:
 
     def ready_roles(self):
         steps = self._store.ready_steps()
-        held = ReleaseHolds(self._store, self).held_ids(steps)
+        held = ReleaseHolds(self._store, self).held_ids(steps) | GateHold(self._store).held_ids(steps)
         return ReadyQueue([s for s in steps if s.id not in held]).distinct_roles()

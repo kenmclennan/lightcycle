@@ -74,9 +74,41 @@ class SweepUseCase:
             ParkInput(step=step_id, observation=observation, decision=decision, tried=tried)
         )
 
+    def _park_for_exits(self, step_id, count, since, now, last_line):
+        elapsed = int(now - since)
+        observation = (
+            "This step's worker ended %d times after real work without closing the step, "
+            "spanning ~%ds since the first. The most recent worker's log ended with: %s"
+            % (count, elapsed, last_line if last_line else "(empty)")
+        )
+        decision = (
+            "A human must read the worker log and decide. If the step is held, say so and "
+            "run `lc release %s`; otherwise unblock it once the cause is understood. A "
+            "step killed repeatedly mid-session (for example by pool restarts) parks here too."
+            % step_id
+        )
+        tried = "%d automatic re-dispatches, each ending with no outcome." % count
+        ParkStepUseCase(self._store).execute(
+            ParkInput(step=step_id, observation=observation, decision=decision, tried=tried)
+        )
+
     def _advance_spin(self, step_id, now, no_work, last_line, spawnid):
         if not no_work:
-            self._spin_port.update(lambda ledger: ledger.record_activity(step_id))
+            exit_entry = []
+
+            def _record(ledger):
+                ledger = ledger.record_activity(step_id).record_exit(
+                    step_id, now, last_line, spawnid)
+                if ledger.should_park_exit(step_id, self._spin_cap):
+                    exit_entry.append(ledger.exits[step_id])
+                    return ledger.clear(step_id)
+                return ledger
+
+            self._spin_port.update(_record)
+            if exit_entry:
+                entry = exit_entry[0]
+                self._park_for_exits(step_id, entry.count, entry.since, now, last_line)
+                return True
             return False
         parked_entry = []
 
@@ -93,6 +125,19 @@ class SweepUseCase:
             self._park_for_spin(step_id, entry.count, entry.since, now, last_line)
             return True
         return False
+
+    def _prune_exits(self):
+        def _drop(ledger):
+            keep = set()
+            for step_id in ledger.exits:
+                try:
+                    if self._store.get_node(step_id).state != "done":
+                        keep.add(step_id)
+                except KeyError:
+                    pass
+            return ledger.drop_exits(keep)
+
+        self._spin_port.update(_drop)
 
     def execute(self, now, max_boot, stall_seconds, sleeps=()) -> SweepResponse:
         probe = self._workers.pid_alive
@@ -160,6 +205,7 @@ class SweepUseCase:
             last_line = self._last_nonempty_line(lines)
             if self._advance_spin(step_id, now, no_work, last_line, dead.spawnid):
                 parked.append(step_id)
+        self._prune_exits()
         orphans = pool.orphans(probe, now, max_boot, claimed_owner, sleeps)
         for w in orphans:
             self._workers.kill(w.pid)
