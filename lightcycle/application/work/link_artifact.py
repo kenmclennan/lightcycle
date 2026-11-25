@@ -9,7 +9,9 @@ from lightcycle.domain.feedback.review_yield import (
     CAUSED_BY,
     FOUND_BY,
     REVIEW_FINDINGS,
+    REWORK_DECISION,
     parse_findings,
+    parse_rework_decision,
 )
 from lightcycle.domain.guidance.guidance import parse_citation
 from lightcycle.domain.runs import RUN_FIELDS
@@ -64,6 +66,9 @@ class LinkArtifactUseCase:
             )
         if input.atype == REVIEW_FINDINGS:
             self._record_findings(input)
+            return
+        if input.atype == REWORK_DECISION:
+            self._record_rework_decision(input)
             return
         if input.replace:
             self._store.replace_artifact(
@@ -163,6 +168,48 @@ class LinkArtifactUseCase:
             )
         write = self._store.replace_artifact if exists else self._store.add_artifact
         write(step_id, REVIEW_FINDINGS, input.value, input.label, internal=True, kind=input.kind)
+
+    def _record_rework_decision(self, input):
+        step_id = input.item
+        try:
+            node = self._store.get_node(step_id)
+        except (KeyError, NodeNotFoundError):
+            node = None
+        if node is None or node.type != "step":
+            raise UseCaseError(
+                "'%s' is not a step - rework-decision attaches to the feedback step" % step_id
+            )
+        flow = self._flow.flow_for(node)
+        targets = {flow.step_def(s).pr_feedback for s in flow.steps()}
+        if node.stage not in targets:
+            raise UseCaseError(
+                "step '%s' (%s) is not a feedback step - no stage declares it as its "
+                "pr_feedback target" % (step_id, node.stage)
+            )
+        if node.state != State.RUNNING:
+            raise UseCaseError(
+                "step '%s' is not running - a rework-decision is recorded by the live "
+                "feedback pass before it closes" % step_id
+            )
+        if not input.label:
+            raise UseCaseError(
+                "rework-decision on '%s' needs a --label naming the comment key" % step_id
+            )
+        try:
+            parse_rework_decision(input.value)
+        except ValueError as e:
+            raise UseCaseError("%s" % e)
+        exists = any(
+            a.type == REWORK_DECISION and a.label == input.label
+            for a in self._store.item_artifacts(step_id)
+        )
+        if exists and not input.replace:
+            raise UseCaseError(
+                "step '%s' already has a rework-decision labeled '%s' - pass --replace to "
+                "overwrite it" % (step_id, input.label)
+            )
+        write = self._store.replace_artifact if exists else self._store.add_artifact
+        write(step_id, REWORK_DECISION, input.value, input.label, internal=True, kind=input.kind)
 
     def _derive_project_if_unset(self, item, repo):
         try:

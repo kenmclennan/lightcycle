@@ -1,8 +1,10 @@
+import json
 import unittest
 
 from lightcycle.application.flow.unblock_step import UnblockInput, UnblockStepUseCase
 from lightcycle.application.pool.check_content_pin import CheckContentPinUseCase
 from lightcycle.domain.feedback import LC_MARKER
+from lightcycle.domain.feedback.review_yield import REWORK_DECISION
 from lightcycle.domain.work import State
 from tests.support.fake_fs import flow_from_metas
 from lightcycle.ports.github import Comment, NotYetRead, ReadFailure
@@ -71,7 +73,9 @@ _FLOW = flow_from_metas(
             "routes": {"merged": "cleanup", "changes": "build"},
             "on_pr_merge": "merged",
             "on_pr_close": "abandoned",
-        }
+            "on_pr_feedback": "handle-feedback",
+        },
+        "handle-feedback": {"step": "handle-feedback", "routes": {"rework": "build"}},
     },
     disposition={"merged": "completed", "abandoned": "abandoned"},
 )
@@ -84,7 +88,9 @@ _REVIEW_FLOW = flow_from_metas(
             "routes": {"merged": "cleanup", "changes": "build"},
             "on_pr_merge": "merged",
             "on_pr_close": "abandoned",
+            "on_pr_feedback": "handle-feedback",
         },
+        "handle-feedback": {"step": "handle-feedback", "routes": {"rework": "build"}},
         "review-code": {
             "step": "review-code",
             "review": "done",
@@ -99,6 +105,18 @@ def close_review(store, item, outcome):
     review = store.create_step(stage="review-code", role="agent", item=item)
     store.complete_node(review, outcome)
     return review
+
+
+def record_rework(store, item, label, sha, path=None, stage="handle-feedback",
+                  state=State.RUNNING):
+    step = store.create_step(stage=stage, role="agent", item=item)
+    if state == State.RUNNING:
+        store.assign(step, "w1")
+    body = {"sha": sha}
+    if path is not None:
+        body["path"] = path
+    store.add_artifact(step, REWORK_DECISION, json.dumps(body), label, internal=True)
+    return step
 
 
 def verdict(sha, body="", author="review-code"):
@@ -583,24 +601,24 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         self.assertIsNone(store.get_node(step).notes)
         self.assertEqual(store.get_node(step).role, "agent")
 
-    def test_removal_authorized_by_a_marked_comment_is_not_parked(self):
-        comment = Comment(
-            author="review-code",
-            body=LC_MARKER + "<!-- lc:decision=rework -->",
-            is_top_level=False,
-            path="b.py",
-            created_at=100.0,
-        )
-        gh = FakeGitHub(
-            head_shas={self._URL: "sha1"},
-            files_by_sha={(self._URL, "sha1"): frozenset({"a.py", "b.py"})},
-            timed_comments=[(100.0, comment)],
-        )
+    def _drop_b(self, gh):
         store, item, step, uc = self._setup(gh)
         uc.execute()
-
         gh._head_shas[self._URL] = "sha2"
         gh._files_by_sha[(self._URL, "sha2")] = frozenset({"a.py"})
+        return store, item, step, uc
+
+    def _ab_github(self, **kw):
+        return FakeGitHub(
+            head_shas={self._URL: "sha1"},
+            files_by_sha={(self._URL, "sha1"): frozenset({"a.py", "b.py"})},
+            **kw,
+        )
+
+    def test_removal_authorized_by_a_recorded_decision_is_not_parked(self):
+        gh = self._ab_github()
+        store, item, step, uc = self._drop_b(gh)
+        record_rework(store, item, "inline:1", "sha1", path="b.py")
 
         uc.execute()
 
@@ -608,7 +626,7 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         self.assertIsNone(store.get_node(step).notes)
         self.assertEqual(self._pin(store, item), "sha2")
 
-    def test_removal_without_a_marked_comment_still_parks(self):
+    def test_removal_without_a_record_still_parks(self):
         gh = FakeGitHub(
             head_shas={self._URL: "sha1"},
             files_by_sha={(self._URL, "sha1"): frozenset({"steps/a.md", "steps/b.md"})},
@@ -632,22 +650,15 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         self.assertIn("steps/b.md", node.park.needs)
 
     def test_mixed_drop_parks_naming_only_the_unauthorized_file(self):
-        comment = Comment(
-            author="review-code",
-            body=LC_MARKER + "<!-- lc:decision=rework -->",
-            is_top_level=False,
-            path="ordered.py",
-            created_at=100.0,
-        )
         gh = FakeGitHub(
             head_shas={self._URL: "sha1"},
             files_by_sha={
                 (self._URL, "sha1"): frozenset({"ordered.py", "stray.py"})
             },
-            timed_comments=[(100.0, comment)],
         )
         store, item, step, uc = self._setup(gh)
         uc.execute()
+        record_rework(store, item, "inline:1", "sha1", path="ordered.py")
 
         gh._head_shas[self._URL] = "sha2"
         gh._files_by_sha[(self._URL, "sha2")] = frozenset()
@@ -661,23 +672,16 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         self.assertIn("stray.py", node.park.needs)
         self.assertNotIn("ordered.py", node.park.needs)
 
-    def test_unmarked_mention_of_the_dropped_file_does_not_authorize_it(self):
+    def test_a_pr_comment_carrying_the_old_rework_marker_does_not_authorize_the_drop(self):
         comment = Comment(
-            author="human",
-            body="heads up, b.py looked off to me",
-            is_top_level=True,
+            author="review-code",
+            body=LC_MARKER + "<!-- lc:decision=rework -->",
+            is_top_level=False,
+            path="b.py",
             created_at=100.0,
         )
-        gh = FakeGitHub(
-            head_shas={self._URL: "sha1"},
-            files_by_sha={(self._URL, "sha1"): frozenset({"a.py", "b.py"})},
-            timed_comments=[(100.0, comment)],
-        )
-        store, item, step, uc = self._setup(gh)
-        uc.execute()
-
-        gh._head_shas[self._URL] = "sha2"
-        gh._files_by_sha[(self._URL, "sha2")] = frozenset({"a.py"})
+        gh = self._ab_github(timed_comments=[(100.0, comment)])
+        store, item, step, uc = self._drop_b(gh)
 
         uc.execute()
 
@@ -685,17 +689,25 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         self.assertEqual(node.role, "human")
         self.assertIn("b.py", node.notes)
 
-    def test_thread_read_failure_fails_closed(self):
-        gh = FakeGitHub(
-            head_shas={self._URL: "sha1"},
-            files_by_sha={(self._URL, "sha1"): frozenset({"a.py", "b.py"})},
-            failing_calls={"comments_since"},
+    def test_a_pr_comment_naming_the_file_without_a_record_does_not_authorize_it(self):
+        comment = Comment(
+            author="human",
+            body="heads up, b.py looked off to me",
+            is_top_level=True,
+            created_at=100.0,
         )
-        store, item, step, uc = self._setup(gh)
+        gh = self._ab_github(timed_comments=[(100.0, comment)])
+        store, item, step, uc = self._drop_b(gh)
+
         uc.execute()
 
-        gh._head_shas[self._URL] = "sha2"
-        gh._files_by_sha[(self._URL, "sha2")] = frozenset({"a.py"})
+        node = store.get_node(step)
+        self.assertEqual(node.role, "human")
+        self.assertIn("b.py", node.notes)
+
+    def test_an_unrecorded_drop_still_parks_when_the_thread_cannot_be_read(self):
+        gh = self._ab_github(failing_calls={"comments_since"})
+        store, item, step, uc = self._drop_b(gh)
 
         uc.execute()
 
@@ -703,26 +715,20 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         self.assertEqual(node.role, "human")
         self.assertIn("b.py", node.notes)
         self.assertIn("b.py", node.park.needs)
-        self.assertIn("could not read", node.park.reason.lower())
 
-    def test_rework_decision_marker_authorizes_its_own_path(self):
-        comment = Comment(
-            author="review-code",
-            body=LC_MARKER + "<!-- lc:decision=rework -->",
-            is_top_level=False,
-            path="b.py",
-            created_at=100.0,
-        )
-        gh = FakeGitHub(
-            head_shas={self._URL: "sha1"},
-            files_by_sha={(self._URL, "sha1"): frozenset({"a.py", "b.py"})},
-            timed_comments=[(100.0, comment)],
-        )
-        store, item, step, uc = self._setup(gh)
+    def test_a_recorded_drop_is_authorized_when_the_thread_cannot_be_read(self):
+        gh = self._ab_github(failing_calls={"comments_since"})
+        store, item, step, uc = self._drop_b(gh)
+        record_rework(store, item, "inline:1", "sha1", path="b.py")
+
         uc.execute()
 
-        gh._head_shas[self._URL] = "sha2"
-        gh._files_by_sha[(self._URL, "sha2")] = frozenset({"a.py"})
+        self.assertEqual(store.get_node(step).role, "agent")
+
+    def test_recorded_rework_decision_authorizes_its_own_path(self):
+        gh = self._ab_github()
+        store, item, step, uc = self._drop_b(gh)
+        record_rework(store, item, "inline:7", "sha1", path="b.py")
 
         uc.execute()
 
@@ -730,76 +736,10 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         self.assertIsNone(store.get_node(step).notes)
         self.assertEqual(self._pin(store, item), "sha2")
 
-    def _forged_rework(self, author):
-        comment = Comment(
-            author=author,
-            body=LC_MARKER + "<!-- lc:decision=rework -->",
-            is_top_level=False,
-            path="b.py",
-            created_at=100.0,
-        )
-        gh = FakeGitHub(
-            head_shas={self._URL: "sha1"},
-            files_by_sha={(self._URL, "sha1"): frozenset({"a.py", "b.py"})},
-            timed_comments=[(100.0, comment)],
-        )
-        store, item, step, uc = self._setup(gh)
-        uc.execute()
-        gh._head_shas[self._URL] = "sha2"
-        gh._files_by_sha[(self._URL, "sha2")] = frozenset({"a.py"})
-        uc.execute()
-        return store.get_node(step)
-
-    def test_rework_marker_from_an_author_outside_trusted_authors_does_not_authorize_the_drop(self):
-        node = self._forged_rework("colleague")
-
-        self.assertEqual(node.role, "human")
-        self.assertIn("b.py", node.notes)
-
-    def test_trusted_author_match_ignores_case(self):
-        node = self._forged_rework("Review-Code")
-
-        self.assertEqual(node.role, "agent")
-        self.assertIsNone(node.notes)
-
-    def test_marker_substring_naming_the_file_without_a_decision_no_longer_authorizes_it(self):
-        comment = Comment(
-            author="review-code",
-            body=LC_MARKER + " Remove b.py - keep everything else.",
-            is_top_level=True,
-            created_at=100.0,
-        )
-        gh = FakeGitHub(
-            head_shas={self._URL: "sha1"},
-            files_by_sha={(self._URL, "sha1"): frozenset({"a.py", "b.py"})},
-            timed_comments=[(100.0, comment)],
-        )
-        store, item, step, uc = self._setup(gh)
-        uc.execute()
-        gh._head_shas[self._URL] = "sha2"
-        gh._files_by_sha[(self._URL, "sha2")] = frozenset({"a.py"})
-        uc.execute()
-
-        self.assertEqual(store.get_node(step).role, "human")
-
-    def test_answer_decision_marker_naming_the_file_does_not_authorize_it(self):
-        comment = Comment(
-            author="review-code",
-            body=LC_MARKER + "<!-- lc:decision=answer -->" + " no need to touch b.py",
-            is_top_level=False,
-            path="b.py",
-            created_at=100.0,
-        )
-        gh = FakeGitHub(
-            head_shas={self._URL: "sha1"},
-            files_by_sha={(self._URL, "sha1"): frozenset({"a.py", "b.py"})},
-            timed_comments=[(100.0, comment)],
-        )
-        store, item, step, uc = self._setup(gh)
-        uc.execute()
-
-        gh._head_shas[self._URL] = "sha2"
-        gh._files_by_sha[(self._URL, "sha2")] = frozenset({"a.py"})
+    def test_a_record_on_a_step_outside_the_feedback_stage_does_not_authorize_the_drop(self):
+        gh = self._ab_github()
+        store, item, step, uc = self._drop_b(gh)
+        record_rework(store, item, "inline:7", "sha1", path="b.py", stage="build")
 
         uc.execute()
 
@@ -807,50 +747,41 @@ class TestMonitorPrsContentPin(unittest.TestCase):
         self.assertEqual(node.role, "human")
         self.assertIn("b.py", node.notes)
 
-
-
-    def _round_decision(self, author, sha, with_decision=True):
-        body = LC_MARKER + "<!-- lc:sha=%s -->" % sha
-        if with_decision:
-            body += "<!-- lc:decision=rework -->"
-        comment = Comment(author=author, body=body, is_top_level=True, created_at=100.0)
-        gh = FakeGitHub(
-            head_shas={self._URL: "sha1"},
-            files_by_sha={(self._URL, "sha1"): frozenset({"a.py", "b.py"})},
-            timed_comments=[(100.0, comment)],
-        )
-        store, item, step, uc = self._setup(gh)
-        uc.execute()
-        gh._head_shas[self._URL] = "sha2"
-        gh._files_by_sha[(self._URL, "sha2")] = frozenset({"a.py"})
+    def _round_decision(self, sha, stage="handle-feedback"):
+        gh = self._ab_github()
+        store, item, step, uc = self._drop_b(gh)
+        record_rework(store, item, "mention:3", sha, stage=stage)
         uc.execute()
         return store.get_node(step)
 
-    def test_top_level_rework_decision_at_the_pinned_head_orders_the_drop_and_notes_it(self):
-        node = self._round_decision("review-code", "sha1")
+    def test_recorded_whole_round_decision_at_the_pinned_head_orders_the_drop_and_notes_it(self):
+        node = self._round_decision("sha1")
 
         self.assertEqual(node.role, "agent")
         self.assertIn("b.py", node.notes)
         self.assertIn("rework", node.notes)
 
-    def test_top_level_rework_decision_naming_an_older_head_still_parks(self):
-        node = self._round_decision("review-code", "sha0")
+    def test_recorded_whole_round_decision_naming_an_older_head_still_parks(self):
+        node = self._round_decision("sha0")
 
         self.assertEqual(node.role, "human")
         self.assertIn("b.py", node.notes)
 
-    def test_top_level_rework_decision_from_an_untrusted_author_still_parks(self):
-        node = self._round_decision("colleague", "sha1")
+    def test_a_whole_round_record_on_a_step_outside_the_feedback_stage_still_parks(self):
+        node = self._round_decision("sha1", stage="build")
 
         self.assertEqual(node.role, "human")
         self.assertIn("b.py", node.notes)
 
-    def test_no_decision_at_the_pinned_head_still_parks(self):
-        node = self._round_decision("review-code", "sha1", with_decision=False)
+    def test_a_verdict_comment_at_the_pinned_head_without_a_record_still_parks(self):
+        gh = self._ab_github(timed_comments=[(100.0, verdict("sha1"))])
+        store, item, step, uc = self._drop_b(gh)
 
+        uc.execute()
+
+        node = store.get_node(step)
         self.assertEqual(node.role, "human")
         self.assertIn("b.py", node.notes)
-
 
     def _review_move(self, comment, outcomes=("rejected",), before=("a.py", "b.py"),
                      after=("a.py",), comments_failing=False):
@@ -1250,7 +1181,7 @@ class TestContentPinOverAStack(unittest.TestCase):
         self.assertNotEqual(self.store.get_node(self.step).state, State.WAITING)
         self.assertEqual(self._pins()["hold:%s" % two], "sha-2c")
 
-    def test_a_rework_decision_at_the_pinned_head_notes_only_the_real_drop(self):
+    def test_a_recorded_rework_decision_at_the_pinned_head_notes_only_the_real_drop(self):
         one, two = _layer_url(1), _layer_url(2)
         self._setup(files={
             (two, "pin2"): frozenset({"a.py", "moved.py", "gone.py"}),
@@ -1259,11 +1190,7 @@ class TestContentPinOverAStack(unittest.TestCase):
         self.github._head_shas[two] = "pin2"
         self._run()
         self.github._head_shas[two] = "sha-2b"
-        self.github._timed_comments.append((100.0, Comment(
-            author="review-code",
-            body=LC_MARKER + "<!-- lc:sha=pin2 --><!-- lc:decision=rework -->",
-            is_top_level=True,
-            created_at=100.0)))
+        record_rework(self.store, self.item, "mention:1", "pin2")
 
         self._run()
         self._run()
