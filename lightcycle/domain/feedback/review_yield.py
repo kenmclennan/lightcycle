@@ -12,6 +12,7 @@ VIA_CHANGE_REQUEST = "change-request"
 VIA_PR_COMMENT = "pr-comment"
 
 REVIEW_FINDINGS = "review-findings"
+REWORK_DECISION = "rework-decision"
 CAUSED_BY = "caused-by"
 FOUND_BY = "found-by"
 
@@ -62,6 +63,27 @@ def latest_passing_verdict(candidates):
         if best is None or (step.closed_at or "", step.id) > (best.closed_at or "", best.id):
             best = step
     return best
+
+
+def parse_rework_decision(text):
+    try:
+        data = json.loads(text)
+    except ValueError as e:
+        raise ValueError("rework-decision is not valid JSON: %s" % e)
+    if not isinstance(data, dict):
+        raise ValueError("rework-decision must be a JSON object")
+    extra = sorted(set(data) - {"sha", "path"})
+    if extra:
+        raise ValueError("rework-decision has unknown key(s): %s" % ", ".join(extra))
+    sha = data.get("sha")
+    if not isinstance(sha, str) or not sha:
+        raise ValueError("rework-decision needs a non-empty string 'sha'")
+    if "path" not in data:
+        return sha, None
+    path = data["path"]
+    if not isinstance(path, str) or not path:
+        raise ValueError("rework-decision 'path', when present, must be a non-empty string")
+    return sha, path
 
 
 def parse_findings(text):
