@@ -180,6 +180,8 @@ lc upgrade --check    # report only, do not install
 
 `lc upgrade` compares the installed `__version__` against the version on the repo's `main`, and if newer runs `UV_VENV_CLEAR=1 pipx install --force git+...` (the `UV_VENV_CLEAR=1` is required when pipx uses the `uv` backend, which otherwise refuses to overwrite the existing venv).
 
+Before installing, `lc upgrade` scans for processes using the venv. A long-lived holder (`lc start`, `lc tui`, `lc logs -f`, a worker) refuses at once. One-shot `lc` commands are waited for: it names them, rescans each second until they exit, then installs; Ctrl-C aborts with nothing installed.
+
 What an upgrade **changes**: the engine venv (code + `prompts/`). What it **does not touch**: `~/.lightcycle` - your store, config, logs, worktrees, pulled workflow bundles, and the project registry. Your data and pulled workflows survive every upgrade; workflows are updated separately with `lc workflow upgrade`.
 
 Schema changes are handled separately: when a new engine opens a store it stamps a current store with its schema version, applies the additive column and cleanup migrations that remain, and opens it. It refuses a store written before the item/step split (one that still carries the `nodes` table) with a message naming the lightcycle release able to migrate it; migrate with that release first, then reopen. Migrations are idempotent. Stop the pool loop before upgrading, so the old engine is not running against a newly-migrated store; restart it after.

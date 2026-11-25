@@ -36,7 +36,7 @@ from lightcycle.application.setup import (
     VenvBusyError,
     upgrade,
 )
-from lightcycle.application.setup.upgrade import scan_venv_holders
+from lightcycle.application.setup.upgrade import format_waiting_message, scan_venv_holders
 from lightcycle.application.workflows.engine_requirement_check import installed_bundle_conflicts
 from lightcycle.adapters.stop_signal import StopSignal
 from lightcycle.adapters.sqlite_store import LiveStoreRefused, SchemaVersionRefused
@@ -269,7 +269,11 @@ def cmd_upgrade(argv):
             holders=lambda: scan_venv_holders(lambda: port.list_processes()),
             bundle_conflicts=lambda target: installed_bundle_conflicts(source, target),
             force=a.force,
+            on_waiting=lambda blockers: sys.stderr.write("%s\n" % format_waiting_message(blockers)),
         )
+    except KeyboardInterrupt:
+        sys.stderr.write("lc upgrade aborted; nothing was installed\n")
+        return 130
     except BundleRangeError as e:
         for message in e.conflicts:
             sys.stderr.write("%s\n" % message)

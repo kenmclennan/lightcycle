@@ -5,6 +5,7 @@ from lightcycle.ports.upgrade import ProcessListUnreadableError
 from lightcycle.application.setup.upgrade import (
     BundleRangeError,
     VenvBusyError,
+    is_long_lived,
     filter_holders,
     format_holders_message,
     parse_process_list,
@@ -172,7 +173,7 @@ class TestUpgrade(unittest.TestCase):
 
     def test_raises_venv_busy_error_when_holders_found_and_does_not_install(self):
         installer = FakeInstaller()
-        holders = [(123, "/venv/bin/python -m lightcycle.pool")]
+        holders = [(123, "/venv/bin/python -m lightcycle.worker_main")]
         with self.assertRaises(VenvBusyError):
             upgrade("0.1.0", fetch=lambda: "0.2.0", install=installer, holders=lambda: holders)
         self.assertEqual(installer.calls, 0)
@@ -186,6 +187,70 @@ class TestUpgrade(unittest.TestCase):
         with self.assertRaises(ProcessListUnreadableError):
             upgrade("0.1.0", fetch=lambda: "0.2.0", install=installer, holders=unreadable_holders)
         self.assertEqual(installer.calls, 0)
+
+    def test_waits_for_a_one_shot_holder_to_exit_then_installs(self):
+        installer = FakeInstaller()
+        scans = [[(7, "/venv/bin/lc doctor")], [(7, "/venv/bin/lc doctor")], []]
+        sleeps = []
+        announced = []
+        resp = upgrade(
+            "0.1.0", fetch=lambda: "0.2.0", install=installer,
+            holders=lambda: scans.pop(0), on_waiting=announced.append, sleep=sleeps.append,
+            installed=lambda: "0.2.0",
+        )
+        self.assertTrue(resp.applied)
+        self.assertEqual(installer.calls, 1)
+        self.assertEqual(len(sleeps), 2)
+        self.assertEqual(announced, [[(7, "/venv/bin/lc doctor")]])
+
+    def test_refuses_at_once_for_a_long_lived_holder_without_waiting(self):
+        installer = FakeInstaller()
+        sleeps = []
+        with self.assertRaises(VenvBusyError) as ctx:
+            upgrade(
+                "0.1.0", fetch=lambda: "0.2.0", install=installer,
+                holders=lambda: [(1, "/venv/bin/lc doctor"), (2, "/venv/bin/lc start")],
+                sleep=sleeps.append,
+            )
+        self.assertEqual(ctx.exception.holders, [(2, "/venv/bin/lc start")])
+        self.assertEqual(sleeps, [])
+        self.assertEqual(installer.calls, 0)
+
+    def test_refuses_when_a_long_lived_holder_appears_while_waiting(self):
+        installer = FakeInstaller()
+        scans = [[(7, "/venv/bin/lc doctor")], [(8, "/venv/bin/lc tui")]]
+        with self.assertRaises(VenvBusyError):
+            upgrade(
+                "0.1.0", fetch=lambda: "0.2.0", install=installer,
+                holders=lambda: scans.pop(0), sleep=lambda s: None,
+            )
+        self.assertEqual(installer.calls, 0)
+
+    def test_an_interrupt_while_waiting_installs_nothing(self):
+        installer = FakeInstaller()
+
+        def interrupt(seconds):
+            raise KeyboardInterrupt
+
+        with self.assertRaises(KeyboardInterrupt):
+            upgrade(
+                "0.1.0", fetch=lambda: "0.2.0", install=installer,
+                holders=lambda: [(7, "/venv/bin/lc doctor")], sleep=interrupt,
+            )
+        self.assertEqual(installer.calls, 0)
+
+
+class TestIsLongLived(unittest.TestCase):
+    def test_classifies_long_lived_commands(self):
+        for command in (
+            "/v/bin/lc start", "/v/bin/lc tui", "/v/bin/lc logs -f", "/v/bin/lc logs 3 --follow",
+            "/py -m lightcycle.worker_main --x",
+        ):
+            self.assertTrue(is_long_lived(command), command)
+
+    def test_classifies_other_lc_commands_as_one_shot(self):
+        for command in ("/v/bin/lc doctor", "/v/bin/lc logs", "/v/bin/lc", "/v/bin/lc show LC-1"):
+            self.assertFalse(is_long_lived(command), command)
 
 
 if __name__ == "__main__":
