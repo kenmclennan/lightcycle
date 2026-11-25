@@ -138,7 +138,7 @@ The mutating CLI is a small set of generic primitives over nodes; the read views
 | `lc dep <id> --needs <id>` | link one node as a blocker of another |
 | `lc advance <step> <outcome>` | route a step's outcome to the next step in its flow and print the new step id; `lc done` does this for you, this is the primitive scripts use |
 | `lc peek <id> <stage>` | print the prompt a worker would receive for `<stage>` of that node's workflow, at its pinned version |
-| `lc search "<text>"` | items whose title, description or notes contain every word, in any state (done included); the duplicate check before filing |
+| `lc search "<text>" [--json]` | items whose title, description or notes contain every word, in any state (done included); the duplicate check before filing; `--json` prints an array with id, title, state, project, repo, workflow, created_at and closed_at |
 | `lc claim agent` | (agents) atomically claim the next ready agent step, whatever its stage |
 
 ### See what's happening / run

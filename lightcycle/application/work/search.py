@@ -4,6 +4,7 @@ from typing import List, Optional
 from lightcycle.application.errors import UseCaseError
 from lightcycle.application.work.project_of import project_of, repo_of
 from lightcycle.domain.work import Step, node_id_key
+from lightcycle.domain.workflows.identity import parse_pin
 
 _SNIPPET_WINDOW = 40
 
@@ -18,6 +19,7 @@ class SearchMatch:
     node: Step
     project: Optional[str]
     repo: Optional[str]
+    workflow: Optional[str]
     field: str
     snippet: str
 
@@ -25,6 +27,13 @@ class SearchMatch:
 @dataclass(frozen=True)
 class SearchResponse:
     matches: List[SearchMatch]
+
+
+def _workflow_name(workflow):
+    pin = parse_pin(workflow)
+    if pin is None:
+        return workflow or None
+    return "%s/%s" % (pin[0], pin[1])
 
 
 def _snippet(text, idx, needle_len):
@@ -74,6 +83,7 @@ class SearchUseCase:
             node = self._store.get_node(row.id)
             matches.append(SearchMatch(
                 node=node, project=project_of(self._store, node), repo=repo_of(self._store, node),
+                workflow=_workflow_name(self._store.item_workflow(row.id)),
                 field=field, snippet=snippet,
             ))
         return SearchResponse(matches=matches)
