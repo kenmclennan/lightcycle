@@ -92,6 +92,30 @@ class TestBusyTimeout(unittest.TestCase):
         self.assertEqual(s._conn.execute("PRAGMA busy_timeout").fetchone()[0], BUSY_TIMEOUT_MS)
 
 
+class TestConsistentNodeRead(unittest.TestCase):
+    def test_a_child_and_parent_closing_mid_read_never_show_the_child_open_under_a_closed_parent(self):
+        from lightcycle.domain.health import fsck
+
+        s = make_sqlite_store()
+        step = create_owned_step(s, "x", role="agent")
+        item = s.get_step(step).item
+        writer = sqlite3.connect(s._db_path)
+        original = s.all_items_including_done
+
+        def close_child_then_parent_then_read():
+            writer.execute("UPDATE steps SET state = 'done' WHERE id = ?", (step,))
+            writer.commit()
+            writer.execute("UPDATE items SET state = 'done' WHERE id = ?", (item,))
+            writer.commit()
+            return original()
+
+        with patch.object(s, "all_items_including_done", close_child_then_parent_then_read):
+            nodes = s.all_nodes_including_done()
+        writer.close()
+
+        self.assertEqual(fsck(nodes), [])
+
+
 class TestHeldCommentsSchema(unittest.TestCase):
     def test_the_two_named_indexes_exist_and_there_is_no_foreign_key(self):
         s = make_sqlite_store()
