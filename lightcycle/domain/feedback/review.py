@@ -1,7 +1,6 @@
 import re
 
 LC_MARKER = "<!-- lc -->"
-AUTOMATED_PREFIX = "AUTOMATED:"
 
 _DECISION_RE = re.compile(r"<!-- lc:decision=(\w+) -->")
 _SHA_RE = re.compile(r"<!-- lc:sha=(\w+) -->")

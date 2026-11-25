@@ -3,7 +3,6 @@ from lightcycle.domain.feedback.period import Period
 from lightcycle.domain.feedback.reflection import Reflection, parse_reflections, reflections_of
 from lightcycle.domain.feedback.retro import RETRO_ORIGIN_LABEL, RETROED_LABEL, Retro
 from lightcycle.domain.feedback.review import (
-    AUTOMATED_PREFIX,
     LC_MARKER,
     is_engine_marked,
     outstanding_reviews,
@@ -47,7 +46,7 @@ from lightcycle.domain.feedback.signal import UNLABELED_MODEL, SignalSpec, Signa
 from lightcycle.domain.feedback.worklog import Worklog, WorklogEntry
 
 __all__ = [
-    "ReviewEscape", "ADMIT", "APPROVED", "AUTOMATED_PREFIX", "DEALT", "Roles", "SUPERSEDED", "Sorted", "WITHDRAWN", "gated", "is_engine_marked", "review_gate_wanted", "roles_of", "routed", "thread_answered_by_operator", "DISPATCHED", "HELD", "HELD_COMMENT_ORIGIN_LABEL", "HOLD", "HeldComment",
+    "ReviewEscape", "ADMIT", "APPROVED", "DEALT", "Roles", "SUPERSEDED", "Sorted", "WITHDRAWN", "gated", "is_engine_marked", "review_gate_wanted", "roles_of", "routed", "thread_answered_by_operator", "DISPATCHED", "HELD", "HELD_COMMENT_ORIGIN_LABEL", "HOLD", "HeldComment",
     "KIND_INLINE", "KIND_MENTION", "KIND_REVIEW", "NOTED", "REJECTED", "can_transition", "hold_key",
     "standing",
     "Duration", "LC_MARKER", "Period", "RETRO_ORIGIN_LABEL", "RETROED_LABEL", "Reflection", "Retro", "SignalSpec", "Signals",

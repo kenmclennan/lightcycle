@@ -1,7 +1,6 @@
 import unittest
 
 from lightcycle.domain.feedback import (
-    AUTOMATED_PREFIX,
     LC_MARKER,
     outstanding_reviews,
     outstanding_threads,
@@ -140,10 +139,10 @@ class TestOutstandingReviews(unittest.TestCase):
         self.assertEqual(result, [linked])
 
 
-class TestAutomatedPrefix(unittest.TestCase):
+class TestLeadingText(unittest.TestCase):
     def test_a_first_line_carrying_the_prefix_does_not_disturb_marker_parsing(self):
         body = "%s pushed the fix\n%s\n<!-- lc:sha=abc123 -->\n<!-- lc:decision=rework -->" % (
-            AUTOMATED_PREFIX, LC_MARKER)
+            "lead", LC_MARKER)
 
         self.assertEqual(parse_decision(body), "rework")
         self.assertEqual(parse_decision_sha(body), "abc123")
