@@ -20,6 +20,7 @@ class HierarchyRow:
     node: Step
     depth: int
     callout: Optional[CalloutLine] = None
+    round: int = 1
 
     @property
     def row_key(self):
@@ -42,8 +43,10 @@ def callout_line(callout_id, record):
 def compose_hierarchy(root, steps_by_item, callouts_by_step=None):
     callouts_by_step = callouts_by_step or {}
     rows = [HierarchyRow(root, 0)]
+    seen = {}
     for step in steps_by_item.get(root.id, []):
-        rows.append(HierarchyRow(step, 1))
+        seen[step.stage] = seen.get(step.stage, 0) + 1
+        rows.append(HierarchyRow(step, 1, round=seen[step.stage]))
         for line in callouts_by_step.get(step.id, []):
             rows.append(HierarchyRow(step, 2, line))
     return rows

@@ -722,7 +722,7 @@ def _hierarchy_stacked_first_line(
     return content_so_far + pad_field_right(cost_cell, cost_area)
 
 
-def _hierarchy_label(node, flow_service, multi_pass):
+def _hierarchy_label(node, flow_service, multi_pass, round_number=1):
     if node.type != "step":
         return node.title
     if flow_service is None:
@@ -731,6 +731,8 @@ def _hierarchy_label(node, flow_service, multi_pass):
         base, phase = flow_service.display_for(node) or node.stage, flow_service.phase_for(node)
     n = pass_number(node.pass_id)
     parts = (["pass %d" % n] if multi_pass else []) + ([phase] if phase else [])
+    if round_number > 1:
+        base = "%s (%d)" % (base, round_number)
     return " · ".join(parts + [base]) if parts else base
 
 
@@ -802,7 +804,7 @@ def hierarchy_row_cells(
             row, layout, row_budget, active_frame, flow_service, store, now, pool_running
         )
         indent = HIERARCHY_CONTINUATION_BASE_INDENT + row.depth
-        label = _hierarchy_label(node, flow_service, multi_pass)
+        label = _hierarchy_label(node, flow_service, multi_pass, row.round)
         return (stacked_cell(first_line, indent, label, row_budget),)
     glyph = _display_glyph(node, active_frame, _flow_for_bucket(node, flow_service), pool_running)
     icon_cell = Text(glyph.glyph, style=COLOURS[glyph.colour])
@@ -810,7 +812,7 @@ def hierarchy_row_cells(
         icon_cell = icon_cell + Text(
             DEPENDENCY_BLOCKED_EXTRA_GLYPH.glyph, style=COLOURS[DEPENDENCY_BLOCKED_EXTRA_GLYPH.colour]
         )
-    title_cell = ("  " * row.depth) + _hierarchy_label(node, flow_service, multi_pass)
+    title_cell = ("  " * row.depth) + _hierarchy_label(node, flow_service, multi_pass, row.round)
     turns_text, cost_text = hierarchy_usage_text(node)
     turns_cell = Text(turns_text, style=COLOURS["dim"]) if turns_text else ""
     time_text = hierarchy_time_text(store, node, now)

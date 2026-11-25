@@ -23,6 +23,18 @@ class TestHierarchyUseCase(unittest.TestCase):
         rows = HierarchyUseCase(s).execute(HierarchyInput(node=step)).rows
         self.assertEqual([(r.node.id, r.depth) for r in rows], [(item, 0), (step, 1)])
 
+    def test_a_repeated_stage_counts_its_rounds_in_order(self):
+        s = FakeStore()
+        item = s.create_item("item", "a description")
+        code1 = s.create_step(stage="write-code", role="agent", item=item)
+        review1 = s.create_step(stage="review-code", role="agent", item=item)
+        code2 = s.create_step(stage="write-code", role="agent", item=item)
+        rows = HierarchyUseCase(s).execute(HierarchyInput(node=item)).rows
+        self.assertEqual(
+            [(r.node.id, r.round) for r in rows],
+            [(item, 1), (code1, 1), (review1, 1), (code2, 2)],
+        )
+
     def test_an_items_siblings_are_not_shown(self):
         s = FakeStore()
         other = s.create_item("other", "a description")
