@@ -1,4 +1,5 @@
 import io
+import json
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 
@@ -147,6 +148,36 @@ class TestCmdSearch(unittest.TestCase):
             rc = cli.cmd_search(["gh pr checks"]) or 0
         self.assertEqual(rc, 0)
         self.assertIn(tid, out.getvalue())
+
+    def test_json_prints_one_object_per_hit_with_the_resolved_workflow_name(self):
+        store = FakeStore()
+        tid = store.create_item(
+            "an item", "gh pr checks", project="proj-a",
+            workflow="lightcycle/small-change@12daa75b8cf49df849f106e78d777c6b92075932")
+        store.add_artifact(tid, "repo", "org/repo-a")
+        store.complete_node(tid, "done")
+        store.create_item("unrelated", "nothing")
+        cli.set_container(FakeContainer(store))
+        out = io.StringIO()
+        with redirect_stdout(out):
+            rc = cli.cmd_search(["gh pr checks", "--json"]) or 0
+        self.assertEqual(rc, 0)
+        hits = json.loads(out.getvalue())
+        self.assertEqual(len(hits), 1)
+        hit = hits[0]
+        self.assertEqual(
+            {k: hit[k] for k in ("id", "title", "state", "project", "repo", "workflow")},
+            {"id": tid, "title": "an item", "state": "done", "project": "proj-a",
+             "repo": "org/repo-a", "workflow": "lightcycle/small-change"})
+        self.assertEqual(set(hit), {
+            "id", "title", "state", "project", "repo", "workflow", "created_at", "closed_at"})
+
+    def test_json_with_no_hits_is_an_empty_array(self):
+        cli.set_container(FakeContainer(FakeStore()))
+        out = io.StringIO()
+        with redirect_stdout(out):
+            cli.cmd_search(["nowhere", "--json"])
+        self.assertEqual(json.loads(out.getvalue()), [])
 
     def test_empty_query_exits_one_with_message_on_stderr(self):
         cli.set_container(FakeContainer(FakeStore()))

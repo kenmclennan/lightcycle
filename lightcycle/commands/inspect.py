@@ -99,6 +99,13 @@ def cmd_search(argv):
     except UseCaseError as e:
         print(e, file=sys.stderr)
         return 1
+    if a.json:
+        print(json.dumps([{
+            "id": m.node.id, "title": m.node.title, "state": m.node.state.value,
+            "project": m.project, "repo": m.repo, "workflow": m.workflow,
+            "created_at": m.node.created_at, "closed_at": m.node.closed_at,
+        } for m in resp.matches], indent=2))
+        return 0
     for line in render_search(resp.matches, container().config.max_title_length()):
         print(line)
     return 0

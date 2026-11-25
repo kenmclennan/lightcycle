@@ -200,7 +200,7 @@ COMMANDS = {
         Arg("n", nargs="?", type=int), Arg("--project"),
     )),
     "search": CommandSpec(prog="lc search", args=(
-        Arg("text"),
+        Arg("text"), Arg("--json", action="store_true"),
     )),
     "active": CommandSpec(prog="lc active"),
     "queue": CommandSpec(prog="lc queue", args=(
