@@ -5,7 +5,7 @@ from lightcycle.application.flow import CompleteStepUseCase
 from lightcycle.application.flow.complete_step import CompleteInput
 from lightcycle.application.pool.dispatch_pr_feedback import DispatchPrFeedbackUseCase
 from lightcycle.application.pool.feedback_window import feedback_window_start
-from lightcycle.domain.feedback import AUTOMATED_PREFIX, LC_MARKER
+from lightcycle.domain.feedback import LC_MARKER
 from lightcycle.domain.work import State
 from lightcycle.ports.github import Comment, NotYetRead, Review
 from tests.support.fake_github import FakeGitHub
@@ -215,7 +215,7 @@ class TestLiveRereadOfGates(_Rig):
         self._gated(_inline(1200.0, _OUTSIDER, "root"))
         self.github._timed_comments.append(_inline(
             1300.0, _OPERATOR, "reply", in_reply_to="root",
-            body="%s pushed %s" % (AUTOMATED_PREFIX, LC_MARKER)))
+            body="lead pushed %s" % LC_MARKER))
         self.uc.execute()
         self.assertEqual(held_comment(self.store, self.rid, "inline:root").state, "held")
 
