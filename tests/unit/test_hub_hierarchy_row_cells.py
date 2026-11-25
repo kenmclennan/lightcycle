@@ -216,6 +216,19 @@ class TestLabelComposition(unittest.TestCase):
 
         self.assertEqual(title_cell, "pass 1 · Code · Building")
 
+    def test_a_repeated_stage_shows_its_round_number_after_the_label(self):
+        store = FakeStore()
+        step = create_owned_step(store, "s", stage="build", role="agent")
+        row = HierarchyRow(store.get_node(step), 1, round=4)
+
+        _, _, title_cell, *_ = hierarchy_row_cells(
+            row,
+            flow_service=FixedFlowService(FLOW, display="Coding", phase="code"),
+            store=store, now=_NOW,
+        )
+
+        self.assertEqual(title_cell, "  code · Coding (4)")
+
 
 class TestRowDepthIndentation(unittest.TestCase):
     def test_depth_zero_has_no_indent(self):

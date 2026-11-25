@@ -726,7 +726,7 @@ class NodeHubScreen(HubScreenMarker, LogTabMixin, HierarchyTabMixin, OutputsTabM
             self._pool_running,
         )
         text = Text(glyph.glyph + "  ", style=COLOURS[glyph.colour])
-        label = _hierarchy_label(ancestor.node, self._flow_service, self._last_multi_pass)
+        label = _hierarchy_label(ancestor.node, self._flow_service, self._last_multi_pass, ancestor.round)
         text.append("%s  %s" % (ancestor.node.id, label), style=COLOURS["dim"])
         banner.update(text)
         banner.display = True
