@@ -79,7 +79,13 @@ class ItemsAggregate:
         return self.all_steps() + self.all_items()
 
     def all_nodes_including_done(self):
-        return self.all_steps_including_done() + self.all_items_including_done()
+        if self._tx_depth or self._conn.in_transaction:
+            return self.all_steps_including_done() + self.all_items_including_done()
+        self._conn.execute("BEGIN")
+        try:
+            return self.all_steps_including_done() + self.all_items_including_done()
+        finally:
+            self._conn.rollback()
 
     def all_items(self):
         return self._select_items("state != 'done'")
