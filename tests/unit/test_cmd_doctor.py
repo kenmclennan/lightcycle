@@ -71,6 +71,15 @@ class FakeConfig:
     def version(self):
         return "0.6.319"
 
+    def ignored_authors(self):
+        return frozenset()
+
+    def trusted_authors(self):
+        return frozenset()
+
+    def review_bots(self):
+        return frozenset()
+
     def missing_config_keys(self):
         return ()
 

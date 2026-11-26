@@ -357,7 +357,27 @@ class DoctorUseCase:
             for k in self._config.obsolete_config_keys()
         ]
         problems += self._health_icon_problems()
+        problems += self._ignored_author_problems()
         return problems
+
+    def _ignored_author_problems(self):
+        try:
+            ignored = self._config.ignored_authors()
+            trusted = self._config.trusted_authors()
+            bots = self._config.review_bots()
+        except ConfigError:
+            return []
+        return [
+            Problem(
+                "config",
+                "%r is on ignored-authors and also on %s: its comments are dropped before "
+                "trust is read" % (login, " and ".join(
+                    key for key, logins in (("trusted-authors", trusted), ("review-bots", bots))
+                    if login in logins)),
+            )
+            for login in sorted(ignored)
+            if login in trusted or login in bots
+        ]
 
     def _health_icon_problems(self):
         try:

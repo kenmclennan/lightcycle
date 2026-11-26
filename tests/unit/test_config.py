@@ -552,6 +552,12 @@ class TestRenamedShortcodeKey(unittest.TestCase):
 
 
 class TestReviewBots(unittest.TestCase):
+    def test_ignored_authors_key_reads_empty_when_unset_and_casefolds(self):
+        self.assertEqual(_cfg().ignored_authors(), frozenset())
+        self.assertEqual(
+            _cfg(ignored_authors="SonarCloud[bot]  Other").ignored_authors(),
+            frozenset({"sonarcloud[bot]", "other"}))
+
     def test_review_bots_key_reads_empty_when_unset_and_casefolds(self):
         self.assertEqual(_cfg().review_bots(), frozenset())
         self.assertEqual(_cfg(review_bots="").review_bots(), frozenset())

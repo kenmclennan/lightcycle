@@ -70,6 +70,7 @@ _SEED_KEYS = [
     ("specs-path", "~/workspace/specs"),
     ("trusted-authors", ""),
     ("review-bots", ""),
+    ("ignored-authors", ""),
     ("memory-reserve-fraction", "0.65"),
     ("guidance-budget-bytes", "8192"),
     ("guidance-unused-after-deliveries", "60"),

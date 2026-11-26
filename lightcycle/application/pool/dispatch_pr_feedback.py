@@ -79,7 +79,7 @@ def _candidate(run, kind, obj, path=None, line=None):
 class DispatchPrFeedbackUseCase:
     def __init__(
         self, store, github, flow_service, complete, *, trusted_authors, review_bots,
-        held_shortcode, held_triage_timeout, wall_clock, poll_epoch, unread_note_polls,
+        ignored_authors, held_shortcode, held_triage_timeout, wall_clock, poll_epoch, unread_note_polls,
     ):
         self._poll_epoch = poll_epoch
         self._unread_note_polls = unread_note_polls
@@ -91,6 +91,7 @@ class DispatchPrFeedbackUseCase:
         self._complete = complete
         self._trusted_authors = trusted_authors
         self._review_bots = review_bots
+        self._ignored_authors = ignored_authors
         self._hold = HoldCommentUseCase(store, held_shortcode, held_triage_timeout)
         self._gates = ReviewGateRefreshUseCase(
             store, github, complete, trusted_authors=trusted_authors, review_bots=review_bots,
@@ -139,6 +140,11 @@ class DispatchPrFeedbackUseCase:
             self._note_gh_read_failure(step.id, failure)
             names = [n for n, r in reads if isinstance(r, NotYetRead)]
             return _Feedback(failed=True), (_unread_reason(pr, names) if names else None)
+
+        ignored = {a.casefold() for a in self._ignored_authors()}
+        top_level = [c for c in top_level if c.author.casefold() not in ignored]
+        inline = [c for c in inline if c.author.casefold() not in ignored]
+        reviews = [r for r in reviews if r.author.casefold() not in ignored]
 
         try:
             trusted = self._trusted_authors()

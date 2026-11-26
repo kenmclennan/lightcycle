@@ -208,7 +208,7 @@ class WorkflowSimulateUseCase:
         return MonitorPrsUseCase(
             self._store, github, self._worktrees, self._flow, self._complete,
             trusted_authors=lambda: frozenset({"reviewer"}),
-            review_bots=lambda: frozenset(),
+            review_bots=lambda: frozenset(), ignored_authors=lambda: frozenset(),
             held_shortcode=lambda: "HLD",
             held_triage_timeout=self._config.held_comment_triage_timeout,
             writes=InlinePrWrites(github, time.monotonic),

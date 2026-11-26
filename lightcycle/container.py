@@ -243,6 +243,7 @@ class Container:
                 self.store, snapshot, worktrees, flow, complete,
                 trusted_authors=self.config.trusted_authors,
                 review_bots=self.config.review_bots,
+                ignored_authors=self.config.ignored_authors,
                 held_shortcode=self.config.held_comment_shortcode,
                 held_triage_timeout=self.config.held_comment_triage_timeout, writes=writes,
                 ci_clock=self.monotonic, ci_poll_seconds=self.config.github_poll_seconds,
