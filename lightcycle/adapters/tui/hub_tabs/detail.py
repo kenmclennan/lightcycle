@@ -11,6 +11,7 @@ from lightcycle.adapters.tui.row_grid import (
     screen_row_budget_for,
 )
 from lightcycle.application.errors import UseCaseError
+from lightcycle.domain.work.state import State
 from lightcycle.application.work import (
     StepRunInput,
     StepRunUseCase,
@@ -76,7 +77,10 @@ class DetailTabMixin:
     def _render_detail(self, store, step, initial) -> None:
         fields = self._fields_for(store, step, self._flow_service)
         self._detail_empty = not fields
-        self._detail_park = park_panel_text(step.park, self._home_dir())
+        parked_state = step.state in (State.BLOCKED, State.WAITING)
+        self._detail_park = (
+            park_panel_text(step.park, self._home_dir()) if parked_state else None
+        )
         panel = self.query_one("#hub-detail-park", Static)
         panel.border_title = PARK_PANEL_TITLE
         panel.update(self._detail_park or "")

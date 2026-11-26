@@ -5,6 +5,7 @@ from pytest_bdd import given, parsers, scenarios, then, when
 from textual.widgets import Static
 
 from lightcycle.adapters.tui.hub import DetailTable, HubTabStrip, NodeHubScreen
+from lightcycle.domain.work.state import State
 from lightcycle.application.flow import BlockInput, BlockStepUseCase
 from tests.support.fake_fs import FakeFs
 from tests.support.fake_store import FakeStore
@@ -228,6 +229,14 @@ def _step_parked_needs_reason(ctx):
     _push_hub(ctx, step_id)
 
 
+@given("a running step that still carries a park, its hub open")
+def _running_step_with_park(ctx):
+    store, step_id = _launch_step(ctx)
+    store.update_metadata(step_id, {"reason": "stale", "needs": "stale decision"})
+    store.update_state(step_id, State.RUNNING)
+    _push_hub(ctx, step_id)
+
+
 @given("a step parked at a stage the workflow declares agent-owned, its hub open")
 def _step_parked_agent_owned(ctx):
     store, step_id = _launch_step(
@@ -367,6 +376,11 @@ def _park_fields_shown(ctx):
     assert panel.index("hit an ambiguity") < panel.index("decide the approach")
     assert not _field_present(ctx, "needs")
     assert not _field_present(ctx, "reason")
+
+
+@then("the Blocked panel is empty")
+def _blocked_panel_empty(ctx):
+    assert ctx["session"].app.screen._detail_park is None
 
 
 @then("no needs field is shown")

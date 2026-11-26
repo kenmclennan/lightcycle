@@ -83,6 +83,11 @@ Feature: The Detail tab
     When I open its Detail tab
     Then the park's reason and needs are shown in the Blocked panel, not as table rows
 
+  Scenario: A running step that still carries a park shows no Blocked panel
+    Given a running step that still carries a park, its hub open
+    When I open its Detail tab
+    Then the Blocked panel is empty
+
   Scenario: A step that is not parked shows neither needs nor reason
     Given a step with no park recorded, its hub open
     When I open its Detail tab
