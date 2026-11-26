@@ -41,7 +41,7 @@ def _review(ts, author, rid, body="@lc needs work"):
 
 
 class _Base(unittest.TestCase):
-    def _build(self, github, trusted=lambda: _TRUSTED, flow=None, review_bots=None):
+    def _build(self, github, trusted=lambda: _TRUSTED, flow=None, review_bots=None, ignored=frozenset()):
         self.flow = flow or _FEEDBACK_FLOW
         self.store = FakeStore()
         self.item = self.store.create_item("in-review feature", "a description")
@@ -50,7 +50,7 @@ class _Base(unittest.TestCase):
         self.adapter = _FlowAdapter(self.flow)
         self.uc = DispatchPrFeedbackUseCase(
             self.store, github, self.adapter, None,
-            trusted_authors=trusted, review_bots=review_bots or trusted, held_shortcode=lambda: "HLD", held_triage_timeout=lambda: 0, wall_clock=lambda: 0.0,
+            trusted_authors=trusted, review_bots=review_bots or trusted, ignored_authors=lambda: ignored, held_shortcode=lambda: "HLD", held_triage_timeout=lambda: 0, wall_clock=lambda: 0.0,
             poll_epoch=lambda: 0, unread_note_polls=lambda: 3,
         )
         return self.uc
@@ -114,6 +114,25 @@ class TestEachRouteAppliesTheSameRule(_Base):
                 self.assertEqual(holds[0].role, "human")
                 self.assertTrue(holds[0].item.startswith("HLD-"))
                 self.assertEqual(self.store.open_holds(self.rid)[0].author, "mallory")
+
+    def test_an_ignored_author_files_no_hold_and_spawns_nothing_on_every_route(self):
+        for route, make in _ROUTES.items():
+            with self.subTest(route=route):
+                self._build(
+                    FakeGitHub(push_time=1000.0, **make("Mallory[bot]")),
+                    ignored=frozenset({"mallory[bot]"}))
+                result = self.uc.execute()
+                self.assertEqual(result.reworked, [])
+                self.assertEqual(self._feedback_steps(), [])
+                self.assertEqual(self._hold_steps(), [])
+                self.assertEqual(self.store.open_holds(self.rid), [])
+
+    def test_a_comment_from_an_author_not_ignored_is_still_held(self):
+        self._build(
+            FakeGitHub(push_time=1000.0, **_ROUTES["mention"]("mallory")),
+            ignored=frozenset({"someone-else"}))
+        self.uc.execute()
+        self.assertEqual(len(self._hold_steps()), 1)
 
     def test_a_trusted_bot_dispatches_on_every_route_including_a_mention(self):
         for route, make in _ROUTES.items():

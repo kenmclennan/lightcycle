@@ -766,6 +766,10 @@ class Config:
         raw = self.load_config().get("review-bots") or ""
         return frozenset(a.casefold() for a in raw.split())
 
+    def ignored_authors(self):
+        raw = self.load_config().get("ignored-authors") or ""
+        return frozenset(a.casefold() for a in raw.split())
+
     def seed_trusted_authors(self, login):
         if self.load_config().get("trusted-authors"):
             return False

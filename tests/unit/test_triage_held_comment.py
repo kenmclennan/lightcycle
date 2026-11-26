@@ -36,7 +36,7 @@ class _Rig(unittest.TestCase):
         self.uc = DispatchPrFeedbackUseCase(
             self.store, github, self.adapter, self._complete(),
             trusted_authors=lambda: frozenset({"ken"}), review_bots=lambda: frozenset({"ken"}),
-            held_shortcode=lambda: "HLD", held_triage_timeout=lambda: self.timeout,
+            ignored_authors=lambda: frozenset(), held_shortcode=lambda: "HLD", held_triage_timeout=lambda: self.timeout,
             wall_clock=lambda: self.clock, poll_epoch=lambda: 0, unread_note_polls=lambda: 3,
         )
 

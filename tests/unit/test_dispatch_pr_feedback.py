@@ -18,7 +18,7 @@ from tests.support.fake_store import FakeStore
 
 _BOT_LOGIN = "copilot-pull-request-reviewer[bot]"
 _TRUST = dict(trusted_authors=lambda: frozenset({"reviewer", _BOT_LOGIN}),
-              review_bots=lambda: frozenset({"reviewer", _BOT_LOGIN}), held_shortcode=lambda: "HLD", held_triage_timeout=lambda: 0, wall_clock=lambda: 0.0,
+              review_bots=lambda: frozenset({"reviewer", _BOT_LOGIN}), ignored_authors=lambda: frozenset(), held_shortcode=lambda: "HLD", held_triage_timeout=lambda: 0, wall_clock=lambda: 0.0,
               poll_epoch=lambda: 0, unread_note_polls=lambda: 3)
 
 

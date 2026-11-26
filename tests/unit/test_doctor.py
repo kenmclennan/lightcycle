@@ -252,6 +252,23 @@ class TestDoctorUseCase(unittest.TestCase):
         for problems in report.problems.values():
             self.assertEqual(problems, [])
 
+    def test_login_on_ignored_authors_and_trusted_or_review_bots_warns_casefolded(self):
+        keys = dict(_ALL_KEYS, trusted_authors="Operator Copilot", review_bots="Copilot",
+                    ignored_authors="operator COPILOT clean-bot")
+        report = _uc(FakeStore(), FakeWorkflowSource(), _cfg(**keys), FakeWorkflowBundle()).execute(
+            DoctorInput())
+        messages = [p.message for p in report.problems["config"] if "ignored-authors" in p.message]
+        self.assertEqual(len(messages), 2)
+        self.assertTrue(any("'operator'" in m and "trusted-authors" in m for m in messages))
+        self.assertTrue(any(
+            "'copilot'" in m and "trusted-authors and review-bots" in m for m in messages))
+
+    def test_ignored_authors_disjoint_from_trusted_and_review_bots_does_not_warn(self):
+        keys = dict(_ALL_KEYS, ignored_authors="clean-bot")
+        report = _uc(FakeStore(), FakeWorkflowSource(), _cfg(**keys), FakeWorkflowBundle()).execute(
+            DoctorInput())
+        self.assertEqual(report.problems["config"], [])
+
     def test_pin_missing_on_disk_reports_pins_problem_and_skips_contract(self):
         store = FakeStore()
         item = store.create_item("item", "a description", workflow="acme/build@sha-gone")

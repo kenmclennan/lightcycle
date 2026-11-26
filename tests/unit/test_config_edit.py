@@ -41,20 +41,20 @@ class ConfigEditCase(unittest.TestCase):
         return self.uc.get(key).lines
 
 
-BLANK_LIST_SEEDS = ("review-bots",)
+BLANK_LIST_SEEDS = ("review-bots", "ignored-authors")
 
 
 class TestKindTable(unittest.TestCase):
     def test_kinds_and_seed_keys_name_the_same_keys(self):
         self.assertEqual(set(KEY_KINDS), {k for k, _ in _SEED_KEYS})
-        self.assertEqual(len(KEY_KINDS), 80)
+        self.assertEqual(len(KEY_KINDS), 81)
 
     def test_kind_sizes(self):
         sizes = {}
         for kind in KEY_KINDS.values():
             sizes[kind] = sizes.get(kind, 0) + 1
         self.assertEqual(sizes, {
-            "bool": 5, "int": 38, "float": 14, "path": 4, "relative-path": 7, "list": 3,
+            "bool": 5, "int": 38, "float": 14, "path": 4, "relative-path": 7, "list": 4,
             "str": 9})
 
 
