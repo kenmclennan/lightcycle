@@ -122,3 +122,66 @@ class TestCmdDep(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestCmdDepOnParkedStep(unittest.TestCase):
+    def setUp(self):
+        from tests.unit.test_halt_step import _OwnerFlow, _Spin
+        from lightcycle.application.flow.unblock_step import UnblockStepUseCase
+        from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
+
+        self.store = FakeStore()
+        store = self.store
+        self.container = FakeContainer(store)
+        self.container.unblock_step_use_case = lambda: UnblockStepUseCase(
+            store, _OwnerFlow(), spin_port=_Spin())
+        cli.set_container(self.container)
+        self.blocker = create_owned_step(store, "blocker", role="agent")
+        self.blocked = create_owned_step(store, "blocked", role="agent")
+        self.park = lambda: ParkStepUseCase(store).execute(
+            ParkInput(step=self.blocked, observation="stuck", decision="pick one"))
+
+    def test_dep_on_a_parked_step_clears_the_park_and_holds_it(self):
+        self.park()
+        rc, _out, _err = call(cli.cmd_dep, self.blocked, "--needs", self.blocker)
+        node = self.store.get_node(self.blocked)
+        self.assertEqual(rc, 0)
+        self.assertFalse(node.park)
+        self.assertNotIn("BLOCKED:", node.notes or "")
+        self.assertIn("PARK RESOLVED", node.notes or "")
+        self.assertEqual(node.role, "agent")
+        self.assertEqual(self.store._deps.get(self.blocked), {self.blocker})
+        self.assertIsNone(self.store.claim_ready("agent", "w1", item=node.item))
+
+    def test_dependency_exists_before_the_park_is_cleared(self):
+        self.park()
+        real = self.container.unblock_step_use_case
+        seen = []
+
+        def recording():
+            seen.append(set(self.store._deps.get(self.blocked, set())))
+            return real()
+
+        self.container.unblock_step_use_case = recording
+        call(cli.cmd_dep, self.blocked, "--needs", self.blocker)
+        self.assertEqual(seen, [{self.blocker}])
+
+    def test_step_runs_with_no_park_once_the_dependency_closes(self):
+        self.park()
+        call(cli.cmd_dep, self.blocked, "--needs", self.blocker)
+        self.store.complete_node(self.blocker, "done")
+        claimed = self.store.claim_ready("agent", "w1", item=self.store.get_node(self.blocked).item)
+        node = self.store.get_node(claimed.id)
+        self.assertEqual(claimed.id, self.blocked)
+        self.assertFalse(node.park)
+        self.assertNotIn("BLOCKED:", node.notes or "")
+
+    def test_dep_on_an_unparked_step_leaves_it_unchanged(self):
+        before = self.store.get_node(self.blocked)
+        rc, _out, _err = call(cli.cmd_dep, self.blocked, "--needs", self.blocker)
+        after = self.store.get_node(self.blocked)
+        self.assertEqual(rc, 0)
+        self.assertEqual(after.notes, before.notes)
+        self.assertEqual(after.role, before.role)
+        self.assertFalse(after.park)
+        self.assertEqual(self.store._deps.get(self.blocked), {self.blocker})

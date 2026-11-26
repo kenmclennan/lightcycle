@@ -440,6 +440,12 @@ def cmd_dep(argv):
         )
         return 1
     container().store.dep_add(a.id, a.needs)
+    if target.type == "step" and target.park:
+        try:
+            container().unblock_step_use_case().execute(UnblockInput(step=a.id))
+        except UseCaseError as e:
+            sys.stderr.write("%s\n" % e)
+            return 1
     return 0
 
 
