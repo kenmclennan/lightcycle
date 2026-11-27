@@ -132,6 +132,21 @@ class TestRequiredAndCeiling(unittest.TestCase):
         self.assertEqual(_outcome(checks), "timeout")
         self.assertEqual(timed_out_check(checks, 10000.0, 3600).name, "build")
 
+    def test_queued_check_past_the_ceiling_is_pending_while_a_runner_is_busy(self):
+        checks = (_run(name="build", status="queued", conclusion=None, started_at=6399.0),)
+        self.assertEqual(_outcome(checks), "pending")
+        self.assertIsNone(timed_out_check(checks, 10000.0, 3600))
+
+    def test_running_check_that_left_a_long_queue_is_pending_until_its_own_ceiling(self):
+        checks = (_run(name="build", status="in_progress", conclusion=None, started_at=10000.0 - 1200.0),)
+        self.assertEqual(_outcome(checks), "pending")
+        self.assertIsNone(timed_out_check(checks, 10000.0, 3600))
+
+    def test_queued_check_past_six_times_the_ceiling_is_timeout(self):
+        checks = (_run(name="build", status="queued", conclusion=None, started_at=1.0),)
+        self.assertEqual(timed_out_check(checks, 3600.0 * 6 + 2, 3600).name, "build")
+        self.assertIsNone(timed_out_check(checks, 3600.0 * 6, 3600))
+
     def test_no_required_set_judges_all_so_a_hung_check_times_out(self):
         self.assertEqual(_outcome((_running("codacy", 1000.0),), required=None), "timeout")
 
@@ -220,14 +235,14 @@ class TestEmptyCheckSet(unittest.TestCase):
 
 
 class TestEveryNonCompletedStatusTimesOut(unittest.TestCase):
-    def test_queued_past_the_ceiling_from_started_at_is_timeout(self):
-        checks = (_run("build", status="queued", conclusion=None, started_at=6399.0),)
-        self.assertEqual(_outcome(checks), "timeout")
-        self.assertEqual(timed_out_check(checks, 10000.0, 3600).name, "build")
+    def test_queued_past_six_times_the_ceiling_from_started_at_is_timeout(self):
+        checks = (_run("build", status="queued", conclusion=None, started_at=1.0),)
+        self.assertEqual(ci_outcome(checks, _REQUIRED, 21602.0, 3600), "timeout")
+        self.assertEqual(timed_out_check(checks, 21602.0, 3600).name, "build")
 
-    def test_queued_exactly_on_the_ceiling_is_pending(self):
-        checks = (_run("build", status="queued", conclusion=None, started_at=6400.0),)
-        self.assertEqual(_outcome(checks), "pending")
+    def test_queued_exactly_on_six_times_the_ceiling_is_pending(self):
+        checks = (_run("build", status="queued", conclusion=None, started_at=1.0),)
+        self.assertEqual(ci_outcome(checks, _REQUIRED, 21601.0, 3600), "pending")
 
     def test_other_statuses_time_out_like_in_progress(self):
         for status in ("waiting", "pending", "requested"):
@@ -236,9 +251,9 @@ class TestEveryNonCompletedStatusTimesOut(unittest.TestCase):
 
     def test_unknown_start_times_out_from_since(self):
         checks = (_run("build", status="queued", conclusion=None),)
-        self.assertEqual(ci_outcome(checks, None, 10000.0, 3600, 6399.0), "timeout")
-        self.assertEqual(ci_outcome(checks, None, 10000.0, 3600, 6400.0), "pending")
-        self.assertEqual(ci_outcome(checks, None, 10000.0, 3600, 0.0), "pending")
+        self.assertEqual(ci_outcome(checks, None, 30000.0, 3600, 8398.0), "timeout")
+        self.assertEqual(ci_outcome(checks, None, 30000.0, 3600, 8400.0), "pending")
+        self.assertEqual(ci_outcome(checks, None, 30000.0, 3600, 0.0), "pending")
 
     def test_a_completed_check_never_times_out(self):
         self.assertIsNone(timed_out_check((_run("build", started_at=1.0),), 10000.0, 3600))

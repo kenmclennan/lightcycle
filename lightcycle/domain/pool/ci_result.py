@@ -53,6 +53,16 @@ def unrun_checks(expected, checks):
     return tuple(sorted(label for label in expected if label not in reported))
 
 
+QUEUED_STATUS = "queued"
+QUEUED_CEILING_FACTOR = 6
+
+
+def _check_ceiling(check, ceiling):
+    if check.status == QUEUED_STATUS:
+        return ceiling * QUEUED_CEILING_FACTOR
+    return ceiling
+
+
 def timed_out_check(checks, now, ceiling, since=0.0, sleeps=()):
     if ceiling is None:
         return None
@@ -60,7 +70,7 @@ def timed_out_check(checks, now, ceiling, since=0.0, sleeps=()):
         (c for c in checks
          if not is_concluded(c)
          and (c.started_at if c.started_at > 0 else since) > 0
-         and awake_elapsed(c.started_at if c.started_at > 0 else since, now, sleeps) > ceiling),
+         and awake_elapsed(c.started_at if c.started_at > 0 else since, now, sleeps) > _check_ceiling(c, ceiling)),
         None,
     )
 

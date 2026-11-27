@@ -563,9 +563,9 @@ class TestRequiredChecksAndCeiling(unittest.TestCase):
         self.assertIn("ceiling of 3600s", node.report)
         self.assertEqual([a.value for a in store.item_artifacts(step) if a.type == "ci-judged-sha"], ["sha1"])
 
-    def test_timeout_note_names_the_queued_check_by_its_own_workflow(self):
+    def test_timeout_note_names_the_waiting_check_by_its_own_workflow(self):
         done = CheckRun(name="test (3.13)", status="completed", conclusion="success", workflow="scanner-python")
-        hung = CheckRun(name="test (3.13)", status="queued", conclusion=None, started_at=6399.0, workflow="scanner-kotlin")
+        hung = CheckRun(name="test (3.13)", status="waiting", conclusion=None, started_at=6399.0, workflow="scanner-kotlin")
         store, item, step, uc = _ci_setup(_gh([done, hung]))
 
         uc.execute()
