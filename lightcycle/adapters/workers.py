@@ -1,6 +1,7 @@
 import fcntl
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -8,6 +9,7 @@ import time
 from contextlib import contextmanager
 
 from lightcycle.adapters.process_group import run_in_group
+from lightcycle.adapters import step_scratch
 from lightcycle.domain.pool.worker import Worker
 from lightcycle.domain.work.worker_log import gh_calls_filename
 from lightcycle.ports.workers import RegistryUnreadable, WorkersPort
@@ -189,7 +191,46 @@ def _end_group(entry, grace_seconds, now):
     return True, False
 
 
-def prune_workers(root, keep_dead, grace_seconds=0, now=time.time, alive=worker_alive):
+def _signal_for(action, pids, signaller):
+    if action == "term":
+        signaller(pids, signal.SIGTERM)
+    elif action == "kill":
+        signaller(pids, signal.SIGKILL)
+
+
+def _reap_entry_scratch(entry, folder, tagged, group_live, grace_seconds, stamp, signaller):
+    pids = [] if tagged is None else tagged.get(folder, [])
+    action = step_scratch.reap_scratch(entry.get("scratch_term_at"), None if tagged is None else pids, group_live, grace_seconds, stamp)
+    touched = False
+    if action in ("term", "kill"):
+        _signal_for(action, pids, signaller)
+        if action == "term":
+            entry["scratch_term_at"] = stamp
+            touched = True
+    elif action == "delete":
+        shutil.rmtree(folder, ignore_errors=True)
+    done = action == "delete" and not os.path.exists(folder)
+    return done, touched
+
+
+def _reap_stray(folder, tagged, grace_seconds, stamp, signaller):
+    if tagged is None:
+        return
+    pids = tagged.get(folder, [])
+    term_at = step_scratch.read_marker(folder)
+    action = step_scratch.reap_scratch(term_at, pids, False, grace_seconds, stamp)
+    if action == "delete":
+        shutil.rmtree(folder, ignore_errors=True)
+    elif action in ("term", "kill"):
+        _signal_for(action, pids, signaller)
+        if action == "term":
+            step_scratch.write_marker(folder, stamp)
+
+
+def prune_workers(
+    root, keep_dead, grace_seconds=0, now=time.time, alive=worker_alive,
+    tagged=step_scratch.tagged_pids, signaller=step_scratch.signal_tagged,
+):
     with registry_lock(root):
         workers = workers_state(root)
         dead_idx = [
@@ -198,13 +239,30 @@ def prune_workers(root, keep_dead, grace_seconds=0, now=time.time, alive=worker_
             if not alive(w.get("pid", -1), w.get("pid_started"))
         ]
         stamp = now()
+        folders = {}
+        for i in dead_idx:
+            folder = step_scratch.scratch_dir(root, workers[i].get("spawnid") or "")
+            if workers[i].get("spawnid") and os.path.isdir(folder):
+                folders[i] = folder
+        strays = step_scratch.stray_scratch_dirs(
+            root, {w.get("spawnid") for w in workers}, stamp
+        )
+        scan = tagged(list(folders.values()) + strays) if (folders or strays) else {}
         live_groups = set()
         changed = False
         for i in dead_idx:
             live, touched = _end_group(workers[i], grace_seconds, stamp)
+            if i in folders:
+                done, scratch_touched = _reap_entry_scratch(
+                    workers[i], folders[i], scan, live, grace_seconds, stamp, signaller
+                )
+                touched = touched or scratch_touched
+                live = live or not done
             if live:
                 live_groups.add(i)
             changed = changed or touched
+        for folder in strays:
+            _reap_stray(folder, scan, grace_seconds, stamp, signaller)
         n_drop = max(0, len(dead_idx) - keep_dead)
         drop = set([i for i in dead_idx if i not in live_groups][:n_drop])
         if not drop:
