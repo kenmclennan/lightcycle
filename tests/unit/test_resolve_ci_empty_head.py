@@ -236,10 +236,10 @@ class TestQueuedCheckCeiling(_Case):
     def _queued(self, status="queued"):
         return (CheckRun(name="build", status=status, conclusion=None),)
 
-    def test_a_check_left_queued_past_the_ceiling_routes_failed_saying_queued(self):
+    def test_a_check_left_queued_past_six_times_the_ceiling_routes_failed_saying_queued(self):
         self._setup(checks=self._queued())
         self._at(0)
-        self._at(3601)
+        self._at(21601)
         node = self._node()
         self.assertEqual(node.outcome, "failed")
         self.assertIn("check 'build'", node.report)
@@ -255,6 +255,13 @@ class TestQueuedCheckCeiling(_Case):
         self._setup(checks=self._queued())
         self._at(0)
         self._at(3600)
+        self.assertEqual(self._node().role, "engine")
+        self.assertIsNone(self._node().outcome)
+
+    def test_a_queued_check_past_the_ceiling_but_inside_the_queued_cap_is_pending(self):
+        self._setup(checks=self._queued())
+        self._at(0)
+        self._at(21600)
         self.assertEqual(self._node().role, "engine")
         self.assertIsNone(self._node().outcome)
 
