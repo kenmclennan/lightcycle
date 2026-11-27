@@ -959,9 +959,9 @@ class TestDoctorOrphans(unittest.TestCase):
         class _Counting(FakeMachine):
             calls = 0
 
-            def cwd_pids_under(self, root):
+            def cwd_pids_under_roots(self, roots):
                 type(self).calls += 1
-                return super().cwd_pids_under(root)
+                return super().cwd_pids_under_roots(roots)
 
         self._report(store, fs, _Counting(), _Worktrees())
         self.assertEqual(_Counting.calls, 1)
@@ -1019,24 +1019,23 @@ class TestDoctorOrphans(unittest.TestCase):
         store.add_project("acme", local_path="/repo")
         store.add_project("beta", local_path="/other")
         fs = FakeFs(dirs={"/repo/.worktrees": ["a"], "/other/.worktrees": ["b"]})
-        machine = FakeMachine(cwd_pids=[
-            {"/repo/.worktrees/a": [1]}, {"/other/.worktrees/b": [2]},
-            {"/repo/.worktrees/a": [1]}, {"/other/.worktrees/b": [2]}])
+        both = {"/repo/.worktrees/a": [1], "/other/.worktrees/b": [2]}
+        machine = FakeMachine(cwd_pids=[both, both])
         report = self._report(store, fs, machine, _Worktrees(), waits.append)
         self.assertEqual(len(report.problems["orphans"]), 2)
         self.assertEqual(waits, [2])
-        self.assertEqual(len(machine.cwd_calls), 4)
+        self.assertEqual(len(machine.cwd_calls), 2)
 
     def test_only_projects_with_a_candidate_are_resampled(self):
         store = FakeStore()
         store.add_project("acme", local_path="/repo")
         store.add_project("beta", local_path="/other")
         fs = FakeFs(dirs={"/repo/.worktrees": ["a"], "/other/.worktrees": []})
-        machine = FakeMachine(cwd_pids=[{"/repo/.worktrees/a": [1]}, {}, {"/repo/.worktrees/a": [1]}])
+        machine = FakeMachine(cwd_pids=[{"/repo/.worktrees/a": [1]}, {"/repo/.worktrees/a": [1]}])
         self._report(store, fs, machine, _Worktrees())
-        self.assertEqual(len(machine.cwd_calls), 3)
+        self.assertEqual(machine.cwd_calls, [["/repo/.worktrees", "/other/.worktrees"], ["/repo/.worktrees"]])
 
-    def test_no_candidate_means_no_wait_and_one_read_per_project(self):
+    def test_no_candidate_means_no_wait_and_one_machine_read(self):
         waits = []
         store = FakeStore()
         store.add_project("acme", local_path="/repo")
@@ -1045,7 +1044,7 @@ class TestDoctorOrphans(unittest.TestCase):
         machine = FakeMachine()
         self._report(store, fs, machine, _Worktrees(), waits.append)
         self.assertEqual(waits, [])
-        self.assertEqual(len(machine.cwd_calls), 2)
+        self.assertEqual(len(machine.cwd_calls), 1)
 
     def test_a_worktree_that_becomes_expected_during_the_wait_is_not_reported(self):
         store = FakeStore()

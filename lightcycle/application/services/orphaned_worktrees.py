@@ -25,11 +25,13 @@ class OrphanedWorktrees:
     def scan(self):
         expected = self._expected_worktree_paths()
         candidates = {}
-        for project in self._store.list_projects():
-            if not project.local_path:
-                continue
-            wt_dir = self._fs.worktrees_dir(project.local_path)
-            by_worktree = self._pids_by_worktree(wt_dir)
+        wt_dirs = [
+            self._fs.worktrees_dir(p.local_path)
+            for p in self._store.list_projects() if p.local_path
+        ]
+        snapshot = self._machine.cwd_pids_under_roots(wt_dirs) if wt_dirs else {}
+        for wt_dir in wt_dirs:
+            by_worktree = self._group(wt_dir, snapshot[wt_dir])
             existing = set(self._fs.list_dir(wt_dir))
             names = self._candidates(wt_dir, existing, expected, by_worktree)
             if names:
@@ -39,8 +41,9 @@ class OrphanedWorktrees:
         self._sleep(ORPHAN_RECHECK_SECONDS)
         expected = self._expected_worktree_paths()
         found = []
+        snapshot = self._machine.cwd_pids_under_roots(list(candidates))
         for wt_dir, names in candidates.items():
-            by_worktree = self._pids_by_worktree(wt_dir)
+            by_worktree = self._group(wt_dir, snapshot[wt_dir])
             existing = set(self._fs.list_dir(wt_dir))
             found += self._existing(wt_dir, existing, expected, by_worktree, names)
             found += self._deleted(wt_dir, existing, expected, by_worktree, names)
@@ -80,8 +83,11 @@ class OrphanedWorktrees:
         return found
 
     def _pids_by_worktree(self, wt_dir):
+        return self._group(wt_dir, self._machine.cwd_pids_under(wt_dir))
+
+    def _group(self, wt_dir, cwd_pids):
         by_worktree = {}
-        for cwd, pids in self._machine.cwd_pids_under(wt_dir).items():
+        for cwd, pids in cwd_pids.items():
             name = os.path.relpath(cwd, wt_dir).split(os.sep)[0]
             by_worktree.setdefault(name, set()).update(pids)
         return by_worktree
