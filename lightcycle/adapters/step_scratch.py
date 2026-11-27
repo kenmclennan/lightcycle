@@ -1,8 +1,10 @@
+import hashlib
 import os
 import re
 import signal
 import subprocess
 import sys
+import tempfile
 
 from lightcycle.adapters.process_group import run_in_group
 
@@ -14,7 +16,8 @@ _TMPDIR_TOKEN = re.compile(r"(?:^|\s)TMPDIR=(\S*)")
 
 
 def scratch_root(root):
-    return os.path.join(root, "scratch")
+    key = hashlib.sha256(os.path.realpath(root).encode("utf-8")).hexdigest()[:12]
+    return os.path.join(tempfile.gettempdir(), "lc-scratch-" + key)
 
 
 def scratch_dir(root, spawnid):
