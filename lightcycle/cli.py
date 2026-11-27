@@ -466,6 +466,13 @@ def _tick_event_lines(result, ts):
         lines.append("%s  %-7s  %s" % (ts, "park", bid))
     for spawnid in result.sweep.killed:
         lines.append("%s  %-7s  %s" % (ts, "kill", spawnid))
+    for label, found in (
+        ("orphan-kill", result.sweep.orphans_ended),
+        ("orphan-fail", result.sweep.orphans_unended),
+        ("orphan-left", result.sweep.orphans_left),
+    ):
+        for orphan in found:
+            lines.append("%s  %-11s  %s %s" % (ts, label, orphan.pid, orphan.worktree))
     if result.stranded is not None:
         for sid in result.stranded.closed:
             lines.append("%s  %-7s  %s" % (ts, "recover", sid))

@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
+from lightcycle.application.pool.reap_orphan_processes import OrphanProcess
 from lightcycle.domain.pool import WorkerPool
 from lightcycle.ports.git import GitReadError
 from lightcycle.ports.workers import RegistryUnreadable
@@ -24,6 +25,9 @@ class SweepResponse:
     parked: List[str] = field(default_factory=list)
     not_checked: List[str] = field(default_factory=list)
     ended: Dict[str, SweepEnd] = field(default_factory=dict)
+    orphans_ended: List[OrphanProcess] = field(default_factory=list)
+    orphans_unended: List[OrphanProcess] = field(default_factory=list)
+    orphans_left: List[OrphanProcess] = field(default_factory=list)
 
 
 def sweep_end_suffix(response, step_id):
@@ -35,7 +39,11 @@ def sweep_end_suffix(response, step_id):
 
 
 class SweepUseCase:
-    def __init__(self, store, workers, worktrees, git, worker_log, spin_port, spin_cap, stream):
+    def __init__(
+        self, store, workers, worktrees, git, worker_log, spin_port, spin_cap, stream,
+        orphan_reaper,
+    ):
+        self._orphan_reaper = orphan_reaper
         self._store = store
         self._workers = workers
         self._worktrees = worktrees
@@ -232,6 +240,7 @@ class SweepUseCase:
         orphans = pool.orphans(probe, now, max_boot, claimed_owner, sleeps)
         for w in orphans:
             self._workers.kill(w.pid)
+        reaped = self._orphan_reaper.execute()
         try:
             pruned = self._workers.prune_workers()
         except RegistryUnreadable:
@@ -245,4 +254,7 @@ class SweepUseCase:
             parked=parked,
             not_checked=not_checked,
             ended=ended,
+            orphans_ended=reaped.ended,
+            orphans_unended=reaped.unended,
+            orphans_left=reaped.left,
         )

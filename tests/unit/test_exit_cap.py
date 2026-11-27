@@ -1,6 +1,7 @@
 import json
 import unittest
 
+from tests.support.fake_orphan_reaper import NoOpOrphanReaper
 from lightcycle.adapters.claude_stream import ClaudeStreamAdapter
 from lightcycle.application.pool.no_op_gates import NoOpGit, NoOpWorktrees
 from lightcycle.application.pool.sweep import SweepUseCase
@@ -25,7 +26,7 @@ def _sweep(store, workers, spin, log):
     return SweepUseCase(
         store, workers, worktrees=NoOpWorktrees(), git=NoOpGit(),
         worker_log=FakeFs(files={"/l/sp%d.log" % i: log for i in range(10)}), spin_port=spin,
-        spin_cap=CAP, stream=ClaudeStreamAdapter(),
+        spin_cap=CAP, stream=ClaudeStreamAdapter(), orphan_reaper=NoOpOrphanReaper(),
     ).execute(1000.0, 120, 1800)
 
 

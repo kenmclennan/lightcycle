@@ -1,6 +1,8 @@
 import json
 import os
+import signal
 import subprocess
+import time
 import unittest
 from unittest.mock import MagicMock, mock_open, patch
 
@@ -396,3 +398,52 @@ class TestFakeMachineSelfRss(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestMachineAdapterSignalPid(unittest.TestCase):
+    def setUp(self):
+        self.pids = []
+
+    def tearDown(self):
+        for pid in self.pids:
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except OSError:
+                pass
+            try:
+                os.waitpid(pid, 0)
+            except OSError:
+                pass
+
+    def _child(self, new_session=False):
+        pid = os.fork()
+        if pid == 0:
+            try:
+                if new_session:
+                    os.setsid()
+                time.sleep(30)
+            finally:
+                os._exit(0)
+        self.pids.append(pid)
+        return pid
+
+    def test_signal_pid_refuses_pid_one_own_pid_and_own_group(self):
+        same_group = self._child()
+        other_group = self._child(new_session=True)
+        adapter = MachineAdapter()
+        deadline = time.time() + 5
+        while os.getpgid(other_group) == os.getpgid(0) and time.time() < deadline:
+            time.sleep(0.01)
+
+        self.assertTrue(adapter.signal_pid(other_group, 0))
+        self.assertFalse(adapter.signal_pid(1, 0))
+        self.assertFalse(adapter.signal_pid(0, 0))
+        self.assertFalse(adapter.signal_pid(os.getpid(), 0))
+        self.assertFalse(adapter.signal_pid(same_group, 0))
+
+    def test_signal_pid_reports_missing_process(self):
+        child = self._child(new_session=True)
+        os.kill(child, signal.SIGKILL)
+        os.waitpid(child, 0)
+
+        self.assertFalse(MachineAdapter().signal_pid(child, 0))

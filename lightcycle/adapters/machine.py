@@ -264,6 +264,18 @@ class MachineAdapter(MachinePort):
     def gh_tooling(self):
         return GhTooling(version_text=_run(["gh", "--version"]))
 
+    def signal_pid(self, pid, sig):
+        try:
+            pid = int(pid)
+            if pid <= 1 or pid == os.getpid():
+                return False
+            if os.getpgid(pid) == os.getpgid(0):
+                return False
+            os.kill(pid, sig)
+            return True
+        except (OSError, ValueError, TypeError):
+            return False
+
     def cwd_pids_under(self, root):
         base = os.path.normpath(root)
         roots = {base, os.path.realpath(root)}

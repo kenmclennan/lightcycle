@@ -4,11 +4,17 @@ from lightcycle.ports.machine import MachinePort
 
 
 class FakeMachine(MachinePort):
-    def __init__(self, headroom=None, rss=None, cwd_pids=None, gh_tooling=None):
+    def __init__(self, headroom=None, rss=None, cwd_pids=None, gh_tooling=None,
+                 alive=None, own_pids=None, stubborn=None, immortal=None):
         self._headroom = headroom if headroom is not None else MachineHeadroom(pool_share=None)
         self._rss = rss
         self._cwd_pids = cwd_pids or {}
         self.cwd_calls = []
+        self.signalled = []
+        self.alive = set(alive or ())
+        self.own_pids = set(own_pids or ())
+        self.stubborn = set(stubborn or ())
+        self.immortal = set(immortal or ())
         self._gh_tooling = gh_tooling if gh_tooling is not None else GhTooling(
             version_text="gh version 2.103.3 (2026-01-01)\n",
         )
@@ -21,6 +27,18 @@ class FakeMachine(MachinePort):
 
     def self_rss(self):
         return self._rss
+
+    def signal_pid(self, pid, sig):
+        if pid <= 1 or pid in self.own_pids or pid not in self.alive:
+            return False
+        if sig == 0:
+            return True
+        self.signalled.append((pid, sig))
+        if sig == 15 and pid not in self.stubborn:
+            self.alive.discard(pid)
+        elif sig == 9 and pid not in self.immortal:
+            self.alive.discard(pid)
+        return True
 
     def cwd_pids_under(self, root):
         self.cwd_calls.append(root)

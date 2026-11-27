@@ -4,6 +4,7 @@ import json
 import os
 import unittest
 
+from tests.support.fake_orphan_reaper import NoOpOrphanReaper
 from lightcycle.adapters.claude_stream import ClaudeStreamAdapter
 from lightcycle.application.pool import (
     BackupResponse,
@@ -266,7 +267,7 @@ class FakeConfig:
 def make_sweep(store, workers, **overrides):
     kwargs = dict(
         worktrees=NoOpWorktrees(), git=NoOpGit(), worker_log=NoOpFs(), spin_port=NoOpSpinPort(),
-        spin_cap=3, stream=NoOpStream(),
+        spin_cap=3, stream=NoOpStream(), orphan_reaper=NoOpOrphanReaper(),
     )
     kwargs.update(overrides)
     return SweepUseCase(store, workers, **kwargs)
