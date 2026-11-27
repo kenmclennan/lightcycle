@@ -247,6 +247,8 @@ COMMANDS = {
         MutexGroup(required=True, args=(
             Arg("--needs", help="item or step id that blocks this one"), Arg("--remove"),
         )),
+        Arg("--force", action="store_true",
+            help="clear a park that carries a needs question when adding --needs"),
     )),
     "rm": CommandSpec(prog="lc rm", args=(
         Arg("id"), Arg("--force", action="store_true"),

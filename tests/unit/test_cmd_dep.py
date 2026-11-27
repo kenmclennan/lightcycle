@@ -141,8 +141,36 @@ class TestCmdDepOnParkedStep(unittest.TestCase):
         self.park = lambda: ParkStepUseCase(store).execute(
             ParkInput(step=self.blocked, observation="stuck", decision="pick one"))
 
-    def test_dep_on_a_parked_step_clears_the_park_and_holds_it(self):
+        def park_without_needs():
+            self.park()
+            meta = dict(store._get(self.blocked).get("metadata") or {})
+            meta["needs"] = None
+            store._get(self.blocked)["metadata"] = meta
+
+        self.park_without_needs = park_without_needs
+
+    def test_dep_on_a_park_carrying_needs_refuses_and_prints_the_question(self):
         self.park()
+        rc, _out, err = call(cli.cmd_dep, self.blocked, "--needs", self.blocker)
+        node = self.store.get_node(self.blocked)
+        self.assertEqual(rc, 1)
+        self.assertIn("pick one", err)
+        self.assertIn("--force", err)
+        self.assertIn("--state ready", err)
+        self.assertTrue(node.park)
+        self.assertIn("BLOCKED:", node.notes or "")
+        self.assertEqual(self.store._deps.get(self.blocked), set())
+
+    def test_dep_force_on_a_park_carrying_needs_clears_it(self):
+        self.park()
+        rc, _out, _err = call(cli.cmd_dep, self.blocked, "--needs", self.blocker, "--force")
+        node = self.store.get_node(self.blocked)
+        self.assertEqual(rc, 0)
+        self.assertFalse(node.park)
+        self.assertEqual(self.store._deps.get(self.blocked), {self.blocker})
+
+    def test_dep_on_a_parked_step_without_needs_clears_the_park_and_holds_it(self):
+        self.park_without_needs()
         rc, _out, _err = call(cli.cmd_dep, self.blocked, "--needs", self.blocker)
         node = self.store.get_node(self.blocked)
         self.assertEqual(rc, 0)
@@ -154,7 +182,7 @@ class TestCmdDepOnParkedStep(unittest.TestCase):
         self.assertIsNone(self.store.claim_ready("agent", "w1", item=node.item))
 
     def test_dependency_exists_before_the_park_is_cleared(self):
-        self.park()
+        self.park_without_needs()
         real = self.container.unblock_step_use_case
         seen = []
 
@@ -167,7 +195,7 @@ class TestCmdDepOnParkedStep(unittest.TestCase):
         self.assertEqual(seen, [{self.blocker}])
 
     def test_step_runs_with_no_park_once_the_dependency_closes(self):
-        self.park()
+        self.park_without_needs()
         call(cli.cmd_dep, self.blocked, "--needs", self.blocker)
         self.store.complete_node(self.blocker, "done")
         claimed = self.store.claim_ready("agent", "w1", item=self.store.get_node(self.blocked).item)
