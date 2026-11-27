@@ -21,3 +21,7 @@ class MachinePort(ABC):
     @abstractmethod
     def cwd_pids_under(self, root):
         pass
+
+    @abstractmethod
+    def cwd_pids_under_roots(self, roots):
+        pass

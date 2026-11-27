@@ -26,6 +26,22 @@ def _store_with_claim():
 
 
 class TestOrphanedWorktreesScan(unittest.TestCase):
+    def test_scan_over_several_projects_lists_cwds_once_and_once_more_on_recheck(self):
+        store = FakeStore()
+        for name in ("a", "b", "c"):
+            store.add_project(name, local_path="/%s" % name)
+        fs = FakeFs(dirs={"/%s/.worktrees" % n: ["idle"] for n in ("a", "b", "c")})
+        table = {"/%s/.worktrees/idle" % n: [i + 1] for i, n in enumerate(("a", "b", "c"))}
+        machine = FakeMachine(cwd_pids=table)
+
+        found = OrphanedWorktrees(store, fs, machine, _Worktrees({}), lambda s: None).scan()
+
+        self.assertEqual(
+            [(o.path, o.pids) for o in found],
+            [("/a/.worktrees/idle", [1]), ("/b/.worktrees/idle", [2]),
+             ("/c/.worktrees/idle", [3])])
+        self.assertEqual(len(machine.cwd_calls), 2)
+
     def test_scan_reports_existing_unclaimed_and_deleted_worktrees(self):
         store, item = _store_with_claim()
         claimed = "/repo/.worktrees/%s-code" % item

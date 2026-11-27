@@ -41,11 +41,17 @@ class FakeMachine(MachinePort):
         return True
 
     def cwd_pids_under(self, root):
-        self.cwd_calls.append(root)
+        return self.cwd_pids_under_roots([root])[root]
+
+    def cwd_pids_under_roots(self, roots):
+        self.cwd_calls.append(list(roots))
         table = self._cwd_pids
         if isinstance(table, list):
             table = table[min(len(self.cwd_calls), len(table)) - 1]
         return {
-            path: list(pids) for path, pids in table.items()
-            if path.startswith(root + "/")
+            root: {
+                path: list(pids) for path, pids in table.items()
+                if path.startswith(root + "/")
+            }
+            for root in roots
         }

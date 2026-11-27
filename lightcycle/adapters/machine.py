@@ -277,13 +277,21 @@ class MachineAdapter(MachinePort):
             return False
 
     def cwd_pids_under(self, root):
-        base = os.path.normpath(root)
-        roots = {base, os.path.realpath(root)}
-        found = {}
-        for pid, name in _cwd_entries():
-            for r in roots:
-                if name.startswith(r + os.sep):
-                    key = os.path.join(base, name[len(r) + 1:])
-                    found.setdefault(key, []).append(pid)
-                    break
-        return found
+        return self.cwd_pids_under_roots([root])[root]
+
+    def cwd_pids_under_roots(self, roots):
+        entries = _cwd_entries()
+        return {root: _group_under(entries, root) for root in roots}
+
+
+def _group_under(entries, root):
+    base = os.path.normpath(root)
+    roots = {base, os.path.realpath(root)}
+    found = {}
+    for pid, name in entries:
+        for r in roots:
+            if name.startswith(r + os.sep):
+                key = os.path.join(base, name[len(r) + 1:])
+                found.setdefault(key, []).append(pid)
+                break
+    return found
