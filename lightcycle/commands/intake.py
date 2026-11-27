@@ -439,6 +439,13 @@ def cmd_dep(argv):
             % (a.id, target.claimed_by)
         )
         return 1
+    if target.type == "step" and target.park and target.park.needs and not a.force:
+        sys.stderr.write(
+            "'%s' is parked with an open question: %s\n"
+            "adding a dependency would clear that park and lose the question; answer it first "
+            "(lc set %s --state ready), or pass --force to clear the park anyway\n" % (a.id, target.park.needs, a.id)
+        )
+        return 1
     container().store.dep_add(a.id, a.needs)
     if target.type == "step" and target.park:
         try:
