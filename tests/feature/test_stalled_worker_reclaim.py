@@ -1,6 +1,7 @@
 import json
 
 import pytest
+from tests.support.fake_orphan_reaper import NoOpOrphanReaper
 from pytest_bdd import given, parsers, scenarios, then, when
 
 from lightcycle.adapters.claude_stream import ClaudeStreamAdapter
@@ -127,7 +128,7 @@ def ctx():
 def _run_sweep(ctx):
     use_case = SweepUseCase(
         ctx["store"], ctx["workers"], worktrees=ctx["worktrees"], git=ctx["git"], worker_log=ctx["fs"],
-        spin_port=NoOpSpinPort(), spin_cap=3, stream=ClaudeStreamAdapter(),
+        spin_port=NoOpSpinPort(), spin_cap=3, stream=ClaudeStreamAdapter(), orphan_reaper=NoOpOrphanReaper(),
     )
     ctx["result"] = use_case.execute(ctx["now"], MAX_BOOT, STALL_SECONDS)
 

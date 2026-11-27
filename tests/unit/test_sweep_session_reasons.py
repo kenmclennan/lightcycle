@@ -1,6 +1,7 @@
 import json
 import unittest
 
+from tests.support.fake_orphan_reaper import NoOpOrphanReaper
 from lightcycle.adapters.claude_stream import ClaudeStreamAdapter
 from lightcycle.application.pool.no_op_gates import NoOpSpinPort
 from lightcycle.application.pool.sweep import SweepUseCase
@@ -40,7 +41,7 @@ def _rig(entry_extra=None, alive=True, stale=False):
 def _sweep(store, workers, fs):
     return SweepUseCase(
         store, workers, worktrees=FakeWorktrees(), git=FakeGit(events=[]), worker_log=fs,
-        spin_port=NoOpSpinPort(), spin_cap=99, stream=ClaudeStreamAdapter(),
+        spin_port=NoOpSpinPort(), spin_cap=99, stream=ClaudeStreamAdapter(), orphan_reaper=NoOpOrphanReaper(),
     ).execute(NOW, MAX_BOOT, STALL)
 
 

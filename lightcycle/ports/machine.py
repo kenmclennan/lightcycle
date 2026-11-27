@@ -15,5 +15,9 @@ class MachinePort(ABC):
         pass
 
     @abstractmethod
+    def signal_pid(self, pid, sig):
+        pass
+
+    @abstractmethod
     def cwd_pids_under(self, root):
         pass

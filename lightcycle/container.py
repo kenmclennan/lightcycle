@@ -77,6 +77,8 @@ from lightcycle.application.pool.live_usage import LiveUsageAccrualUseCase
 from lightcycle.application.pool.memory_gate import MemoryGateUseCase
 from lightcycle.application.pool.monitor_prs import MonitorPrsUseCase
 from lightcycle.application.pool.observe_sleep import ObserveSleepUseCase
+from lightcycle.application.pool.reap_orphan_processes import ReapOrphanProcessesUseCase
+from lightcycle.application.services.orphaned_worktrees import OrphanedWorktrees
 from lightcycle.application.pool.release_interrupted_runs import ReleaseInterruptedRunsUseCase
 from lightcycle.application.pool.sweep import SweepUseCase
 from lightcycle.application.pool.tick import TickUseCase
@@ -312,9 +314,15 @@ class Container:
 
     def sweep(self, flow=None, worktrees=None):
         flow = flow if flow is not None else self.flow_service()
+        worktrees = worktrees if worktrees is not None else worktrees_for(self, flow=flow)
+        reaper = ReapOrphanProcessesUseCase(
+            OrphanedWorktrees(self.store, self.fs, self.machine, worktrees, self.sleep),
+            self.workers, self.machine, self.config, self.sleep, self.monotonic,
+        )
         return SweepUseCase(
             self.store, self.workers,
-            worktrees=worktrees if worktrees is not None else worktrees_for(self, flow=flow),
+            orphan_reaper=reaper,
+            worktrees=worktrees,
             git=self.git, worker_log=self.worker_log,
             spin_port=self.spin, spin_cap=self.config.spin_cap(),
             stream=self.claude_stream,

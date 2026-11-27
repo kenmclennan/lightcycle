@@ -1,6 +1,7 @@
 import time
 import unittest
 
+from tests.support.fake_orphan_reaper import NoOpOrphanReaper
 from lightcycle.application.pool import StopPoolResponse, StopPoolUseCase, SweepUseCase
 from lightcycle.application.pool.no_op_gates import (
     NoOpFs,
@@ -56,7 +57,7 @@ class TestStopPool(unittest.TestCase):
         git = _Git(dirty=dirty)
         sweep = SweepUseCase(
             store, workers, worktrees=_Worktrees(), git=git, worker_log=NoOpFs(),
-            spin_port=NoOpSpinPort(), spin_cap=3, stream=NoOpStream(),
+            spin_port=NoOpSpinPort(), spin_cap=3, stream=NoOpStream(), orphan_reaper=NoOpOrphanReaper(),
         )
         return store, workers, git, step, StopPoolUseCase(workers, sweep, FakeRunGroups(), sleep=lambda s: None, clock=time.monotonic)
 
@@ -86,7 +87,7 @@ class TestStopPool(unittest.TestCase):
         workers = FakeWorkers()
         sweep = SweepUseCase(
             store, workers, worktrees=NoOpWorktrees(), git=NoOpGit(), worker_log=NoOpFs(),
-            spin_port=NoOpSpinPort(), spin_cap=3, stream=NoOpStream(),
+            spin_port=NoOpSpinPort(), spin_cap=3, stream=NoOpStream(), orphan_reaper=NoOpOrphanReaper(),
         )
         resp = StopPoolUseCase(workers, sweep, FakeRunGroups(), sleep=lambda s: None, clock=time.monotonic).execute(100.0, 120, 1800)
         self.assertEqual((resp.stopped, resp.reclaimed), ([], []))
@@ -127,7 +128,7 @@ class TestStopPool(unittest.TestCase):
         )
         sweep = SweepUseCase(
             store, workers, worktrees=_Worktrees(), git=_Git(), worker_log=NoOpFs(),
-            spin_port=NoOpSpinPort(), spin_cap=3, stream=NoOpStream(),
+            spin_port=NoOpSpinPort(), spin_cap=3, stream=NoOpStream(), orphan_reaper=NoOpOrphanReaper(),
         )
         uc = StopPoolUseCase(workers, sweep, FakeRunGroups(), sleep=lambda s: None, clock=time.monotonic)
 
@@ -159,7 +160,7 @@ class TestStopPool(unittest.TestCase):
         )
         sweep = SweepUseCase(
             store, workers, worktrees=_Worktrees(), git=_Git(), worker_log=NoOpFs(),
-            spin_port=NoOpSpinPort(), spin_cap=3, stream=NoOpStream(),
+            spin_port=NoOpSpinPort(), spin_cap=3, stream=NoOpStream(), orphan_reaper=NoOpOrphanReaper(),
         )
         ticks = iter(range(1000))
         uc = StopPoolUseCase(workers, sweep, FakeRunGroups(), sleep=lambda s: None, clock=lambda: next(ticks))

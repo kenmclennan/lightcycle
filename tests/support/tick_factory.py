@@ -1,4 +1,5 @@
 from lightcycle.application.pool.accrual_gates import AccrualGatesUseCase
+from tests.support.fake_orphan_reaper import NoOpOrphanReaper
 from lightcycle.application.pool.cadence_gates import CadenceGatesUseCase
 from lightcycle.application.pool.no_op_gates import (
     NoOpBackupGate,
@@ -42,7 +43,7 @@ def make_tick(store, workers, spawner, config, **overrides):
     if sweep is None:
         sweep = SweepUseCase(
             store, workers, worktrees, git, worker_log,
-            spin_port=spin_port, spin_cap=config.spin_cap(), stream=stream,
+            spin_port=spin_port, spin_cap=config.spin_cap(), stream=stream, orphan_reaper=NoOpOrphanReaper(),
         )
     cadence = take("cadence", None)
     schedule_gate = take("schedule_gate", NoOpScheduleGate())

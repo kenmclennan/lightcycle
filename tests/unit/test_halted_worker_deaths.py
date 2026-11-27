@@ -1,5 +1,6 @@
 import unittest
 
+from tests.support.fake_orphan_reaper import NoOpOrphanReaper
 from lightcycle.adapters.claude_stream import ClaudeStreamAdapter
 from lightcycle.application.flow.park_step import ParkInput, ParkStepUseCase
 from lightcycle.application.pool.breaker_gate import BreakerGateUseCase
@@ -28,7 +29,7 @@ class TestSweepSkipsHaltedDeaths(unittest.TestCase):
         SweepUseCase(
             store, workers, worktrees=NoOpWorktrees(), git=NoOpGit(),
             worker_log=FakeFs(files={"/l/sp1.log": b""}), spin_port=spin,
-            spin_cap=SPIN_CAP, stream=ClaudeStreamAdapter(),
+            spin_cap=SPIN_CAP, stream=ClaudeStreamAdapter(), orphan_reaper=NoOpOrphanReaper(),
         ).execute(1000.0, 120, 1800)
 
     def _halted_step(self, store):

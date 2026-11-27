@@ -60,6 +60,15 @@ def cmd_sweep(argv):
         print("parked %s" % bid)
     for spawnid in result.killed:
         print("killed %s" % spawnid)
+    for orphan in result.orphans_ended:
+        print("ended orphan process %d in %s" % (orphan.pid, orphan.worktree))
+    for orphan in result.orphans_unended:
+        sys.stderr.write("could not end orphan process %d in %s\n" % (orphan.pid, orphan.worktree))
+    for orphan in result.orphans_left:
+        sys.stderr.write(
+            "left orphan process %d in %s (worktree exists, no claimed step)\n"
+            % (orphan.pid, orphan.worktree)
+        )
     if result.pruned:
         print(
             "pruned %d dead worker entr%s" % (result.pruned, "y" if result.pruned == 1 else "ies")

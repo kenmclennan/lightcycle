@@ -1,15 +1,14 @@
 import datetime
-import os
 import re
 import time
 from dataclasses import dataclass, field
 from typing import Dict, List
 
-from lightcycle.application.errors import UseCaseError
 from lightcycle.application.flow.engine_steps import LIFECYCLE_ORIGIN_LABEL
 from lightcycle.application.work.close_item import RELEASE_PENDING_LABEL, TEARDOWN_REFUSED_ARTIFACT
 from lightcycle.application.pool.schedule_resolution import ScheduleResolver
 from lightcycle.application.services.flow import FlowService
+from lightcycle.application.services.orphaned_worktrees import OrphanedWorktrees
 from lightcycle.application.workflows.engine_requirement_check import bundle_conflict_messages
 from lightcycle.application.workflows.pin_drift import PinDrift
 from lightcycle.application.workflows.lifecycle import (
@@ -48,7 +47,6 @@ from lightcycle.domain.workflows.source import parse_source_manifest
 
 CONVENTIONS_FILE = "CONVENTIONS.md"
 REVERT_HISTORY_LIMIT = 200
-ORPHAN_RECHECK_SECONDS = 2
 _VERSION_LINE = re.compile(r"^Conventions version:\s*(\d+)\s*$")
 
 
@@ -86,6 +84,7 @@ class DoctorUseCase:
         self._fs = fs
         self._machine = machine
         self._worktrees = worktrees
+        self._orphaned_worktrees = OrphanedWorktrees(store, fs, machine, worktrees, sleep)
         self._git = git
         self._guidance_sync_status = guidance_sync_status
         self._config_reload_status = config_reload_status
@@ -467,15 +466,6 @@ class DoctorUseCase:
             for sid, problem in self._schedule_resolver.bundle_suggestion_problems()
         ]
 
-    def _expected_worktree_paths(self):
-        expected = set()
-        for step in self._store.claimed_steps():
-            try:
-                expected.add(self._worktrees.worktree_path(step))
-            except UseCaseError:
-                continue
-        return expected
-
     def _guidance_registration_problems(self):
         if (
             self._store.get_project(LEGACY_KNOWLEDGE_WORKSPACE) is None
@@ -751,28 +741,16 @@ class DoctorUseCase:
         return problems
 
     def _orphan_problems(self):
-        expected = self._expected_worktree_paths()
-        candidates = {}
-        for project in self._store.list_projects():
-            if not project.local_path:
-                continue
-            wt_dir = self._fs.worktrees_dir(project.local_path)
-            by_worktree = self._pids_by_worktree(wt_dir)
-            existing = set(self._fs.list_dir(wt_dir))
-            names = self._orphan_candidates(wt_dir, existing, expected, by_worktree)
-            if names:
-                candidates[wt_dir] = names
-        if not candidates:
-            return []
-        self._sleep(ORPHAN_RECHECK_SECONDS)
-        expected = self._expected_worktree_paths()
         problems = []
-        for wt_dir, names in candidates.items():
-            by_worktree = self._pids_by_worktree(wt_dir)
-            existing = set(self._fs.list_dir(wt_dir))
-            problems += self._existing_orphan_problems(wt_dir, existing, expected, by_worktree, names)
-            problems += self._deleted_worktree_problems(
-                wt_dir, existing, expected, by_worktree, names)
+        for entry in self._orphaned_worktrees.scan():
+            pids = ", ".join(str(p) for p in entry.pids)
+            if entry.exists:
+                text = "worktree %s has no active worker but %d live process(es): %s" % (
+                    entry.path, len(entry.pids), pids)
+            else:
+                text = "worktree %s no longer exists but %d live process(es) remain: %s" % (
+                    entry.path, len(entry.pids), pids)
+            problems.append(Problem("orphans", text))
         return problems
 
     def _layer_branch_problems(self, nodes):
@@ -797,50 +775,4 @@ class DoctorUseCase:
                     fix="delete the named branches and remove the worktree, or run lc doctor "
                         "again after the release retries",
                 ))
-        return problems
-
-    def _orphan_candidates(self, wt_dir, existing, expected, by_worktree):
-        names = set()
-        for name, pids in by_worktree.items():
-            path = os.path.join(wt_dir, name)
-            if not pids or path in expected:
-                continue
-            if name in existing or not self._fs.exists(path):
-                names.add(name)
-        return names
-
-    def _existing_orphan_problems(self, wt_dir, existing, expected, by_worktree, names):
-        problems = []
-        for name in sorted(existing & names):
-            path = os.path.join(wt_dir, name)
-            pids = sorted(by_worktree.get(name, ()))
-            if path in expected or not pids:
-                continue
-            problems.append(Problem(
-                "orphans",
-                "worktree %s has no active worker but %d live process(es): %s" % (
-                    path, len(pids), ", ".join(str(p) for p in pids)),
-            ))
-        return problems
-
-    def _pids_by_worktree(self, wt_dir):
-        by_worktree = {}
-        for cwd, pids in self._machine.cwd_pids_under(wt_dir).items():
-            name = os.path.relpath(cwd, wt_dir).split(os.sep)[0]
-            by_worktree.setdefault(name, set()).update(pids)
-        return by_worktree
-
-    def _deleted_worktree_problems(self, wt_dir, existing, expected, by_worktree, names):
-        problems = []
-        for name, pids in sorted(by_worktree.items()):
-            if name not in names:
-                continue
-            path = os.path.join(wt_dir, name)
-            if name in existing or path in expected or self._fs.exists(path):
-                continue
-            problems.append(Problem(
-                "orphans",
-                "worktree %s no longer exists but %d live process(es) remain: %s" % (
-                    path, len(pids), ", ".join(str(p) for p in sorted(pids))),
-            ))
         return problems
