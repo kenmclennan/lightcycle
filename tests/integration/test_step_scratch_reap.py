@@ -50,6 +50,7 @@ class TestStepScratchReap(unittest.TestCase):
     def setUp(self):
         self.root = tempfile.mkdtemp()
         self.addCleanup(__import__("shutil").rmtree, self.root, True)
+        self.addCleanup(__import__("shutil").rmtree, step_scratch.scratch_root(self.root), True)
 
     def _stand_in(self, spawnid):
         folder = step_scratch.create_scratch(self.root, spawnid)
@@ -107,10 +108,10 @@ class TestStepScratchReap(unittest.TestCase):
         wk.reap_children()
         for _ in range(50):
             wk.prune_workers(self.root, 0, grace_seconds=0)
-            if not os.listdir(os.path.join(self.root, "scratch")):
+            if not os.listdir(step_scratch.scratch_root(self.root)):
                 break
             time.sleep(0.2)
-        self.assertEqual(os.listdir(os.path.join(self.root, "scratch")), [])
+        self.assertEqual(os.listdir(step_scratch.scratch_root(self.root)), [])
 
 
 if __name__ == "__main__":

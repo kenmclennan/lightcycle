@@ -1,12 +1,12 @@
 import os
+import shutil
 import tempfile
 import unittest
 from unittest import mock
 
-from lightcycle.adapters import spawner
+from lightcycle.adapters import spawner, step_scratch
 from lightcycle.adapters.workers import workers_path
 from lightcycle.config import Config
-
 
 class FakeProc:
     def __init__(self, pid):
@@ -33,9 +33,19 @@ class TestSpawnWorkerScratch(unittest.TestCase):
         for extra in ({}, {"LC_SPAWN_CMD": "exit 0"}):
             with self.subTest(extra=extra), tempfile.TemporaryDirectory() as root:
                 result, env = self._spawn(dict({"LC_HOME": root, "LC_MAX_AGENTS": "5"}, **extra))
-                expected = os.path.join(root, "scratch", result["spawnid"])
+                self.addCleanup(shutil.rmtree, step_scratch.scratch_root(root), True)
+                expected = step_scratch.scratch_dir(root, result["spawnid"])
                 self.assertEqual(env["TMPDIR"], expected)
                 self.assertEqual(os.stat(expected).st_mode & 0o777, 0o700)
+
+    def test_scratch_is_outside_the_home(self):
+        home = os.path.realpath(os.path.expanduser("~"))
+        with tempfile.TemporaryDirectory() as root:
+            result, env = self._spawn({"LC_HOME": root, "LC_MAX_AGENTS": "5"})
+            self.addCleanup(shutil.rmtree, step_scratch.scratch_root(root), True)
+            scratch = os.path.realpath(env["TMPDIR"])
+            self.assertFalse(scratch.startswith(home + os.sep))
+            self.assertEqual(os.path.dirname(os.path.dirname(env["TMPDIR"])), tempfile.gettempdir())
 
     def test_unreadable_registry_removes_the_folder(self):
         with tempfile.TemporaryDirectory() as root:
@@ -49,7 +59,8 @@ class TestSpawnWorkerScratch(unittest.TestCase):
                     Config(environ={"LC_HOME": root, "LC_MAX_AGENTS": "5"}), "agent"
                 )
             self.assertIsNone(result)
-            self.assertEqual(os.listdir(os.path.join(root, "scratch")), [])
+            self.addCleanup(shutil.rmtree, step_scratch.scratch_root(root), True)
+            self.assertEqual(os.listdir(step_scratch.scratch_root(root)), [])
 
 
 if __name__ == "__main__":

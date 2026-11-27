@@ -1,4 +1,5 @@
 import os
+import shutil
 import tempfile
 import unittest
 
@@ -7,14 +8,22 @@ from lightcycle.adapters import workers as wk
 
 
 class TestScratchDir(unittest.TestCase):
-    def test_scratch_dir_is_under_data_root_keyed_by_spawn_id(self):
-        self.assertEqual(
-            step_scratch.scratch_dir("/data", "abcd1234"), os.path.join("/data", "scratch", "abcd1234")
-        )
+    def test_scratch_dir_is_under_the_system_temp_folder_keyed_by_root_and_spawn_id(self):
+        path = step_scratch.scratch_dir("/data", "abcd1234")
+        self.assertEqual(os.path.dirname(os.path.dirname(path)), tempfile.gettempdir())
+        self.assertEqual(os.path.basename(path), "abcd1234")
+        self.assertNotEqual(path, step_scratch.scratch_dir("/other", "abcd1234"))
+        self.assertEqual(path, step_scratch.scratch_dir("/data", "abcd1234"))
+
+    def test_scratch_dir_is_not_under_the_real_home_even_for_a_root_that_is(self):
+        root = os.path.join(os.path.expanduser("~"), ".lightcycle")
+        path = step_scratch.scratch_dir(root, "abcd1234")
+        self.assertFalse(path.startswith(os.path.join(os.path.expanduser("~"), "")))
 
     def test_create_scratch_makes_a_private_folder(self):
         with tempfile.TemporaryDirectory() as root:
             path = step_scratch.create_scratch(root, "abcd1234")
+            self.addCleanup(shutil.rmtree, step_scratch.scratch_root(root), True)
             self.assertEqual(os.stat(path).st_mode & 0o777, 0o700)
 
 
