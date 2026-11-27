@@ -1,11 +1,13 @@
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 import time
 import uuid
 
 from lightcycle.adapters.gh_shim import ensure_gh_shim
+from lightcycle.adapters.step_scratch import create_scratch
 from lightcycle.adapters.workers import process_start_time, register_worker, set_pid_started, track_child
 from lightcycle.domain.work.worker_log import worker_log_filename
 from lightcycle.ports.spawner import SpawnerPort
@@ -34,6 +36,8 @@ def spawn_worker(config, role):
     env["PYTHONPATH"] = os.pathsep.join(p for p in (pkg_parent, env.get("PYTHONPATH", "")) if p)
     env["GH_STACK_NO_UPDATE_NOTIFIER"] = "1"
     env["PATH"] = os.pathsep.join([ensure_gh_shim(root), env.get("PATH") or os.defpath])
+    scratch = create_scratch(root, spawnid)
+    env["TMPDIR"] = scratch
     override = config.spawn_cmd()
     with open(log, "a") as logf:
         if override:
@@ -63,6 +67,7 @@ def spawn_worker(config, role):
             proc.terminate()
         except OSError:
             pass
+        shutil.rmtree(scratch, ignore_errors=True)
         return None
     pid_started = capture_pid_started(proc)
     if pid_started is None and proc.poll() is not None:
